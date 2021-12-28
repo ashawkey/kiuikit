@@ -47,10 +47,9 @@ LEVELS = {
 G = None
 
 def retrieve_globals(verbose=False):
-    # locate and set the callee's globals. (only once)
+    # locate and set G to the globals which directly `import kiui`. (only once)
     # ref: https://stackoverflow.com/questions/40652688/how-to-access-globals-of-parent-module-into-a-sub-module/50381748
     global G
-    # find the frame that `import kiui` (usually frame 2)
     stack = inspect.stack()
     frame_id = 1 
     while frame_id < len(stack):
