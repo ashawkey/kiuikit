@@ -10,20 +10,21 @@ LIBS = {
         'os': 'os',
         'sys': 'sys',
         'math': 'math',
+        'copy': 'copy',
         'glob': 'glob',
     },
     'utils': {
-        'tqdm': 'tqdm',
-        'argparse': 'argparse',
-        'shutil': 'shutil',
         'time': 'time',
+        'tqdm': 'tqdm',
+        'shutil': 'shutil',
+        'argparse': 'argparse',
     },
     'data': {
         'np': ['numpytorch', 'numpy'], # alternatives
         'pd': 'pandas',
         'cv2': 'cv2',
         'plt': 'matplotlib.pyplot',
-        'Axes3D': 'mpl_toolkits.mplot3d',
+        'Image': 'PIL.Image',
     },
     'torch': {
         'torch': 'torch',
@@ -32,17 +33,23 @@ LIBS = {
         'Dataset': ('torch.utils.data', 'Dataset'), # single class/function
         'DataLoader': ('torch.utils.data', 'DataLoader'),
         'torch_vis_2d': torch_vis_2d, # live object
+    },
+    'ddp': {
+        'dist': 'torch.distributed',
+        'mp': 'torch.multiprocessing',
+        'DDP': ('torch.nn.parallel', 'DistributedDataParallel'),
     }
 }
 
 
-LEVELS = {
-    0: ['standard'],
-    1: ['standard', 'utils'],
-    2: ['standard', 'utils', 'data'],
-    3: ['standard', 'utils', 'data', 'torch'],
-    'all': ['standard', 'utils', 'data', 'torch'],
-}
+LEVELS = {}
+for k in LIBS.keys():
+    LEVELS[k] = [k]
+LEVELS[0] = ['standard']
+LEVELS[1] = LEVELS[0] + ['utils']
+LEVELS[2] = LEVELS[1] + ['data']
+LEVELS[3] = LEVELS[2] + ['torch']
+LEVELS['all'] = list(LIBS.keys())
 
 G = None
 
@@ -98,7 +105,7 @@ def import_libs(libs, verbose=False):
         try_import(k, v, verbose)
 
 
-def init(level='all', verbose=False):
+def init(level=3, verbose=False):
     if level not in LEVELS:
         raise ValueError(f'invalid level, availables: {LEVELS.keys()}')
     for libs in LEVELS[level]:
