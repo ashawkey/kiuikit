@@ -12,6 +12,5 @@ pip install kiui
 
 ```python
 import kiui
-# import np, torch (if installed), ... all in once
-kiui.init()
+kiui.env()
 ```
