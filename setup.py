@@ -3,7 +3,7 @@ from setuptools import setup
 if __name__ == '__main__':
     setup(
         name="kiui",
-        version='0.1.1',
+        version='0.1.2',
         description="self-use toolkits",
         long_description=open('README.md', encoding='utf-8').read(),
         long_description_content_type='text/markdown',
@@ -17,4 +17,16 @@ if __name__ == '__main__':
         ],
         keywords='utility',
         install_requires=[],
+        extras_require={
+            'full': [
+                'tqdm',
+                'rich',
+                'omegaconf',
+                'numpytorch',
+                'matplotlib',
+                'pandas',
+                'opencv-python',
+                'torch',
+            ],
+        },
     )

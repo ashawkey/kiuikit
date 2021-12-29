@@ -9,15 +9,18 @@ LIBS = {
     'standard': {
         'os': 'os',
         'sys': 'sys',
-        'math': 'math',
         'copy': 'copy',
         'glob': 'glob',
-    },
-    'utils': {
+        'math': 'math',
         'time': 'time',
-        'tqdm': 'tqdm',
         'shutil': 'shutil',
         'argparse': 'argparse',
+        'collections': 'collections',
+    },
+    'utils': {
+        'tqdm': 'tqdm',
+        'rich': 'rich',
+        'omegaconf': 'omegaconf',
     },
     'data': {
         'np': ['numpytorch', 'numpy'], # alternatives
@@ -42,14 +45,12 @@ LIBS = {
 }
 
 
-LEVELS = {}
-for k in LIBS.keys():
-    LEVELS[k] = [k]
-LEVELS[0] = ['standard']
-LEVELS[1] = LEVELS[0] + ['utils']
-LEVELS[2] = LEVELS[1] + ['data']
-LEVELS[3] = LEVELS[2] + ['torch']
-LEVELS['all'] = list(LIBS.keys())
+PACKS = {}
+PACKS['std'] = ['standard']
+PACKS['utils'] = PACKS['std'] + ['utils']
+PACKS['default'] = ['standard', 'utils', 'data']
+PACKS['torch'] = PACKS['default'] + ['torch']
+PACKS['all'] = list(LIBS.keys())
 
 G = None
 
@@ -105,9 +106,12 @@ def import_libs(libs, verbose=False):
         try_import(k, v, verbose)
 
 
-def init(level=3, verbose=False):
-    if level not in LEVELS:
-        raise ValueError(f'invalid level, availables: {LEVELS.keys()}')
-    for libs in LEVELS[level]:
-        import_libs(libs, verbose)
-    
+def env(*packs, verbose=False):
+    if len(packs) == 0:
+        packs = ['default']
+
+    for pack in packs:
+        if pack not in PACKS:
+            raise RuntimeError(f'invalid pack {pack}')
+        for libs in PACKS[pack]:
+            import_libs(libs, verbose)
