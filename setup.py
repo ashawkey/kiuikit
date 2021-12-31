@@ -22,6 +22,7 @@ if __name__ == '__main__':
                 'tqdm',
                 'rich',
                 'omegaconf',
+                'trimesh',
                 'numpytorch',
                 'matplotlib',
                 'pandas',

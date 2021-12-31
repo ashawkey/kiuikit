@@ -5,3 +5,8 @@ print(os)
 
 kiui.env(verbose=True)
 print(globals())
+
+kiui.env('torch', verbose=True)
+print(globals())
+
+kiui.env('notapack', verbose=True)
