@@ -2,7 +2,8 @@
 import importlib
 import inspect
 
-from . import vis_utils
+from . import vis
+from . import op
 
 LIBS = {
     'standard': [{
@@ -20,7 +21,6 @@ LIBS = {
     'utils': [{
         'tqdm': 'tqdm',
         'rich': 'rich',
-        'omegaconf': 'omegaconf',
     }, ('standard')], # dependency
 
     'data': [{
@@ -29,7 +29,7 @@ LIBS = {
         'cv2': 'cv2',
         'plt': 'matplotlib.pyplot',
         'Image': 'PIL.Image',
-        'vis_utils': vis_utils, # live object
+        # 'vis': vis, # live object
     }, ('standard', 'utils')],
 
     'torch': [{
@@ -40,15 +40,6 @@ LIBS = {
         'DataLoader': ('torch.utils.data', 'DataLoader'),
     }, ('standard', 'utils', 'data')],
 
-    'ddp': [{
-        'dist': 'torch.distributed',
-        'mp': 'torch.multiprocessing',
-        'DDP': ('torch.nn.parallel', 'DistributedDataParallel'),
-    }, ('standard', 'utils', 'data', 'torch')],
-
-    '3d': [{
-        'trimesh': 'trimesh',
-    }, ('standard', 'utils', 'data')],
 }
 
 LIBS['all'] = [{}, tuple(LIBS.keys())]
@@ -66,7 +57,7 @@ def retrieve_globals(verbose=False):
         if 'kiui' in g:
             G = g
             if verbose:
-                print(f'[INFO] located global frame at {frame_id}')
+                print(f'[KiuiKit-INFO] located global frame at {frame_id}')
             break
         frame_id += 1
     if G is None:
@@ -80,7 +71,7 @@ def try_import(target, sources, verbose=False):
     
     if target in G:
         if verbose:
-            print(f'[INFO] {target} is already present, skipped.')
+            print(f'[KiuiKit-INFO] {target} is already present, skipped.')
         return
 
     if not isinstance(sources, list):
@@ -89,7 +80,7 @@ def try_import(target, sources, verbose=False):
     for source in sources:
         try:
             if verbose:
-                print(f'[INFO] try to import {source}')
+                print(f'[KiuiKit-INFO] try to import {source}')
             
             # (module, component) or ("module", component)
             if isinstance(source, tuple):
@@ -107,11 +98,11 @@ def try_import(target, sources, verbose=False):
             G[target] = source
             
             if verbose:
-                print(f'[INFO] succeed to import {source} as {target}')
+                print(f'[KiuiKit-INFO] succeed to import {source} as {target}')
             break
 
         except ImportError as e:
-            print(f'[WARN] failed to import {source} as {target}: {str(e)}')
+            print(f'[KiuiKit-WARN] failed to import {source} as {target}: {str(e)}')
             
 
 def import_libs(pack, verbose=False):
@@ -132,7 +123,7 @@ def env(*packs, verbose=False):
 
     def check_pack(pack):
         if pack not in LIBS:
-            raise RuntimeError(f'unknown pack {pack}, availables: {list(LIBS.keys())}')
+            raise RuntimeError(f'[KiuiKit-ERROR] unknown pack {pack}, availables: {list(LIBS.keys())}')
 
     def resolve_env(packs):
         res = set()

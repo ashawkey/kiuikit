@@ -21,13 +21,11 @@ if __name__ == '__main__':
             'full': [
                 'tqdm',
                 'rich',
-                'omegaconf',
-                'trimesh',
+                'numpy',
+                'pandas',
                 'numpytorch',
                 'matplotlib',
-                'pandas',
                 'opencv-python',
-                'torch',
             ],
         },
     )
