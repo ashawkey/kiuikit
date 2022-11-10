@@ -7,8 +7,4 @@ __pycache__/
 *.log
 .coverage
 build/
-<<<<<<< HEAD
 dist/
-=======
-dist/
->>>>>>> cfb0073 (add .gitignore)
