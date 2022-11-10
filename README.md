@@ -9,7 +9,7 @@ Utils for self-use.
 pip install kiui
 
 # latest
-pip install https://github.com/ashawkey/kiuikit.git
+pip install git+https://github.com/ashawkey/kiuikit.git
 ```
 
 ### Usage
