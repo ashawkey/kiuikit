@@ -5,6 +5,7 @@ import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 
 import trimesh
+from .utils import lo
 
 def map_color(value, cmap_name='viridis', vmin=None, vmax=None):
     # value: [N], float
@@ -18,32 +19,37 @@ def map_color(value, cmap_name='viridis', vmin=None, vmax=None):
     return rgb
 
 
-def plot_image(x, renormalize=False):
+def plot_image(*xs, renormalize=False):
     # x: [3, H, W] or [1, H, W] or [H, W] torch.Tensor
     #    [H, W, 3] or [H, W] numpy.ndarray
 
-    if isinstance(x, torch.Tensor):
-        if len(x.shape) == 3:
-            x = x.permute(1,2,0).squeeze()
-        x = x.detach().cpu().numpy()
+    def _plot_image(x):
 
-    print(f'[VISUALIZER] {x.shape}, {x.min()} - {x.max()}')
+        if isinstance(x, torch.Tensor):
+            if len(x.shape) == 3:
+                x = x.permute(1,2,0).squeeze()
+            x = x.detach().cpu().numpy()
 
-    x = x.astype(np.float32)
+        lo(x)
+
+        x = x.astype(np.float32)
+        
+        # renormalize
+        if renormalize:
+            x = (x - x.min(axis=0, keepdims=True)) / (x.max(axis=0, keepdims=True) - x.min(axis=0, keepdims=True) + 1e-8)
+
+        plt.imshow(x)
+        plt.show()
     
-    # renormalize
-    if renormalize:
-        x = (x - x.min(axis=0, keepdims=True)) / (x.max(axis=0, keepdims=True) - x.min(axis=0, keepdims=True) + 1e-8)
-
-    plt.imshow(x)
-    plt.show()
+    for x in xs:
+        _plot_image(x)
 
 
 def plot_pointcloud(pc, color=None):
     # pc: [N, 3]
     # color: [N, 3/4]
 
-    print('[visualize points]', pc.shape, pc.dtype, pc.min(0), pc.max(0))
+    lo(pc)
 
     # import open3d as o3d
     # pcd = o3d.geometry.PointCloud()
@@ -64,6 +70,8 @@ def plot_pointcloud(pc, color=None):
 
 def plot_poses(poses, size=0.05, bound=1, points=None):
     # poses: [B, 4, 4]
+
+    lo(poses)
 
     axes = trimesh.creation.axis(axis_length=4)
     box = trimesh.primitives.Box(extents=[2*bound]*3).as_outline()

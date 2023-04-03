@@ -8,31 +8,27 @@ from . import op
 from .utils import *
 
 LIBS = {
-    'standard': [{
+    'base': [{
         'os': 'os',
-        'sys': 'sys',
-        'copy': 'copy',
         'glob': 'glob',
         'math': 'math',
         'time': 'time',
-        'shutil': 'shutil',
+        'random': 'random',
         'argparse': 'argparse',
-        'collections': 'collections',
     }, ()],
 
     'utils': [{
         'tqdm': 'tqdm',
         'rich': 'rich',
-    }, ('standard')], # dependency
+    }, ('base')], # dependency
 
     'data': [{
-        'np': ['numpytorch', 'numpy'], # alternatives
-        'pd': 'pandas',
+        'np': 'numpy', # alternatives
         'cv2': 'cv2',
         'plt': 'matplotlib.pyplot',
         'Image': 'PIL.Image',
         # 'vis': vis, # live object
-    }, ('standard', 'utils')],
+    }, ('base', 'utils')],
 
     'torch': [{
         'torch': 'torch',
@@ -40,7 +36,7 @@ LIBS = {
         'F': 'torch.nn.functional',
         'Dataset': ('torch.utils.data', 'Dataset'), # single class/function
         'DataLoader': ('torch.utils.data', 'DataLoader'),
-    }, ('standard', 'utils', 'data')],
+    }, ('base', 'utils', 'data')],
 
 }
 
@@ -115,17 +111,17 @@ def import_libs(pack, verbose=False):
 """
 setup all import in one line.
 usage:
-    kiui.env() # setup standard env
+    kiui.env() # setup base env
     kiui.env('torch') # pytorch with all regular dependencies
     kiui.env('[torch]') # pytorch only
 """
 def env(*packs, verbose=False):
     if len(packs) == 0:
-        packs = ['standard']
+        packs = ['base']
 
     def check_pack(pack):
         if pack not in LIBS:
-            raise RuntimeError(f'[KiuiKit-ERROR] unknown pack {pack}, availables: {list(LIBS.keys())}')
+            raise RuntimeError(f'[Kiui-ERROR] unknown pack {pack}, availables: {list(LIBS.keys())}')
 
     def resolve_env(packs):
         res = set()
