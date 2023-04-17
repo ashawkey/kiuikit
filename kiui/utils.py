@@ -1,12 +1,12 @@
 import torch
 import numpy as np
+
 import cv2
 import json
 import varname
 from PIL import Image
 
 from rich.console import Console
-from rich.text import Text
 
 # inspect array like object x and report stats
 def lo(*xs, verbose=0):
