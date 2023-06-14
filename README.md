@@ -6,10 +6,11 @@ A toolkit for personal use.
 
 ```bash
 # released
-pip install kiui
+pip install kiui # install the minimal package
+pip install kiui[full] # install optional dependencies
 
 # latest
-pip install git+https://github.com/ashawkey/kiuikit.git
+pip install git+https://github.com/ashawkey/kiuikit.git # only the minimal package
 ```
 
 ### Usage
