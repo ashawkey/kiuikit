@@ -1,10 +1,10 @@
-import torch
-import numpy as np
-
 import cv2
 import json
 import varname
 from PIL import Image
+
+import torch
+import numpy as np
 
 from rich.console import Console
 
