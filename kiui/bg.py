@@ -59,3 +59,19 @@ def remove_folder(path, out_path, **kwargs):
             remove_file(img_path, img_out_path, **kwargs)
         except Exception as e:
             print(e)
+
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('path', type=str, default=None)
+    parser.add_argument('out_path', type=str, default=None)
+    parser.add_argument('--lcc', action='store_true')
+    parser.add_argument('--return_mask', action='store_true')
+    args = parser.parse_args()
+
+    if os.path.isfile(args.path):
+        remove_file(args.path, args.out_path, return_mask=args.return_mask, lcc=args.lcc)
+    elif os.path.isdir(args.path):
+        remove_folder(args.path, args.out_path, return_mask=args.return_mask, lcc=args.lcc)
+    

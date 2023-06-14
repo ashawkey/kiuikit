@@ -59,3 +59,12 @@ remove_file('input.jpg', 'output.png', lcc=True) # largest connected component
 remove_file('input.jpg', 'mask.png', return_mask=True) # only save [h, w] mask
 remove_folder('input/', 'output/')
 ```
+
+CLI tools:
+```bash
+# background removal utils
+python -m kiui.bg --help
+python -m kiui.bg input.png output.png
+python -m kiui.bg input_folder output_folder
+python -m kiui.bg input_folder output_folder --return_mask --lcc
+```
