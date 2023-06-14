@@ -20,19 +20,19 @@ def largest_connected_component(mask, background=0, connectivity=None):
 SESSION = None
 
 # a make-more-sense wrapper of rembg
-def remove(img, return_mask=False, lcc=False, **kwargs):
+def remove(img, return_mask=False, lcc=False, post_process=True, **kwargs):
     # img: np.ndarray, (h, w, 3), uint8, BGR
 
     global SESSION
     if SESSION is None:
         SESSION = rembg.new_session()
 
-    res = rembg.remove(img, session=SESSION, **kwargs) # (h, w, 4), BGRA
+    res = rembg.remove(img, session=SESSION, post_process=post_process, **kwargs) # (h, w, 4), BGRA
 
     # largest-connected-component
     if lcc:
-        mask = largest_connected_component(res[:, :, 3])
-        res *= mask[:, :, None].astype(np.uint8)
+        mask = largest_connected_component((res[:, :, 3] > 10).astype(np.uint8))
+        res = res * mask[:, :, None].astype(np.uint8)
 
     if return_mask:
         res = res[:, :, 3] # (h, w), uint8
