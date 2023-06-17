@@ -67,4 +67,11 @@ python -m kiui.bg --help
 python -m kiui.bg input.png output.png
 python -m kiui.bg input_folder output_folder
 python -m kiui.bg input_folder output_folder --return_mask --lcc
+
+# openpose detector
+python -m kiui.pose --help
+python -m kiui.pose input.png output.png
+python -m kiui.pose input_folder output_folder
+python -m kiui.pose input_folder output_folder --body_only
+
 ```
