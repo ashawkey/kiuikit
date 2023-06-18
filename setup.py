@@ -18,6 +18,7 @@ if __name__ == '__main__':
         keywords='utility',
         install_requires=[
             'lazy_loader',
+            'varname',
         ],
         extras_require={
             'full': [
