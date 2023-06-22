@@ -124,10 +124,10 @@ def plot_poses(poses, size=0.05, bound=1, points=None, mesh=None):
     for pose in poses:
         # a camera is visualized with 8 line segments.
         pos = pose[:3, 3]
-        a = pos + size * pose[:3, 0] + size * pose[:3, 1] - size * pose[:3, 2]
-        b = pos - size * pose[:3, 0] + size * pose[:3, 1] - size * pose[:3, 2]
-        c = pos - size * pose[:3, 0] - size * pose[:3, 1] - size * pose[:3, 2]
-        d = pos + size * pose[:3, 0] - size * pose[:3, 1] - size * pose[:3, 2]
+        a = pos + size * pose[:3, 0] + size * pose[:3, 1] + size * pose[:3, 2]
+        b = pos - size * pose[:3, 0] + size * pose[:3, 1] + size * pose[:3, 2]
+        c = pos - size * pose[:3, 0] - size * pose[:3, 1] + size * pose[:3, 2]
+        d = pos + size * pose[:3, 0] - size * pose[:3, 1] + size * pose[:3, 2]
 
         dir = (a + b + c + d) / 4 - pos
         dir = dir / (np.linalg.norm(dir) + 1e-8)
