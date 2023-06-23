@@ -53,10 +53,10 @@ mesh.write('new.obj')
 ### background removal utils
 from kiui.bg import remove, remove_file, remove_folder
 res = remove(img)
-remove_file('input.jpg', 'output.png')
+remove_file('input.jpg', 'output.png') # save original + mask as rgba
 remove_file('input.jpg', 'output.png', post_process=True) # morphology opening
 remove_file('input.jpg', 'output.png', lcc=True) # largest connected component
-remove_file('input.jpg', 'mask.png', return_mask=True) # only save [h, w] mask
+remove_file('input.jpg', 'mask.jpg', mode='a') # only save [h, w] mask
 remove_folder('input/', 'output/')
 ```
 
@@ -66,7 +66,7 @@ CLI tools:
 python -m kiui.bg --help
 python -m kiui.bg input.png output.png
 python -m kiui.bg input_folder output_folder
-python -m kiui.bg input_folder output_folder --return_mask --lcc
+python -m kiui.bg input_folder output_folder --mode a --lcc
 
 # openpose detector
 python -m kiui.pose --help

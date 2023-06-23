@@ -6,16 +6,16 @@ import tqdm
 from .openpose import OpenposeDetector
 
 # reusable lazy session
-DETECTOR = None
+SESSION = None
 
 def detect(img, hand_and_face=True, **kwargs):
     # img: np.ndarray, (h, w, 3), uint8, RGB
 
-    global DETECTOR
-    if DETECTOR is None:
-        DETECTOR = OpenposeDetector()
+    global SESSION
+    if SESSION is None:
+        SESSION = OpenposeDetector()
 
-    res = DETECTOR(img, hand_and_face=hand_and_face)
+    res = SESSION(img, hand_and_face=hand_and_face)
 
     return res
 

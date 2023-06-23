@@ -20,7 +20,7 @@ def look_at(campos, target):
 
 
 # elevation & azimuth to pose (cam2world) matrix
-def circle_pose(elevation, azimuth, radius=1, is_degree=True, target=None):
+def orbit_camera(elevation, azimuth, radius=1, is_degree=True, target=None):
     # radius: [N,] or scalar
     # elevation: [N,], in (-90, 90)
     # azimuth: [N,], in (-180, 180), from +z to +x is (0, 90)

@@ -20,7 +20,7 @@ def largest_connected_component(mask, background=0, connectivity=None):
 SESSION = None
 
 # a make-more-sense wrapper of rembg
-def remove(img, return_mask=False, lcc=False, post_process=True, **kwargs):
+def remove(img, mode='rgba', lcc=False, post_process=True, **kwargs):
     # img: np.ndarray, (h, w, 3), uint8, BGR
 
     global SESSION
@@ -31,11 +31,15 @@ def remove(img, return_mask=False, lcc=False, post_process=True, **kwargs):
 
     # largest-connected-component
     if lcc:
-        mask = largest_connected_component((res[:, :, 3] > 10).astype(np.uint8))
-        res = res * mask[:, :, None].astype(np.uint8)
+        mask = largest_connected_component((res[..., 3] > 10).astype(np.uint8))
+        res = res * mask[..., None].astype(np.uint8)
 
-    if return_mask:
-        res = res[:, :, 3] # (h, w), uint8
+    if mode == 'rgb':
+        # mix masked image with white background
+        # res = cv2.cvtColor(res, cv2.COLOR_BGRA2BGR)
+        res = res[..., :3] * (res[..., 3:] / 255.0) + 255.0 * (1.0 - res[..., 3:] / 255.0)
+    elif mode == 'a':
+        res = res[..., 3] # (h, w), uint8
     
     return res
 
@@ -46,17 +50,16 @@ def remove_file(path, out_path, **kwargs):
     cv2.imwrite(out_path, res)
 
 
-def remove_folder(path, out_path, **kwargs):
+def remove_folder(path, out_path, mode, **kwargs):
     os.makedirs(out_path, exist_ok=True)
     img_paths = glob.glob(os.path.join(path, '*'))
     for img_path in tqdm.tqdm(img_paths):
         try:
             img_out_path = os.path.join(out_path, os.path.basename(img_path))
-            if img_out_path.endswith('.jpg'):
-                img_out_path = img_out_path.replace('.jpg', '.png')
-            elif img_out_path.endswith('.jpeg'):
-                img_out_path = img_out_path.replace('.jpeg', '.png')
-            remove_file(img_path, img_out_path, **kwargs)
+            if mode == 'rgba': # can only save as png                    
+                if img_out_path.endswith('.jpg'):
+                    img_out_path = img_out_path.replace('.jpg', '.png')
+            remove_file(img_path, img_out_path, mode=mode, **kwargs)
         except Exception as e:
             print(e)
 
@@ -67,11 +70,11 @@ if __name__ == '__main__':
     parser.add_argument('path', type=str, default=None)
     parser.add_argument('out_path', type=str, default=None)
     parser.add_argument('--lcc', action='store_true')
-    parser.add_argument('--return_mask', action='store_true')
+    parser.add_argument('--mode', type=str, choices=['rgba', 'a', 'rgb'], default='rgba')
     args = parser.parse_args()
 
     if os.path.isfile(args.path):
-        remove_file(args.path, args.out_path, return_mask=args.return_mask, lcc=args.lcc)
+        remove_file(args.path, args.out_path, mode=args.mode, lcc=args.lcc)
     elif os.path.isdir(args.path):
-        remove_folder(args.path, args.out_path, return_mask=args.return_mask, lcc=args.lcc)
+        remove_folder(args.path, args.out_path, mode=args.mode, lcc=args.lcc)
     
