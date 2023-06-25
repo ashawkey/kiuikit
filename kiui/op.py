@@ -17,4 +17,4 @@ def length(x, eps=1e-20):
 
 
 def safe_normalize(x, eps=1e-20):
-    return x / length(x, eps)    
+    return x / length(x, eps)

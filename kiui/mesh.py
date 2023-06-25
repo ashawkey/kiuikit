@@ -7,9 +7,18 @@ import numpy as np
 from .op import *
 
 
-class Mesh():
-
-    def __init__(self, v=None, f=None, vn=None, fn=None, vt=None, ft=None, albedo=None, device=None):
+class Mesh:
+    def __init__(
+        self,
+        v=None,
+        f=None,
+        vn=None,
+        fn=None,
+        vt=None,
+        ft=None,
+        albedo=None,
+        device=None,
+    ):
         self.device = device
         self.v = v
         self.vn = vn
@@ -22,52 +31,52 @@ class Mesh():
 
         self.ori_center = 0
         self.ori_scale = 1
-    
+
     @classmethod
     def load(cls, path=None, **kwargs):
         # assume init with kwargs
         if path is None:
             mesh = cls(**kwargs)
         # obj supports face uv
-        elif path.endswith('.obj'):
+        elif path.endswith(".obj"):
             mesh = cls.load_obj(path, **kwargs)
         # trimesh only supports vertex uv, but can load more formats
         else:
             mesh = cls.load_trimesh(path, **kwargs)
-        
+
         # auto-normalize
         mesh.auto_size()
-        print(f'[Mesh loading] v: {mesh.v.shape}, f: {mesh.f.shape}')
+        print(f"[Mesh loading] v: {mesh.v.shape}, f: {mesh.f.shape}")
         # auto-fix normal
         if mesh.vn is None:
             mesh.auto_normal()
-        print(f'[Mesh loading] vn: {mesh.vn.shape}, fn: {mesh.fn.shape}')
+        print(f"[Mesh loading] vn: {mesh.vn.shape}, fn: {mesh.fn.shape}")
         # auto-fix texture
         if mesh.vt is None:
             mesh.auto_uv(cache_path=path)
-        print(f'[Mesh loading] vt: {mesh.vt.shape}, ft: {mesh.ft.shape}')
-        
+        print(f"[Mesh loading] vt: {mesh.vt.shape}, ft: {mesh.ft.shape}")
+
         return mesh
 
     # load from obj file
     @classmethod
     def load_obj(cls, path, albedo_path=None, device=None, init_empty_tex=False):
 
-        assert os.path.splitext(path)[-1] == '.obj'
+        assert os.path.splitext(path)[-1] == ".obj"
 
         mesh = cls()
 
         # device
         if device is None:
-            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         mesh.device = device
 
         # try to find texture from mtl file
         if albedo_path is None:
-            mtl_path = path.replace('.obj', '.mtl')
+            mtl_path = path.replace(".obj", ".mtl")
             if os.path.exists(mtl_path):
-                with open(mtl_path, 'r') as f:
+                with open(mtl_path, "r") as f:
                     lines = f.readlines()
                 for line in lines:
                     split_line = line.split()
@@ -76,21 +85,23 @@ class Mesh():
                         continue
                     prefix = split_line[0]
                     # NOTE: simply use the first map_Kd as albedo!
-                    if 'map_Kd' in prefix:
+                    if "map_Kd" in prefix:
                         albedo_path = os.path.join(os.path.dirname(path), split_line[1])
-                        print(f'[load_obj] use texture from: {albedo_path}')
+                        print(f"[load_obj] use texture from: {albedo_path}")
                         break
 
         if init_empty_tex or albedo_path is None or not os.path.exists(albedo_path):
             # init an empty texture
-            print(f'[load_obj] init empty albedo!')
+            print(f"[load_obj] init empty albedo!")
             # albedo = np.random.rand(1024, 1024, 3).astype(np.float32)
-            albedo = np.ones((1024, 1024, 3), dtype=np.float32) * np.array([0.5, 0.5, 0.5])  # default color
+            albedo = np.ones((1024, 1024, 3), dtype=np.float32) * np.array(
+                [0.5, 0.5, 0.5]
+            )  # default color
         else:
             albedo = cv2.imread(albedo_path, cv2.IMREAD_UNCHANGED)
             albedo = cv2.cvtColor(albedo, cv2.COLOR_BGR2RGB)
             albedo = albedo.astype(np.float32) / 255
-            print(f'[load_obj] load texture: {albedo.shape}')
+            print(f"[load_obj] load texture: {albedo.shape}")
 
             # import matplotlib.pyplot as plt
             # plt.imshow(albedo)
@@ -99,7 +110,7 @@ class Mesh():
         mesh.albedo = torch.tensor(albedo, dtype=torch.float32, device=device)
 
         # load obj
-        with open(path, 'r') as f:
+        with open(path, "r") as f:
             lines = f.readlines()
 
         def parse_f_v(fv):
@@ -109,7 +120,7 @@ class Mesh():
             # f v1/vt1 v2/vt2 v3/vt3
             # f v1/vt1/vn1 v2/vt2/vn2 v3/vt3/vn3
             # f v1//vn1 v2//vn2 v3//vn3
-            xs = [int(x) - 1 if x != '' else -1 for x in fv.split('/')]
+            xs = [int(x) - 1 if x != "" else -1 for x in fv.split("/")]
             xs.extend([-1] * (3 - len(xs)))
             return xs[0], xs[1], xs[2]
 
@@ -123,14 +134,14 @@ class Mesh():
                 continue
             # v/vn/vt
             prefix = split_line[0].lower()
-            if prefix == 'v':
+            if prefix == "v":
                 vertices.append([float(v) for v in split_line[1:]])
-            elif prefix == 'vn':
+            elif prefix == "vn":
                 normals.append([float(v) for v in split_line[1:]])
-            elif prefix == 'vt':
+            elif prefix == "vt":
                 val = [float(v) for v in split_line[1:]]
                 texcoords.append([val[0], 1.0 - val[1]])
-            elif prefix == 'f':
+            elif prefix == "f":
                 vs = split_line[1:]
                 nv = len(vs)
                 v0, t0, n0 = parse_f_v(vs[0])
@@ -142,12 +153,28 @@ class Mesh():
                     nfaces.append([n0, n1, n2])
 
         mesh.v = torch.tensor(vertices, dtype=torch.float32, device=device)
-        mesh.vt = torch.tensor(texcoords, dtype=torch.float32, device=device) if len(texcoords) > 0 else None
-        mesh.vn = torch.tensor(normals, dtype=torch.float32, device=device) if len(normals) > 0 else None
+        mesh.vt = (
+            torch.tensor(texcoords, dtype=torch.float32, device=device)
+            if len(texcoords) > 0
+            else None
+        )
+        mesh.vn = (
+            torch.tensor(normals, dtype=torch.float32, device=device)
+            if len(normals) > 0
+            else None
+        )
 
         mesh.f = torch.tensor(faces, dtype=torch.int32, device=device)
-        mesh.ft = torch.tensor(tfaces, dtype=torch.int32, device=device) if texcoords is not None else None
-        mesh.fn = torch.tensor(nfaces, dtype=torch.int32, device=device) if normals is not None else None
+        mesh.ft = (
+            torch.tensor(tfaces, dtype=torch.int32, device=device)
+            if texcoords is not None
+            else None
+        )
+        mesh.fn = (
+            torch.tensor(nfaces, dtype=torch.int32, device=device)
+            if normals is not None
+            else None
+        )
 
         return mesh
 
@@ -157,34 +184,38 @@ class Mesh():
 
         # device
         if device is None:
-            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         mesh.device = device
 
         # use trimesh to load glb, assume only has one single RootMesh...
         _data = trimesh.load(path)
         if isinstance(_data, trimesh.Scene):
-                
+
             mesh_keys = list(_data.geometry.keys())
-            assert len(mesh_keys) == 1, f'{path} contains more than one meshes, not supported!'
+            assert (
+                len(mesh_keys) == 1
+            ), f"{path} contains more than one meshes, not supported!"
             _mesh = _data.geometry[mesh_keys[0]]
 
         elif isinstance(_data, trimesh.Trimesh):
             _mesh = _data
 
         else:
-            raise NotImplementedError(f'type {type(_data)} not supported!')
+            raise NotImplementedError(f"type {type(_data)} not supported!")
 
         # TODO: exception handling if no material
         _material = _mesh.visual.material
         if isinstance(_material, trimesh.visual.material.PBRMaterial):
             texture = np.array(_material.baseColorTexture).astype(np.float32) / 255
         elif isinstance(_material, trimesh.visual.material.SimpleMaterial):
-            texture = np.array(_material.to_pbr().baseColorTexture).astype(np.float32) / 255
+            texture = (
+                np.array(_material.to_pbr().baseColorTexture).astype(np.float32) / 255
+            )
         else:
-            raise NotImplementedError(f'material type {type(_material)} not supported!')
+            raise NotImplementedError(f"material type {type(_material)} not supported!")
 
-        print(f'[load_obj] load texture: {texture.shape}')
+        print(f"[load_obj] load texture: {texture.shape}")
         mesh.albedo = torch.tensor(texture, dtype=torch.float32, device=device)
 
         vertices = _mesh.vertices
@@ -196,22 +227,38 @@ class Mesh():
         faces = tfaces = nfaces = _mesh.faces
 
         mesh.v = torch.tensor(vertices, dtype=torch.float32, device=device)
-        mesh.vt = torch.tensor(texcoords, dtype=torch.float32, device=device) if len(texcoords) > 0 else None
-        mesh.vn = torch.tensor(normals, dtype=torch.float32, device=device) if len(normals) > 0 else None
+        mesh.vt = (
+            torch.tensor(texcoords, dtype=torch.float32, device=device)
+            if len(texcoords) > 0
+            else None
+        )
+        mesh.vn = (
+            torch.tensor(normals, dtype=torch.float32, device=device)
+            if len(normals) > 0
+            else None
+        )
 
         mesh.f = torch.tensor(faces, dtype=torch.int32, device=device)
-        mesh.ft = torch.tensor(tfaces, dtype=torch.int32, device=device) if texcoords is not None else None
-        mesh.fn = torch.tensor(nfaces, dtype=torch.int32, device=device) if normals is not None else None
+        mesh.ft = (
+            torch.tensor(tfaces, dtype=torch.int32, device=device)
+            if texcoords is not None
+            else None
+        )
+        mesh.fn = (
+            torch.tensor(nfaces, dtype=torch.int32, device=device)
+            if normals is not None
+            else None
+        )
 
         return mesh
-    
+
     # aabb
     def aabb(self):
         return torch.min(self.v, dim=0).values, torch.max(self.v, dim=0).values
 
     # unit size
     @torch.no_grad()
-    def auto_size(self): 
+    def auto_size(self):
         vmin, vmax = self.aabb()
         self.ori_center = (vmax + vmin) / 2
         self.ori_scale = 1.2 / torch.max(vmax - vmin).item()
@@ -230,7 +277,11 @@ class Mesh():
         vn.scatter_add_(0, i2[:, None].repeat(1, 3), face_normals)
 
         # Normalize, replace zero (degenerated) normals with some default value
-        vn = torch.where(dot(vn, vn) > 1e-20, vn, torch.tensor([0.0, 0.0, 1.0], dtype=torch.float32, device=vn.device))
+        vn = torch.where(
+            dot(vn, vn) > 1e-20,
+            vn,
+            torch.tensor([0.0, 0.0, 1.0], dtype=torch.float32, device=vn.device),
+        )
         vn = safe_normalize(vn)
 
         self.vn = vn
@@ -240,14 +291,15 @@ class Mesh():
 
         # try to load cache
         if cache_path is not None:
-            cache_path = cache_path.replace('.obj', '_uv.npz')
+            cache_path = cache_path.replace(".obj", "_uv.npz")
 
         if cache_path is not None and os.path.exists(cache_path):
             data = np.load(cache_path)
-            vt_np, ft_np = data['vt'], data['ft']
+            vt_np, ft_np = data["vt"], data["ft"]
         else:
 
             import xatlas
+
             v_np = self.v.detach().cpu().numpy()
             f_np = self.f.detach().int().cpu().numpy()
             atlas = xatlas.Atlas()
@@ -269,7 +321,7 @@ class Mesh():
 
     def to(self, device):
         self.device = device
-        for name in ['v', 'f', 'vn', 'fn', 'vt', 'ft', 'albedo']:
+        for name in ["v", "f", "vn", "fn", "vt", "ft", "albedo"]:
             tensor = getattr(self, name)
             if tensor is not None:
                 setattr(self, name, tensor.to(device))
@@ -278,8 +330,8 @@ class Mesh():
     # write to obj file
     def write(self, path):
 
-        mtl_path = path.replace('.obj', '.mtl')
-        albedo_path = path.replace('.obj', '_albedo.png')
+        mtl_path = path.replace(".obj", ".mtl")
+        albedo_path = path.replace(".obj", "_albedo.png")
 
         v_np = self.v.detach().cpu().numpy()
         vt_np = self.vt.detach().cpu().numpy() if self.vt is not None else None
@@ -289,18 +341,18 @@ class Mesh():
         fn_np = self.fn.detach().cpu().numpy() if self.fn is not None else None
 
         with open(path, "w") as fp:
-            fp.write(f'mtllib {os.path.basename(mtl_path)} \n')
+            fp.write(f"mtllib {os.path.basename(mtl_path)} \n")
 
             for v in v_np:
-                fp.write(f'v {v[0]} {v[1]} {v[2]} \n')
+                fp.write(f"v {v[0]} {v[1]} {v[2]} \n")
 
             for v in vt_np:
-                fp.write(f'vt {v[0]} {1 - v[1]} \n')
+                fp.write(f"vt {v[0]} {1 - v[1]} \n")
 
             for v in vn_np:
-                fp.write(f'vn {v[0]} {v[1]} {v[2]} \n')
+                fp.write(f"vn {v[0]} {v[1]} {v[2]} \n")
 
-            fp.write(f'usemtl defaultMat \n')
+            fp.write(f"usemtl defaultMat \n")
             for i in range(len(f_np)):
                 fp.write(
                     f'f {f_np[i, 0] + 1}/{ft_np[i, 0] + 1 if ft_np is not None else ""}/{fn_np[i, 0] + 1 if fn_np is not None else ""} \
@@ -309,14 +361,14 @@ class Mesh():
                 )
 
         with open(mtl_path, "w") as fp:
-            fp.write(f'newmtl defaultMat \n')
-            fp.write(f'Ka 1 1 1 \n')
-            fp.write(f'Kd 1 1 1 \n')
-            fp.write(f'Ks 0 0 0 \n')
-            fp.write(f'Tr 1 \n')
-            fp.write(f'illum 1 \n')
-            fp.write(f'Ns 0 \n')
-            fp.write(f'map_Kd {os.path.basename(albedo_path)} \n')
+            fp.write(f"newmtl defaultMat \n")
+            fp.write(f"Ka 1 1 1 \n")
+            fp.write(f"Kd 1 1 1 \n")
+            fp.write(f"Ks 0 0 0 \n")
+            fp.write(f"Tr 1 \n")
+            fp.write(f"illum 1 \n")
+            fp.write(f"Ns 0 \n")
+            fp.write(f"map_Kd {os.path.basename(albedo_path)} \n")
 
         albedo = self.albedo.detach().cpu().numpy()
         albedo = (albedo * 255).astype(np.uint8)

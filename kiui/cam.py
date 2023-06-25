@@ -1,7 +1,7 @@
 import numpy as np
 from .op import *
 
-# camera convention (OpenGL): 
+# camera convention (OpenGL):
 # right-hand, x right, y up, z forward
 # elevation in (-90, 90), azimuth in (-180, 180)
 # ref: https://note.kiui.moe/vision/camera_intrinsics_exintrics/
@@ -34,7 +34,7 @@ def orbit_camera(elevation, azimuth, radius=1, is_degree=True, target=None):
     z = radius * np.cos(elevation) * np.cos(azimuth)
     if target is None:
         target = np.zeros([1, 3], dtype=np.float32)
-    campos = np.stack([x, y, z], axis=-1) + target # [N, 3]
+    campos = np.stack([x, y, z], axis=-1) + target  # [N, 3]
     T = np.eye(4, dtype=np.float32)[None, ...].repeat(N, axis=0)
     T[:, :3, :3] = look_at(campos, target)
     T[:, :3, 3] = campos

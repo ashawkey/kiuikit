@@ -1,13 +1,13 @@
 import kiui
 
-kiui.try_import('os', 'os', True)
+kiui.try_import("os", "os", True)
 print(os)
 
-kiui.env('data', verbose=False)
+kiui.env("data", verbose=False)
 print(globals())
 
 try:
-    kiui.env('NotAPack', verbose=True)
+    kiui.env("NotAPack", verbose=True)
 except Exception as e:
     print(e)
 

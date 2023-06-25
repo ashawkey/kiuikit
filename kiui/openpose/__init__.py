@@ -5,7 +5,8 @@
 # 4th Edited by ControlNet (added face and correct hands)
 
 import os
-os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
+
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 import torch
 import numpy as np
@@ -16,16 +17,23 @@ from .face import Face
 
 from ..utils import load_file_from_url
 
-body_model_path = "https://huggingface.co/lllyasviel/Annotators/resolve/main/body_pose_model.pth"
-hand_model_path = "https://huggingface.co/lllyasviel/Annotators/resolve/main/hand_pose_model.pth"
-face_model_path = "https://huggingface.co/lllyasviel/Annotators/resolve/main/facenet.pth"
+body_model_path = (
+    "https://huggingface.co/lllyasviel/Annotators/resolve/main/body_pose_model.pth"
+)
+hand_model_path = (
+    "https://huggingface.co/lllyasviel/Annotators/resolve/main/hand_pose_model.pth"
+)
+face_model_path = (
+    "https://huggingface.co/lllyasviel/Annotators/resolve/main/facenet.pth"
+)
+
 
 def draw_pose(pose, H, W, draw_body=True, draw_hand=True, draw_face=True):
-    bodies = pose['bodies']
-    faces = pose['faces']
-    hands = pose['hands']
-    candidate = bodies['candidate']
-    subset = bodies['subset']
+    bodies = pose["bodies"]
+    faces = pose["faces"]
+    hands = pose["hands"]
+    candidate = bodies["candidate"]
+    subset = bodies["subset"]
     canvas = np.zeros(shape=(H, W, 3), dtype=np.uint8)
 
     if draw_body:
@@ -41,7 +49,6 @@ def draw_pose(pose, H, W, draw_body=True, draw_hand=True, draw_face=True):
 
 
 class OpenposeDetector:
-
     def __init__(self):
         self.body_estimation = Body(load_file_from_url(body_model_path))
         self.hand_estimation = Hand(load_file_from_url(hand_model_path))
@@ -58,19 +65,31 @@ class OpenposeDetector:
                 # Hand
                 hands_list = util.handDetect(candidate, subset, oriImg)
                 for x, y, w, is_left in hands_list:
-                    peaks = self.hand_estimation(oriImg[y:y+w, x:x+w, :]).astype(np.float32)
+                    peaks = self.hand_estimation(
+                        oriImg[y : y + w, x : x + w, :]
+                    ).astype(np.float32)
                     if peaks.ndim == 2 and peaks.shape[1] == 2:
-                        peaks[:, 0] = np.where(peaks[:, 0] < 1e-6, -1, peaks[:, 0] + x) / float(W)
-                        peaks[:, 1] = np.where(peaks[:, 1] < 1e-6, -1, peaks[:, 1] + y) / float(H)
+                        peaks[:, 0] = np.where(
+                            peaks[:, 0] < 1e-6, -1, peaks[:, 0] + x
+                        ) / float(W)
+                        peaks[:, 1] = np.where(
+                            peaks[:, 1] < 1e-6, -1, peaks[:, 1] + y
+                        ) / float(H)
                         hands.append(peaks.tolist())
                 # Face
                 faces_list = util.faceDetect(candidate, subset, oriImg)
                 for x, y, w in faces_list:
-                    heatmaps = self.face_estimation(oriImg[y:y+w, x:x+w, :])
-                    peaks = self.face_estimation.compute_peaks_from_heatmaps(heatmaps).astype(np.float32)
+                    heatmaps = self.face_estimation(oriImg[y : y + w, x : x + w, :])
+                    peaks = self.face_estimation.compute_peaks_from_heatmaps(
+                        heatmaps
+                    ).astype(np.float32)
                     if peaks.ndim == 2 and peaks.shape[1] == 2:
-                        peaks[:, 0] = np.where(peaks[:, 0] < 1e-6, -1, peaks[:, 0] + x) / float(W)
-                        peaks[:, 1] = np.where(peaks[:, 1] < 1e-6, -1, peaks[:, 1] + y) / float(H)
+                        peaks[:, 0] = np.where(
+                            peaks[:, 0] < 1e-6, -1, peaks[:, 0] + x
+                        ) / float(W)
+                        peaks[:, 1] = np.where(
+                            peaks[:, 1] < 1e-6, -1, peaks[:, 1] + y
+                        ) / float(H)
                         faces.append(peaks.tolist())
             if candidate.ndim == 2 and candidate.shape[1] == 4:
                 candidate = candidate[:, :2]

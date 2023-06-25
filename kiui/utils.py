@@ -1,4 +1,6 @@
 import os
+import glob
+import tqdm
 import cv2
 import json
 import varname
@@ -18,82 +20,83 @@ def lo(*xs, verbose=0):
 
         if isinstance(x, np.ndarray):
             # general stats
-            text = ''
+            text = ""
             text += f"[orange1]Array {name}[/orange1] {x.shape} {x.dtype} ∈ [{x.min()}, {x.max()}]"
             if verbose >= 1:
                 text += f" μ = {x.mean()} σ = {x.std()}"
             # detect abnormal values
             if np.isnan(x).any():
-                text += '[red] NaN![/red]'
+                text += "[red] NaN![/red]"
             if np.isinf(x).any():
-                text += '[red] Inf![/red]'
+                text += "[red] Inf![/red]"
             console.print(text)
-            
+
             # show values if shape is small or verbose is high
             if x.size < 50 or verbose >= 2:
                 # np.set_printoptions(precision=4)
                 print(x)
-        
+
         elif torch.is_tensor(x):
             # general stats
-            text = ''
+            text = ""
             text += f"[orange1]Tensor {name}[/orange1] {x.shape} {x.dtype} {x.device} ∈ [{x.min().item()}, {x.max().item()}]"
             if verbose >= 1:
                 text += f" μ = {x.mean().item()} σ = {x.std().item()}"
             # detect abnormal values
             if torch.isnan(x).any():
-                text += '[red] NaN![/red]'
+                text += "[red] NaN![/red]"
             if torch.isinf(x).any():
-                text += '[red] Inf![/red]'
+                text += "[red] Inf![/red]"
             console.print(text)
-            
+
             # show values if shape is small or verbose is high
             if x.numel() < 50 or verbose >= 2:
                 # np.set_printoptions(precision=4)
                 print(x)
-            
-        else: # other type, just print them
-            console.print(f'[orange1]{type(x)} {name}[/orange1] {x}')
+
+        else:  # other type, just print them
+            console.print(f"[orange1]{type(x)} {name}[/orange1] {x}")
 
     # inspect names
     for i, x in enumerate(xs):
-        _lo(x, varname.argname(f'xs[{i}]'))
+        _lo(x, varname.argname(f"xs[{i}]"))
 
 
 def read_json(path):
-    with open(path, 'r') as f:
+    with open(path, "r") as f:
         return json.load(f)
 
 
 def write_json(path, x):
-    with open(path, 'w') as f:
+    with open(path, "w") as f:
         json.dump(x, f, indent=2)
-    
 
-def read_image(path, mode='float'):
 
-    if mode == 'pil':
+def read_image(path, mode="float", order="RGB"):
+
+    if mode == "pil":
         return Image.open(path)
 
     img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
-    
+
     # cvtColor
-    if len(img.shape) == 3:
-        if img.shape[2] == 4:
-            img = cv2.cvtColor(img, cv2.COLOR_BGRA2RGBA)
-        else:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    if order == "RGB":
+        if len(img.shape) == 3:
+            if img.shape[2] == 4:
+                img = cv2.cvtColor(img, cv2.COLOR_BGRA2RGBA)
+            else:
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     # mode
-    if 'float' in mode:
+    if "float" in mode:
         return img.astype(np.float32) / 255
-    elif 'tensor' in mode:
+    elif "tensor" in mode:
         return torch.from_numpy(img.astype(np.float32) / 255)
-    else: # uint8
+    else:  # uint8
         return img
 
 
-def write_image(path, img):
+def write_image(path, img, order="RGB"):
 
     if torch.is_tensor(img):
         img = img.detach().cpu().numpy()
@@ -102,12 +105,14 @@ def write_image(path, img):
         img = (img * 255).astype(np.uint8)
 
     # cvtColor
-    if len(img.shape) == 3:
-        if img.shape[2] == 4:
-            img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGRA)
-        else:
-            img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-    
+    if order == "RGB":
+        if len(img.shape) == 3:
+            if img.shape[2] == 4:
+                img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGRA)
+            else:
+                img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     cv2.imwrite(path, img)
 
 
@@ -132,7 +137,7 @@ def load_file_from_url(url, model_dir=None, progress=True, file_name=None):
     """
     if model_dir is None:  # use the pytorch hub_dir
         hub_dir = get_dir()
-        model_dir = os.path.join(hub_dir, 'checkpoints')
+        model_dir = os.path.join(hub_dir, "checkpoints")
 
     os.makedirs(model_dir, exist_ok=True)
 
@@ -144,4 +149,38 @@ def load_file_from_url(url, model_dir=None, progress=True, file_name=None):
     if not os.path.exists(cached_file):
         print(f'Downloading: "{url}" to {cached_file}\n')
         download_url_to_file(url, cached_file, hash_prefix=None, progress=progress)
-    return cached_file    
+    return cached_file
+
+
+def batch_process_image(
+    process_fn, path, out_path, color_order="RGB", out_format=None, **kwargs
+):
+    if os.path.isdir(path):
+        img_paths = glob.glob(os.path.join(path, "*"))
+        img_paths = [
+            f
+            for f in img_paths
+            if os.path.splitext(f)[1].lower() in [".jpg", ".jpeg", ".png"]
+        ]
+    else:
+        img_paths = [path]
+
+    if os.path.isdir(out_path):
+        os.makedirs(out_path, exist_ok=True)
+
+    for img_path in tqdm.tqdm(img_paths):
+        try:
+            if os.path.isdir(out_path):
+                img_out_path = os.path.join(out_path, os.path.basename(img_path))
+            else:
+                img_out_path = out_path
+
+            if out_format is not None:
+                img_out_path = os.path.splitext(img_out_path)[0] + "." + out_format
+
+            img = read_image(img_path, mode="uint8", order=color_order)
+            res = process_fn(img, **kwargs)
+            write_image(img_out_path, res, order=color_order)
+
+        except Exception as e:
+            print(e)
