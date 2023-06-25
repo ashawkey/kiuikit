@@ -152,25 +152,25 @@ def load_file_from_url(url, model_dir=None, progress=True, file_name=None):
     return cached_file
 
 
+def is_image_file(f):
+    return os.path.splitext(f)[1].lower() in [".jpg", ".jpeg", ".png"]
+
+
 def batch_process_image(
     process_fn, path, out_path, color_order="RGB", out_format=None, **kwargs
 ):
     if os.path.isdir(path):
         img_paths = glob.glob(os.path.join(path, "*"))
-        img_paths = [
-            f
-            for f in img_paths
-            if os.path.splitext(f)[1].lower() in [".jpg", ".jpeg", ".png"]
-        ]
+        img_paths = [f for f in img_paths if is_image_file(f)]
     else:
         img_paths = [path]
 
-    if os.path.isdir(out_path):
+    if not is_image_file(out_path):
         os.makedirs(out_path, exist_ok=True)
 
     for img_path in tqdm.tqdm(img_paths):
         try:
-            if os.path.isdir(out_path):
+            if not is_image_file(out_path):
                 img_out_path = os.path.join(out_path, os.path.basename(img_path))
             else:
                 img_out_path = out_path
@@ -183,4 +183,5 @@ def batch_process_image(
             write_image(img_out_path, res, order=color_order)
 
         except Exception as e:
+            print(f"[Error] when processing {img_path} --> {img_out_path}")
             print(e)
