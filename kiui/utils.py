@@ -112,7 +112,9 @@ def write_image(path, img, order="RGB"):
             else:
                 img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    dir_path = os.path.dirname(path)
+    if dir_path != '' and not os.path.exists(dir_path):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
     cv2.imwrite(path, img)
 
 
