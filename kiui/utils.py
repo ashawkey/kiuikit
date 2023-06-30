@@ -21,7 +21,9 @@ def lo(*xs, verbose=0):
         if isinstance(x, np.ndarray):
             # general stats
             text = ""
-            text += f"[orange1]Array {name}[/orange1] {x.shape} {x.dtype} ∈ [{x.min()}, {x.max()}]"
+            text += f"[orange1]Array {name}[/orange1] {x.shape} {x.dtype}"
+            if x.size > 0:
+                text += f"∈ [{x.min()}, {x.max()}]"
             if verbose >= 1:
                 text += f" μ = {x.mean()} σ = {x.std()}"
             # detect abnormal values
@@ -39,7 +41,9 @@ def lo(*xs, verbose=0):
         elif torch.is_tensor(x):
             # general stats
             text = ""
-            text += f"[orange1]Tensor {name}[/orange1] {x.shape} {x.dtype} {x.device} ∈ [{x.min().item()}, {x.max().item()}]"
+            text += f"[orange1]Tensor {name}[/orange1] {x.shape} {x.dtype} {x.device}"
+            if x.numel() > 0:
+                text += f"∈ [{x.min().item()}, {x.max().item()}]"
             if verbose >= 1:
                 text += f" μ = {x.mean().item()} σ = {x.std().item()}"
             # detect abnormal values
@@ -159,7 +163,10 @@ def is_image_file(f):
 
 
 def batch_process_image(
-    process_fn, path, out_path, color_order="RGB", out_format=None, **kwargs
+    process_fn, path, out_path, 
+    overwrite=False,
+    color_order="RGB", out_format=None, 
+    **kwargs
 ):
     if os.path.isdir(path):
         img_paths = glob.glob(os.path.join(path, "*"))
@@ -179,6 +186,10 @@ def batch_process_image(
 
             if out_format is not None:
                 img_out_path = os.path.splitext(img_out_path)[0] + "." + out_format
+
+            if os.path.exists(img_out_path) and not overwrite:
+                print(f"[INFO] ignoring {img_path} --> {img_out_path}")
+                continue
 
             img = read_image(img_path, mode="uint8", order=color_order)
             res = process_fn(img, **kwargs)
