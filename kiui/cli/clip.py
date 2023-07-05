@@ -9,7 +9,7 @@ def process(img_or_txt, **kwargs):
 
 if __name__ == "__main__":
     import argparse
-    from ..utils import batch_process_files
+    from kiui.utils import batch_process_files
 
     parser = argparse.ArgumentParser()
     parser.add_argument("path", type=str, default=None)

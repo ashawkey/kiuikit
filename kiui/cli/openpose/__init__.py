@@ -15,7 +15,7 @@ from .body import Body
 from .hand import Hand
 from .face import Face
 
-from ..utils import load_file_from_url
+from kiui.utils import load_file_from_url
 
 body_model_path = (
     "https://huggingface.co/lllyasviel/Annotators/resolve/main/body_pose_model.pth"

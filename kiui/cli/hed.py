@@ -9,7 +9,7 @@ import cv2
 import torch
 import numpy as np
 
-from ..utils import load_file_from_url
+from kiui.utils import load_file_from_url
 
 
 def nms(x, t, s):
@@ -162,7 +162,7 @@ def detect(img, **kwargs):
 
 if __name__ == "__main__":
     import argparse
-    from ..utils import batch_process_files
+    from kiui.utils import batch_process_files
 
     parser = argparse.ArgumentParser()
     parser.add_argument("path", type=str, default=None)

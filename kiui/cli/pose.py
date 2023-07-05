@@ -23,7 +23,7 @@ def detect(img, reso=None, body_only=False, **kwargs):
 
 if __name__ == "__main__":
     import argparse
-    from ..utils import batch_process_files
+    from kiui.utils import batch_process_files
 
     parser = argparse.ArgumentParser()
     parser.add_argument("path", type=str, default=None)
