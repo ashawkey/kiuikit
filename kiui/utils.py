@@ -176,7 +176,8 @@ def batch_process_files(
     else:
         file_paths = [path]
 
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    if os.path.dirname(out_path) != '':
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
     for file_path in tqdm.tqdm(file_paths):
         try:
