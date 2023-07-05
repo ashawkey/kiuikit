@@ -158,43 +158,60 @@ def load_file_from_url(url, model_dir=None, progress=True, file_name=None):
     return cached_file
 
 
-def is_image_file(f):
-    return os.path.splitext(f)[1].lower() in [".jpg", ".jpeg", ".png"]
+def is_format(f, format):
+    return os.path.splitext(f)[1].lower() in format
 
-
-def batch_process_image(
+def batch_process_files(
     process_fn, path, out_path, 
     overwrite=False,
-    color_order="RGB", out_format=None, 
+    in_format=[".jpg", ".jpeg", ".png"],
+    out_format=None,
+    color_order="RGB",
     **kwargs
 ):
+    
     if os.path.isdir(path):
-        img_paths = glob.glob(os.path.join(path, "*"))
-        img_paths = [f for f in img_paths if is_image_file(f)]
+        file_paths = glob.glob(os.path.join(path, "*"))
+        file_paths = [f for f in file_paths if is_format(f, in_format)]
     else:
-        img_paths = [path]
+        file_paths = [path]
 
-    if not is_image_file(out_path):
-        os.makedirs(out_path, exist_ok=True)
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
-    for img_path in tqdm.tqdm(img_paths):
+    for file_path in tqdm.tqdm(file_paths):
         try:
-            if not is_image_file(out_path):
-                img_out_path = os.path.join(out_path, os.path.basename(img_path))
+            
+            if len(file_paths) == 1:
+                file_out_path = out_path
             else:
-                img_out_path = out_path
-
+                file_out_path = os.path.join(out_path, os.path.basename(file_path))
+            
             if out_format is not None:
-                img_out_path = os.path.splitext(img_out_path)[0] + "." + out_format
+                file_out_path = os.path.splitext(file_out_path)[0] + out_format
 
-            if os.path.exists(img_out_path) and not overwrite:
-                print(f"[INFO] ignoring {img_path} --> {img_out_path}")
+            if os.path.exists(file_out_path) and not overwrite:
+                print(f"[INFO] ignoring {file_path} --> {file_out_path}")
                 continue
+            
+            # dispatch suitable loader and writer
+            # only support image and text file
+            if is_format(file_path, ['.jpg', '.jpeg', '.png']):
+                input = read_image(file_path, mode="uint8", order=color_order)
+            else:
+                with open(file_path, "r") as f:
+                    input = f.read()
 
-            img = read_image(img_path, mode="uint8", order=color_order)
-            res = process_fn(img, **kwargs)
-            write_image(img_out_path, res, order=color_order)
+            output = process_fn(input, **kwargs)
+
+            # only support image, npy or text file
+            if is_format(file_out_path, ['.jpg', '.jpeg', '.png']):
+                write_image(file_out_path, output, order=color_order)
+            elif is_format(file_out_path, ['.npy']):
+                np.save(file_out_path, output)
+            else:
+                with open(file_out_path, "w") as f:
+                    f.write(output)
 
         except Exception as e:
-            print(f"[Error] when processing {img_path} --> {img_out_path}")
+            print(f"[Error] when processing {file_path} --> {file_out_path}")
             print(e)

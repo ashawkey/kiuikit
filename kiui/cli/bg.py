@@ -1,5 +1,3 @@
-import os
-import cv2
 import numpy as np
 from skimage.measure import label
 
@@ -49,7 +47,7 @@ def remove(img, mode="rgba", lcc=False, post_process=True, **kwargs):
 
 if __name__ == "__main__":
     import argparse
-    from .utils import batch_process_image
+    from ..utils import batch_process_files
 
     parser = argparse.ArgumentParser()
     parser.add_argument("path", type=str, default=None)
@@ -60,12 +58,12 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    batch_process_image(
+    batch_process_files(
         remove,
         args.path,
         args.out_path,
         color_order="BGR",
-        out_format="png" if args.mode == "rgba" else None,
+        out_format=".png" if args.mode == "rgba" else None,
         mode=args.mode,
         lcc=args.lcc,
     )

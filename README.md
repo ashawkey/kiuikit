@@ -50,28 +50,18 @@ mesh = Mesh.load('model.obj')
 kiui.lo(mesh.v, mesh.f) # CUDA torch.Tensor suitable for nvdiffrast
 mesh.write('new.obj')
 
-### background removal utils
-from kiui.bg import remove, remove_file, remove_folder
-res = remove(img)
-remove_file('input.jpg', 'output.png') # save original + mask as rgba
-remove_file('input.jpg', 'output.png', post_process=True) # morphology opening
-remove_file('input.jpg', 'output.png', lcc=True) # largest connected component
-remove_file('input.jpg', 'mask.jpg', mode='a') # only save [h, w] mask
-remove_folder('input/', 'output/')
 ```
 
 CLI tools:
 ```bash
 # background removal utils
-python -m kiui.bg --help
-python -m kiui.bg input.png output.png
-python -m kiui.bg input_folder output_folder
-python -m kiui.bg input_folder output_folder --mode a --lcc
+python -m kiui.cli.bg --help
+python -m kiui.cli.bg input.png output.png
+python -m kiui.cli.bg input_folder output_folder
 
 # openpose detector
-python -m kiui.pose --help
-python -m kiui.pose input.png output.png
-python -m kiui.pose input_folder output_folder
-python -m kiui.pose input_folder output_folder --body_only
+python -m kiui.cli.pose --help
 
+# hed edge detector
+python -m kiui.cli.hed --help
 ```

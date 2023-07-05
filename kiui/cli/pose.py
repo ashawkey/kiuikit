@@ -23,7 +23,7 @@ def detect(img, reso=None, body_only=False, **kwargs):
 
 if __name__ == "__main__":
     import argparse
-    from .utils import batch_process_image
+    from ..utils import batch_process_files
 
     parser = argparse.ArgumentParser()
     parser.add_argument("path", type=str, default=None)
@@ -32,4 +32,4 @@ if __name__ == "__main__":
     parser.add_argument("--body_only", action="store_true")
     args = parser.parse_args()
 
-    batch_process_image(detect, args.path, args.out_path, reso=args.reso, body_only=args.body_only)
+    batch_process_files(detect, args.path, args.out_path, reso=args.reso, body_only=args.body_only)
