@@ -19,6 +19,7 @@ if __name__ == "__main__":
         install_requires=[
             "lazy_loader",
             "varname",
+            "objprint",
         ],
         extras_require={
             "full": [

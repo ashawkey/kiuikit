@@ -8,6 +8,7 @@ from PIL import Image
 
 import torch
 import numpy as np
+from objprint import objstr
 
 from rich.console import Console
 
@@ -59,7 +60,7 @@ def lo(*xs, verbose=0):
                 print(x)
 
         else:  # other type, just print them
-            console.print(f"[orange1]{type(x)} {name}[/orange1] {x}")
+            console.print(f"[orange1]{type(x)} {name}[/orange1] {objstr(x)}")
 
     # inspect names
     for i, x in enumerate(xs):
