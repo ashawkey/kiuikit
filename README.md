@@ -64,4 +64,8 @@ python -m kiui.cli.pose --help
 
 # hed edge detector
 python -m kiui.cli.hed --help
+
+# open a GUI to render a mesh (extra dependency: nvdiffrast)
+python -m kiui.cli.renderer --help
+python -m kiui.cli.renderer mesh.obj
 ```

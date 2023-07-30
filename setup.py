@@ -33,7 +33,8 @@ if __name__ == "__main__":
                 "matplotlib",
                 "opencv-python",
                 "scikit-image",
-                "rembg[gpu]",
+                "rembg[gpu,cli]",
+                "dearpygui",
             ],
         },
     )
