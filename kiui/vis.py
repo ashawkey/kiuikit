@@ -66,7 +66,8 @@ def plot_image(*xs, normalize=False):
 
         lo(image)
 
-        image = image.astype(np.float32)
+        if image.dtype == np.uint8:
+            image = image.astype(np.float32) / 255.0
 
         # normalize
         if normalize:
