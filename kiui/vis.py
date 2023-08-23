@@ -41,7 +41,7 @@ def plot_matrix(*xs):
                 plt.matshow(matrix[..., i])
                 plt.show()
         else:
-            plt.matshow(matrix)
+            plt.matshow(matrix.astype(np.float32))
             plt.show()
 
     for x in xs:
@@ -77,7 +77,7 @@ def plot_image(*xs, normalize=False):
                 + 1e-8
             )
 
-        plt.imshow(image)
+        plt.imshow(image.astype(np.float32))
         plt.show()
 
     for x in xs:

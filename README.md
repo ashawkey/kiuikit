@@ -49,6 +49,7 @@ from kiui.mesh import Mesh
 mesh = Mesh.load('model.obj')
 kiui.lo(mesh.v, mesh.f) # CUDA torch.Tensor suitable for nvdiffrast
 mesh.write('new.obj')
+mesh.write('new.glb') # support exporting to GLB/GLTF too (texture embedded).
 
 ```
 
@@ -68,4 +69,5 @@ python -m kiui.cli.hed --help
 # open a GUI to render a mesh (extra dependency: nvdiffrast)
 python -m kiui.cli.renderer --help
 python -m kiui.cli.renderer mesh.obj
+python -m kiui.cli.renderer mesh.obj --save_video out.mp4 --wogui # save 360 degree rotating video
 ```

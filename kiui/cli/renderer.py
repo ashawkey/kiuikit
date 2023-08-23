@@ -18,6 +18,7 @@ class GUI:
         self.W = opt.W
         self.H = opt.H
         self.debug = debug
+        self.wogui = opt.wogui # disable gui and run in cmd
         self.cam = OrbitCamera(opt.W, opt.H, r=opt.radius, fovy=opt.fovy)
         self.bg_color = torch.ones(3, dtype=torch.float32) # default white bg
 
@@ -31,15 +32,20 @@ class GUI:
         # load mesh
         self.mesh = Mesh.load(opt.mesh)
 
-        self.glctx = dr.RasterizeCudaContext() # dr.RasterizeGLContext()
+        if self.wogui or os.name == 'nt':
+            self.glctx = dr.RasterizeGLContext()
+        else:
+            self.glctx = dr.RasterizeCudaContext()
 
-        dpg.create_context()
-        self.register_dpg()
-        self.step()
+        if not self.wogui:
+            dpg.create_context()
+            self.register_dpg()
+            self.step()
         
 
     def __del__(self):
-        dpg.destroy_context()
+        if not self.wogui:
+            dpg.destroy_context()
     
     def step(self):
 
@@ -95,8 +101,9 @@ class GUI:
             else:
                 self.render_buffer = (self.render_buffer * self.spp + buffer) / (self.spp + 1)
 
-            dpg.set_value("_log_infer_time", f'{t:.4f}ms ({int(1000/t)} FPS)')
-            dpg.set_value("_texture", self.render_buffer)
+            if not self.wogui:
+                dpg.set_value("_log_infer_time", f'{t:.4f}ms ({int(1000/t)} FPS)')
+                dpg.set_value("_texture", self.render_buffer)
 
         
     def register_dpg(self):
@@ -252,6 +259,7 @@ class GUI:
 
 
     def render(self):
+        assert not self.wogui
         while dpg.is_dearpygui_running():
             self.step()
             dpg.render_dearpygui_frame()
@@ -266,9 +274,11 @@ if __name__ == '__main__':
     parser.add_argument('mesh', default='', type=str, help="path to mesh (obj, glb, ...)")
     parser.add_argument('--W', type=int, default=800, help="GUI width")
     parser.add_argument('--H', type=int, default=800, help="GUI height")
-    parser.add_argument('--radius', type=float, default=5, help="default GUI camera radius from center")
-    parser.add_argument('--fovy', type=float, default=30, help="default GUI camera fovy")
+    parser.add_argument('--radius', type=float, default=3, help="default GUI camera radius from center")
+    parser.add_argument('--fovy', type=float, default=50, help="default GUI camera fovy")
+    parser.add_argument("--wogui", action='store_true', help="disable all dpg GUI")
     parser.add_argument('--save', type=str, default=None, help="path to save example rendered images")
+    parser.add_argument('--save_video', type=str, default=None, help="path to save rendered video")
 
     opt = parser.parse_args()
 
@@ -284,9 +294,26 @@ if __name__ == '__main__':
                 gui.cam.from_angle(ele, azi)
                 gui.need_update = True
                 gui.step()
-                dpg.render_dearpygui_frame()
+                if not opt.wogui:
+                    dpg.render_dearpygui_frame()
                 image = (gui.render_buffer * 255).astype(np.uint8)
                 image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
                 cv2.imwrite(os.path.join(opt.save, f'{ele}_{azi}.png'), image)
+    elif opt.save_video is not None:
+        import imageio
+        images = []
+        elevation = [0,]
+        azimuth = np.arange(-180, 180, 2, dtype=np.int32)
+        for ele in tqdm.tqdm(elevation):
+            for azi in tqdm.tqdm(azimuth):
+                gui.cam.from_angle(ele, azi)
+                gui.need_update = True
+                gui.step()
+                if not opt.wogui:
+                    dpg.render_dearpygui_frame()
+                image = (gui.render_buffer * 255).astype(np.uint8)
+                images.append(image)
+        images = np.stack(images, axis=0)
+        imageio.mimwrite(opt.save_video, images, fps=30, quality=8, macro_block_size=1)
     else:
         gui.render()

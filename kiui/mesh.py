@@ -33,7 +33,7 @@ class Mesh:
         self.ori_scale = 1
 
     @classmethod
-    def load(cls, path=None, **kwargs):
+    def load(cls, path=None, resize=True, renormal=True, **kwargs):
         # assume init with kwargs
         if path is None:
             mesh = cls(**kwargs)
@@ -45,15 +45,16 @@ class Mesh:
             mesh = cls.load_trimesh(path, **kwargs)
 
         # auto-normalize
-        mesh.auto_size()
-        print(f"[Mesh loading] v: {mesh.v.shape}, f: {mesh.f.shape}")
+        if resize:
+            mesh.auto_size()
         # auto-fix normal
-        if mesh.vn is None:
+        if renormal or mesh.vn is None:
             mesh.auto_normal()
-        print(f"[Mesh loading] vn: {mesh.vn.shape}, fn: {mesh.fn.shape}")
         # auto-fix texture
         if mesh.vt is None:
             mesh.auto_uv(cache_path=path)
+        print(f"[Mesh loading] v: {mesh.v.shape}, f: {mesh.f.shape}")
+        print(f"[Mesh loading] vn: {mesh.vn.shape}, fn: {mesh.fn.shape}")
         print(f"[Mesh loading] vt: {mesh.vt.shape}, ft: {mesh.ft.shape}")
 
         return mesh
@@ -61,7 +62,6 @@ class Mesh:
     # load from obj file
     @classmethod
     def load_obj(cls, path, albedo_path=None, device=None, init_empty_tex=False):
-
         assert os.path.splitext(path)[-1] == ".obj"
 
         mesh = cls()
@@ -191,7 +191,6 @@ class Mesh:
         # use trimesh to load glb, assume only has one single RootMesh...
         _data = trimesh.load(path)
         if isinstance(_data, trimesh.Scene):
-
             mesh_keys = list(_data.geometry.keys())
             assert (
                 len(mesh_keys) == 1
@@ -261,7 +260,7 @@ class Mesh:
     def auto_size(self):
         vmin, vmax = self.aabb()
         self.ori_center = (vmax + vmin) / 2
-        self.ori_scale = 1.2 / torch.max(vmax - vmin).item()
+        self.ori_scale = 1.8 / torch.max(vmax - vmin).item()
         self.v = (self.v - self.ori_center) * self.ori_scale
 
     def auto_normal(self):
@@ -287,17 +286,14 @@ class Mesh:
         self.vn = vn
         self.fn = self.f
 
-    def auto_uv(self, cache_path=None):
-
+    def auto_uv(self, cache_path=None, vmap=True):
         # try to load cache
         if cache_path is not None:
             cache_path = cache_path.replace(".obj", "_uv.npz")
-
         if cache_path is not None and os.path.exists(cache_path):
             data = np.load(cache_path)
-            vt_np, ft_np = data["vt"], data["ft"]
+            vt_np, ft_np, vmapping = data["vt"], data["ft"], data["vmapping"]
         else:
-
             import xatlas
 
             v_np = self.v.detach().cpu().numpy()
@@ -305,19 +301,38 @@ class Mesh:
             atlas = xatlas.Atlas()
             atlas.add_mesh(v_np, f_np)
             chart_options = xatlas.ChartOptions()
-            chart_options.max_iterations = 4
+            # chart_options.max_iterations = 4
             atlas.generate(chart_options=chart_options)
             vmapping, ft_np, vt_np = atlas[0]  # [N], [M, 3], [N, 2]
 
             # save to cache
             if cache_path is not None:
-                np.savez(cache_path, vt=vt_np, ft=ft_np)
-
+                np.savez(cache_path, vt=vt_np, ft=ft_np, vmapping=vmapping)
+        
         vt = torch.from_numpy(vt_np.astype(np.float32)).to(self.device)
         ft = torch.from_numpy(ft_np.astype(np.int32)).to(self.device)
-
         self.vt = vt
         self.ft = ft
+
+        if vmap:
+            # remap v/f to vt/ft, so each v correspond to a unique vt. (necessary for gltf)
+            vmapping = torch.from_numpy(vmapping.astype(np.int64)).long().to(self.device)
+            self.align_v_to_vt(vmapping)
+    
+    def align_v_to_vt(self, vmapping=None):
+        # remap v/f and vn/vn to vt/ft.
+        if vmapping is None:
+            ft = self.ft.view(-1).long()
+            f = self.f.view(-1).long()
+            vmapping = torch.zeros(self.vt.shape[0], dtype=torch.long, device=self.device)
+            vmapping[ft] = f # scatter, choose one if not index is not unique
+
+        self.v = self.v[vmapping]
+        self.f = self.ft
+        # assume fn == f
+        if self.vn is not None:
+            self.vn = self.vn[vmapping]
+            self.fn = self.ft
 
     def to(self, device):
         self.device = device
@@ -326,9 +341,170 @@ class Mesh:
             if tensor is not None:
                 setattr(self, name, tensor.to(device))
         return self
-
-    # write to obj file
+    
     def write(self, path):
+        if path.endswith(".ply"):
+            self.write_ply(path)
+        elif path.endswith(".obj"):
+            self.write_obj(path)
+        elif path.endswith(".glb") or path.endswith(".gltf"):
+            self.write_glb(path)
+        else:
+            raise NotImplementedError(f"format {path} not supported!")
+    
+    # write to ply file (only geom)
+    def write_ply(self, path):
+
+        v_np = self.v.detach().cpu().numpy()
+        f_np = self.f.detach().cpu().numpy()
+
+        _mesh = trimesh.Trimesh(vertices=v_np, faces=f_np)
+        _mesh.export(path)
+
+    # write to gltf/glb file (geom + texture)
+    def write_glb(self, path):
+
+        assert self.vn is not None and self.vt is not None # should be improved to support export without texture...
+
+        # assert self.v.shape[0] == self.vn.shape[0] and self.v.shape[0] == self.vt.shape[0]
+        if self.v.shape[0] != self.vt.shape[0]:
+            self.align_v_to_vt()
+
+        # assume f == fn == ft
+
+        import pygltflib
+
+        f_np = self.f.detach().cpu().numpy().astype(np.uint32)
+        v_np = self.v.detach().cpu().numpy().astype(np.float32)
+        vn_np = self.vn.detach().cpu().numpy().astype(np.float32)
+        vt_np = self.vt.detach().cpu().numpy().astype(np.float32)
+        
+        albedo = self.albedo.detach().cpu().numpy()
+        albedo = (albedo * 255).astype(np.uint8)
+        albedo = cv2.cvtColor(albedo, cv2.COLOR_RGB2BGR)
+
+        f_np_blob = f_np.flatten().tobytes()
+        v_np_blob = v_np.tobytes()
+        vn_np_blob = vn_np.tobytes()
+        vt_np_blob = vt_np.tobytes()
+        albedo_blob = cv2.imencode('.png', albedo)[1].tobytes()
+
+        gltf = pygltflib.GLTF2(
+            scene=0,
+            scenes=[pygltflib.Scene(nodes=[0])],
+            nodes=[pygltflib.Node(mesh=0)],
+            meshes=[pygltflib.Mesh(primitives=[
+                pygltflib.Primitive(
+                    # indices to accessors (0 is triangles)
+                    attributes=pygltflib.Attributes(
+                        POSITION=1, NORMAL=2, TEXCOORD_0=3, 
+                    ),
+                    indices=0, material=0,
+                )
+            ])],
+            materials=[
+                pygltflib.Material(
+                    pbrMetallicRoughness=pygltflib.PbrMetallicRoughness(
+                        baseColorTexture=pygltflib.TextureInfo(index=0, texCoord=0),
+                        metallicFactor=0.0,
+                        roughnessFactor=1.0,
+                    ),
+                    alphaCutoff=0,
+                    doubleSided=True,
+                )
+            ],
+            textures=[
+                pygltflib.Texture(sampler=0, source=0),
+            ],
+            samplers=[
+                pygltflib.Sampler(magFilter=pygltflib.LINEAR, minFilter=pygltflib.LINEAR_MIPMAP_LINEAR, wrapS=pygltflib.REPEAT, wrapT=pygltflib.REPEAT),
+            ],
+            images=[
+                # use embedded (buffer) image
+                pygltflib.Image(bufferView=3, mimeType="image/png"),
+            ],
+            buffers=[
+                pygltflib.Buffer(byteLength=len(f_np_blob) + len(v_np_blob) + len(vn_np_blob) + len(vt_np_blob) + len(albedo_blob))
+            ],
+            # buffer view (based on dtype)
+            bufferViews=[
+                # triangles; as flatten (element) array
+                pygltflib.BufferView(
+                    buffer=0,
+                    byteLength=len(f_np_blob),
+                    target=pygltflib.ELEMENT_ARRAY_BUFFER, # GL_ELEMENT_ARRAY_BUFFER (34963)
+                ),
+                # positions, normals; as vec3 array
+                pygltflib.BufferView(
+                    buffer=0,
+                    byteOffset=len(f_np_blob),
+                    byteLength=len(v_np_blob) + len(vn_np_blob),
+                    byteStride=12, # vec3
+                    target=pygltflib.ARRAY_BUFFER, # GL_ARRAY_BUFFER (34962)
+                ),
+                # texcoords; as vec2 array
+                pygltflib.BufferView(
+                    buffer=0,
+                    byteOffset=len(f_np_blob) + len(v_np_blob) + len(vn_np_blob),
+                    byteLength=len(vt_np_blob),
+                    byteStride=8, # vec2
+                    target=pygltflib.ARRAY_BUFFER,
+                ),
+                # texture; as none target
+                pygltflib.BufferView(
+                    buffer=0,
+                    byteOffset=len(f_np_blob) + len(v_np_blob) + len(vn_np_blob) + len(vt_np_blob),
+                    byteLength=len(albedo_blob),
+                ),
+            ],
+            accessors=[
+                # 0 = triangles
+                pygltflib.Accessor(
+                    bufferView=0,
+                    componentType=pygltflib.UNSIGNED_INT, # GL_UNSIGNED_INT (5125)
+                    count=f_np.size,
+                    type=pygltflib.SCALAR,
+                    max=[int(f_np.max())],
+                    min=[int(f_np.min())],
+                ),
+                # 1 = positions
+                pygltflib.Accessor(
+                    bufferView=1,
+                    componentType=pygltflib.FLOAT, # GL_FLOAT (5126)
+                    count=len(v_np),
+                    type=pygltflib.VEC3,
+                    max=v_np.max(axis=0).tolist(),
+                    min=v_np.min(axis=0).tolist(),
+                ),
+                # 2 = normals
+                pygltflib.Accessor(
+                    bufferView=1,
+                    componentType=pygltflib.FLOAT,
+                    count=len(vn_np),
+                    type=pygltflib.VEC3,
+                    max=vn_np.max(axis=0).tolist(),
+                    min=vn_np.min(axis=0).tolist(),
+                ),
+                # 3 = texcoords
+                pygltflib.Accessor(
+                    bufferView=2,
+                    componentType=pygltflib.FLOAT,
+                    count=len(vt_np),
+                    type=pygltflib.VEC2,
+                    max=vt_np.max(axis=0).tolist(),
+                    min=vt_np.min(axis=0).tolist(),
+                ),
+            ],
+        )
+
+        # set actual data
+        gltf.set_binary_blob(f_np_blob + v_np_blob + vn_np_blob + vt_np_blob + albedo_blob)
+
+        # glb = b"".join(gltf.save_to_bytes())
+        gltf.save(path)
+
+    # write to obj file (geom + texture)
+    def write_obj(self, path):
 
         mtl_path = path.replace(".obj", ".mtl")
         albedo_path = path.replace(".obj", "_albedo.png")
@@ -346,11 +522,13 @@ class Mesh:
             for v in v_np:
                 fp.write(f"v {v[0]} {v[1]} {v[2]} \n")
 
-            for v in vt_np:
-                fp.write(f"vt {v[0]} {1 - v[1]} \n")
+            if vt_np is not None:
+                for v in vt_np:
+                    fp.write(f"vt {v[0]} {1 - v[1]} \n")
 
-            for v in vn_np:
-                fp.write(f"vn {v[0]} {v[1]} {v[2]} \n")
+            if vn_np is not None:
+                for v in vn_np:
+                    fp.write(f"vn {v[0]} {v[1]} {v[2]} \n")
 
             fp.write(f"usemtl defaultMat \n")
             for i in range(len(f_np)):
