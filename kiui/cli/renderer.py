@@ -20,14 +20,14 @@ class GUI:
         self.debug = debug
         self.wogui = opt.wogui # disable gui and run in cmd
         self.cam = OrbitCamera(opt.W, opt.H, r=opt.radius, fovy=opt.fovy)
-        self.bg_color = torch.ones(3, dtype=torch.float32) # default white bg
+        self.bg_color = torch.ones(3, dtype=torch.float32).cuda() # default white bg
 
         self.render_buffer = np.zeros((self.W, self.H, 3), dtype=np.float32)
         self.need_update = True # camera moved, should reset accumulation
         self.light_dir = np.array([0, 0])
         self.ambient_ratio = 0.5
         
-        self.mode = 'lambertian'
+        self.mode = opt.mode
 
         # load mesh
         self.mesh = Mesh.load(opt.mesh)
@@ -55,24 +55,28 @@ class GUI:
             starter.record()
 
             # do MVP for vertices
-            mv = torch.from_numpy(self.cam.view).cuda() # [4, 4]
-            proj = torch.from_numpy(self.cam.perspective).cuda() # [4, 4]
-            mvp = proj @ mv
+            pose = torch.from_numpy(self.cam.pose.astype(np.float32)).cuda()
+            proj = torch.from_numpy(self.cam.perspective.astype(np.float32)).cuda()
             
-            v_clip = torch.matmul(F.pad(self.mesh.v, pad=(0, 1), mode='constant', value=1.0),
-                              torch.transpose(mvp, 0, 1)).float().unsqueeze(0)  # [1, N, 4]
+            v_cam = torch.matmul(F.pad(self.mesh.v, pad=(0, 1), mode='constant', value=1.0), torch.inverse(pose).T).float().unsqueeze(0)
+            v_clip = v_cam @ proj.T
 
             rast, rast_db = dr.rasterize(self.glctx, v_clip, self.mesh.f, (self.H, self.W))
+
+            alpha = (rast[..., 3:] > 0).float()
+            alpha = dr.antialias(alpha, rast, v_clip, self.mesh.f).squeeze(0).clamp(0, 1) # [H, W, 3]
             
             if self.mode == 'depth':
-                depth = rast[0, :, :, [2]]  # [H, W, 1]
-                buffer = depth.detach().cpu().numpy().repeat(3, -1) # [H, W, 3]
+                depth, _ = dr.interpolate(-v_cam[..., [2]], rast, self.mesh.f) # [1, H, W, 1]
+                depth = (depth - depth.min()) / (depth.max() - depth.min() + 1e-20)
+                buffer = depth.squeeze(0).detach().cpu().numpy().repeat(3, -1) # [H, W, 3]
             else:
                 texc, _ = dr.interpolate(self.mesh.vt.unsqueeze(0).contiguous(), rast, self.mesh.ft)
                 albedo = dr.texture(self.mesh.albedo.unsqueeze(0), texc, filter_mode='linear') # [1, H, W, 3]
                 albedo = torch.where(rast[..., 3:] > 0, albedo, torch.tensor(0).to(albedo.device)) # remove background
                 albedo = dr.antialias(albedo, rast, v_clip, self.mesh.f).clamp(0, 1) # [1, H, W, 3]
                 if self.mode == 'albedo':
+                    albedo = albedo * alpha + self.bg_color * (1 - alpha)
                     buffer = albedo[0].detach().cpu().numpy()
                 else:
                     normal, _ = dr.interpolate(self.mesh.vn.unsqueeze(0).contiguous(), rast, self.mesh.fn)
@@ -88,7 +92,8 @@ class GUI:
                         ], dtype=np.float32)
                         light_d = torch.from_numpy(light_d).to(albedo.device)
                         lambertian = self.ambient_ratio + (1 - self.ambient_ratio)  * (normal @ light_d).float().clamp(min=0)
-                        buffer = (albedo * lambertian.unsqueeze(-1))[0].detach().cpu().numpy()
+                        albedo = (albedo * lambertian.unsqueeze(-1)) * alpha + self.bg_color * (1 - alpha)
+                        buffer = albedo[0].detach().cpu().numpy()
 
 
             ender.record()
@@ -148,6 +153,13 @@ class GUI:
                     self.need_update = True
                 
                 dpg.add_combo(('albedo', 'depth', 'normal', 'lambertian'), label='mode', default_value=self.mode, callback=callback_change_mode)
+
+                # bg_color picker
+                def callback_change_bg(sender, app_data):
+                    self.bg_color = torch.tensor(app_data[:3], dtype=torch.float32).cuda() # only need RGB in [0, 1]
+                    self.need_update = True
+                
+                dpg.add_color_edit((255, 255, 255), label="Background Color", width=200, tag="_color_editor", no_alpha=True, callback=callback_change_bg)
 
                 # fov slider
                 def callback_set_fovy(sender, app_data):
@@ -272,6 +284,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('mesh', default='', type=str, help="path to mesh (obj, glb, ...)")
+    parser.add_argument('--mode', default='albedo', type=str, choices=['lambertian', 'albedo', 'normal', 'depth'], help="rendering mode")
     parser.add_argument('--W', type=int, default=800, help="GUI width")
     parser.add_argument('--H', type=int, default=800, help="GUI height")
     parser.add_argument('--radius', type=float, default=3, help="default GUI camera radius from center")
