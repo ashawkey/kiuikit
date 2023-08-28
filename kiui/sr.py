@@ -11,7 +11,7 @@ from torch.nn.modules.batchnorm import _BatchNorm
 import numpy as np
 from PIL import Image
 
-from huggingface_hub import hf_hub_url, cached_download
+from huggingface_hub import hf_hub_download
 
 HF_MODELS = {
     2: dict(
@@ -474,7 +474,7 @@ class RealESRGAN:
         self.load_weights()
         
     def load_weights(self):
-        model_path = cached_download(hf_hub_url(repo_id=HF_MODELS[self.scale]['repo_id'], filename=HF_MODELS[self.scale]['filename']))
+        model_path = hf_hub_download(repo_id=HF_MODELS[self.scale]['repo_id'], filename=HF_MODELS[self.scale]['filename'])
         checkpoint = torch.load(model_path)
         if 'params' in checkpoint:
             self.model.load_state_dict(checkpoint['params'], strict=True)
@@ -489,11 +489,17 @@ class RealESRGAN:
     def predict(self, lr_image, batch_size=4, patches_size=192, padding=24, pad_size=15):
         # lr_image: np.ndarray, [h, w, 3], RGB uint8
         # return: np.ndarray, [H, W, 3], RGB uint8
+
+        return_tensor = False
+        if torch.is_tensor(lr_image):
+            # or Tensor, [1, 3, H, W], RGB float32
+            lr_image = (lr_image.detach().permute(0,2,3,1)[0].cpu().numpy() * 255).astype(np.uint8)
+            return_tensor = True
         
         lr_image = pad_reflect(lr_image, pad_size)
 
         patches, p_shape = split_image_into_overlapping_patches(lr_image, patch_size=patches_size, padding_size=padding)
-        img = torch.FloatTensor(patches / 255).permute((0,3,1,2)).to(self.device).detach()
+        img = torch.from_numpy(patches.astype(np.float32) / 255).permute((0,3,1,2)).to(self.device).detach()
 
         with torch.no_grad():
             res = self.model(img[0:batch_size])
@@ -513,9 +519,22 @@ class RealESRGAN:
 
         sr_img = (np_sr_image * 255).astype(np.uint8)
         sr_img = unpad_image(sr_img, pad_size * self.scale)
+
+        if return_tensor:
+            sr_img = torch.from_numpy(sr_img.astype(np.float32) / 255).permute((2,0,1)).unsqueeze(0).to(self.device)
         
         return sr_img
-    
+
+
+# a lazy load functional API for convenience
+MODEL = None
+def sr(image, scale=2):
+    global MODEL
+    if MODEL is None:
+        MODEL = RealESRGAN('cuda', scale=scale)
+    sr_image = MODEL.predict(image)
+    return sr_image
+
 
 if __name__ == '__main__':
     import argparse
