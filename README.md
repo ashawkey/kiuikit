@@ -51,6 +51,10 @@ kiui.lo(mesh.v, mesh.f) # CUDA torch.Tensor suitable for nvdiffrast
 mesh.write('new.obj')
 mesh.write('new.glb') # support exporting to GLB/GLTF too (texture embedded).
 
+# perceptual loss (from https://github.com/richzhang/PerceptualSimilarity)
+from kiui.lpips import LPIPS
+lpips = LPIPS(net='vgg').cuda()
+loss = lpips(input, target) # [B, 3, H, W] image in [-1, 1]
 ```
 
 CLI tools:
@@ -70,4 +74,8 @@ python -m kiui.cli.hed --help
 python -m kiui.cli.renderer --help
 python -m kiui.cli.renderer mesh.obj
 python -m kiui.cli.renderer mesh.obj --save_video out.mp4 --wogui # save 360 degree rotating video
+
+# sr (Real-ESRGAN from https://github.com/ai-forever/Real-ESRGAN/tree/main)
+python -m kiui.sr --help
+python -m kiui.sr image.jpg --scale 2 # save to image_2x.jpg
 ```
