@@ -28,6 +28,7 @@ class GUI:
         self.ambient_ratio = 0.5
         
         self.mode = opt.mode
+        self.render_modes = ['albedo', 'depth', 'normal', 'lambertian']
 
         # load mesh
         self.mesh = Mesh.load(opt.mesh)
@@ -129,7 +130,7 @@ class GUI:
         dpg.set_primary_window("_primary_window", True)
 
         # control window
-        with dpg.window(label="Control", tag="_control_window", width=300, height=200):
+        with dpg.window(label="Control", tag="_control_window", width=300, height=200, collapsed=True):
 
             # button theme
             with dpg.theme() as theme_button:
@@ -152,7 +153,7 @@ class GUI:
                     self.mode = app_data
                     self.need_update = True
                 
-                dpg.add_combo(('albedo', 'depth', 'normal', 'lambertian'), label='mode', default_value=self.mode, callback=callback_change_mode)
+                dpg.add_combo(self.render_modes, label='mode', default_value=self.mode, tag="_mode_combo", callback=callback_change_mode)
 
                 # bg_color picker
                 def callback_change_bg(sender, app_data):
@@ -199,8 +200,9 @@ class GUI:
                     dpg.add_text(str(self.cam.pose), tag="_log_pose")
 
 
-        ### register camera handler
+        ### register IO handlers
 
+        # camera mouse controller
         def callback_camera_drag_rotate(sender, app_data):
 
             if not dpg.is_item_focused("_primary_window"):
@@ -243,12 +245,20 @@ class GUI:
 
             if self.debug:
                 dpg.set_value("_log_pose", str(self.cam.pose))
+        
+        # press spacebar to toggle rendering mode
+        def callback_space_toggle_mode(sender, app_data):
+            self.mode = self.render_modes[(self.render_modes.index(self.mode) + 1) % len(self.render_modes)]
+            dpg.set_value("_mode_combo", self.mode)
+            self.need_update = True
 
 
         with dpg.handler_registry():
             dpg.add_mouse_drag_handler(button=dpg.mvMouseButton_Left, callback=callback_camera_drag_rotate)
             dpg.add_mouse_wheel_handler(callback=callback_camera_wheel_scale)
             dpg.add_mouse_drag_handler(button=dpg.mvMouseButton_Right, callback=callback_camera_drag_pan)
+
+            dpg.add_key_press_handler(dpg.mvKey_Spacebar, callback=callback_space_toggle_mode)
 
         
         dpg.create_viewport(title='mesh viewer', width=self.W, height=self.H, resizable=False)
@@ -316,7 +326,8 @@ if __name__ == '__main__':
         import imageio
         images = []
         elevation = [0,]
-        azimuth = np.arange(-180, 180, 2, dtype=np.int32)
+        # azimuth = np.arange(-180, 180, 2, dtype=np.int32) # back-->front-->back
+        azimuth = np.arange(0, 360, 2, dtype=np.int32) # front-->back-->front
         for ele in tqdm.tqdm(elevation):
             for azi in tqdm.tqdm(azimuth):
                 gui.cam.from_angle(ele, azi)

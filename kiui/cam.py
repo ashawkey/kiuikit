@@ -3,26 +3,34 @@ from .op import *
 from scipy.spatial.transform import Rotation
 
 # camera convention:
-# world coordinate is right-hand, x right, y up, z forward
+# world coordinate is right-hand, +x = right, +y = up, +z = forward
 # camera coordinate is the same (forward is target --> campos).
 # elevation in (-90, 90), from +y (-90) --> -y (+90)
-# azimuth in (-180, 180), from +z (0) --> +x (90) --> -z (180/-180) --> -x (-90) --> +z (0)
+# azimuth in (-180, 180), from +z (0/-360) --> +x (90/-270) --> -z (180/-180) --> -x (270/-90) --> +z (360/0)
 
 # look at rotation matrix
-def look_at(campos, target):
+def look_at(campos, target, opengl=True):
     # campos: [N, 3], camera/eye position
     # target: [N, 3], object to look at
     # return: [N, 3, 3], rotation matrix
-    forward_vector = safe_normalize(campos - target)
-    up_vector = np.array([0, 1, 0], dtype=np.float32)
-    right_vector = safe_normalize(np.cross(up_vector, forward_vector))
-    up_vector = safe_normalize(np.cross(forward_vector, right_vector))
+    if not opengl:
+        # camera forward aligns with -z
+        forward_vector = safe_normalize(target - campos)
+        up_vector = np.array([0, 1, 0], dtype=np.float32)
+        right_vector = safe_normalize(np.cross(forward_vector, up_vector))
+        up_vector = safe_normalize(np.cross(right_vector, forward_vector))
+    else:
+        # camera forward aligns with +z
+        forward_vector = safe_normalize(campos - target)
+        up_vector = np.array([0, 1, 0], dtype=np.float32)
+        right_vector = safe_normalize(np.cross(up_vector, forward_vector))
+        up_vector = safe_normalize(np.cross(forward_vector, right_vector))
     R = np.stack([right_vector, up_vector, forward_vector], axis=1)
     return R
 
 
-# elevation & azimuth to pose (c2w) matrix
-def orbit_camera(elevation, azimuth, radius=1, is_degree=True, target=None):
+# elevation & azimuth to pose (cam2world) matrix
+def orbit_camera(elevation, azimuth, radius=1, is_degree=True, target=None, opengl=True):
     # radius: scalar
     # elevation: scalar, in (-90, 90), from +y to -y is (-90, 90)
     # azimuth: scalar, in (-180, 180), from +z to +x is (0, 90)
@@ -37,10 +45,9 @@ def orbit_camera(elevation, azimuth, radius=1, is_degree=True, target=None):
         target = np.zeros([3], dtype=np.float32)
     campos = np.array([x, y, z]) + target  # [3]
     T = np.eye(4, dtype=np.float32)
-    T[:3, :3] = look_at(campos, target)
+    T[:3, :3] = look_at(campos, target, opengl)
     T[:3, 3] = campos
     return T
-
 
 class OrbitCamera:
     def __init__(self, W, H, r=2, fovy=60, near=0.01, far=100):
