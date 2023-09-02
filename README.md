@@ -71,9 +71,9 @@ python -m kiui.cli.pose --help
 python -m kiui.cli.hed --help
 
 # open a GUI to render a mesh (extra dependency: nvdiffrast)
-python -m kiui.cli.renderer --help
-python -m kiui.cli.renderer mesh.obj
-python -m kiui.cli.renderer mesh.obj --save_video out.mp4 --wogui # save 360 degree rotating video
+python -m kiui.render --help
+python -m kiui.render mesh.obj
+python -m kiui.render mesh.obj --save_video out.mp4 --wogui # save 360 degree rotating video
 
 # sr (Real-ESRGAN from https://github.com/ai-forever/Real-ESRGAN/tree/main)
 python -m kiui.sr --help
