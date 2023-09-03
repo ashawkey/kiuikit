@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 if __name__ == "__main__":
     setup(
@@ -10,7 +10,7 @@ if __name__ == "__main__":
         url="https://github.com/ashawkey/kiuikit",
         author="kiui",
         author_email="ashawkey1999@gmail.com",
-        packages=["kiui"],
+        packages=find_packages(),
         include_package_data=True,
         classifiers=[
             "Programming Language :: Python :: 3 ",
