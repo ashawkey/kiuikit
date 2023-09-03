@@ -38,7 +38,7 @@ if __name__ == "__main__":
                 "scikit-image",
                 "rembg[gpu,cli]",
                 "dearpygui",
-                'huggingface_hub'
+                'huggingface_hub',
             ],
         },
     )

@@ -12,6 +12,7 @@ def process(image, **kwargs):
 
     global SESSION
     if SESSION is None:
+        # NOTE: requires timm==0.6.11 ...
         SESSION = torch.hub.load("isl-org/ZoeDepth", "ZoeD_N", pretrained=True, trust_repo=True).to(DEVICE)
     
     image = torch.from_numpy(image.astype(np.float32) / 255).to(DEVICE)
