@@ -1,10 +1,11 @@
-from .openpose import OpenposeDetector
 import cv2
+import torch
+from .openpose import OpenposeDetector
 
 # reusable lazy session
 SESSION = None
 
-
+@torch.no_grad()
 def detect(img, reso=None, body_only=False, **kwargs):
     # img: np.ndarray, (h, w, 3), uint8, RGB
 

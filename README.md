@@ -70,6 +70,9 @@ python -m kiui.cli.pose --help
 # hed edge detector
 python -m kiui.cli.hed --help
 
+# zoe depth estimation
+python -m kiui.cli.depth --help
+
 # open a GUI to render a mesh (extra dependency: nvdiffrast)
 python -m kiui.render --help
 python -m kiui.render mesh.obj

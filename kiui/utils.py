@@ -80,7 +80,7 @@ def write_json(path, x):
 def read_image(path, mode="float", order="RGB"):
 
     if mode == "pil":
-        return Image.open(path)
+        return Image.open(path).convert(order)
 
     img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
 
@@ -167,9 +167,12 @@ def batch_process_files(
     overwrite=False,
     in_format=[".jpg", ".jpeg", ".png"],
     out_format=None,
-    color_order="RGB",
+    image_mode='uint8',
+    image_color_order="RGB",
     **kwargs
 ):
+    # process_fn: function that takes input and return output
+    # path, out_path: can be either a file or a directory, if directory, process all files in it
     
     if os.path.isdir(path):
         file_paths = glob.glob(os.path.join(path, "*"))
@@ -198,7 +201,7 @@ def batch_process_files(
             # dispatch suitable loader and writer
             # only support image and text file
             if is_format(file_path, ['.jpg', '.jpeg', '.png']):
-                input = read_image(file_path, mode="uint8", order=color_order)
+                input = read_image(file_path, mode=image_mode, order=image_color_order)
             else:
                 with open(file_path, "r") as f:
                     input = f.read()
@@ -207,7 +210,7 @@ def batch_process_files(
 
             # only support image, npy or text file
             if is_format(file_out_path, ['.jpg', '.jpeg', '.png']):
-                write_image(file_out_path, output, order=color_order)
+                write_image(file_out_path, output, order=image_color_order)
             elif is_format(file_out_path, ['.npy']):
                 np.save(file_out_path, output)
             else:

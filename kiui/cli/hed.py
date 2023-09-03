@@ -147,7 +147,7 @@ class HEDdetector:
 # reusable lazy session
 SESSION = None
 
-
+@torch.no_grad()
 def detect(img, **kwargs):
     # img: np.ndarray, (h, w, 3), uint8, RGB
 
