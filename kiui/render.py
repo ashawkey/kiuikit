@@ -301,6 +301,8 @@ if __name__ == '__main__':
     parser.add_argument('--fovy', type=float, default=50, help="default GUI camera fovy")
     parser.add_argument("--wogui", action='store_true', help="disable all dpg GUI")
     parser.add_argument('--save', type=str, default=None, help="path to save example rendered images")
+    parser.add_argument('--elevation', type=int, default=0, help="rendering elevation")
+    parser.add_argument('--num_azimuth', type=int, default=8, help="number of images to render from different azimuths")
     parser.add_argument('--save_video', type=str, default=None, help="path to save rendered video")
 
     opt = parser.parse_args()
@@ -310,8 +312,8 @@ if __name__ == '__main__':
     if opt.save is not None:
         os.makedirs(opt.save, exist_ok=True)
         # render from fixed views and save all images
-        elevation = [0, -30, -60]
-        azimuth = np.arange(-180, 180, 10, dtype=np.int32)
+        elevation = [opt.elevation,]
+        azimuth = np.linspace(0, 360, opt.num_azimuth, dtype=np.int32, endpoint=False)
         for ele in tqdm.tqdm(elevation):
             for azi in tqdm.tqdm(azimuth):
                 gui.cam.from_angle(ele, azi)
@@ -325,7 +327,7 @@ if __name__ == '__main__':
     elif opt.save_video is not None:
         import imageio
         images = []
-        elevation = [0,]
+        elevation = [opt.elevation,]
         # azimuth = np.arange(-180, 180, 2, dtype=np.int32) # back-->front-->back
         azimuth = np.arange(0, 360, 2, dtype=np.int32) # front-->back-->front
         for ele in tqdm.tqdm(elevation):
@@ -338,6 +340,7 @@ if __name__ == '__main__':
                 image = (gui.render_buffer * 255).astype(np.uint8)
                 images.append(image)
         images = np.stack(images, axis=0)
+        # ~6 seconds, 180 frames at 30 fps
         imageio.mimwrite(opt.save_video, images, fps=30, quality=8, macro_block_size=1)
     else:
         gui.render()

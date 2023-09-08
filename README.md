@@ -2,6 +2,11 @@
 
 A toolkit for personal use.
 
+**Features**:
+* Collection of *maintained, reusable and trustworthy* code snippets.
+* Always using lazy import so the code is not slowed down by `import kiui`.
+* Useful CLI tools, such as a GUI mesh renderer.
+
 ### Install
 
 ```bash
