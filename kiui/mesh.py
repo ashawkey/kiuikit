@@ -204,23 +204,35 @@ class Mesh:
             raise NotImplementedError(f"type {type(_data)} not supported!")
 
         # TODO: exception handling if no material
-        _material = _mesh.visual.material
-        if isinstance(_material, trimesh.visual.material.PBRMaterial):
-            texture = np.array(_material.baseColorTexture).astype(np.float32) / 255
-        elif isinstance(_material, trimesh.visual.material.SimpleMaterial):
-            texture = (
-                np.array(_material.to_pbr().baseColorTexture).astype(np.float32) / 255
-            )
-        else:
-            raise NotImplementedError(f"material type {type(_material)} not supported!")
+        try:
+            _material = _mesh.visual.material
+            if isinstance(_material, trimesh.visual.material.PBRMaterial):
+                texture = np.array(_material.baseColorTexture).astype(np.float32) / 255
+            elif isinstance(_material, trimesh.visual.material.SimpleMaterial):
+                texture = (
+                    np.array(_material.to_pbr().baseColorTexture).astype(np.float32) / 255
+                )
+            else:
+                raise NotImplementedError(f"material type {type(_material)} not supported!")
+            print(f"[load_trimesh] load texture: {texture.shape}")
+        except Exception as e:
+            texture = np.ones((1024, 1024, 3), dtype=np.float32) * np.array([0.5, 0.5, 0.5])
+            print(f"[load_trimesh] failed to load texture, init as grey.")
 
-        print(f"[load_obj] load texture: {texture.shape}")
         mesh.albedo = torch.tensor(texture, dtype=torch.float32, device=device)
 
         vertices = _mesh.vertices
-        texcoords = _mesh.visual.uv
-        texcoords[:, 1] = 1 - texcoords[:, 1]
-        normals = _mesh.vertex_normals
+
+        try:
+            texcoords = _mesh.visual.uv
+            texcoords[:, 1] = 1 - texcoords[:, 1]
+        except Exception as e:
+            texcoords = None
+
+        try:
+            normals = _mesh.vertex_normals
+        except Exception as e:
+            normals = None
 
         # trimesh only support vertex uv...
         faces = tfaces = nfaces = _mesh.faces
@@ -228,12 +240,12 @@ class Mesh:
         mesh.v = torch.tensor(vertices, dtype=torch.float32, device=device)
         mesh.vt = (
             torch.tensor(texcoords, dtype=torch.float32, device=device)
-            if len(texcoords) > 0
+            if texcoords is not None
             else None
         )
         mesh.vn = (
             torch.tensor(normals, dtype=torch.float32, device=device)
-            if len(normals) > 0
+            if normals is not None
             else None
         )
 
@@ -289,7 +301,7 @@ class Mesh:
     def auto_uv(self, cache_path=None, vmap=True):
         # try to load cache
         if cache_path is not None:
-            cache_path = cache_path.replace(".obj", "_uv.npz")
+            cache_path = os.path.splitext(cache_path)[0] + "_uv.npz"
         if cache_path is not None and os.path.exists(cache_path):
             data = np.load(cache_path)
             vt_np, ft_np, vmapping = data["vt"], data["ft"], data["vmapping"]

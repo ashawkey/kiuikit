@@ -15,15 +15,15 @@ from huggingface_hub import hf_hub_download
 
 HF_MODELS = {
     2: dict(
-        repo_id='sberbank-ai/Real-ESRGAN',
+        repo_id='ai-forever/Real-ESRGAN',
         filename='RealESRGAN_x2.pth',
     ),
     4: dict(
-        repo_id='sberbank-ai/Real-ESRGAN',
+        repo_id='ai-forever/Real-ESRGAN',
         filename='RealESRGAN_x4.pth',
     ),
     8: dict(
-        repo_id='sberbank-ai/Real-ESRGAN',
+        repo_id='ai-forever/Real-ESRGAN',
         filename='RealESRGAN_x8.pth',
     ),
 }
@@ -465,6 +465,7 @@ class RRDBNet(nn.Module):
 
 class RealESRGAN:
     def __init__(self, device, scale=4):
+        print(f'[INFO] init RealESRGAN_{scale}x: {device}')
         self.device = device
         self.scale = scale
         self.model = RRDBNet(
@@ -527,12 +528,12 @@ class RealESRGAN:
 
 
 # a lazy load functional API for convenience
-MODEL = None
+MODELS = {}
 def sr(image, scale=2):
-    global MODEL
-    if MODEL is None:
-        MODEL = RealESRGAN('cuda', scale=scale)
-    sr_image = MODEL.predict(image)
+    global MODELS
+    if scale not in MODELS:
+        MODELS[scale] = RealESRGAN('cuda', scale=scale)
+    sr_image = MODELS[scale].predict(image)
     return sr_image
 
 
