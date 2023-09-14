@@ -83,7 +83,9 @@ class GUI:
                     normal, _ = dr.interpolate(self.mesh.vn.unsqueeze(0).contiguous(), rast, self.mesh.fn)
                     normal = safe_normalize(normal)
                     if self.mode == 'normal':
-                        buffer = (normal[0].detach().cpu().numpy() + 1) / 2
+                        normal_image = (normal[0] + 1) / 2
+                        normal_image = torch.where(rast[..., 3:] > 0, normal_image, torch.tensor(1).to(normal_image.device)) # remove background
+                        buffer = normal_image.detach().cpu().numpy()
                     elif self.mode == 'lambertian':
                         light_d = np.deg2rad(self.light_dir)
                         light_d = np.array([
