@@ -17,6 +17,7 @@ class Mesh:
         vt=None,
         ft=None,
         albedo=None,
+        vc=None, # vertex color
         device=None,
     ):
         self.device = device
@@ -28,6 +29,8 @@ class Mesh:
         self.ft = ft
         # only support a single albedo
         self.albedo = albedo
+        # support vertex color is no albedo
+        self.vc = vc
 
         self.ori_center = 0
         self.ori_scale = 1
@@ -44,24 +47,24 @@ class Mesh:
         else:
             mesh = cls.load_trimesh(path, **kwargs)
 
+        print(f"[Mesh loading] v: {mesh.v.shape}, f: {mesh.f.shape}")
         # auto-normalize
         if resize:
             mesh.auto_size()
         # auto-fix normal
         if renormal or mesh.vn is None:
             mesh.auto_normal()
-        # auto-fix texture
-        if mesh.vt is None:
+            print(f"[Mesh loading] vn: {mesh.vn.shape}, fn: {mesh.fn.shape}")
+        # auto-fix texcoords
+        if mesh.albedo is not None and mesh.vt is None:
             mesh.auto_uv(cache_path=path)
-        print(f"[Mesh loading] v: {mesh.v.shape}, f: {mesh.f.shape}")
-        print(f"[Mesh loading] vn: {mesh.vn.shape}, fn: {mesh.fn.shape}")
-        print(f"[Mesh loading] vt: {mesh.vt.shape}, ft: {mesh.ft.shape}")
+            print(f"[Mesh loading] vt: {mesh.vt.shape}, ft: {mesh.ft.shape}")
 
         return mesh
 
     # load from obj file
     @classmethod
-    def load_obj(cls, path, albedo_path=None, device=None, init_empty_tex=False):
+    def load_obj(cls, path, albedo_path=None, device=None):
         assert os.path.splitext(path)[-1] == ".obj"
 
         mesh = cls()
@@ -71,43 +74,6 @@ class Mesh:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         mesh.device = device
-
-        # try to find texture from mtl file
-        if albedo_path is None:
-            mtl_path = path.replace(".obj", ".mtl")
-            if os.path.exists(mtl_path):
-                with open(mtl_path, "r") as f:
-                    lines = f.readlines()
-                for line in lines:
-                    split_line = line.split()
-                    # empty line
-                    if len(split_line) == 0:
-                        continue
-                    prefix = split_line[0]
-                    # NOTE: simply use the first map_Kd as albedo!
-                    if "map_Kd" in prefix:
-                        albedo_path = os.path.join(os.path.dirname(path), split_line[1])
-                        print(f"[load_obj] use texture from: {albedo_path}")
-                        break
-
-        if init_empty_tex or albedo_path is None or not os.path.exists(albedo_path):
-            # init an empty texture
-            print(f"[load_obj] init empty albedo!")
-            # albedo = np.random.rand(1024, 1024, 3).astype(np.float32)
-            albedo = np.ones((1024, 1024, 3), dtype=np.float32) * np.array(
-                [0.5, 0.5, 0.5]
-            )  # default color
-        else:
-            albedo = cv2.imread(albedo_path, cv2.IMREAD_UNCHANGED)
-            albedo = cv2.cvtColor(albedo, cv2.COLOR_BGR2RGB)
-            albedo = albedo.astype(np.float32) / 255
-            print(f"[load_obj] load texture: {albedo.shape}")
-
-            # import matplotlib.pyplot as plt
-            # plt.imshow(albedo)
-            # plt.show()
-
-        mesh.albedo = torch.tensor(albedo, dtype=torch.float32, device=device)
 
         # load obj
         with open(path, "r") as f:
@@ -127,14 +93,22 @@ class Mesh:
         # NOTE: we ignore usemtl, and assume the mesh ONLY uses one material (first in mtl)
         vertices, texcoords, normals = [], [], []
         faces, tfaces, nfaces = [], [], []
+        mtl_path = None
+
         for line in lines:
             split_line = line.split()
             # empty line
             if len(split_line) == 0:
                 continue
-            # v/vn/vt
             prefix = split_line[0].lower()
-            if prefix == "v":
+            # mtllib
+            if prefix == "mtllib":
+                mtl_path = split_line[1]
+            # usemtl
+            elif prefix == "usemtl":
+                pass # ignored
+            # v/vn/vt
+            elif prefix == "v":
                 vertices.append([float(v) for v in split_line[1:]])
             elif prefix == "vn":
                 normals.append([float(v) for v in split_line[1:]])
@@ -167,14 +141,71 @@ class Mesh:
         mesh.f = torch.tensor(faces, dtype=torch.int32, device=device)
         mesh.ft = (
             torch.tensor(tfaces, dtype=torch.int32, device=device)
-            if texcoords is not None
+            if len(texcoords) > 0
             else None
         )
         mesh.fn = (
             torch.tensor(nfaces, dtype=torch.int32, device=device)
-            if normals is not None
+            if len(normals) > 0
             else None
         )
+
+        # see if there is vertex color
+        use_vertex_color = False
+        if mesh.v.shape[1] == 6:
+            use_vertex_color = True
+            mesh.vc = mesh.v[:, 3:]
+            mesh.v = mesh.v[:, :3]
+            print(f"[load_obj] use vertex color: {mesh.vc.shape}")
+
+        # try to load texture image
+        if not use_vertex_color:
+            # try to retrieve mtl file
+            mtl_path_candidates = []
+            if mtl_path is not None:
+                mtl_path_candidates.append(mtl_path)
+                mtl_path_candidates.append(os.path.join(os.path.dirname(path), mtl_path))
+            mtl_path_candidates.append(path.replace(".obj", ".mtl"))
+
+            mtl_path = None
+            for candidate in mtl_path_candidates:
+                if os.path.exists(candidate):
+                    mtl_path = candidate
+                    break
+            
+            # if albedo_path is not provided, try retrieve it from mtl
+            if mtl_path is not None and albedo_path is None:
+                with open(mtl_path, "r") as f:
+                    lines = f.readlines()
+                for line in lines:
+                    split_line = line.split()
+                    # empty line
+                    if len(split_line) == 0:
+                        continue
+                    prefix = split_line[0]
+                    # NOTE: simply use the first map_Kd as albedo!
+                    if "map_Kd" in prefix:
+                        albedo_path = os.path.join(os.path.dirname(path), split_line[1])
+                        print(f"[load_obj] use texture from: {albedo_path}")
+                        break
+            
+            # still not found albedo_path, or the path doesn't exist
+            if albedo_path is None or not os.path.exists(albedo_path):
+                # init an empty texture
+                print(f"[load_obj] init empty albedo!")
+                # albedo = np.random.rand(1024, 1024, 3).astype(np.float32)
+                albedo = np.ones((1024, 1024, 3), dtype=np.float32) * np.array([0.5, 0.5, 0.5])  # default color
+            else:
+                albedo = cv2.imread(albedo_path, cv2.IMREAD_UNCHANGED)
+                albedo = cv2.cvtColor(albedo, cv2.COLOR_BGR2RGB)
+                albedo = albedo.astype(np.float32) / 255
+                print(f"[load_obj] load texture: {albedo.shape}")
+
+                # import matplotlib.pyplot as plt
+                # plt.imshow(albedo)
+                # plt.show()
+
+            mesh.albedo = torch.tensor(albedo, dtype=torch.float32, device=device)
 
         return mesh
 
@@ -188,7 +219,7 @@ class Mesh:
 
         mesh.device = device
 
-        # use trimesh to load glb, assume only has one single RootMesh...
+        # use trimesh to load ply/glb, assume only has one single RootMesh...
         _data = trimesh.load(path)
         if isinstance(_data, trimesh.Scene):
             mesh_keys = list(_data.geometry.keys())
@@ -202,24 +233,26 @@ class Mesh:
 
         else:
             raise NotImplementedError(f"type {type(_data)} not supported!")
-
-        # TODO: exception handling if no material
-        try:
+        
+        if _mesh.visual.kind == 'vertex':
+            vertex_colors = _mesh.visual.vertex_colors
+            vertex_colors = np.array(vertex_colors[..., :3]).astype(np.float32) / 255
+            mesh.vc = torch.tensor(vertex_colors, dtype=torch.float32, device=device)
+            print(f"[load_trimesh] use vertex color: {mesh.vc.shape}")
+        elif _mesh.visual.kind == 'face':
             _material = _mesh.visual.material
             if isinstance(_material, trimesh.visual.material.PBRMaterial):
                 texture = np.array(_material.baseColorTexture).astype(np.float32) / 255
             elif isinstance(_material, trimesh.visual.material.SimpleMaterial):
-                texture = (
-                    np.array(_material.to_pbr().baseColorTexture).astype(np.float32) / 255
-                )
+                texture = np.array(_material.to_pbr().baseColorTexture).astype(np.float32) / 255
             else:
                 raise NotImplementedError(f"material type {type(_material)} not supported!")
+            mesh.albedo = torch.tensor(texture, dtype=torch.float32, device=device)
             print(f"[load_trimesh] load texture: {texture.shape}")
-        except Exception as e:
+        else:
             texture = np.ones((1024, 1024, 3), dtype=np.float32) * np.array([0.5, 0.5, 0.5])
-            print(f"[load_trimesh] failed to load texture, init as grey.")
-
-        mesh.albedo = torch.tensor(texture, dtype=torch.float32, device=device)
+            mesh.albedo = torch.tensor(texture, dtype=torch.float32, device=device)
+            print(f"[load_trimesh] failed to load texture.")
 
         vertices = _mesh.vertices
 

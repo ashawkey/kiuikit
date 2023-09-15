@@ -72,8 +72,14 @@ class GUI:
                 depth = (depth - depth.min()) / (depth.max() - depth.min() + 1e-20)
                 buffer = depth.squeeze(0).detach().cpu().numpy().repeat(3, -1) # [H, W, 3]
             else:
-                texc, _ = dr.interpolate(self.mesh.vt.unsqueeze(0).contiguous(), rast, self.mesh.ft)
-                albedo = dr.texture(self.mesh.albedo.unsqueeze(0), texc, filter_mode='linear') # [1, H, W, 3]
+                # use vertex color if exists
+                if self.mesh.vc is not None:
+                    albedo, _ = dr.interpolate(self.mesh.vc.unsqueeze(0).contiguous(), rast, self.mesh.f)
+                # use texture image
+                else:
+                    texc, _ = dr.interpolate(self.mesh.vt.unsqueeze(0).contiguous(), rast, self.mesh.ft)
+                    albedo = dr.texture(self.mesh.albedo.unsqueeze(0), texc, filter_mode='linear') # [1, H, W, 3]
+
                 albedo = torch.where(rast[..., 3:] > 0, albedo, torch.tensor(0).to(albedo.device)) # remove background
                 albedo = dr.antialias(albedo, rast, v_clip, self.mesh.f).clamp(0, 1) # [1, H, W, 3]
                 if self.mode == 'albedo':
