@@ -39,6 +39,9 @@ if __name__ == "__main__":
                 "rembg[gpu,cli]",
                 "dearpygui",
                 'huggingface_hub',
+                'transformers',
+                'accelerate',
+                'diffusers',
             ],
         },
     )

@@ -231,26 +231,14 @@ class Mesh:
         mesh.device = device
 
         # use trimesh to load ply/glb, assume only has one single RootMesh...
-        _data = trimesh.load(path)
-        if isinstance(_data, trimesh.Scene):
-            mesh_keys = list(_data.geometry.keys())
-            assert (
-                len(mesh_keys) == 1
-            ), f"{path} contains more than one meshes, not supported!"
-            _mesh = _data.geometry[mesh_keys[0]]
-
-        elif isinstance(_data, trimesh.Trimesh):
-            _mesh = _data
-
-        else:
-            raise NotImplementedError(f"type {type(_data)} not supported!")
+        _mesh = trimesh.load(path, force='mesh')
         
         if _mesh.visual.kind == 'vertex':
             vertex_colors = _mesh.visual.vertex_colors
             vertex_colors = np.array(vertex_colors[..., :3]).astype(np.float32) / 255
             mesh.vc = torch.tensor(vertex_colors, dtype=torch.float32, device=device)
             print(f"[load_trimesh] use vertex color: {mesh.vc.shape}")
-        elif _mesh.visual.kind == 'face':
+        elif _mesh.visual.kind == 'texture':
             _material = _mesh.visual.material
             if isinstance(_material, trimesh.visual.material.PBRMaterial):
                 texture = np.array(_material.baseColorTexture).astype(np.float32) / 255
