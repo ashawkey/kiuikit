@@ -4,8 +4,7 @@ import torch
 import trimesh
 import numpy as np
 
-from .op import *
-
+from kiui.op import safe_normalize, dot
 
 class Mesh:
     def __init__(
@@ -36,7 +35,7 @@ class Mesh:
         self.ori_scale = 1
 
     @classmethod
-    def load(cls, path=None, resize=True, renormal=True, **kwargs):
+    def load(cls, path=None, resize=True, renormal=True, front_dir='+z', **kwargs):
         # assume init with kwargs
         if path is None:
             mesh = cls(**kwargs)
@@ -46,6 +45,18 @@ class Mesh:
         # trimesh only supports vertex uv, but can load more formats
         else:
             mesh = cls.load_trimesh(path, **kwargs)
+
+        # rotate front dir to +z
+        if front_dir == "-z":
+            mesh.v @= torch.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]], device=mesh.device, dtype=torch.float32).T
+        elif front_dir == "+x":
+            mesh.v @= torch.tensor([[0, 0, 1], [0, 1, 0], [1, 0, 0]], device=mesh.device, dtype=torch.float32).T
+        elif front_dir == "-x":
+            mesh.v @= torch.tensor([[0, 0, 1], [0, 1, 0], [-1, 0, 0]], device=mesh.device, dtype=torch.float32).T
+        elif front_dir == "+y":
+            mesh.v @= torch.tensor([[1, 0, 0], [0, 0, 1], [0, 1, 0]], device=mesh.device, dtype=torch.float32).T
+        elif front_dir == "-y":
+            mesh.v @= torch.tensor([[1, 0, 0], [0, 0, 1], [0, -1, 0]], device=mesh.device, dtype=torch.float32).T
 
         print(f"[Mesh loading] v: {mesh.v.shape}, f: {mesh.f.shape}")
         # auto-normalize

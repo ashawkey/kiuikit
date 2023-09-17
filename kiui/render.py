@@ -31,7 +31,7 @@ class GUI:
         self.render_modes = ['albedo', 'depth', 'normal', 'lambertian']
 
         # load mesh
-        self.mesh = Mesh.load(opt.mesh)
+        self.mesh = Mesh.load(opt.mesh, front_dir=opt.front_dir)
 
         if self.wogui or os.name == 'nt':
             self.glctx = dr.RasterizeGLContext()
@@ -301,7 +301,8 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('mesh', default='', type=str, help="path to mesh (obj, glb, ...)")
+    parser.add_argument('mesh', type=str, help="path to mesh (obj, ply, glb, ...)")
+    parser.add_argument('--front_dir', type=str, default='+z', help="mesh front-facing dir")
     parser.add_argument('--mode', default='albedo', type=str, choices=['lambertian', 'albedo', 'normal', 'depth'], help="rendering mode")
     parser.add_argument('--W', type=int, default=800, help="GUI width")
     parser.add_argument('--H', type=int, default=800, help="GUI height")
