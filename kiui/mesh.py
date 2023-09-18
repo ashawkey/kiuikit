@@ -35,7 +35,7 @@ class Mesh:
         self.ori_scale = 1
 
     @classmethod
-    def load(cls, path=None, resize=True, renormal=True, front_dir='+z', **kwargs):
+    def load(cls, path=None, resize=True, renormal=True, retex=False, front_dir='+z', **kwargs):
         # assume init with kwargs
         if path is None:
             mesh = cls(**kwargs)
@@ -46,18 +46,6 @@ class Mesh:
         else:
             mesh = cls.load_trimesh(path, **kwargs)
 
-        # rotate front dir to +z
-        if front_dir == "-z":
-            mesh.v @= torch.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]], device=mesh.device, dtype=torch.float32).T
-        elif front_dir == "+x":
-            mesh.v @= torch.tensor([[0, 0, 1], [0, 1, 0], [1, 0, 0]], device=mesh.device, dtype=torch.float32).T
-        elif front_dir == "-x":
-            mesh.v @= torch.tensor([[0, 0, 1], [0, 1, 0], [-1, 0, 0]], device=mesh.device, dtype=torch.float32).T
-        elif front_dir == "+y":
-            mesh.v @= torch.tensor([[1, 0, 0], [0, 0, 1], [0, 1, 0]], device=mesh.device, dtype=torch.float32).T
-        elif front_dir == "-y":
-            mesh.v @= torch.tensor([[1, 0, 0], [0, 0, 1], [0, -1, 0]], device=mesh.device, dtype=torch.float32).T
-
         print(f"[Mesh loading] v: {mesh.v.shape}, f: {mesh.f.shape}")
         # auto-normalize
         if resize:
@@ -67,9 +55,34 @@ class Mesh:
             mesh.auto_normal()
             print(f"[Mesh loading] vn: {mesh.vn.shape}, fn: {mesh.fn.shape}")
         # auto-fix texcoords
-        if mesh.albedo is not None and mesh.vt is None:
+        if retex or (mesh.albedo is not None and mesh.vt is None):
             mesh.auto_uv(cache_path=path)
             print(f"[Mesh loading] vt: {mesh.vt.shape}, ft: {mesh.ft.shape}")
+
+        # rotate front dir to +z
+        if front_dir != "+z":
+            # axis switch
+            if "-z" in front_dir:
+                T = torch.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]], device=mesh.device, dtype=torch.float32)
+            elif "+x" in front_dir:
+                T = torch.tensor([[0, 0, 1], [0, 1, 0], [1, 0, 0]], device=mesh.device, dtype=torch.float32)
+            elif "-x" in front_dir:
+                T = torch.tensor([[0, 0, -1], [0, 1, 0], [1, 0, 0]], device=mesh.device, dtype=torch.float32)
+            elif "+y" in front_dir:
+                T = torch.tensor([[1, 0, 0], [0, 0, 1], [0, 1, 0]], device=mesh.device, dtype=torch.float32)
+            elif "-y" in front_dir:
+                T = torch.tensor([[1, 0, 0], [0, 0, -1], [0, 1, 0]], device=mesh.device, dtype=torch.float32)
+            else:
+                T = torch.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]], device=mesh.device, dtype=torch.float32)
+            # rotation (how many 90 degrees)
+            if '1' in front_dir:
+                T @= torch.tensor([[0, -1, 0], [1, 0, 0], [0, 0, 1]], device=mesh.device, dtype=torch.float32) 
+            elif '2' in front_dir:
+                T @= torch.tensor([[-1, 0, 0], [0, 1, 0], [0, 0, 1]], device=mesh.device, dtype=torch.float32) 
+            elif '3' in front_dir:
+                T @= torch.tensor([[0, 1, 0], [-1, 0, 0], [0, 0, 1]], device=mesh.device, dtype=torch.float32) 
+            mesh.v @= T
+            mesh.vn @= T
 
         return mesh
 
@@ -231,7 +244,19 @@ class Mesh:
         mesh.device = device
 
         # use trimesh to load ply/glb, assume only has one single RootMesh...
-        _mesh = trimesh.load(path, force='mesh')
+        _data = trimesh.load(path)
+        if isinstance(_data, trimesh.Scene):
+            if len(_data.geometry) == 1:
+                _mesh = list(_data.geometry.values())[0]
+            else:
+                # manual concat, will lose texture
+                _concat = []
+                for g in _data.geometry.values():
+                    if isinstance(g, trimesh.Trimesh):
+                        _concat.append(g)
+                _mesh = trimesh.util.concatenate(_concat)
+        else:
+            _mesh = _data
         
         if _mesh.visual.kind == 'vertex':
             vertex_colors = _mesh.visual.vertex_colors
