@@ -445,16 +445,16 @@ class Mesh:
 
         f_np = self.f.detach().cpu().numpy().astype(np.uint32)
         v_np = self.v.detach().cpu().numpy().astype(np.float32)
-        vn_np = self.vn.detach().cpu().numpy().astype(np.float32)
+        # vn_np = self.vn.detach().cpu().numpy().astype(np.float32)
         vt_np = self.vt.detach().cpu().numpy().astype(np.float32)
-        
+
         albedo = self.albedo.detach().cpu().numpy()
         albedo = (albedo * 255).astype(np.uint8)
         albedo = cv2.cvtColor(albedo, cv2.COLOR_RGB2BGR)
 
         f_np_blob = f_np.flatten().tobytes()
         v_np_blob = v_np.tobytes()
-        vn_np_blob = vn_np.tobytes()
+        # vn_np_blob = vn_np.tobytes()
         vt_np_blob = vt_np.tobytes()
         albedo_blob = cv2.imencode('.png', albedo)[1].tobytes()
 
@@ -466,7 +466,7 @@ class Mesh:
                 pygltflib.Primitive(
                     # indices to accessors (0 is triangles)
                     attributes=pygltflib.Attributes(
-                        POSITION=1, NORMAL=2, TEXCOORD_0=3, 
+                        POSITION=1, TEXCOORD_0=2, 
                     ),
                     indices=0, material=0,
                 )
@@ -493,7 +493,7 @@ class Mesh:
                 pygltflib.Image(bufferView=3, mimeType="image/png"),
             ],
             buffers=[
-                pygltflib.Buffer(byteLength=len(f_np_blob) + len(v_np_blob) + len(vn_np_blob) + len(vt_np_blob) + len(albedo_blob))
+                pygltflib.Buffer(byteLength=len(f_np_blob) + len(v_np_blob) + len(vt_np_blob) + len(albedo_blob))
             ],
             # buffer view (based on dtype)
             bufferViews=[
@@ -503,18 +503,18 @@ class Mesh:
                     byteLength=len(f_np_blob),
                     target=pygltflib.ELEMENT_ARRAY_BUFFER, # GL_ELEMENT_ARRAY_BUFFER (34963)
                 ),
-                # positions, normals; as vec3 array
+                # positions; as vec3 array
                 pygltflib.BufferView(
                     buffer=0,
                     byteOffset=len(f_np_blob),
-                    byteLength=len(v_np_blob) + len(vn_np_blob),
+                    byteLength=len(v_np_blob),
                     byteStride=12, # vec3
                     target=pygltflib.ARRAY_BUFFER, # GL_ARRAY_BUFFER (34962)
                 ),
                 # texcoords; as vec2 array
                 pygltflib.BufferView(
                     buffer=0,
-                    byteOffset=len(f_np_blob) + len(v_np_blob) + len(vn_np_blob),
+                    byteOffset=len(f_np_blob) + len(v_np_blob),
                     byteLength=len(vt_np_blob),
                     byteStride=8, # vec2
                     target=pygltflib.ARRAY_BUFFER,
@@ -522,7 +522,7 @@ class Mesh:
                 # texture; as none target
                 pygltflib.BufferView(
                     buffer=0,
-                    byteOffset=len(f_np_blob) + len(v_np_blob) + len(vn_np_blob) + len(vt_np_blob),
+                    byteOffset=len(f_np_blob) + len(v_np_blob) + len(vt_np_blob),
                     byteLength=len(albedo_blob),
                 ),
             ],
@@ -545,16 +545,7 @@ class Mesh:
                     max=v_np.max(axis=0).tolist(),
                     min=v_np.min(axis=0).tolist(),
                 ),
-                # 2 = normals
-                pygltflib.Accessor(
-                    bufferView=1,
-                    componentType=pygltflib.FLOAT,
-                    count=len(vn_np),
-                    type=pygltflib.VEC3,
-                    max=vn_np.max(axis=0).tolist(),
-                    min=vn_np.min(axis=0).tolist(),
-                ),
-                # 3 = texcoords
+                # 2 = texcoords
                 pygltflib.Accessor(
                     bufferView=2,
                     componentType=pygltflib.FLOAT,
@@ -567,7 +558,7 @@ class Mesh:
         )
 
         # set actual data
-        gltf.set_binary_blob(f_np_blob + v_np_blob + vn_np_blob + vt_np_blob + albedo_blob)
+        gltf.set_binary_blob(f_np_blob + v_np_blob + vt_np_blob + albedo_blob)
 
         # glb = b"".join(gltf.save_to_bytes())
         gltf.save(path)
