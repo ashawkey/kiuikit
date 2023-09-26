@@ -72,6 +72,9 @@ python -m kiui.cli.bg input_folder output_folder
 # openpose detector
 python -m kiui.cli.pose --help
 
+# blip2 image captioning
+python -m kiui.cli.blip --help
+
 # hed edge detector
 python -m kiui.cli.hed --help
 
@@ -81,12 +84,19 @@ python -m kiui.cli.depth_zoe --help
 # midas depth estimation (dpt-large)
 python -m kiui.cli.depth_midas --help
 
+# sr (Real-ESRGAN from https://github.com/ai-forever/Real-ESRGAN/tree/main)
+python -m kiui.sr --help
+python -m kiui.sr image.jpg --scale 2 # save to image_2x.jpg
+```
+
+GUI tools:
+```bash
 # open a GUI to render a mesh (extra dep: nvdiffrast)
 python -m kiui.render --help
 python -m kiui.render mesh.obj
 python -m kiui.render mesh.obj --save_video out.mp4 --wogui # save 360 degree rotating video
 
-# sr (Real-ESRGAN from https://github.com/ai-forever/Real-ESRGAN/tree/main)
-python -m kiui.sr --help
-python -m kiui.sr image.jpg --scale 2 # save to image_2x.jpg
+# open a GUI to render and edit pose (openpose convention, controlnet compatible)
+python -m kiui.poser --help
+python -m kiui.poser --load 3head # load preset 3 headed skeleton
 ```
