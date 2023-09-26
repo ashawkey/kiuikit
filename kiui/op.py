@@ -18,3 +18,7 @@ def length(x, eps=1e-20):
 
 def safe_normalize(x, eps=1e-20):
     return x / length(x, eps)
+
+
+def make_divisible(x, m=8):
+    return x + (m - x % m)

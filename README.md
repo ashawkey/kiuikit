@@ -87,6 +87,9 @@ python -m kiui.cli.depth_midas --help
 # sr (Real-ESRGAN from https://github.com/ai-forever/Real-ESRGAN/tree/main)
 python -m kiui.sr --help
 python -m kiui.sr image.jpg --scale 2 # save to image_2x.jpg
+
+# made-in-heaven timer (https://github.com/ashawkey/made-in-heaven-timer)
+python -m kiui.cli.timer --help
 ```
 
 GUI tools:
