@@ -33,7 +33,7 @@ class GUI:
         # load mesh
         self.mesh = Mesh.load(opt.mesh, front_dir=opt.front_dir)
 
-        if self.wogui or os.name == 'nt':
+        if not opt.force_cuda_rast and (self.wogui or os.name == 'nt'):
             self.glctx = dr.RasterizeGLContext()
         else:
             self.glctx = dr.RasterizeCudaContext()
@@ -309,6 +309,7 @@ if __name__ == '__main__':
     parser.add_argument('--radius', type=float, default=3, help="default GUI camera radius from center")
     parser.add_argument('--fovy', type=float, default=50, help="default GUI camera fovy")
     parser.add_argument("--wogui", action='store_true', help="disable all dpg GUI")
+    parser.add_argument("--force_cuda_rast", action='store_true', help="force to use RasterizeCudaContext.")
     parser.add_argument('--save', type=str, default=None, help="path to save example rendered images")
     parser.add_argument('--elevation', type=int, default=0, help="rendering elevation")
     parser.add_argument('--num_azimuth', type=int, default=8, help="number of images to render from different azimuths")
