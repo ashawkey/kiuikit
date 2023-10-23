@@ -24,7 +24,7 @@ def lo(*xs, verbose=0):
             text = ""
             text += f"[orange1]Array {name}[/orange1] {x.shape} {x.dtype}"
             if x.size > 0:
-                text += f"∈ [{x.min()}, {x.max()}]"
+                text += f" ∈ [{x.min()}, {x.max()}]"
             if verbose >= 1:
                 text += f" μ = {x.mean()} σ = {x.std()}"
             # detect abnormal values
@@ -44,7 +44,7 @@ def lo(*xs, verbose=0):
             text = ""
             text += f"[orange1]Tensor {name}[/orange1] {x.shape} {x.dtype} {x.device}"
             if x.numel() > 0:
-                text += f"∈ [{x.min().item()}, {x.max().item()}]"
+                text += f" ∈ [{x.min().item()}, {x.max().item()}]"
             if verbose >= 1:
                 text += f" μ = {x.mean().item()} σ = {x.std().item()}"
             # detect abnormal values
@@ -64,7 +64,11 @@ def lo(*xs, verbose=0):
 
     # inspect names
     for i, x in enumerate(xs):
-        _lo(x, varname.argname(f"xs[{i}]"))
+        try:
+            name = varname.argname(f"xs[{i}]", func=lo)
+        except:
+            name = f"UNKNOWN"
+        _lo(x, name)
 
 
 def read_json(path):
@@ -95,10 +99,12 @@ def read_image(path, mode="float", order="RGB"):
     # mode
     if "float" in mode:
         return img.astype(np.float32) / 255
-    elif "tensor" in mode:
+    elif "tensor" in mode or "torch" in mode:
         return torch.from_numpy(img.astype(np.float32) / 255)
-    else:  # uint8
+    elif "uint8" in mode:
         return img
+    else:
+        raise ValueError(f"Unknown read_image mode {mode}")
 
 
 def write_image(path, img, order="RGB"):

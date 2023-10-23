@@ -49,6 +49,19 @@ def orbit_camera(elevation, azimuth, radius=1, is_degree=True, target=None, open
     T[:3, 3] = campos
     return T
 
+# orbit pose to elevation & azimuth
+def undo_orbit_camera(T, is_degree=True):
+    # T: [4, 4], camera pose matrix
+    # return: elevation, azimuth, radius
+    campos = T[:3, 3]
+    radius = np.linalg.norm(campos)
+    elevation = np.arcsin(-campos[1] / radius)
+    azimuth = np.arctan2(campos[0], campos[2])
+    if is_degree:
+        elevation = np.rad2deg(elevation)
+        azimuth = np.rad2deg(azimuth)
+    return elevation, azimuth, radius
+
 class OrbitCamera:
     def __init__(self, W, H, r=2, fovy=60, near=0.01, far=100):
         self.W = W
