@@ -243,17 +243,21 @@ class Mesh:
 
         mesh.device = device
 
-        # use trimesh to load ply/glb, assume only has one single RootMesh...
+        # use trimesh to load ply/glb
         _data = trimesh.load(path)
         if isinstance(_data, trimesh.Scene):
             if len(_data.geometry) == 1:
                 _mesh = list(_data.geometry.values())[0]
             else:
-                # manual concat, will lose texture
+                print(f"[load_trimesh] concatenating {len(_data.geometry)} meshes.")
                 _concat = []
-                for g in _data.geometry.values():
-                    if isinstance(g, trimesh.Trimesh):
-                        _concat.append(g)
+                # loop the scene graph and apply transform to each mesh
+                scene_graph = _data.graph.to_flattened() # dict {name: {transform: 4x4 mat, geometry: str}}
+                for k, v in scene_graph.items():
+                    name = v['geometry']
+                    if name in _data.geometry and isinstance(_data.geometry[name], trimesh.Trimesh):
+                        transform = v['transform']
+                        _concat.append(_data.geometry[name].apply_transform(transform))
                 _mesh = trimesh.util.concatenate(_concat)
         else:
             _mesh = _data
@@ -271,7 +275,7 @@ class Mesh:
                 texture = np.array(_material.to_pbr().baseColorTexture).astype(np.float32) / 255
             else:
                 raise NotImplementedError(f"material type {type(_material)} not supported!")
-            mesh.albedo = torch.tensor(texture, dtype=torch.float32, device=device)
+            mesh.albedo = torch.tensor(texture[..., :3], dtype=torch.float32, device=device).contiguous()
             print(f"[load_trimesh] load texture: {texture.shape}")
         else:
             texture = np.ones((1024, 1024, 3), dtype=np.float32) * np.array([0.5, 0.5, 0.5])
