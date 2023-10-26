@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 import dearpygui.dearpygui as dpg
 from scipy.spatial.transform import Rotation
 
-from kiui.op import safe_normalize
 from kiui.cam import OrbitCamera
 
 PRESET = {
@@ -17,7 +16,31 @@ PRESET = {
     '3head': {"nose": [-0.009920584969222546, 0.12076142430305481, 0.05144921690225601], "neck": [-0.010807228274643421, 0.0514158271253109, 0.0013299279380589724], "right_shoulder": [-0.06006723269820213, 0.04696957394480705, 0.0002115728275384754], "right_elbow": [-0.09811610728502274, -0.005623028613626957, 0.0059844981878995895], "right_wrist": [-0.13300932943820953, -0.06305573135614395, 0.03299811854958534], "left_shoulder": [0.03998754173517227, 0.04971584677696228, 0.00508818868547678], "left_elbow": [0.08185750991106033, -0.0020600110292434692, -0.00042760284850373864], "left_wrist": [0.12347455322742462, -0.057821620255708694, 0.03114679642021656], "right_hip": [0.028485914692282677, -0.07230513542890549, 0.007468733470886946], "right_knee": [0.02956254966557026, -0.1690925806760788, 0.0041032107546925545], "right_ankle": [0.03433872014284134, -0.26075273752212524, 0.004083261359483004], "left_hip": [-0.045689668506383896, -0.07934730499982834, 0.007511031813919544], "left_knee": [-0.04399966821074486, -0.17574959993362427, 0.004589484538882971], "left_ankle": [-0.04372630640864372, -0.26631468534469604, 0.004584244918078184], "right_eye": [-0.050951384007930756, 0.14704833924770355, 0.030185498297214508], "left_eye": [0.030040200799703598, 0.14831678569316864, 0.03128870204091072], "right_ear": [-0.07488956302404404, 0.12157893925905228, -0.004280052147805691], "left_ear": [0.05265972018241882, 0.12078605592250824, -0.004687455017119646]},
     '4head': {"nose": [-0.003130262019112706, 0.16587696969509125, 0.05414091795682907], "neck": [-0.008572826161980629, 0.10935179889202118, -0.005226037930697203], "right_shoulder": [-0.0681774765253067, 0.10397181659936905, -0.006579247768968344], "right_elbow": [-0.11421658098697662, 0.04033476859331131, 0.0004059926141053438], "right_wrist": [-0.1564374417066574, -0.02915881760418415, 0.033092476427555084], "left_shoulder": [0.05288884416222572, 0.10729481279850006, -0.0006785409059375525], "left_elbow": [0.10355149209499359, 0.0446460098028183, -0.007352650165557861], "left_wrist": [0.1539081186056137, -0.022825559601187706, 0.030852381139993668], "right_hip": [0.03897187486290932, -0.040350597351789474, 0.0022019187454134226], "right_knee": [0.04027460888028145, -0.15746350586414337, -0.001870364649221301], "right_ankle": [0.04605376720428467, -0.2683720886707306, -0.001894504064694047], "left_hip": [-0.05078059807419777, -0.04887162148952484, 0.002253100508823991], "left_knee": [-0.04873568192124367, -0.16551849246025085, -0.0012819726252928376], "left_ankle": [-0.04840493202209473, -0.27510207891464233, -0.0012883121380582452], "right_eye": [-0.03098677098751068, 0.19395537674427032, 0.019874906167387962], "left_eye": [0.01657041721045971, 0.1956009715795517, 0.02724142000079155], "right_ear": [-0.05411602929234505, 0.1733667254447937, -0.013280442915856838], "left_ear": [0.0373358279466629, 0.16922003030776978, -0.009465649724006653]},
     '7head': {"nose": [0.008811305277049541, 0.31194087862968445, 0.03809100389480591], "neck": [0.002824489725753665, 0.2497633546590805, -0.027212638407945633], "right_shoulder": [-0.06274063885211945, 0.2438453733921051, -0.0287011731415987], "right_elbow": [-0.11721517890691757, 0.11645109206438065, -0.020040860399603844], "right_wrist": [-0.14608919620513916, -0.027798010036349297, 0.013604634441435337], "left_shoulder": [0.07043224573135376, 0.24750067293643951, -0.02221038192510605], "left_elbow": [0.13446204364299774, 0.11769299954175949, -0.02934686467051506], "left_wrist": [0.1729350984096527, -0.029831381514668465, 0.013683688826858997], "right_hip": [0.05391363054513931, -0.017539208754897118, -0.0190418753772974], "right_knee": [0.06667664647102356, -0.1525234431028366, -0.023521387949585915], "right_ankle": [0.07457379996776581, -0.3374432921409607, -0.02354794181883335], "left_hip": [-0.059334054589271545, -0.023282308131456375, -0.018985575065016747], "left_knee": [-0.06742465496063232, -0.14818398654460907, -0.02287415601313114], "left_ankle": [-0.08158088475465775, -0.33846616744995117, -0.02288113348186016], "right_eye": [-0.0218308437615633, 0.34282705187797546, 0.0003984148206654936], "left_eye": [0.03048212267458439, 0.3446371853351593, 0.008501569740474224], "right_ear": [-0.04727301374077797, 0.3201795518398285, -0.0360724963247776], "left_ear": [0.05332399904727936, 0.31561821699142456, -0.03187622129917145]},
+    '8head': {"nose": [0.013792905025184155, 0.3043023347854614, 0.031688809394836426], "neck": [0.009342477656900883, 0.2587159276008606, -0.022332727909088135], "right_shoulder": [-0.05664093792438507, 0.24332502484321594, -0.02351135015487671], "right_elbow": [-0.09274981170892715, 0.12393242120742798, -0.014478711411356926], "right_wrist": [-0.12370569258928299, -0.0065268343314528465, 0.014483341947197914], "left_shoulder": [0.08111944049596786, 0.24344637989997864, -0.0181470587849617], "left_elbow": [0.11824966222047806, 0.12197338044643402, -0.021892601624131203], "left_wrist": [0.14754801988601685, -0.0040277112275362015, 0.014088761992752552], "right_hip": [0.05466757342219353, -0.027295198291540146, -0.015528455376625061], "right_knee": [0.07225559651851654, -0.18235255777835846, -0.018520904704928398], "right_ankle": [0.089942067861557, -0.3677787184715271, -0.019252480939030647], "left_hip": [-0.042525578290224075, -0.03484155982732773, -0.015481928363442421], "left_knee": [-0.06011202931404114, -0.180166095495224, -0.018695630133152008], "left_ankle": [-0.07281138002872467, -0.36362409591674805, -0.018701398745179176], "right_eye": [-0.011531195603311062, 0.329828143119812, 0.0005379004869610071], "left_eye": [0.0317026749253273, 0.33132410049438477, 0.007234722841531038], "right_ear": [-0.03255778178572655, 0.311111181974411, -0.02960335463285446], "left_ear": [0.05058026313781738, 0.30734145641326904, -0.026135355234146118]},
 }
+
+def joint_mapper_smplx_to_openpose18(joints):
+    indices = np.array([
+        56, # nose
+        13, # neck
+        18, # right_shoulder
+        20, # right_elbow
+        22, # right_wrist
+        17, # left_shoulder
+        19, # left_elbow
+        21, # left_wrist
+        3,  # right_hip
+        6,  # right_knee
+        9,  # right_ankle
+        2,  # left_hip
+        5,  # left_knee
+        8,  # left_ankle
+        57, # right_eye
+        58, # left_eye
+        59, # right_ear
+        60, # left_ear
+    ], dtype=np.int64) - 1
+    return joints[indices]
 
 class Skeleton:
 
@@ -58,6 +81,10 @@ class Skeleton:
         self.colors = [[255, 0, 0], [255, 85, 0], [255, 170, 0], [255, 255, 0], [170, 255, 0], [85, 255, 0], [0, 255, 0],
                        [0, 255, 85], [0, 255, 170], [0, 255, 255], [0, 170, 255], [0, 85, 255], [0, 0, 255], [85, 0, 255],
                        [170, 0, 255], [255, 0, 255], [255, 0, 170], [255, 0, 85]]
+
+        # smplx mesh if available
+        self.vertices = None
+        self.faces = None
     
     @property
     def center(self):
@@ -78,6 +105,20 @@ class Skeleton:
         min_point -= remedy_thickness
         max_point += remedy_thickness
         return min_point, max_point
+
+    def sample_points(self, noise=0.05, N=1000):
+        # just sample N points around each line
+        pc = []
+        for i in range(17):
+            A = self.points3D[[self.lines[i][0]], :3] # [1, 3]
+            B = self.points3D[[self.lines[i][1]], :3]
+            x = np.linspace(0, 1, N)[:, None] # [N, 1]
+            points = A * (1 - x) + B * x
+            # add noise
+            points += np.random.randn(N, 3) * noise
+            pc.append(points)
+        pc = np.concatenate(pc, axis=0) # [17 * N, 3]
+        return pc
     
     def write_json(self, path):
 
@@ -99,7 +140,44 @@ class Skeleton:
         # load keypoints
         for i in range(18):
             self.points3D[i, :3] = np.array(d[self.name[i]])
+    
+    def load_smplx(self, path, betas=None, expression=None, gender='neutral'):
 
+        import smplx
+
+        smplx_model = smplx.create(
+            path, 
+            model_type='smplx',
+            gender=gender, 
+            use_face_contour=False,
+            num_betas=10,
+            num_expression_coeffs=10,
+            ext='npz',
+        )
+
+        # import torch
+        # betas = torch.randn([1, smplx_model.num_betas], dtype=torch.float32)
+        # expression = torch.randn([1, smplx_model.num_expression_coeffs], dtype=torch.float32)
+
+        smplx_output = smplx_model(betas=betas, expression=expression, return_verts=True)
+
+        self.vertices = smplx_output.vertices.detach().cpu().numpy()[0] # [10475, 3]
+        self.faces = smplx_model.faces # [20908, 3]
+
+        joints = smplx_output.joints.detach().cpu().numpy()[0] # [127, 3]
+        joints = joint_mapper_smplx_to_openpose18(joints)
+
+        self.points3D = np.concatenate([joints, np.ones_like(joints[:, :1])], axis=1) # [18, 4]
+
+        # rescale and recenter 
+        vmin = self.vertices.min(0)
+        vmax = self.vertices.max(0)
+        self.ori_center = (vmax + vmin) / 2
+        self.ori_scale = 0.8 / np.max(vmax - vmin)
+        self.vertices = (self.vertices - self.ori_center) * self.ori_scale
+        self.points3D[:, :3] = (self.points3D[:, :3] - self.ori_center) * self.ori_scale
+
+        
     def scale(self, delta):
         self.points3D[:, :3] *= 1.1 ** (-delta)
 
@@ -419,6 +497,7 @@ if __name__ == '__main__':
     parser.add_argument('--W', type=int, default=512, help="GUI width")
     parser.add_argument('--H', type=int, default=512, help="GUI height")
     parser.add_argument('--load', type=str, default=None, help="path to load a json pose, or a preset name (2head, 2.5head, 3head, 4head)")
+    parser.add_argument('--smplx_path', type=str, default=None, help="path to models folder (contains smplx/)")
     parser.add_argument('--save', type=str, default=None, help="path to render and save pose images")
     parser.add_argument('--radius', type=float, default=2.7, help="default GUI camera radius from center")
     parser.add_argument('--fovy', type=float, default=18.8, help="default GUI camera fovy")
@@ -426,6 +505,11 @@ if __name__ == '__main__':
     opt = parser.parse_args()
 
     gui = GUI(opt)
+
+    if opt.smplx_path is not None:
+        print(f'[INFO] load smplx from {opt.smplx_path}')
+        gui.skel.load_smplx(opt.smplx_path)
+        gui.need_update = True
 
     if opt.load is not None:
         print(f'[INFO] load from {opt.load}')
