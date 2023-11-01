@@ -83,6 +83,8 @@ class Skeleton:
                        [170, 0, 255], [255, 0, 255], [255, 0, 170], [255, 0, 85]]
 
         # smplx mesh if available
+        self.smplx_model = None
+        self.body_pose = np.zeros((21, 3), dtype=np.float32)
         self.vertices = None
         self.faces = None
     
@@ -144,25 +146,30 @@ class Skeleton:
     def load_smplx(self, path, betas=None, expression=None, gender='neutral'):
 
         import smplx
+        import torch
 
-        smplx_model = smplx.create(
-            path, 
-            model_type='smplx',
-            gender=gender, 
-            use_face_contour=False,
-            num_betas=10,
-            num_expression_coeffs=10,
-            ext='npz',
+        if self.smplx_model is None:
+
+            self.smplx_model = smplx.create(
+                path, 
+                model_type='smplx',
+                gender=gender, 
+                use_face_contour=False,
+                num_betas=10,
+                num_expression_coeffs=10,
+                ext='npz',
+            )
+
+        # betas = torch.randn([1, self.smplx_model.num_betas], dtype=torch.float32)
+        # expression = torch.randn([1, self.smplx_model.num_expression_coeffs], dtype=torch.float32)
+
+        smplx_output = self.smplx_model(
+            body_pose=torch.tensor(self.body_pose, dtype=torch.float32).unsqueeze(0),
+            betas=betas, expression=expression, return_verts=True
         )
 
-        # import torch
-        # betas = torch.randn([1, smplx_model.num_betas], dtype=torch.float32)
-        # expression = torch.randn([1, smplx_model.num_expression_coeffs], dtype=torch.float32)
-
-        smplx_output = smplx_model(betas=betas, expression=expression, return_verts=True)
-
         self.vertices = smplx_output.vertices.detach().cpu().numpy()[0] # [10475, 3]
-        self.faces = smplx_model.faces # [20908, 3]
+        self.faces = self.smplx_model.faces # [20908, 3]
 
         joints = smplx_output.joints.detach().cpu().numpy()[0] # [127, 3]
         joints = joint_mapper_smplx_to_openpose18(joints)
@@ -298,13 +305,13 @@ class GUI:
         ### register window
 
         # the rendered image, as the primary window
-        with dpg.window(label="Viewer", tag="_primary_window", width=self.W, height=self.H):
+        with dpg.window(label="Viewer", tag="_primary_window", width=self.W, height=self.H, pos=[0, 0], no_move=True, no_title_bar=True, no_scrollbar=True):
             dpg.add_image("_texture")
 
-        dpg.set_primary_window("_primary_window", True)
+        # dpg.set_primary_window("_primary_window", True)
 
         # control window
-        with dpg.window(label="Control", tag="_control_window", width=-1, height=-1):
+        with dpg.window(label="Control", tag="_control_window", width=600, height=self.H, pos=[self.W, 0], no_move=True, no_title_bar=True):
 
             # button theme
             with dpg.theme() as theme_button:
@@ -371,8 +378,18 @@ class GUI:
                 self.need_update = True
 
             dpg.add_slider_float(label="drag sensitivity", min_value=0.000001, max_value=0.001, format="%f", default_value=self.drag_sensitivity, callback=callback_set_drag_sensitivity)
+            
+            # SMPLX pose editing
+            with dpg.collapsing_header(label="SMPLX", default_open=True):
 
-              
+                def callback_update_body_pose(sender, app_data, user_data):
+                    self.skel.body_pose[user_data] = app_data[:3]
+                    self.skel.load_smplx(self.opt.smplx_path)
+                    self.need_update = True
+
+                for i in range(self.skel.body_pose.shape[0]):
+                    dpg.add_input_floatx(default_value=self.skel.body_pose[i], size=3, width=200, format="%.3f", on_enter=False, callback=callback_update_body_pose, user_data=i)
+
         ### register camera handler
 
         def callback_camera_drag_rotate(sender, app_data):
@@ -462,7 +479,7 @@ class GUI:
             dpg.add_mouse_drag_handler(button=dpg.mvMouseButton_Right, callback=callback_skel_drag)
 
         
-        dpg.create_viewport(title='pose viewer', resizable=False, width=self.W, height=self.H)
+        dpg.create_viewport(title='pose viewer', resizable=False, width=self.W + 600, height=self.H)
         
         ### global theme
         with dpg.theme() as theme_no_padding:
@@ -494,8 +511,8 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--W', type=int, default=512, help="GUI width")
-    parser.add_argument('--H', type=int, default=512, help="GUI height")
+    parser.add_argument('--W', type=int, default=800, help="GUI width")
+    parser.add_argument('--H', type=int, default=800, help="GUI height")
     parser.add_argument('--load', type=str, default=None, help="path to load a json pose, or a preset name (2head, 2.5head, 3head, 4head)")
     parser.add_argument('--smplx_path', type=str, default=None, help="path to models folder (contains smplx/)")
     parser.add_argument('--save', type=str, default=None, help="path to render and save pose images")
