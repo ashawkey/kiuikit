@@ -62,6 +62,26 @@ def undo_orbit_camera(T, is_degree=True):
         azimuth = np.rad2deg(azimuth)
     return elevation, azimuth, radius
 
+# perspective matrix
+def get_perspective(fovy, aspect=1, near=0.01, far=1000):
+    # fovy: field of view in degree.
+    
+    y = np.tan(np.deg2rad(fovy) / 2)
+    return np.array(
+        [
+            [1 / (y * aspect), 0, 0, 0],
+            [0, -1 / y, 0, 0],
+            [
+                0,
+                0,
+                -(far + near) / (far - near),
+                -(2 * far * near) / (far - near),
+            ],
+            [0, 0, -1, 0],
+        ],
+        dtype=np.float32,
+    )
+
 class OrbitCamera:
     def __init__(self, W, H, r=2, fovy=60, near=0.01, far=100):
         self.W = W

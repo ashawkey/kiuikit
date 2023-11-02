@@ -35,7 +35,7 @@ class Mesh:
         self.ori_scale = 1
 
     @classmethod
-    def load(cls, path=None, resize=True, renormal=True, retex=False, front_dir='+z', **kwargs):
+    def load(cls, path=None, resize=True, renormal=True, remesh=False, retex=False, bound=0.9, front_dir='+z', **kwargs):
         # assume init with kwargs
         if path is None:
             mesh = cls(**kwargs)
@@ -45,11 +45,20 @@ class Mesh:
         # trimesh only supports vertex uv, but can load more formats
         else:
             mesh = cls.load_trimesh(path, **kwargs)
+        
+        # remesh
+        if remesh:
+            from kiui.mesh_utils import clean_mesh
+            vertices = mesh.v.detach().cpu().numpy()
+            triangles = mesh.f.detach().cpu().numpy()
+            vertices, triangles = clean_mesh(vertices, triangles, remesh=True, remesh_size=0.01)
+            mesh.v = torch.from_numpy(vertices).float().to(mesh.device)
+            mesh.f = torch.from_numpy(triangles).int().to(mesh.device)
 
         print(f"[Mesh loading] v: {mesh.v.shape}, f: {mesh.f.shape}")
         # auto-normalize
         if resize:
-            mesh.auto_size()
+            mesh.auto_size(bound=bound)
         # auto-fix normal
         if renormal or mesh.vn is None:
             mesh.auto_normal()
@@ -330,10 +339,10 @@ class Mesh:
 
     # unit size
     @torch.no_grad()
-    def auto_size(self):
+    def auto_size(self, bound=0.9):
         vmin, vmax = self.aabb()
         self.ori_center = (vmax + vmin) / 2
-        self.ori_scale = 1.8 / torch.max(vmax - vmin).item()
+        self.ori_scale = 2 * bound / torch.max(vmax - vmin).item()
         self.v = (self.v - self.ori_center) * self.ori_scale
 
     def auto_normal(self):

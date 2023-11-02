@@ -28,12 +28,12 @@ def plot_matrix(*xs):
 
     def _plot_matrix(matrix):
 
+        lo(matrix)
+
         if isinstance(matrix, torch.Tensor):
             if len(matrix.shape) == 3:
                 matrix = matrix.permute(1, 2, 0).squeeze()
             matrix = matrix.detach().cpu().numpy()
-
-        lo(matrix)
 
         if len(matrix.shape) == 3:
             # per channel
@@ -48,26 +48,28 @@ def plot_matrix(*xs):
         if len(x.shape) == 4:
             for i in range(x.shape[0]):
                 _plot_matrix(x[i])
-        else:
+        else: # 3 or 2
             _plot_matrix(x)
 
 
 # sequentially plot provided images
 def plot_image(*xs, normalize=False):
-    # x: [B, 3, H, W], [3, H, W], [1, H, W] or [H, W] torch.Tensor
-    #    [B, H, W, 3], [H, W, 3], [H, W, 1] or [H, W] numpy.ndarray
+    # x: [B, 3, H, W], [3, H, W], [H, W, 3], [1, H, W], [H, W, 1] or [H, W] torch.Tensor
+    #    [B, H, W, 3], [H, W, 3], [3, H, W], [H, W, 1], [1, H, W] or [H, W] numpy.ndarray
 
     def _plot_image(image):
 
-        if isinstance(image, torch.Tensor):
-            if len(image.shape) == 3:
-                image = image.permute(1, 2, 0).squeeze()
-            image = image.detach().cpu().numpy()
-
         lo(image)
+
+        if isinstance(image, torch.Tensor):
+            image = image.detach().cpu().numpy()
 
         if image.dtype == np.uint8:
             image = image.astype(np.float32) / 255.0
+        
+        # empirially to channel-last
+        if len(image.shape) == 3 and image.shape[0] < image.shape[-1]:
+            image = image.transpose(1, 2, 0)
 
         # normalize
         if normalize:
@@ -84,7 +86,7 @@ def plot_image(*xs, normalize=False):
         if len(x.shape) == 4:
             for i in range(x.shape[0]):
                 _plot_image(x[i])
-        else:
+        else: # 3 or 2
             _plot_image(x)
 
 
