@@ -90,6 +90,9 @@ python -m kiui.sr image.jpg --scale 2 # save to image_2x.jpg
 
 # made-in-heaven timer (https://github.com/ashawkey/made-in-heaven-timer)
 python -m kiui.cli.timer --help
+
+# mesh format conversion (only for a single textured mesh in obj/glb)
+python -m kiui.cli.convert input.obj output.glb
 ```
 
 GUI tools:

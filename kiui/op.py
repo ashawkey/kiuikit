@@ -1,3 +1,4 @@
+import cv2
 import torch
 import numpy as np
 
@@ -45,3 +46,32 @@ def scale_img_nhw(x, size, mag='bilinear', min='bilinear'):
 
 def scale_img_hw(x, size, mag='bilinear', min='bilinear'):
     return scale_img_nhwc(x[None, ..., None], size, mag, min)[0, ..., 0]
+
+
+# uv padding from threestudio
+def uv_padding(image, mask, padding=2):
+    # image: [H, W, 3] torch.tensor or np.ndarray in [0, 1]
+    # mask: [H, W] torch.tensor or np.ndarray, bool, regions to inpaint.
+    # padding: size to pad into mask
+
+    if torch.is_tensor(image):
+        image_input = image.detach().cpu().numpy()
+    else:
+        image_input = image
+
+    if torch.is_tensor(mask):
+        mask_input = mask.detach().cpu().numpy()
+    else:
+        mask_input = mask
+
+    inpaint_image = cv2.inpaint(
+        (image_input * 255).astype(np.uint8),
+        (mask_input * 255).astype(np.uint8),
+        padding,
+        cv2.INPAINT_TELEA,
+    ).astype(np.float32) / 255
+
+    if torch.is_tensor(image):
+        inpaint_image = torch.from_numpy(inpaint_image).to(image)
+    
+    return inpaint_image
