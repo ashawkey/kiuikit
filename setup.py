@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 if __name__ == "__main__":
     setup(
         name="kiui",
-        version="0.1.9",
+        version="0.1.10",
         description="self-use toolkits",
         long_description=open("README.md", encoding="utf-8").read(),
         long_description_content_type="text/markdown",
@@ -27,6 +27,8 @@ if __name__ == "__main__":
                 "rich",
                 "numpy",
                 "scipy",
+                "scikit-image",
+                "scikit-learn",
                 "pandas",
                 "trimesh",
                 "pygltflib",
@@ -35,7 +37,6 @@ if __name__ == "__main__":
                 "opencv-python",
                 "imageio",
                 "imageio-ffmpeg",
-                "scikit-image",
                 "rembg[gpu,cli]",
                 "dearpygui",
                 'huggingface_hub',

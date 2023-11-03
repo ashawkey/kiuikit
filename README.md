@@ -1,6 +1,6 @@
-# kiui kit
+# kiuikit
 
-A toolkit for personal use.
+A toolkit for computer vision (especially 3D vision) tasks.
 
 **Features**:
 * Collection of *maintained, reusable and trustworthy* code snippets.
