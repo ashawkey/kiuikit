@@ -294,8 +294,7 @@ class GUI:
             self.step()
             dpg.render_dearpygui_frame()
 
-
-if __name__ == '__main__':
+def main():
     import os
     import tqdm
     import argparse
@@ -354,3 +353,7 @@ if __name__ == '__main__':
         imageio.mimwrite(opt.save_video, images, fps=30, quality=8, macro_block_size=1)
     else:
         gui.render()
+
+
+if __name__ == '__main__':
+    main()

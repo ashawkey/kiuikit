@@ -101,6 +101,7 @@ GUI tools:
 python -m kiui.render --help
 python -m kiui.render mesh.obj
 python -m kiui.render mesh.obj --save_video out.mp4 --wogui # save 360 degree rotating video
+kir --help # short cut
 
 # open a GUI to render and edit pose (openpose convention, controlnet compatible)
 python -m kiui.poser --help

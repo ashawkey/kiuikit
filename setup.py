@@ -4,7 +4,7 @@ if __name__ == "__main__":
     setup(
         name="kiui",
         version="0.1.10",
-        description="self-use toolkits",
+        description="A toolkit for 3D vision",
         long_description=open("README.md", encoding="utf-8").read(),
         long_description_content_type="text/markdown",
         url="https://github.com/ashawkey/kiuikit",
@@ -12,6 +12,12 @@ if __name__ == "__main__":
         author_email="ashawkey1999@gmail.com",
         packages=find_packages(),
         include_package_data=True,
+        entry_points={
+            # CLI tools
+            'console_scripts': [
+                'kir = kiui.render:main'
+            ],
+        },
         classifiers=[
             "Programming Language :: Python :: 3 ",
         ],
