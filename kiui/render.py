@@ -1,4 +1,7 @@
+import os
 import cv2
+import tqdm
+import argparse
 import numpy as np
 
 import torch
@@ -295,10 +298,7 @@ class GUI:
             dpg.render_dearpygui_frame()
 
 def main():
-    import os
-    import tqdm
-    import argparse
-
+    
     parser = argparse.ArgumentParser()
     parser.add_argument('mesh', type=str, help="path to mesh (obj, ply, glb, ...)")
     parser.add_argument('--front_dir', type=str, default='+z', help="mesh front-facing dir")
