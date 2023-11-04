@@ -446,7 +446,7 @@ class Mesh:
     # write to gltf/glb file (geom + texture)
     def write_glb(self, path):
 
-        assert self.vn is not None and self.vt is not None # should be improved to support export without texture...
+        assert self.vt is not None # should be improved to support export without texture...
 
         # assert self.v.shape[0] == self.vn.shape[0] and self.v.shape[0] == self.vt.shape[0]
         if self.v.shape[0] != self.vt.shape[0]:
