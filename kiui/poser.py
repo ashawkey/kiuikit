@@ -199,10 +199,11 @@ class Skeleton:
                 model_type='smplx',
                 gender=gender, 
                 use_face_contour=False,
-                use_pca=False, # explicitly control hand pose
                 num_betas=10,
                 num_expression_coeffs=10,
                 ext='npz',
+                use_pca=False, # explicitly control hand pose
+                flat_hand_mean=True, # use a flatten hand default pose
             )
 
         # betas = torch.randn([1, self.smplx_model.num_betas], dtype=torch.float32)
