@@ -536,8 +536,7 @@ def sr(image, scale=2):
     sr_image = MODELS[scale].predict(image)
     return sr_image
 
-
-if __name__ == '__main__':
+def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('input', type=str)
@@ -556,3 +555,7 @@ if __name__ == '__main__':
     sr_image = cv2.cvtColor(sr_image, cv2.COLOR_RGB2BGR)
 
     cv2.imwrite(args.output, sr_image)
+
+
+if __name__ == '__main__':
+    main()

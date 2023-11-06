@@ -87,12 +87,14 @@ python -m kiui.cli.depth_midas --help
 # sr (Real-ESRGAN from https://github.com/ai-forever/Real-ESRGAN/tree/main)
 python -m kiui.sr --help
 python -m kiui.sr image.jpg --scale 2 # save to image_2x.jpg
+kisr image.jpg --scale 2 # short cut cmd
 
 # made-in-heaven timer (https://github.com/ashawkey/made-in-heaven-timer)
 python -m kiui.cli.timer --help
 
 # mesh format conversion (only for a single textured mesh in obj/glb)
 python -m kiui.cli.convert input.obj output.glb
+kico input.obj output.glb # short cut cmd
 ```
 
 GUI tools:
@@ -101,7 +103,7 @@ GUI tools:
 python -m kiui.render --help
 python -m kiui.render mesh.obj
 python -m kiui.render mesh.obj --save_video out.mp4 --wogui # save 360 degree rotating video
-kir --help # short cut
+kire --help # short cut cmd
 
 # open a GUI to render and edit pose (openpose convention, controlnet compatible)
 python -m kiui.poser --help

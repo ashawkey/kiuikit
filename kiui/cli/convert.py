@@ -1,6 +1,6 @@
 from kiui.mesh import Mesh
 
-if __name__ == '__main__':
+def main():
     import os
     import glob
     import argparse
@@ -13,3 +13,7 @@ if __name__ == '__main__':
 
     mesh = Mesh.load(opt.mesh)
     mesh.write(opt.out)
+
+
+if __name__ == '__main__':
+    main()

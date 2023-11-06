@@ -15,7 +15,9 @@ if __name__ == "__main__":
         entry_points={
             # CLI tools
             'console_scripts': [
-                'kir = kiui.render:main'
+                'kire = kiui.render:main',
+                'kico = kiui.cli.convert:main',
+                'kisr = kiui.sr:main',
             ],
         },
         classifiers=[
