@@ -92,6 +92,9 @@ class Skeleton:
         self.smplx_model = None
         self.vertices = None
         self.faces = None
+        self.ori_center = None
+        self.ori_scale = None
+
         self.body_pose = np.zeros((21, 3), dtype=np.float32)
         # let's default to A-pose
         self.body_pose[15, 2] = -0.7853982
@@ -122,6 +125,12 @@ class Skeleton:
         18: 'right_elbow',#'R_Elbow', 同右肩膀
         19: 'left_wrist',#'L_Wrist', 同左肩膀
         20: 'right_wrist',#'R_Wrist', 同右肩膀
+        """
+
+        self.left_hand_pose = np.zeros((15, 3), dtype=np.float32)
+        self.right_hand_pose = np.zeros((15, 3), dtype=np.float32)
+        """ hand_pose definition
+        index, middle, pinky, ring, thumb; each with 3 joints.
         """
     
     @property
@@ -190,6 +199,7 @@ class Skeleton:
                 model_type='smplx',
                 gender=gender, 
                 use_face_contour=False,
+                use_pca=False, # explicitly control hand pose
                 num_betas=10,
                 num_expression_coeffs=10,
                 ext='npz',
@@ -200,6 +210,8 @@ class Skeleton:
 
         smplx_output = self.smplx_model(
             body_pose=torch.tensor(self.body_pose, dtype=torch.float32).unsqueeze(0),
+            left_hand_pose=torch.tensor(self.left_hand_pose, dtype=torch.float32).unsqueeze(0),
+            right_hand_pose=torch.tensor(self.right_hand_pose, dtype=torch.float32).unsqueeze(0),
             betas=betas, expression=expression, return_verts=True
         )
 
@@ -212,10 +224,12 @@ class Skeleton:
         self.points3D = np.concatenate([joints, np.ones_like(joints[:, :1])], axis=1) # [18, 4]
 
         # rescale and recenter 
-        vmin = self.vertices.min(0)
-        vmax = self.vertices.max(0)
-        self.ori_center = (vmax + vmin) / 2
-        self.ori_scale = 0.8 / np.max(vmax - vmin)
+        if self.ori_center is None:
+            vmin = self.vertices.min(0)
+            vmax = self.vertices.max(0)
+            self.ori_center = (vmax + vmin) / 2
+            self.ori_scale = 0.8 / np.max(vmax - vmin)
+        
         self.vertices = (self.vertices - self.ori_center) * self.ori_scale
         self.points3D[:, :3] = (self.points3D[:, :3] - self.ori_center) * self.ori_scale
 
@@ -465,7 +479,7 @@ class GUI:
             dpg.add_slider_float(label="drag sensitivity", min_value=0.000001, max_value=0.001, format="%f", default_value=self.drag_sensitivity, callback=callback_set_drag_sensitivity)
             
             # SMPLX pose editing
-            with dpg.collapsing_header(label="SMPLX", default_open=True):
+            with dpg.collapsing_header(label="SMPLX body_pose", default_open=False):
 
                 def callback_update_body_pose(sender, app_data, user_data):
                     self.skel.body_pose[user_data] = app_data[:3]
@@ -474,6 +488,27 @@ class GUI:
 
                 for i in range(self.skel.body_pose.shape[0]):
                     dpg.add_input_floatx(default_value=self.skel.body_pose[i], size=3, width=200, format="%.3f", on_enter=False, callback=callback_update_body_pose, user_data=i)
+            
+            with dpg.collapsing_header(label="SMPLX left_hand_pose", default_open=False):
+
+                def callback_update_left_hand_pose(sender, app_data, user_data):
+                    self.skel.left_hand_pose[user_data] = app_data[:3]
+                    self.skel.load_smplx(self.opt.smplx_path)
+                    self.need_update = True
+
+                for i in range(self.skel.left_hand_pose.shape[0]):
+                    dpg.add_input_floatx(default_value=self.skel.left_hand_pose[i], size=3, width=200, format="%.3f", on_enter=False, callback=callback_update_left_hand_pose, user_data=i)
+            
+            with dpg.collapsing_header(label="SMPLX right_hand_pose", default_open=False):
+
+                def callback_update_right_hand_pose(sender, app_data, user_data):
+                    self.skel.right_hand_pose[user_data] = app_data[:3]
+                    self.skel.load_smplx(self.opt.smplx_path)
+                    self.need_update = True
+
+                for i in range(self.skel.right_hand_pose.shape[0]):
+                    dpg.add_input_floatx(default_value=self.skel.right_hand_pose[i], size=3, width=200, format="%.3f", on_enter=False, callback=callback_update_right_hand_pose, user_data=i)
+
 
         ### register camera handler
 
