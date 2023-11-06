@@ -10,6 +10,12 @@ from scipy.spatial.transform import Rotation
 
 from kiui.cam import OrbitCamera
 
+import torch
+import torch.nn.functional as F
+import nvdiffrast.torch as dr
+
+from kiui.op import dot, safe_normalize
+
 PRESET = {
     '2head': {"nose": [0.0021412528585642576, 0.09663597494363785, 0.0658300444483757], "neck": [-0.0010681250132620335, -0.00773019902408123, 0.0070612248964607716], "right_shoulder": [-0.05952326953411102, -0.01074729859828949, -9.221061918651685e-05], "right_elbow": [-0.08530594408512115, -0.055266208946704865, -0.0002990829525515437], "right_wrist": [-0.10009504109621048, -0.10672871768474579, 0.04145783558487892], "left_shoulder": [0.05843103677034378, -0.00984001811593771, 0.006993727292865515], "left_elbow": [0.08632118254899979, -0.05415782332420349, 0.0014727215748280287], "left_wrist": [0.10457248985767365, -0.10312359780073166, 0.03887445852160454], "right_hip": [0.045034412294626236, -0.11504126340150833, 0.013827108778059483], "right_knee": [0.04918656870722771, -0.18811877071857452, 0.013533061370253563], "right_ankle": [0.04868278279900551, -0.26335108280181885, 0.00865345261991024], "left_hip": [-0.042053237557411194, -0.12201181799173355, 0.01380667183548212], "left_knee": [-0.04329617694020271, -0.1887422651052475, 0.017976703122258186], "left_ankle": [-0.043604593724012375, -0.2664816379547119, 0.009848599322140217], "right_eye": [-0.059466104954481125, 0.14732250571250916, 0.03459283709526062], "left_eye": [0.05259571596980095, 0.15527287125587463, 0.03957919031381607], "right_ear": [-0.0915362536907196, 0.12822526693344116, -0.0068031493574380875], "left_ear": [0.0850512906908989, 0.132415309548378, -0.0023928845766931772]},
     '2.5head': {"nose": [0.0017373580485582352, 0.10973469167947769, 0.0656559020280838], "neck": [0.0005578577402047813, 0.04446818679571152, 0.007351499516516924], "right_shoulder": [-0.06537579745054245, 0.04295105114579201, 0.0007656214293092489], "right_elbow": [-0.10073791444301605, -0.011567563749849796, 0.0011918626260012388], "right_wrist": [-0.13308240473270416, -0.08192941546440125, 0.041919875890016556], "left_shoulder": [0.06524424999952316, 0.044958289712667465, 0.006919004488736391], "left_elbow": [0.10230650007724762, -0.003759381826967001, 0.0006817418616265059], "left_wrist": [0.13201594352722168, -0.0703246220946312, 0.037093378603458405], "right_hip": [0.04595021530985832, -0.08364222943782806, 0.014006344601511955], "right_knee": [0.04918656870722771, -0.18811877071857452, 0.013533061370253563], "right_ankle": [0.04868278279900551, -0.26335108280181885, 0.00865345261991024], "left_hip": [-0.04423205181956291, -0.09601262211799622, 0.014173348434269428], "left_knee": [-0.04329617694020271, -0.1887422651052475, 0.017976703122258186], "left_ankle": [-0.043604593724012375, -0.2664816379547119, 0.009848599322140217], "right_eye": [-0.059466104954481125, 0.14732250571250916, 0.03459283709526062], "left_eye": [0.05259571596980095, 0.15527287125587463, 0.03957919031381607], "right_ear": [-0.0915362536907196, 0.12822526693344116, -0.0068031493574380875], "left_ear": [0.0850495845079422, 0.1380147635936737, -0.002471053972840309]},
@@ -84,9 +90,39 @@ class Skeleton:
 
         # smplx mesh if available
         self.smplx_model = None
-        self.body_pose = np.zeros((21, 3), dtype=np.float32)
         self.vertices = None
         self.faces = None
+        self.body_pose = np.zeros((21, 3), dtype=np.float32)
+        # let's default to A-pose
+        self.body_pose[15, 2] = -0.7853982
+        self.body_pose[16, 2] = 0.7853982
+        self.body_pose[0, 1] = 0.2
+        self.body_pose[0, 2] = 0.1
+        self.body_pose[1, 1] = -0.2
+        self.body_pose[1, 2] = -0.1
+        """ SMPLX body_pose definition
+        0: 'left_hip',#'L_Hip', XYZ -> (-X)(-Y)Z, 后外高 -> 前里高 (3) XYZ
+        1: 'right_hip',#'R_Hip', (4) XYZ -> (-X)(-Y)Z, 后里低 -> 前外低 (4) XYZ
+        2: 'spine1',#'Spine1', (-X)Y(-Z) -> (0) XYZ
+        3: 'left_knee',#'L_Knee', 同左UpperLeg
+        4: 'right_knee',#'R_Knee',同右UpperLeg
+        5: 'spine2',
+        6: 'left_ankle',
+        7: 'right_ankle',#'R_Ankle',同右UpperLeg
+        8: 'spine3',#'Spine3', (-X)Y(-Z) 同脊椎
+        9: 'left_foot',#'L_Foot',同左UpperLeg
+        10: 'right_foot',#'R_Foot',同右UpperLeg
+        11: 'neck',#'Neck', (-X)Y(-Z) 同脊椎
+        12: 'left_collar',#'L_Collar', XYZ -> ZXY (VRM), 前拧, 后, 高 -> 高, 前拧, 后 (1) YZX
+        13: 'right_collar',#'R_Collar', XYZ -> (-Z)(-X)Y , 前拧, 前, 低 -> 高, 后拧, 前 (2) YZX
+        14: 'head',#'Head', (-X)Y(-Z) 同脊椎
+        15: 'left_shoulder',#'L_Shoulder', 同左肩膀
+        16: 'right_shoulder',#'R_Shoulder', 同右肩膀
+        17: 'left_elbow',#'L_Elbow', 同左肩膀
+        18: 'right_elbow',#'R_Elbow', 同右肩膀
+        19: 'left_wrist',#'L_Wrist', 同左肩膀
+        20: 'right_wrist',#'R_Wrist', 同右肩膀
+        """
     
     @property
     def center(self):
@@ -146,7 +182,6 @@ class Skeleton:
     def load_smplx(self, path, betas=None, expression=None, gender='neutral'):
 
         import smplx
-        import torch
 
         if self.smplx_model is None:
 
@@ -187,10 +222,15 @@ class Skeleton:
         
     def scale(self, delta):
         self.points3D[:, :3] *= 1.1 ** (-delta)
+        if self.vertices is not None:
+            self.vertices *= 1.1 ** (-delta)
 
     def pan(self, rot, dx, dy, dz=0):
         # pan in camera coordinate system (careful on the sensitivity!)
-        self.points3D[:, :3] += 0.0005 * rot.as_matrix()[:3, :3] @ np.array([dx, -dy, dz])
+        delta = 0.0005 * rot.as_matrix()[:3, :3] @ np.array([dx, -dy, dz])
+        self.points3D[:, :3] += delta
+        if self.vertices is not None:
+            self.vertices += delta
 
     def draw(self, mvp, H, W, enable_occlusion=False):
         # mvp: [4, 4]
@@ -256,6 +296,7 @@ class GUI:
         self.cam = OrbitCamera(opt.W, opt.H, r=opt.radius, fovy=opt.fovy)
 
         self.skel = Skeleton()
+        self.glctx = dr.RasterizeCudaContext()
         
         self.render_buffer = np.zeros((self.W, self.H, 3), dtype=np.float32)
         self.need_update = True # camera moved, should reset accumulation
@@ -289,10 +330,54 @@ class GUI:
 
             # render our openpose image, somehow
             self.render_buffer, self.points2D = self.skel.draw(mvp, self.H, self.W, enable_occlusion=self.enable_occlusion)
+
+            # if with smplx, overlay normal of mesh
+            if self.skel.vertices is not None:
+                mesh_normal = self.render_mesh_normal(mvp, self.H, self.W, self.skel.vertices, self.skel.faces)
+            
+                # mix normal with buffer
+                self.render_buffer = self.render_buffer + mesh_normal
         
             self.need_update = False
             
             dpg.set_value("_texture", self.render_buffer)
+
+    def render_mesh_normal(self, mvp, H, W, vertices, faces):
+
+        mvp = torch.from_numpy(mvp.astype(np.float32)).cuda()
+        vertices = torch.from_numpy(vertices.astype(np.float32)).cuda()
+        faces = torch.from_numpy(faces.astype(np.int32)).cuda()
+
+        vertices_clip = torch.matmul(F.pad(vertices, pad=(0, 1), mode='constant', value=1.0), torch.transpose(mvp, 0, 1)).float().unsqueeze(0) # [1, N, 4]
+        rast, _ = dr.rasterize(self.glctx, vertices_clip, faces, (H, W))
+
+        i0, i1, i2 = faces[:, 0].long(), faces[:, 1].long(), faces[:, 2].long()
+        v0, v1, v2 = vertices[i0, :], vertices[i1, :], vertices[i2, :]
+
+        face_normals = torch.cross(v1 - v0, v2 - v0)
+
+        # Splat face normals to vertices
+        vn = torch.zeros_like(vertices)
+        vn.scatter_add_(0, i0[:, None].repeat(1, 3), face_normals)
+        vn.scatter_add_(0, i1[:, None].repeat(1, 3), face_normals)
+        vn.scatter_add_(0, i2[:, None].repeat(1, 3), face_normals)
+
+        # Normalize, replace zero (degenerated) normals with some default value
+        vn = torch.where(
+            dot(vn, vn) > 1e-20,
+            vn,
+            torch.tensor([0.0, 0.0, 1.0], dtype=torch.float32, device=vn.device),
+        )
+        vn = safe_normalize(vn)
+
+        normal, _ = dr.interpolate(vn.unsqueeze(0).contiguous(), rast, faces)
+        normal = safe_normalize(normal)
+
+        normal_image = (normal[0] + 1) / 2
+        normal_image = torch.where(rast[..., 3:] > 0, normal_image, torch.tensor(1).to(normal_image.device)) # remove background
+        buffer = normal_image.detach().cpu().numpy()
+
+        return buffer
 
         
     def register_dpg(self):
