@@ -204,19 +204,24 @@ def batch_process_files(
                 print(f"[INFO] ignoring {file_path} --> {file_out_path}")
                 continue
             
-            # dispatch suitable loader and writer
-            # only support image and text file
+            # dispatch loader
             if is_format(file_path, ['.jpg', '.jpeg', '.png']):
                 input = read_image(file_path, mode=image_mode, order=image_color_order)
+            elif is_format(file_path, ['.ply', '.obj', '.glb', '.gltf']):
+                from kiui.mesh import Mesh
+                input = Mesh.load(file_path)
             else:
                 with open(file_path, "r") as f:
                     input = f.read()
-
+            
+            # process
             output = process_fn(input, **kwargs)
 
-            # only support image, npy or text file
+            # dispatch writer
             if is_format(file_out_path, ['.jpg', '.jpeg', '.png']):
                 write_image(file_out_path, output, order=image_color_order)
+            elif is_format(file_out_path, ['.ply', '.obj', '.glb', '.gltf']):
+                output.write(file_out_path)
             elif is_format(file_out_path, ['.npy']):
                 np.save(file_out_path, output)
             else:

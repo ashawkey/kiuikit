@@ -95,6 +95,7 @@ python -m kiui.cli.timer --help
 # mesh format conversion (only for a single textured mesh in obj/glb)
 python -m kiui.cli.convert input.obj output.glb
 kico input.obj output.glb # short cut cmd
+kico mesh_folder/ video_folder --fmt .mp4 # render all meshes into rotating videos
 ```
 
 GUI tools:
