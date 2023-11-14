@@ -19,7 +19,7 @@ def safe_normalize(x, eps=1e-20):
     return x / length(x, eps)
 
 def make_divisible(x, m=8):
-    return x + (m - x % m)
+    return int(x + (m - x % m))
 
 def trunc_rev_sigmoid(x, eps=1e-6):
     x = x.clamp(eps, 1 - eps)
