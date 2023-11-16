@@ -219,6 +219,11 @@ class Skeleton:
         self.vertices = smplx_output.vertices.detach().cpu().numpy()[0] # [10475, 3]
         self.faces = self.smplx_model.faces # [20908, 3]
 
+        # tmp: save deformed smplx mesh
+        # import trimesh
+        # _mesh = trimesh.Trimesh(vertices=self.vertices, faces=self.faces)
+        # _mesh.export('smplx.obj')
+
         joints = smplx_output.joints.detach().cpu().numpy()[0] # [127, 3]
         joints = joint_mapper_smplx_to_openpose18(joints)
 

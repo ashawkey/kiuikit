@@ -1,10 +1,11 @@
+import time
 import torch
 import numpy as np
 
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 
-from .utils import lo
+from .utils import lo, write_image
 
 
 def map_color(value, cmap_name="viridis", vmin=None, vmax=None):
@@ -52,12 +53,17 @@ def plot_matrix(*xs):
             _plot_matrix(x)
 
 
-# sequentially plot provided images
-def plot_image(*xs, normalize=False):
+# sequentially plot provided images, optionally save to current dir.
+def plot_image(*xs, normalize=False, save=False):
     # x: [B, 3, H, W], [3, H, W], [H, W, 3], [1, H, W], [H, W, 1] or [H, W] torch.Tensor
     #    [B, H, W, 3], [H, W, 3], [3, H, W], [H, W, 1], [1, H, W] or [H, W] numpy.ndarray
 
+    _cnt = 0
+    _signature = str(time.time())
+
     def _plot_image(image):
+
+        nonlocal _cnt
 
         lo(image)
 
@@ -79,6 +85,12 @@ def plot_image(*xs, normalize=False):
                 + 1e-8
             )
 
+        if save:
+            _path = f'kiui_vis_plot_image_{_signature}_{_cnt}.png'
+            _cnt += 1
+            write_image(_path, image)
+            print(f'[kiui.vis.plot_image] write image to {_path}')
+    
         plt.imshow(image.astype(np.float32))
         plt.show()
 
