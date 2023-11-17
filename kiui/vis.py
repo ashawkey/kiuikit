@@ -88,7 +88,7 @@ def plot_image(*xs, normalize=False, save=False):
         if save:
             _path = f'kiui_vis_plot_image_{_signature}_{_cnt}.png'
             _cnt += 1
-            write_image(_path, image)
+            write_image(_path, image.astype(np.float32))
             print(f'[kiui.vis.plot_image] write image to {_path}')
     
         plt.imshow(image.astype(np.float32))

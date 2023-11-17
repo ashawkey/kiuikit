@@ -24,6 +24,7 @@ class GUI:
         self.wogui = opt.wogui # disable gui and run in cmd
         self.cam = OrbitCamera(opt.W, opt.H, r=opt.radius, fovy=opt.fovy)
         self.bg_color = torch.ones(3, dtype=torch.float32).cuda() # default white bg
+        # self.bg_color = torch.zeros(3, dtype=torch.float32).cuda() # black bg
 
         self.render_buffer = np.zeros((self.W, self.H, 3), dtype=np.float32)
         self.need_update = True # camera moved, should reset accumulation
