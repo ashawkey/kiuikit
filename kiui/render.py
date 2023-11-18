@@ -16,11 +16,10 @@ from kiui.op import safe_normalize
 
 
 class GUI:
-    def __init__(self, opt, debug=True):
+    def __init__(self, opt):
         self.opt = opt # shared with the trainer's opt to support in-place modification of rendering parameters.
         self.W = opt.W
         self.H = opt.H
-        self.debug = debug
         self.wogui = opt.wogui # disable gui and run in cmd
         self.cam = OrbitCamera(opt.W, opt.H, r=opt.radius, fovy=opt.fovy)
         self.bg_color = torch.ones(3, dtype=torch.float32).cuda() # default white bg
@@ -30,6 +29,10 @@ class GUI:
         self.need_update = True # camera moved, should reset accumulation
         self.light_dir = np.array([0, 0])
         self.ambient_ratio = 0.5
+
+        # auto-rotate
+        self.auto_rotate_cam = False
+        self.auto_rotate_light = False
         
         self.mode = opt.mode
         self.render_modes = ['albedo', 'depth', 'normal', 'lambertian']
@@ -54,74 +57,80 @@ class GUI:
     
     def step(self):
 
-        if self.need_update:
+        if not self.need_update:
+            return
+    
+        starter, ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        starter.record()
+
+        # do MVP for vertices
+        pose = torch.from_numpy(self.cam.pose.astype(np.float32)).cuda()
+        proj = torch.from_numpy(self.cam.perspective.astype(np.float32)).cuda()
         
-            starter, ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-            starter.record()
+        v_cam = torch.matmul(F.pad(self.mesh.v, pad=(0, 1), mode='constant', value=1.0), torch.inverse(pose).T).float().unsqueeze(0)
+        v_clip = v_cam @ proj.T
 
-            # do MVP for vertices
-            pose = torch.from_numpy(self.cam.pose.astype(np.float32)).cuda()
-            proj = torch.from_numpy(self.cam.perspective.astype(np.float32)).cuda()
-            
-            v_cam = torch.matmul(F.pad(self.mesh.v, pad=(0, 1), mode='constant', value=1.0), torch.inverse(pose).T).float().unsqueeze(0)
-            v_clip = v_cam @ proj.T
+        rast, rast_db = dr.rasterize(self.glctx, v_clip, self.mesh.f, (self.H, self.W))
 
-            rast, rast_db = dr.rasterize(self.glctx, v_clip, self.mesh.f, (self.H, self.W))
-
-            alpha = (rast[..., 3:] > 0).float()
-            alpha = dr.antialias(alpha, rast, v_clip, self.mesh.f).squeeze(0).clamp(0, 1) # [H, W, 3]
-            
-            if self.mode == 'depth':
-                depth, _ = dr.interpolate(-v_cam[..., [2]], rast, self.mesh.f) # [1, H, W, 1]
-                depth = (depth - depth.min()) / (depth.max() - depth.min() + 1e-20)
-                buffer = depth.squeeze(0).detach().cpu().numpy().repeat(3, -1) # [H, W, 3]
+        alpha = (rast[..., 3:] > 0).float()
+        alpha = dr.antialias(alpha, rast, v_clip, self.mesh.f).squeeze(0).clamp(0, 1) # [H, W, 3]
+        
+        if self.mode == 'depth':
+            depth, _ = dr.interpolate(-v_cam[..., [2]], rast, self.mesh.f) # [1, H, W, 1]
+            depth = (depth - depth.min()) / (depth.max() - depth.min() + 1e-20)
+            buffer = depth.squeeze(0).detach().cpu().numpy().repeat(3, -1) # [H, W, 3]
+        else:
+            # use vertex color if exists
+            if self.mesh.vc is not None:
+                albedo, _ = dr.interpolate(self.mesh.vc.unsqueeze(0).contiguous(), rast, self.mesh.f)
+            # use texture image
             else:
-                # use vertex color if exists
-                if self.mesh.vc is not None:
-                    albedo, _ = dr.interpolate(self.mesh.vc.unsqueeze(0).contiguous(), rast, self.mesh.f)
-                # use texture image
-                else:
-                    texc, _ = dr.interpolate(self.mesh.vt.unsqueeze(0).contiguous(), rast, self.mesh.ft)
-                    albedo = dr.texture(self.mesh.albedo.unsqueeze(0), texc, filter_mode='linear') # [1, H, W, 3]
+                texc, _ = dr.interpolate(self.mesh.vt.unsqueeze(0).contiguous(), rast, self.mesh.ft)
+                albedo = dr.texture(self.mesh.albedo.unsqueeze(0), texc, filter_mode='linear') # [1, H, W, 3]
 
-                albedo = torch.where(rast[..., 3:] > 0, albedo, torch.tensor(0).to(albedo.device)) # remove background
-                albedo = dr.antialias(albedo, rast, v_clip, self.mesh.f).clamp(0, 1) # [1, H, W, 3]
-                if self.mode == 'albedo':
-                    albedo = albedo * alpha + self.bg_color * (1 - alpha)
+            albedo = torch.where(rast[..., 3:] > 0, albedo, torch.tensor(0).to(albedo.device)) # remove background
+            albedo = dr.antialias(albedo, rast, v_clip, self.mesh.f).clamp(0, 1) # [1, H, W, 3]
+            if self.mode == 'albedo':
+                albedo = albedo * alpha + self.bg_color * (1 - alpha)
+                buffer = albedo[0].detach().cpu().numpy()
+            else:
+                normal, _ = dr.interpolate(self.mesh.vn.unsqueeze(0).contiguous(), rast, self.mesh.fn)
+                normal = safe_normalize(normal)
+                if self.mode == 'normal':
+                    normal_image = (normal[0] + 1) / 2
+                    normal_image = torch.where(rast[..., 3:] > 0, normal_image, torch.tensor(1).to(normal_image.device)) # remove background
+                    buffer = normal_image.detach().cpu().numpy()
+                elif self.mode == 'lambertian':
+                    light_d = np.deg2rad(self.light_dir)
+                    light_d = np.array([
+                        np.cos(light_d[0]) * np.sin(light_d[1]),
+                        -np.sin(light_d[0]),
+                        np.cos(light_d[0]) * np.cos(light_d[1]),
+                    ], dtype=np.float32)
+                    light_d = torch.from_numpy(light_d).to(albedo.device)
+                    lambertian = self.ambient_ratio + (1 - self.ambient_ratio)  * (normal @ light_d).float().clamp(min=0)
+                    albedo = (albedo * lambertian.unsqueeze(-1)) * alpha + self.bg_color * (1 - alpha)
                     buffer = albedo[0].detach().cpu().numpy()
-                else:
-                    normal, _ = dr.interpolate(self.mesh.vn.unsqueeze(0).contiguous(), rast, self.mesh.fn)
-                    normal = safe_normalize(normal)
-                    if self.mode == 'normal':
-                        normal_image = (normal[0] + 1) / 2
-                        normal_image = torch.where(rast[..., 3:] > 0, normal_image, torch.tensor(1).to(normal_image.device)) # remove background
-                        buffer = normal_image.detach().cpu().numpy()
-                    elif self.mode == 'lambertian':
-                        light_d = np.deg2rad(self.light_dir)
-                        light_d = np.array([
-                            np.sin(light_d[0]) * np.sin(light_d[1]),
-                            np.cos(light_d[0]),
-                            np.sin(light_d[0]) * np.cos(light_d[1]),
-                        ], dtype=np.float32)
-                        light_d = torch.from_numpy(light_d).to(albedo.device)
-                        lambertian = self.ambient_ratio + (1 - self.ambient_ratio)  * (normal @ light_d).float().clamp(min=0)
-                        albedo = (albedo * lambertian.unsqueeze(-1)) * alpha + self.bg_color * (1 - alpha)
-                        buffer = albedo[0].detach().cpu().numpy()
 
 
-            ender.record()
-            torch.cuda.synchronize()
-            t = starter.elapsed_time(ender)
+        ender.record()
+        torch.cuda.synchronize()
+        t = starter.elapsed_time(ender)
 
-            if self.need_update:
-                self.render_buffer = buffer
-                self.need_update = False
-            else:
-                self.render_buffer = (self.render_buffer * self.spp + buffer) / (self.spp + 1)
+        self.render_buffer = buffer
+        self.need_update = False
 
-            if not self.wogui:
-                dpg.set_value("_log_infer_time", f'{t:.4f}ms ({int(1000/t)} FPS)')
-                dpg.set_value("_texture", self.render_buffer)
+        if self.auto_rotate_cam:
+            self.cam.orbit(5, 0)
+            self.need_update = True
+        
+        if self.auto_rotate_light:
+            self.light_dir[1] += 3
+            self.need_update = True
+        
+        if not self.wogui:
+            dpg.set_value("_log_infer_time", f'{t:.4f}ms ({int(1000/t)} FPS)')
+            dpg.set_value("_texture", self.render_buffer)
 
         
     def register_dpg(self):
@@ -190,10 +199,10 @@ class GUI:
                 dpg.add_text("Plane Light Direction:")
 
                 with dpg.group(horizontal=True):
-                    dpg.add_slider_float(label="theta", min_value=0, max_value=180, format="%.2f", default_value=self.light_dir[0], callback=callback_set_light_dir, user_data=0)
+                    dpg.add_slider_float(label="elevation", min_value=-90, max_value=90, format="%.2f", default_value=self.light_dir[0], callback=callback_set_light_dir, user_data=0)
 
                 with dpg.group(horizontal=True):
-                    dpg.add_slider_float(label="phi", min_value=0, max_value=360, format="%.2f", default_value=self.light_dir[1], callback=callback_set_light_dir, user_data=1)
+                    dpg.add_slider_float(label="azimuth", min_value=0, max_value=360, format="%.2f", default_value=self.light_dir[1], callback=callback_set_light_dir, user_data=1)
 
                 # ambient ratio
                 def callback_set_abm_ratio(sender, app_data):
@@ -201,15 +210,6 @@ class GUI:
                     self.need_update = True
 
                 dpg.add_slider_float(label="ambient", min_value=0, max_value=1.0, format="%.5f", default_value=self.ambient_ratio, callback=callback_set_abm_ratio)
-
-
-            # debug info
-            if self.debug:
-                with dpg.collapsing_header(label="Debug"):
-                    # pose
-                    dpg.add_separator()
-                    dpg.add_text("Camera Pose:")
-                    dpg.add_text(str(self.cam.pose), tag="_log_pose")
 
 
         ### register IO handlers
@@ -226,10 +226,6 @@ class GUI:
             self.cam.orbit(dx, dy)
             self.need_update = True
 
-            if self.debug:
-                dpg.set_value("_log_pose", str(self.cam.pose))
-
-
         def callback_camera_wheel_scale(sender, app_data):
 
             if not dpg.is_item_focused("_primary_window"):
@@ -239,10 +235,6 @@ class GUI:
 
             self.cam.scale(delta)
             self.need_update = True
-
-            if self.debug:
-                dpg.set_value("_log_pose", str(self.cam.pose))
-
 
         def callback_camera_drag_pan(sender, app_data):
 
@@ -255,15 +247,21 @@ class GUI:
             self.cam.pan(dx, dy)
             self.need_update = True
 
-            if self.debug:
-                dpg.set_value("_log_pose", str(self.cam.pose))
-        
         # press spacebar to toggle rendering mode
         def callback_space_toggle_mode(sender, app_data):
             self.mode = self.render_modes[(self.render_modes.index(self.mode) + 1) % len(self.render_modes)]
             dpg.set_value("_mode_combo", self.mode)
             self.need_update = True
-
+        
+        # press P to toggle auto-rotate camera
+        def callback_toggle_auto_rotate_cam(sender, app_data):
+            self.auto_rotate_cam = not self.auto_rotate_cam
+            self.need_update = True
+        
+        # press L to toggle auto-rotate light
+        def callback_toggle_auto_rotate_light(sender, app_data):
+            self.auto_rotate_light = not self.auto_rotate_light
+            self.need_update = True
 
         with dpg.handler_registry():
             dpg.add_mouse_drag_handler(button=dpg.mvMouseButton_Left, callback=callback_camera_drag_rotate)
@@ -271,6 +269,8 @@ class GUI:
             dpg.add_mouse_drag_handler(button=dpg.mvMouseButton_Right, callback=callback_camera_drag_pan)
 
             dpg.add_key_press_handler(dpg.mvKey_Spacebar, callback=callback_space_toggle_mode)
+            dpg.add_key_press_handler(dpg.mvKey_P, callback=callback_toggle_auto_rotate_cam)
+            dpg.add_key_press_handler(dpg.mvKey_L, callback=callback_toggle_auto_rotate_light)
 
         
         dpg.create_viewport(title='mesh viewer', width=self.W, height=self.H, resizable=False)
