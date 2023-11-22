@@ -3,6 +3,7 @@ import glob
 import tqdm
 import cv2
 import json
+import pickle
 import varname
 from PIL import Image
 
@@ -79,6 +80,16 @@ def read_json(path):
 def write_json(path, x):
     with open(path, "w") as f:
         json.dump(x, f, indent=2)
+
+
+def read_pickle(path):
+    with open(path, "rb") as f:
+        return pickle.load(f)
+
+
+def write_pickle(path, x):
+    with open(path, "wb") as f:
+        pickle.dump(x, f)
 
 
 def read_image(path, mode="float", order="RGB"):
