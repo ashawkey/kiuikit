@@ -242,3 +242,11 @@ def batch_process_files(
         except Exception as e:
             print(f"[Error] when processing {file_path} --> {file_out_path}")
             print(e)
+
+def freeze(m: torch.nn.Module):
+    for p in m.parameters():
+        p.requires_grad = False
+
+def unfreeze(m: torch.nn.Module):
+    for p in m.parameters():
+        p.requires_grad = True
