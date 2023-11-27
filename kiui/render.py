@@ -17,7 +17,7 @@ from kiui.op import safe_normalize
 
 class GUI:
     def __init__(self, opt):
-        self.opt = opt # shared with the trainer's opt to support in-place modification of rendering parameters.
+        self.opt = opt
         self.W = opt.W
         self.H = opt.H
         self.wogui = opt.wogui # disable gui and run in cmd
