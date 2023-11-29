@@ -96,6 +96,9 @@ python -m kiui.cli.timer --help
 python -m kiui.cli.convert input.obj output.glb
 kico input.obj output.glb # short cut cmd
 kico mesh_folder/ video_folder --fmt .mp4 # render all meshes into rotating videos
+
+# aesthetic predictor v2 (https://github.com/christophschuhmann/improved-aesthetic-predictor)
+python -m kiui.cli.aes --help
 ```
 
 GUI tools:
@@ -109,4 +112,11 @@ kire --help # short cut cmd
 # open a GUI to render and edit pose (openpose convention, controlnet compatible)
 python -m kiui.poser --help
 python -m kiui.poser --load 3head # load preset 3 headed skeleton
+```
+
+WebGUI tools:
+```bash
+# open a web GUI to render a mesh (extra dep: viser)
+python -m kiui.render_viser --help
+vire --help # short cut cmd
 ```
