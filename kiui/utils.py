@@ -1,17 +1,24 @@
 import os
+import sys
 import glob
 import tqdm
-import cv2
 import json
 import pickle
 import varname
+from objprint import objstr
+from rich.console import Console
+
+import cv2
 from PIL import Image
 
-import torch
 import numpy as np
-from objprint import objstr
+import torch
 
-from rich.console import Console
+from kiui.env import is_imported
+
+''' utils
+All functions will be automatically imported as kiui.<func>
+'''
 
 # inspect array like object x and report stats
 def lo(*xs, verbose=0):
@@ -70,6 +77,40 @@ def lo(*xs, verbose=0):
         except:
             name = f"UNKNOWN"
         _lo(x, name)
+
+
+def seed_everything(seed=42, verbose=False, strict=False):
+
+    os.environ['PYTHONHASHSEED'] = str(seed)
+
+    if is_imported('random'):
+        import random # still need to import it here
+        random.seed(seed)
+        if verbose: print(f'[INFO] set random.seed = {seed}')
+    else:
+        if verbose: print(f'[INFO] random not imported, skip setting seed')
+
+    # assume numpy is imported as np
+    if is_imported('np'):
+        import numpy as np
+        np.random.seed(seed)
+        if verbose: print(f'[INFO] set np.random.seed = {seed}')
+    else:
+        if verbose: print(f'[INFO] numpy not imported, skip setting seed')
+        
+    if is_imported('torch'):
+        import torch
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        if verbose: print(f'[INFO] set torch.manual_seed = {seed}')
+
+        if strict:
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+            torch.use_deterministic_algorithms(True)
+            if verbose: print(f'[INFO] set strict deterministic mode for torch.')
+    else:
+        if verbose: print(f'[INFO] torch not imported, skip setting seed')
 
 
 def read_json(path):

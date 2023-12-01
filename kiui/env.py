@@ -59,7 +59,8 @@ def retrieve_globals(verbose=False):
         if "kiui" in g:
             G = g
             if verbose:
-                print(f"[KiuiKit-INFO] located global frame at {frame_id}")
+                print(f"[INFO] located global frame at {frame_id}")
+                # print(G)
             break
         frame_id += 1
     if G is None:
@@ -67,6 +68,12 @@ def retrieve_globals(verbose=False):
             "Cannot locate global frame, make sure you called exactly `import kiui`!"
         )
 
+def is_imported(target, verbose=False):
+
+    if G is None:
+        retrieve_globals(verbose)
+
+    return target in G
 
 def try_import(target, sources, verbose=False):
 
@@ -75,7 +82,7 @@ def try_import(target, sources, verbose=False):
 
     if target in G:
         if verbose:
-            print(f"[KiuiKit-INFO] {target} is already present, skipped.")
+            print(f"[INFO] {target} is already present, skipped.")
         return
 
     if not isinstance(sources, list):
@@ -84,7 +91,7 @@ def try_import(target, sources, verbose=False):
     for source in sources:
         try:
             if verbose:
-                print(f"[KiuiKit-INFO] try to import {source}")
+                print(f"[INFO] try to import {source}")
 
             # (module, component) or ("module", component)
             if isinstance(source, tuple):
@@ -102,11 +109,11 @@ def try_import(target, sources, verbose=False):
             G[target] = source
 
             if verbose:
-                print(f"[KiuiKit-INFO] succeed to import {source} as {target}")
+                print(f"[INFO] succeed to import {source} as {target}")
             break
 
         except ImportError as e:
-            print(f"[KiuiKit-WARN] failed to import {source} as {target}: {str(e)}")
+            print(f"[WARN] failed to import {source} as {target}: {str(e)}")
 
 
 def import_libs(pack, verbose=False):
