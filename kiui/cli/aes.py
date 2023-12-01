@@ -19,7 +19,7 @@ class CLIP:
         self.processor = CLIPProcessor.from_pretrained(model_name)
     
     def encode_image(self, image):
-        # image: PIL, np.ndarray uint8 [H, W, 3]
+        # image: PIL, np.ndarray uint8 [H, W, 3] or [B, H, W, 3]
 
         pixel_values = self.processor(images=image, return_tensors="pt").pixel_values.to(self.device)
         image_features = self.clip_model.get_image_features(pixel_values=pixel_values)
@@ -66,13 +66,13 @@ class AES:
 
 
     def __call__(self, x):
-        # x: np.ndarray, (h, w, 3), uint8, RGB
+        # x: np.ndarray, (h, w, 3) / (b, h, w, 3), uint8, RGB
         # return: y: aesthetic score
 
         features = self.clip.encode_image(x)
         y = self.mlp(features)
             
-        return y.item()
+        return y
 
 
 if __name__ == '__main__':
@@ -98,5 +98,5 @@ if __name__ == '__main__':
     elif image.shape[-1] == 1:
         image = np.concatenate([image] * 3, axis=-1)
     
-    aes_score = aes(image)
-    print(f'Aesthetic score: {aes_score:.3f} <-- {opt.image}')
+    aes_score = aes(image[None, :])
+    print(f'Aesthetic score: {aes_score} <-- {opt.image}')
