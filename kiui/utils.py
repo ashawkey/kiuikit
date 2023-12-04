@@ -7,6 +7,7 @@ import pickle
 import varname
 from objprint import objstr
 from rich.console import Console
+from typing import Literal, List, Tuple, Any, Optional
 
 import cv2
 from PIL import Image
@@ -133,7 +134,11 @@ def write_pickle(path, x):
         pickle.dump(x, f)
 
 
-def read_image(path, mode="float", order="RGB"):
+def read_image(
+    path: str, 
+    mode: Literal["float", "uint8", "pil", "torch", "tensor"] = "float", 
+    order: Literal["RGB", "RGBA", "BGR", "BGRA"] = "RGB",
+):
 
     if mode == "pil":
         return Image.open(path).convert(order)
@@ -141,20 +146,31 @@ def read_image(path, mode="float", order="RGB"):
     img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
 
     # cvtColor
-    if order == "RGB":
-        if len(img.shape) == 3:
-            if img.shape[2] == 4:
+    if len(img.shape) == 3: # ignore if gray scale
+        if order in ["RGB", "RGBA"]:
+            if img.shape[-1] == 4:
                 img = cv2.cvtColor(img, cv2.COLOR_BGRA2RGBA)
-            else:
+            elif img.shape[-1] == 3:
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    
+        # mix background
+        if img.shape[-1] == 4 and 'A' not in order:
+            img = img.astype(np.float32) / 255
+            img = img[..., :3] * img[..., 3:] + (1 - img[..., 3:])
 
     # mode
-    if "float" in mode:
-        return img.astype(np.float32) / 255
-    elif "tensor" in mode or "torch" in mode:
-        return torch.from_numpy(img.astype(np.float32) / 255)
-    elif "uint8" in mode:
+    if mode == "uint8":
+        if img.dtype != np.uint8:
+            img = (img * 255).astype(np.uint8)
         return img
+    elif mode == "float":
+        if img.dtype == np.uint8:
+            img = img.astype(np.float32) / 255
+        return img
+    elif mode in ["tensor", "torch"]:
+        if img.dtype == np.uint8:
+            img = img.astype(np.float32) / 255
+        return torch.from_numpy(img)
     else:
         raise ValueError(f"Unknown read_image mode {mode}")
 
@@ -168,11 +184,11 @@ def write_image(path, img, order="RGB"):
         img = (img * 255).astype(np.uint8)
 
     # cvtColor
-    if order == "RGB":
-        if len(img.shape) == 3:
-            if img.shape[2] == 4:
+    if len(img.shape) == 3:
+        if order == "RGB":
+            if img.shape[-1] == 4:
                 img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGRA)
-            else:
+            elif img.shape[-1] == 3:
                 img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
     dir_path = os.path.dirname(path)

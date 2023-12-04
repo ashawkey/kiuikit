@@ -99,6 +99,9 @@ kico mesh_folder/ video_folder --fmt .mp4 # render all meshes into rotating vide
 
 # aesthetic predictor v2 (https://github.com/christophschuhmann/improved-aesthetic-predictor)
 python -m kiui.cli.aes --help
+
+# compare content of two directories
+python -m kiui.cli.dircmp <dir1> <dir2>
 ```
 
 GUI tools:
