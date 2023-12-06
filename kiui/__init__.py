@@ -11,7 +11,7 @@ submodules = [m.strip('.py') for m in os.listdir(module_path) if not m.startswit
 
 # find out all function names without importing the module
 utils_path = os.path.join(module_path, 'utils.py')
-with open(utils_path) as f:
+with open(utils_path, 'r', encoding='utf-8') as f:
     utils_code = f.readlines()
 utils_funcnames = []
 for line in utils_code:
