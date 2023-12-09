@@ -25,9 +25,9 @@ Right-handed       Colmap                        Left-handed
 '''
 
 ''' camera pose matrix
-[[Forward_x, Up_x, Right_x, Position_x],
- [Forward_y, Up_y, Right_y, Position_y],
- [Forward_z, Up_z, Right_z, Position_z],
+[[Right_x, Up_x, Forward_x, Position_x],
+ [Right_y, Up_y, Forward_y, Position_y],
+ [Right_z, Up_z, Forward_z, Position_z],
  [0,         0,    0,       1         ]]
 The xyz follows corresponding world coordinate system.
 '''
