@@ -1,6 +1,7 @@
 import numpy as np
-from .op import *
+from .op import safe_normalize
 from scipy.spatial.transform import Rotation
+from typing import Literal
 
 # camera convention:
 # world coordinate is right-hand, +x = right, +y = up, +z = forward
@@ -24,6 +25,49 @@ Right-handed       Colmap                        Left-handed
 
 '''
 
+# convert between different world coordinate systems
+def convert(
+    pose, 
+    target: Literal['unity', 'blender', 'opencv', 'colmap', 'opengl'] = 'unity', 
+    original: Literal['unity', 'blender', 'opencv', 'colmap', 'opengl'] = 'opengl',
+):
+    # pose: [4, 4]
+    # target/original: 'unity', 'blender', 'opencv', 'colmap', 'opengl'
+    if original == 'opengl':
+        if target == 'unity':
+            pose[2] *= -1
+        elif target == 'blender':
+            pose[2] *= -1
+            pose[[1, 2]] = pose[[2, 1]]
+        elif target in ['opencv', 'colmap']:
+            pose[1:3] *= -1
+    elif original == 'unity':
+        if target == 'opengl':
+            pose[2] *= -1
+        elif target == 'blender':
+            pose[[1, 2]] = pose[[2, 1]]
+        elif target in ['opencv', 'colmap']:
+            pose[1] *= -1
+    elif original == 'blender':
+        if target == 'opengl':
+            pose[1] *= -1
+            pose[[1, 2]] = pose[[2, 1]]
+        elif target == 'unity':
+            pose[[1, 2]] = pose[[2, 1]]
+        elif target in ['opencv', 'colmap']:
+            pose[2] *= -1
+            pose[[1, 2]] = pose[[2, 1]]
+    elif original in ['opencv', 'colmap']:
+        if target == 'opengl':
+            pose[1:3] *= -1
+        elif target == 'unity':
+            pose[1] *= -1
+        elif target == 'blender':
+            pose[1] *= -1
+            pose[[1, 2]] = pose[[2, 1]]
+    return pose
+
+
 ''' camera pose matrix
 [[Right_x, Up_x, Forward_x, Position_x],
  [Right_y, Up_y, Forward_y, Position_y],
@@ -32,20 +76,19 @@ Right-handed       Colmap                        Left-handed
 The xyz follows corresponding world coordinate system.
 '''
 
-
-# look at rotation matrix
+# construct rotation matrix by look-at
 def look_at(campos, target, opengl=True):
     # campos: [N, 3], camera/eye position
     # target: [N, 3], object to look at
     # return: [N, 3, 3], rotation matrix
     if not opengl:
-        # camera forward aligns with -z
+        # forward is camera --> target
         forward_vector = safe_normalize(target - campos)
         up_vector = np.array([0, 1, 0], dtype=np.float32)
         right_vector = safe_normalize(np.cross(forward_vector, up_vector))
         up_vector = safe_normalize(np.cross(right_vector, forward_vector))
     else:
-        # camera forward aligns with +z
+        # forward is target --> camera
         forward_vector = safe_normalize(campos - target)
         up_vector = np.array([0, 1, 0], dtype=np.float32)
         right_vector = safe_normalize(np.cross(up_vector, forward_vector))
@@ -106,6 +149,37 @@ def get_perspective(fovy, aspect=1, near=0.01, far=1000):
         ],
         dtype=np.float32,
     )
+
+
+def get_rays(pose, h, w, fovy, opengl=False):
+    # pose: [4, 4]
+    # fov: in degree
+    # opengl: camera front view convention
+
+    x, y = np.meshgrid(np.arange(w), np.arange(h), indexing="xy")
+    x = x.reshape(-1)
+    y = y.reshape(-1)
+
+    cx = w * 0.5
+    cy = h * 0.5
+
+    # objaverse rendering has fixed focal of 560 at resolution 512 --> fov = 49.1 degree
+    focal = h * 0.5 / np.tan(0.5 * np.deg2rad(fovy))
+
+    camera_dirs = np.stack([
+        (x - cx + 0.5) / focal,
+        (y - cy + 0.5) / focal * (-1.0 if opengl else 1.0),
+        np.ones_like(x) * (-1.0 if opengl else 1.0),
+    ], axis=-1) # [hw, 3]
+
+    rays_d = camera_dirs @ pose[:3, :3].transpose(0, 1)  # [hw, 3]
+    rays_o = np.expand_dims(pose[:3, 3], 0).repeat(rays_d.shape[0], 0)  # [hw, 3]
+
+    rays_o = rays_o.reshape(h, w, 3)
+    rays_d = safe_normalize(rays_d).reshape(h, w, 3)
+
+    return rays_o, rays_d
+
 
 class OrbitCamera:
     def __init__(self, W, H, r=2, fovy=60, near=0.01, far=100):
