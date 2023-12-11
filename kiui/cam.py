@@ -3,12 +3,6 @@ from .op import safe_normalize
 from scipy.spatial.transform import Rotation
 from typing import Literal
 
-# camera convention:
-# world coordinate is right-hand, +x = right, +y = up, +z = forward
-# camera coordinate is the same (forward is target --> campos).
-# elevation in (-90, 90), from +y (-90) --> -y (+90)
-# azimuth in (-180, 180), from +z (0/-360) --> +x (90/-270) --> -z (180/-180) --> -x (270/-90) --> +z (360/0)
-
 ''' common world coordinate system conventions
 
    OpenGL          OpenCV           Blender        Unity             
@@ -24,6 +18,7 @@ Right-handed       Colmap                        Left-handed
  +z                 +y                                                                                           
 
 A common color code: x = red, y = green, z = blue (XYZ=RGB)
+Left/right-handed notation: Thumb = right (x), Index = up (y), Middle = forward (z).
 '''
 
 # convert between different world coordinate systems
@@ -100,6 +95,12 @@ A common color code: right = red, up = green, forward = blue (XYZ=RUF=RGB)
 But many datasets are just very confusing and combine different conventions together.
 You may check a few poses to make sure what the convention they are using...
 '''
+
+# our camera convention:
+# world coordinate is OpenGL/right-handed, +x = right, +y = up, +z = forward
+# camera coordinate is OpenGL (forward is target --> campos).
+# elevation in (-90, 90), from +y (-90) --> -y (+90)
+# azimuth in (-180, 180), from +z (0/-360) --> +x (90/-270) --> -z (180/-180) --> -x (270/-90) --> +z (360/0)
 
 # construct rotation matrix by look-at
 def look_at(campos, target, opengl=True):
