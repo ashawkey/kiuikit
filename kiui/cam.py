@@ -23,6 +23,7 @@ Right-handed       Colmap                        Left-handed
   /                 |                                                                                         
  +z                 +y                                                                                           
 
+A common color code: x = red, y = green, z = blue (XYZ=RGB)
 '''
 
 # convert between different world coordinate systems
@@ -72,8 +73,32 @@ def convert(
 [[Right_x, Up_x, Forward_x, Position_x],
  [Right_y, Up_y, Forward_y, Position_y],
  [Right_z, Up_z, Forward_z, Position_z],
- [0,         0,    0,       1         ]]
+ [0,       0,    0,         1         ]]
+
 The xyz follows corresponding world coordinate system.
+However, the three directions (right, up, forward) can be defined differently:
+(1) forward can be (camera --> target) or (target --> camera).
+(2) up can align with the world-up-axis (y) or world-down-axis (-y).
+(3) right can also be left, depending on it's (up cross forward) or (forward cross up).
+
+Two common camera coordinate conventions:
+
+   OpenGL                OpenCV       
+   Blender               Colmap       
+
+     up  target          forward & target
+     |  /                /         
+     | /                /          
+     |/_____right      /______right   
+    /                  |           
+   /                   |           
+  /                    |           
+forward                up          
+
+A common color code: right = red, up = green, forward = blue (XYZ=RUF=RGB)
+
+But many datasets are just very confusing and combine different conventions together.
+You may check a few poses to make sure what the convention they are using...
 '''
 
 # construct rotation matrix by look-at
