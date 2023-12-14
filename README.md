@@ -102,6 +102,9 @@ python -m kiui.cli.aes --help
 
 # compare content of two directories
 python -m kiui.cli.dircmp <dir1> <dir2>
+
+# lock requirements.txt package versions based on current environment
+python -m kiui.cli.lock_version <requirements.txt>
 ```
 
 GUI tools:
