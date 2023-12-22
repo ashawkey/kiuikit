@@ -5,20 +5,20 @@ from typing import Literal
 
 ''' common world coordinate system conventions
 
-   OpenGL          OpenCV           Blender        Unity             
-Right-handed       Colmap                        Left-handed  
+OpenGL/MAYA       OpenCV/Colmap     Blender      Unity/DirectX     Unreal       
+Right-handed      Right-handed    Right-handed    Left-handed    Left-handed
 
-     +y                +z           +z  +y         +y  +z                                               
-     |                /             |  /           |  /                                               
-     |               /              | /            | /                                                   
-     |______+x      /______+x       |/_____+x      |/_____+x                                          
-    /               |                                                                                        
-   /                |                                                                                                  
-  /                 |                                                                                         
- +z                 +y                                                                                           
+     +y                +z           +z  +y         +y  +z           +z                                       
+     |                /             |  /           |  /             |                                  
+     |               /              | /            | /              |                                     
+     |______+x      /______+x       |/_____+x      |/_____+x        |______+x
+    /               |                                              /                                        
+   /                |                                             /                                                     
+  /                 |                                            /                                             
+ +z                 +y                                          +y                                                  
 
 A common color code: x = red, y = green, z = blue (XYZ=RGB)
-Left/right-handed notation: Thumb = right (x), Index = up (y), Middle = forward (z).
+Left/right-handed notation: roll your left/right palm from x to y, and your thumb should point to z.
 '''
 
 # convert between different world coordinate systems
