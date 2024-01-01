@@ -15,8 +15,9 @@ class Mesh:
         fn=None,
         vt=None,
         ft=None,
-        albedo=None,
         vc=None, # vertex color
+        albedo=None,
+        metallicRoughness=None,
         device=None,
     ):
         self.device = device
@@ -26,10 +27,12 @@ class Mesh:
         self.f = f
         self.fn = fn
         self.ft = ft
-        # only support a single albedo
-        self.albedo = albedo
-        # support vertex color is no albedo
+        # will first see if there is vertex color to use
         self.vc = vc
+        # only support a single albedo image
+        self.albedo = albedo
+        # pbr extension, packed in the first two channels
+        self.metallicRoughness = metallicRoughness
 
         self.ori_center = 0
         self.ori_scale = 1
@@ -418,7 +421,7 @@ class Mesh:
 
     def to(self, device):
         self.device = device
-        for name in ["v", "f", "vn", "fn", "vt", "ft", "albedo"]:
+        for name in ["v", "f", "vn", "fn", "vt", "ft", "albedo", "vc", "metallicRoughness"]:
             tensor = getattr(self, name)
             if tensor is not None:
                 setattr(self, name, tensor.to(device))
@@ -437,6 +440,9 @@ class Mesh:
     # write to ply file (only geom)
     def write_ply(self, path):
 
+        if self.albedo is not None:
+            print(f'[WARN] ply format does not support exporting texture, will ignore!')
+
         v_np = self.v.detach().cpu().numpy()
         f_np = self.f.detach().cpu().numpy()
 
@@ -446,67 +452,35 @@ class Mesh:
     # write to gltf/glb file (geom + texture)
     def write_glb(self, path):
 
-        assert self.vt is not None # should be improved to support export without texture...
-
         # assert self.v.shape[0] == self.vn.shape[0] and self.v.shape[0] == self.vt.shape[0]
-        if self.v.shape[0] != self.vt.shape[0]:
+        if self.vt is not None and self.v.shape[0] != self.vt.shape[0]:
             self.align_v_to_vt()
-
-        # assume f == fn == ft
 
         import pygltflib
 
         f_np = self.f.detach().cpu().numpy().astype(np.uint32)
-        v_np = self.v.detach().cpu().numpy().astype(np.float32)
-        # vn_np = self.vn.detach().cpu().numpy().astype(np.float32)
-        vt_np = self.vt.detach().cpu().numpy().astype(np.float32)
-
-        albedo = self.albedo.detach().cpu().numpy()
-        albedo = (albedo * 255).astype(np.uint8)
-        albedo = cv2.cvtColor(albedo, cv2.COLOR_RGB2BGR)
-
         f_np_blob = f_np.flatten().tobytes()
-        v_np_blob = v_np.tobytes()
-        # vn_np_blob = vn_np.tobytes()
-        vt_np_blob = vt_np.tobytes()
-        albedo_blob = cv2.imencode('.png', albedo)[1].tobytes()
 
+        v_np = self.v.detach().cpu().numpy().astype(np.float32)
+        v_np_blob = v_np.tobytes()
+
+        blob = f_np_blob + v_np_blob
+        byteOffset = len(blob)
+
+        # base mesh
         gltf = pygltflib.GLTF2(
             scene=0,
             scenes=[pygltflib.Scene(nodes=[0])],
             nodes=[pygltflib.Node(mesh=0)],
-            meshes=[pygltflib.Mesh(primitives=[
-                pygltflib.Primitive(
-                    # indices to accessors (0 is triangles)
-                    attributes=pygltflib.Attributes(
-                        POSITION=1, TEXCOORD_0=2, 
-                    ),
-                    indices=0, material=0,
-                )
-            ])],
-            materials=[
-                pygltflib.Material(
-                    pbrMetallicRoughness=pygltflib.PbrMetallicRoughness(
-                        baseColorTexture=pygltflib.TextureInfo(index=0, texCoord=0),
-                        metallicFactor=0.0,
-                        roughnessFactor=1.0,
-                    ),
-                    alphaCutoff=0,
-                    doubleSided=True,
-                )
-            ],
-            textures=[
-                pygltflib.Texture(sampler=0, source=0),
-            ],
-            samplers=[
-                pygltflib.Sampler(magFilter=pygltflib.LINEAR, minFilter=pygltflib.LINEAR_MIPMAP_LINEAR, wrapS=pygltflib.REPEAT, wrapT=pygltflib.REPEAT),
-            ],
-            images=[
-                # use embedded (buffer) image
-                pygltflib.Image(bufferView=3, mimeType="image/png"),
-            ],
+            meshes=[pygltflib.Mesh(primitives=[pygltflib.Primitive(
+                # indices to accessors (0 is triangles)
+                attributes=pygltflib.Attributes(
+                    POSITION=1,
+                ),
+                indices=0,
+            )])],
             buffers=[
-                pygltflib.Buffer(byteLength=len(f_np_blob) + len(v_np_blob) + len(vt_np_blob) + len(albedo_blob))
+                pygltflib.Buffer(byteLength=len(f_np_blob) + len(v_np_blob))
             ],
             # buffer view (based on dtype)
             bufferViews=[
@@ -523,20 +497,6 @@ class Mesh:
                     byteLength=len(v_np_blob),
                     byteStride=12, # vec3
                     target=pygltflib.ARRAY_BUFFER, # GL_ARRAY_BUFFER (34962)
-                ),
-                # texcoords; as vec2 array
-                pygltflib.BufferView(
-                    buffer=0,
-                    byteOffset=len(f_np_blob) + len(v_np_blob),
-                    byteLength=len(vt_np_blob),
-                    byteStride=8, # vec2
-                    target=pygltflib.ARRAY_BUFFER,
-                ),
-                # texture; as none target
-                pygltflib.BufferView(
-                    buffer=0,
-                    byteOffset=len(f_np_blob) + len(v_np_blob) + len(vt_np_blob),
-                    byteLength=len(albedo_blob),
                 ),
             ],
             accessors=[
@@ -558,6 +518,53 @@ class Mesh:
                     max=v_np.max(axis=0).tolist(),
                     min=v_np.min(axis=0).tolist(),
                 ),
+            ],
+        )
+
+        # append texture info
+        if self.vt is not None:
+
+            vt_np = self.vt.detach().cpu().numpy().astype(np.float32)
+            vt_np_blob = vt_np.tobytes()
+
+            albedo = self.albedo.detach().cpu().numpy()
+            albedo = (albedo * 255).astype(np.uint8)
+            albedo = cv2.cvtColor(albedo, cv2.COLOR_RGB2BGR)
+            albedo_blob = cv2.imencode('.png', albedo)[1].tobytes()
+
+            # update primitive
+            gltf.meshes[0].primitives[0].attributes.TEXCOORD_0 = 2
+            gltf.meshes[0].primitives[0].material = 0
+
+            # update materials
+            gltf.materials.append(pygltflib.Material(
+                pbrMetallicRoughness=pygltflib.PbrMetallicRoughness(
+                    baseColorTexture=pygltflib.TextureInfo(index=0, texCoord=0),
+                    metallicFactor=0.0,
+                    roughnessFactor=1.0,
+                ),
+                alphaMode=pygltflib.OPAQUE,
+                alphaCutoff=None,
+                doubleSided=True,
+            ))
+
+            gltf.textures.append(pygltflib.Texture(sampler=0, source=0))
+            gltf.samplers.append(pygltflib.Sampler(magFilter=pygltflib.LINEAR, minFilter=pygltflib.LINEAR_MIPMAP_LINEAR, wrapS=pygltflib.REPEAT, wrapT=pygltflib.REPEAT))
+            gltf.images.append(pygltflib.Image(bufferView=3, mimeType="image/png"))
+
+            # update buffers
+            gltf.bufferViews.append(
+                # index = 2, texcoords; as vec2 array
+                pygltflib.BufferView(
+                    buffer=0,
+                    byteOffset=byteOffset,
+                    byteLength=len(vt_np_blob),
+                    byteStride=8, # vec2
+                    target=pygltflib.ARRAY_BUFFER,
+                )
+            )
+
+            gltf.accessors.append(
                 # 2 = texcoords
                 pygltflib.Accessor(
                     bufferView=2,
@@ -566,12 +573,60 @@ class Mesh:
                     type=pygltflib.VEC2,
                     max=vt_np.max(axis=0).tolist(),
                     min=vt_np.min(axis=0).tolist(),
-                ),
-            ],
-        )
+                )
+            )
 
+            blob += vt_np_blob 
+            byteOffset += len(vt_np_blob)
+
+            gltf.bufferViews.append(
+                # index = 3, albedo texture; as none target
+                pygltflib.BufferView(
+                    buffer=0,
+                    byteOffset=byteOffset,
+                    byteLength=len(albedo_blob),
+                )
+            )
+
+            blob += albedo_blob
+            byteOffset += len(albedo_blob)
+
+            gltf.buffers[0].byteLength = byteOffset
+
+            # append metllic roughness
+            if self.metallicRoughness is not None:
+                metallicRoughness = self.metallicRoughness.detach().cpu().numpy()
+                metallicRoughness = (metallicRoughness * 255).astype(np.uint8)
+                metallicRoughness = cv2.cvtColor(metallicRoughness, cv2.COLOR_RGB2BGR)
+                metallicRoughness_blob = cv2.imencode('.png', metallicRoughness)[1].tobytes()
+
+                # update texture definition
+                gltf.materials[0].pbrMetallicRoughness.metallicFactor = 1.0
+                gltf.materials[0].pbrMetallicRoughness.roughnessFactor = 1.0
+                gltf.materials[0].pbrMetallicRoughness.metallicRoughnessTexture = pygltflib.TextureInfo(index=1, texCoord=0)
+
+                gltf.textures.append(pygltflib.Texture(sampler=1, source=1))
+                gltf.samplers.append(pygltflib.Sampler(magFilter=pygltflib.LINEAR, minFilter=pygltflib.LINEAR_MIPMAP_LINEAR, wrapS=pygltflib.REPEAT, wrapT=pygltflib.REPEAT))
+                gltf.images.append(pygltflib.Image(bufferView=4, mimeType="image/png"))
+
+                # update buffers
+                gltf.bufferViews.append(
+                    # index = 4, metallicRoughness texture; as none target
+                    pygltflib.BufferView(
+                        buffer=0,
+                        byteOffset=byteOffset,
+                        byteLength=len(metallicRoughness_blob),
+                    )
+                )
+
+                blob += metallicRoughness_blob
+                byteOffset += len(metallicRoughness_blob)
+
+                gltf.buffers[0].byteLength = byteOffset
+
+            
         # set actual data
-        gltf.set_binary_blob(f_np_blob + v_np_blob + vt_np_blob + albedo_blob)
+        gltf.set_binary_blob(blob)
 
         # glb = b"".join(gltf.save_to_bytes())
         gltf.save(path)
@@ -581,6 +636,7 @@ class Mesh:
 
         mtl_path = path.replace(".obj", ".mtl")
         albedo_path = path.replace(".obj", "_albedo.png")
+        metallicRoughness_path = path.replace(".obj", "_metallicRoughness.png")
 
         v_np = self.v.detach().cpu().numpy()
         vt_np = self.vt.detach().cpu().numpy() if self.vt is not None else None
@@ -619,8 +675,15 @@ class Mesh:
             fp.write(f"Tr 1 \n")
             fp.write(f"illum 1 \n")
             fp.write(f"Ns 0 \n")
-            fp.write(f"map_Kd {os.path.basename(albedo_path)} \n")
+            if self.albedo is not None:
+                fp.write(f"map_Kd {os.path.basename(albedo_path)} \n")
 
-        albedo = self.albedo.detach().cpu().numpy()
-        albedo = (albedo * 255).astype(np.uint8)
-        cv2.imwrite(albedo_path, cv2.cvtColor(albedo, cv2.COLOR_RGB2BGR))
+        if self.albedo is not None:
+            albedo = self.albedo.detach().cpu().numpy()
+            albedo = (albedo * 255).astype(np.uint8)
+            cv2.imwrite(albedo_path, cv2.cvtColor(albedo, cv2.COLOR_RGB2BGR))
+        
+        if self.metallicRoughness is not None:
+            metallicRoughness = self.metallicRoughness.detach().cpu().numpy()
+            metallicRoughness = (metallicRoughness * 255).astype(np.uint8)
+            cv2.imwrite(metallicRoughness_path, cv2.cvtColor(metallicRoughness, cv2.COLOR_RGB2BGR))
