@@ -112,6 +112,7 @@ GUI tools:
 # open a GUI to render a mesh (extra dep: nvdiffrast)
 python -m kiui.render --help
 python -m kiui.render mesh.obj
+python -m kiui.render mesh.glb --pbr # render with PBR (metallic + roughness)
 python -m kiui.render mesh.obj --save_video out.mp4 --wogui # save 360 degree rotating video
 kire --help # short cut cmd
 

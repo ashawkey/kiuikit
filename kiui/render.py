@@ -43,8 +43,10 @@ class GUI:
         # load pbr if enabled
         if self.opt.pbr:
             import envlight
-            # tmp: use a hard-coded hdr
-            hdr_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lights/mud_road_puresky_1k.hdr')
+            if self.opt.envmap is None:
+                hdr_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lights/mud_road_puresky_1k.hdr')
+            else:
+                hdr_path = self.opt.envmap
             self.light = envlight.EnvLight(hdr_path, scale=2, device='cuda')
             self.FG_LUT = torch.from_numpy(np.fromfile(os.path.join(os.path.dirname(os.path.abspath(__file__)), "lights/bsdf_256_256.bin"), dtype=np.float32).reshape(1, 256, 256, 2)).cuda()
 
@@ -125,6 +127,7 @@ class GUI:
                     lambertian = self.ambient_ratio + (1 - self.ambient_ratio)  * (normal @ light_d).float().clamp(min=0)
                     albedo = (albedo * lambertian.unsqueeze(-1)) * alpha + self.bg_color * (1 - alpha)
                     buffer = albedo[0].detach().cpu().numpy()
+                    
                 elif self.mode == 'pbr':
 
                     if self.mesh.metallicRoughness is not None:
@@ -369,6 +372,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('mesh', type=str, help="path to mesh (obj, ply, glb, ...)")
     parser.add_argument('--pbr', action='store_true', help="enable PBR material")
+    parser.add_argument('--envmap', type=str, default=None, help="hdr env map path for pbr")
     parser.add_argument('--front_dir', type=str, default='+z', help="mesh front-facing dir")
     parser.add_argument('--mode', default='albedo', type=str, choices=['lambertian', 'albedo', 'normal', 'depth', 'pbr'], help="rendering mode")
     parser.add_argument('--W', type=int, default=800, help="GUI width")
