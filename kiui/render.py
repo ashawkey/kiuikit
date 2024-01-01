@@ -129,7 +129,7 @@ class GUI:
 
                     if self.mesh.metallicRoughness is not None:
                         metallicRoughness = dr.texture(self.mesh.metallicRoughness.unsqueeze(0), texc, filter_mode='linear') # [1, H, W, 3]
-                        metallic = metallicRoughness[..., 0:1] * self.metallic_factor
+                        metallic = metallicRoughness[..., 2:3] * self.metallic_factor
                         roughness = metallicRoughness[..., 1:2] * self.roughness_factor
                     else:
                         metallic = torch.ones_like(albedo[..., :1]) * self.metallic_factor

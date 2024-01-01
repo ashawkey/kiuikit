@@ -31,7 +31,8 @@ class Mesh:
         self.vc = vc
         # only support a single albedo image
         self.albedo = albedo
-        # pbr extension, packed in the first two channels
+        # pbr extension, metallic(Blue) = metallicRoughness[..., 2], roughness(Green) = metallicRoughness[..., 1]
+        # ref: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
         self.metallicRoughness = metallicRoughness
 
         self.ori_center = 0
@@ -253,7 +254,7 @@ class Mesh:
                 metallic = metallic.astype(np.float32) / 255
                 roughness = cv2.imread(roughness_path, cv2.IMREAD_UNCHANGED)
                 roughness = roughness.astype(np.float32) / 255
-                metallicRoughness = np.stack([metallic, roughness, np.zeros_like(metallic)], axis=-1)
+                metallicRoughness = np.stack([np.zeros_like(metallic), roughness, metallic], axis=-1)
 
                 mesh.metallicRoughness = torch.tensor(metallicRoughness, dtype=torch.float32, device=device).contiguous()
 
@@ -709,5 +710,5 @@ class Mesh:
         if self.metallicRoughness is not None:
             metallicRoughness = self.metallicRoughness.detach().cpu().numpy()
             metallicRoughness = (metallicRoughness * 255).astype(np.uint8)
-            cv2.imwrite(metallic_path, metallicRoughness[..., 0])
+            cv2.imwrite(metallic_path, metallicRoughness[..., 2])
             cv2.imwrite(roughness_path, metallicRoughness[..., 1])
