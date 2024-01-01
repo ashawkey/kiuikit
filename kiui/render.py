@@ -40,6 +40,19 @@ class GUI:
         # load mesh
         self.mesh = Mesh.load(opt.mesh, front_dir=opt.front_dir)
 
+        # load pbr if enabled
+        if self.opt.pbr:
+            import envlight
+            # tmp: use a hard-coded hdr
+            hdr_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lights/mud_road_puresky_1k.hdr')
+            self.light = envlight.EnvLight(hdr_path, scale=2, device='cuda')
+            self.FG_LUT = torch.from_numpy(np.fromfile(os.path.join(os.path.dirname(os.path.abspath(__file__)), "lights/bsdf_256_256.bin"), dtype=np.float32).reshape(1, 256, 256, 2)).cuda()
+
+            self.metallic_factor = 1
+            self.roughness_factor = 1
+
+            self.render_modes.append('pbr')
+            
         if not opt.force_cuda_rast and (self.wogui or os.name == 'nt'):
             self.glctx = dr.RasterizeGLContext()
         else:
@@ -89,7 +102,8 @@ class GUI:
                 albedo = dr.texture(self.mesh.albedo.unsqueeze(0), texc, filter_mode='linear') # [1, H, W, 3]
 
             albedo = torch.where(rast[..., 3:] > 0, albedo, torch.tensor(0).to(albedo.device)) # remove background
-            albedo = dr.antialias(albedo, rast, v_clip, self.mesh.f).clamp(0, 1) # [1, H, W, 3]
+            # albedo = dr.antialias(albedo, rast, v_clip, self.mesh.f).clamp(0, 1) # [1, H, W, 3]
+
             if self.mode == 'albedo':
                 albedo = albedo * alpha + self.bg_color * (1 - alpha)
                 buffer = albedo[0].detach().cpu().numpy()
@@ -111,7 +125,42 @@ class GUI:
                     lambertian = self.ambient_ratio + (1 - self.ambient_ratio)  * (normal @ light_d).float().clamp(min=0)
                     albedo = (albedo * lambertian.unsqueeze(-1)) * alpha + self.bg_color * (1 - alpha)
                     buffer = albedo[0].detach().cpu().numpy()
+                elif self.mode == 'pbr':
 
+                    if self.mesh.metallicRoughness is not None:
+                        metallicRoughness = dr.texture(self.mesh.metallicRoughness.unsqueeze(0), texc, filter_mode='linear') # [1, H, W, 3]
+                        metallic = metallicRoughness[..., 0:1] * self.metallic_factor
+                        roughness = metallicRoughness[..., 1:2] * self.roughness_factor
+                    else:
+                        metallic = torch.ones_like(albedo[..., :1]) * self.metallic_factor
+                        roughness = torch.ones_like(albedo[..., :1]) * self.roughness_factor
+
+                    xyzs, _ = dr.interpolate(self.mesh.v.unsqueeze(0), rast, self.mesh.f) # [1, H, W, 3]
+                    viewdir = safe_normalize(xyzs - pose[:3, 3])
+
+                    n_dot_v = (normal * viewdir).sum(-1, keepdim=True) # [1, H, W, 1]
+                    reflective = n_dot_v * normal * 2 - viewdir
+
+                    diffuse_albedo = (1 - metallic) * albedo
+
+                    fg_uv = torch.cat([n_dot_v, roughness], -1).clamp(0, 1) # [H, W, 2]
+                    fg = dr.texture(
+                        self.FG_LUT,
+                        fg_uv.reshape(1, -1, 1, 2).contiguous(),
+                        filter_mode="linear",
+                        boundary_mode="clamp",
+                    ).reshape(1, self.H, self.W, 2)
+                    F0 = (1 - metallic) * 0.04 + metallic * albedo
+                    specular_albedo = F0 * fg[..., 0:1] + fg[..., 1:2]
+
+                    diffuse_light = self.light(normal)
+                    specular_light = self.light(reflective, roughness)
+
+                    color = diffuse_albedo * diffuse_light + specular_albedo * specular_light # [H, W, 3]
+                    color = color * alpha + self.bg_color * (1 - alpha)
+
+                    buffer = color[0].detach().cpu().numpy()
+                    
 
         ender.record()
         torch.cuda.synchronize()
@@ -211,6 +260,23 @@ class GUI:
 
                 dpg.add_slider_float(label="ambient", min_value=0, max_value=1.0, format="%.5f", default_value=self.ambient_ratio, callback=callback_set_abm_ratio)
 
+                # pbr
+                if self.opt.pbr:
+                    # metallic
+                    def callback_set_metallic(sender, app_data):
+                        self.metallic_factor = app_data
+                        self.need_update = True
+
+                    dpg.add_slider_float(label="metallic", min_value=0, max_value=1.0, format="%.5f", default_value=self.metallic_factor, callback=callback_set_metallic)
+                
+                    # roughness
+                    def callback_set_roughness(sender, app_data):
+                        self.roughness_factor = app_data
+                        self.need_update = True
+
+                    dpg.add_slider_float(label="roughness", min_value=0, max_value=1.0, format="%.5f", default_value=self.roughness_factor, callback=callback_set_roughness)
+
+
 
         ### register IO handlers
 
@@ -302,8 +368,9 @@ def main():
     
     parser = argparse.ArgumentParser()
     parser.add_argument('mesh', type=str, help="path to mesh (obj, ply, glb, ...)")
+    parser.add_argument('--pbr', action='store_true', help="enable PBR material")
     parser.add_argument('--front_dir', type=str, default='+z', help="mesh front-facing dir")
-    parser.add_argument('--mode', default='albedo', type=str, choices=['lambertian', 'albedo', 'normal', 'depth'], help="rendering mode")
+    parser.add_argument('--mode', default='albedo', type=str, choices=['lambertian', 'albedo', 'normal', 'depth', 'pbr'], help="rendering mode")
     parser.add_argument('--W', type=int, default=800, help="GUI width")
     parser.add_argument('--H', type=int, default=800, help="GUI height")
     parser.add_argument('--radius', type=float, default=3, help="default GUI camera radius from center")
