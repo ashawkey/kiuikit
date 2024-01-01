@@ -210,21 +210,28 @@ class Mesh:
                     break
             
             # if albedo_path is not provided, try retrieve it from mtl
+            metallic_path = None
+            roughness_path = None
             if mtl_path is not None and albedo_path is None:
                 with open(mtl_path, "r") as f:
                     lines = f.readlines()
+
                 for line in lines:
                     split_line = line.split()
                     # empty line
                     if len(split_line) == 0:
                         continue
                     prefix = split_line[0]
-                    # NOTE: simply use the first map_Kd as albedo!
+                    
                     if "map_Kd" in prefix:
+                        # assume relative path!
                         albedo_path = os.path.join(os.path.dirname(path), split_line[1])
                         print(f"[load_obj] use texture from: {albedo_path}")
-                        break
-            
+                    elif "map_Pm" in prefix:
+                        metallic_path = os.path.join(os.path.dirname(path), split_line[1])
+                    elif "map_Pr" in prefix:
+                        roughness_path = os.path.join(os.path.dirname(path), split_line[1])
+                    
             # still not found albedo_path, or the path doesn't exist
             if albedo_path is None or not os.path.exists(albedo_path):
                 # init an empty texture
@@ -236,12 +243,19 @@ class Mesh:
                 albedo = cv2.cvtColor(albedo, cv2.COLOR_BGR2RGB)
                 albedo = albedo.astype(np.float32) / 255
                 print(f"[load_obj] load texture: {albedo.shape}")
-
-                # import matplotlib.pyplot as plt
-                # plt.imshow(albedo)
-                # plt.show()
-
+            
             mesh.albedo = torch.tensor(albedo, dtype=torch.float32, device=device)
+            
+            # try to load metallic and roughness
+            if metallic_path is not None and roughness_path is not None:
+                print(f"[load_obj] load metallicRoughness from: {metallic_path}, {roughness_path}")
+                metallic = cv2.imread(metallic_path, cv2.IMREAD_UNCHANGED)
+                metallic = metallic.astype(np.float32) / 255
+                roughness = cv2.imread(roughness_path, cv2.IMREAD_UNCHANGED)
+                roughness = roughness.astype(np.float32) / 255
+                metallicRoughness = np.stack([metallic, roughness, np.zeros_like(metallic)], axis=-1)
+
+                mesh.metallicRoughness = torch.tensor(metallicRoughness, dtype=torch.float32, device=device).contiguous()
 
         return mesh
 
@@ -283,6 +297,10 @@ class Mesh:
             _material = _mesh.visual.material
             if isinstance(_material, trimesh.visual.material.PBRMaterial):
                 texture = np.array(_material.baseColorTexture).astype(np.float32) / 255
+                # load metallicRoughness if present
+                if _material.metallicRoughnessTexture is not None:
+                    metallicRoughness = np.array(_material.metallicRoughnessTexture).astype(np.float32) / 255
+                    mesh.metallicRoughness = torch.tensor(metallicRoughness, dtype=torch.float32, device=device).contiguous()
             elif isinstance(_material, trimesh.visual.material.SimpleMaterial):
                 texture = np.array(_material.to_pbr().baseColorTexture).astype(np.float32) / 255
             else:
@@ -636,7 +654,8 @@ class Mesh:
 
         mtl_path = path.replace(".obj", ".mtl")
         albedo_path = path.replace(".obj", "_albedo.png")
-        metallicRoughness_path = path.replace(".obj", "_metallicRoughness.png")
+        metallic_path = path.replace(".obj", "_metallic.png")
+        roughness_path = path.replace(".obj", "_roughness.png")
 
         v_np = self.v.detach().cpu().numpy()
         vt_np = self.vt.detach().cpu().numpy() if self.vt is not None else None
@@ -677,6 +696,10 @@ class Mesh:
             fp.write(f"Ns 0 \n")
             if self.albedo is not None:
                 fp.write(f"map_Kd {os.path.basename(albedo_path)} \n")
+            if self.metallicRoughness is not None:
+                # ref: https://en.wikipedia.org/wiki/Wavefront_.obj_file#Physically-based_Rendering
+                fp.write(f"map_Pm {os.path.basename(metallic_path)} \n")
+                fp.write(f"map_Pr {os.path.basename(roughness_path)} \n")
 
         if self.albedo is not None:
             albedo = self.albedo.detach().cpu().numpy()
@@ -686,4 +709,5 @@ class Mesh:
         if self.metallicRoughness is not None:
             metallicRoughness = self.metallicRoughness.detach().cpu().numpy()
             metallicRoughness = (metallicRoughness * 255).astype(np.uint8)
-            cv2.imwrite(metallicRoughness_path, cv2.cvtColor(metallicRoughness, cv2.COLOR_RGB2BGR))
+            cv2.imwrite(metallic_path, metallicRoughness[..., 0])
+            cv2.imwrite(roughness_path, metallicRoughness[..., 1])
