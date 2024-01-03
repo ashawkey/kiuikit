@@ -2,6 +2,8 @@ import cv2
 import torch
 import numpy as np
 
+from kiui.grid_put import grid_put
+
 # torch / numpy math utils
 def dot(x, y):
     if isinstance(x, np.ndarray):
