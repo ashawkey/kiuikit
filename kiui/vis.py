@@ -131,10 +131,13 @@ def plot_pointcloud(pc, color=None):
         trimesh.Scene([pc, axes, box]).show()
 
 
-def plot_poses(poses, size=0.05, bound=1, points=None, mesh=None):
+def plot_poses(poses, size=0.1, bound=1, points=None, mesh=None, opengl=True):
     # poses: [B, 4, 4]
 
     lo(poses)
+
+    if torch.is_tensor(poses):
+        poses = poses.detach().cpu().numpy()
 
     import trimesh
 
@@ -151,30 +154,40 @@ def plot_poses(poses, size=0.05, bound=1, points=None, mesh=None):
     for pose in poses:
         # a camera is visualized with 8 line segments.
         pos = pose[:3, 3]
-        a = pos + size * pose[:3, 0] + size * pose[:3, 1] + size * pose[:3, 2]
-        b = pos - size * pose[:3, 0] + size * pose[:3, 1] + size * pose[:3, 2]
-        c = pos - size * pose[:3, 0] - size * pose[:3, 1] + size * pose[:3, 2]
-        d = pos + size * pose[:3, 0] - size * pose[:3, 1] + size * pose[:3, 2]
+        a = pos + size * pose[:3, 0] + size * pose[:3, 1] + size * pose[:3, 2] * (-1 if opengl else 1)
+        b = pos - size * pose[:3, 0] + size * pose[:3, 1] + size * pose[:3, 2] * (-1 if opengl else 1)
+        c = pos - size * pose[:3, 0] - size * pose[:3, 1] + size * pose[:3, 2] * (-1 if opengl else 1)
+        d = pos + size * pose[:3, 0] - size * pose[:3, 1] + size * pose[:3, 2] * (-1 if opengl else 1)
 
-        dir = (a + b + c + d) / 4 - pos
-        dir = dir / (np.linalg.norm(dir) + 1e-8)
-        o = pos + dir * 3
+        # construct 3D paths
+        frame = np.array([
+            [pos, a],
+            [pos, b],
+            [pos, c],
+            [pos, d],
+            [a, b],
+            [b, c],
+            [c, d],
+            [d, a],
+            [pos, pos + pose[:3, 2] * (-1 if opengl else 1) * 3], # point to target
+        ])
+        frame = trimesh.load_path(frame)
+        objects.append(frame)
 
-        segs = np.array(
-            [
-                [pos, a],
-                [pos, b],
-                [pos, c],
-                [pos, d],
-                [a, b],
-                [b, c],
-                [c, d],
-                [d, a],
-                [pos, o],
-            ]
-        )
-        segs = trimesh.load_path(segs)
-        objects.append(segs)
+        right_line = np.array([[pos, pos + pose[:3, 0] * size]])
+        right_line = trimesh.load_path(right_line)
+        right_line.colors = np.array([[255, 0, 0, 255]]).repeat(len(right_line.entities), axis=0)
+        objects.append(right_line)
+
+        up_line = np.array([[pos, pos + pose[:3, 1] * size]])
+        up_line = trimesh.load_path(up_line)
+        up_line.colors = np.array([[0, 255, 0, 255]]).repeat(len(up_line.entities), axis=0)
+        objects.append(up_line)
+
+        forward_line = np.array([[pos, pos + pose[:3, 2] * size]])
+        forward_line = trimesh.load_path(forward_line)
+        forward_line.colors = np.array([[0, 0, 255, 255]]).repeat(len(forward_line.entities), axis=0)
+        objects.append(forward_line)
 
     if points is not None:
 
