@@ -1,4 +1,10 @@
-# kiuikit
+<p align="center">
+    <picture>
+    <img alt="kiuikit_logo" src="assets/kiuikit_logo.jpg" width="20%">
+    </picture>
+    </br>
+    <b>Kiuikit</b>
+</p>
 
 A toolkit for computer vision (especially 3D vision) tasks.
 
