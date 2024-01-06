@@ -177,7 +177,7 @@ def get_perspective(fovy, aspect=1, near=0.01, far=1000):
     )
 
 
-def get_rays(pose, h, w, fovy, opengl=False):
+def get_rays(pose, h, w, fovy, opengl=True, normalize_dir=True):
     # pose: [4, 4]
     # fov: in degree
     # opengl: camera front view convention
@@ -201,8 +201,11 @@ def get_rays(pose, h, w, fovy, opengl=False):
     rays_d = camera_dirs @ pose[:3, :3].transpose(0, 1)  # [hw, 3]
     rays_o = np.expand_dims(pose[:3, 3], 0).repeat(rays_d.shape[0], 0)  # [hw, 3]
 
+    if normalize_dir:
+        rays_d = safe_normalize(rays_d)
+
     rays_o = rays_o.reshape(h, w, 3)
-    rays_d = safe_normalize(rays_d).reshape(h, w, 3)
+    rays_d = rays_d.reshape(h, w, 3)
 
     return rays_o, rays_d
 

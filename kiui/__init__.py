@@ -8,6 +8,7 @@ import lazy_loader
 
 module_path = os.path.dirname(os.path.abspath(__file__))
 submodules = [m.strip('.py') for m in os.listdir(module_path) if not m.startswith('__')]
+submodules.append('gridencoder')
 
 # find out all function names without importing the module
 utils_path = os.path.join(module_path, 'utils.py')
