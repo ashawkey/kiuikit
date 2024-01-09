@@ -5,8 +5,12 @@ import trimesh
 import numpy as np
 
 from kiui.op import safe_normalize, dot
+from kiui.typing import *
 
 class Mesh:
+    """
+    A torch-native tri-mesh class, with support for loading/writing in ply/obj/glb formats.
+    """
     def __init__(
         self,
         v=None,

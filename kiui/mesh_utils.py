@@ -2,6 +2,8 @@ import torch
 import numpy as np
 import pymeshlab as pml
 
+from kiui.op import safe_normalize
+
 
 def decimate_mesh(
     verts, faces, target, backend="pymeshlab", remesh=False, optimalplacement=True
@@ -176,7 +178,15 @@ def compute_edge_to_face_mapping(faces):
     return tris_per_edge
 
 
-def normal_consistency(face_normals, faces):
+def normal_consistency(verts, faces, face_normals=None):
+
+    if face_normals is None:
+        
+        i0, i1, i2 = faces[:, 0].long(), faces[:, 1].long(), faces[:, 2].long()
+        v0, v1, v2 = verts[i0, :], verts[i1, :], verts[i2, :]
+
+        face_normals = torch.cross(v1 - v0, v2 - v0)
+        face_normals = safe_normalize(face_normals)
 
     tris_per_edge = compute_edge_to_face_mapping(faces)
 
