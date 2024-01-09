@@ -414,6 +414,7 @@ def main():
         for ele in tqdm.tqdm(elevation):
             for azi in tqdm.tqdm(azimuth):
                 gui.cam.from_angle(ele, azi)
+                gui.light_dir = np.array([ele, azi]) # light will follow camera to rotate
                 gui.need_update = True
                 gui.step()
                 if not opt.wogui:
