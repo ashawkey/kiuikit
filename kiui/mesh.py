@@ -9,11 +9,10 @@ from kiui.typing import *
 
 class Mesh:
     """
-    A torch-native trimesh class, with support for `ply/obj/glb` formats.
+    A torch-native trimesh class, with support for ``ply/obj/glb`` formats.
 
     Note:
         This class only supports one mesh with a single texture image (an albedo texture and a metallic-roughness texture).
-        This means only limited features of glb is supported!
     """
     def __init__(
         self,
@@ -62,7 +61,7 @@ class Mesh:
 
     @classmethod
     def load(cls, path, resize=True, renormal=True, remesh=False, retex=False, bound=0.9, front_dir='+z', **kwargs):
-        """load mesh from path. e.g., `mesh = Mesh.load(path)`
+        """load mesh from path. e.g., ``mesh = Mesh.load(path)``
 
         Args:
             path (str): path to mesh file, supports ply, obj, glb.
@@ -308,9 +307,9 @@ class Mesh:
 
     @classmethod
     def load_trimesh(cls, path, device=None):
-        """load a mesh using `trimesh.load()`.
+        """load a mesh using ``trimesh.load()``.
 
-        Can load various formats like `glb` and serves as a fallback.
+        Can load various formats like ``glb`` and serves as a fallback.
 
         Note:
             We will try to merge all geometries if the glb contains more than one meshes, and this may lose the texture, since we only support one texture image.
@@ -430,7 +429,7 @@ class Mesh:
         """auto resize the mesh.
 
         Args:
-            bound (float, optional): resizing into [-bound, bound]^3. Defaults to 0.9.
+            bound (float, optional): resizing into ``[-bound, bound]^3``. Defaults to 0.9.
         """
         vmin, vmax = self.aabb()
         self.ori_center = (vmax + vmin) / 2
@@ -569,7 +568,8 @@ class Mesh:
 
 
     def write_glb(self, path):
-        """write the mesh in glb/gltf format. This will create a scene with a single mesh.
+        """write the mesh in glb/gltf format.
+          This will create a scene with a single mesh.
 
         Args:
             path (str): path to write.
@@ -821,3 +821,4 @@ class Mesh:
             metallicRoughness = (metallicRoughness * 255).astype(np.uint8)
             cv2.imwrite(metallic_path, metallicRoughness[..., 2])
             cv2.imwrite(roughness_path, metallicRoughness[..., 1])
+

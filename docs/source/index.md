@@ -1,6 +1,6 @@
 # Kiuikit
 
-## TODO: this doc is unfinished!
+> NOTE: this doc is still unfinished!
 
 A toolkit for computer vision (especially 3D vision) tasks.
 
@@ -11,9 +11,13 @@ A toolkit for computer vision (especially 3D vision) tasks.
 
 ## Installation
 ```bash
-pip install kiui
-```
+# released
+pip install kiui # install the minimal package
+pip install kiui[full] # install optional dependencies
 
+# latest
+pip install -U git+https://github.com/ashawkey/kiuikit.git
+```
 
 <!-- toctree -->
 
@@ -26,6 +30,7 @@ pip install kiui
    ./mesh.md
    ./camera.md
    ./utils.md
+   ./ops.md
 
 .. toctree::
    :caption: Tools
@@ -34,4 +39,4 @@ pip install kiui
    :titlesonly:
 
    ./render.md
-   ./cli.md
+   ./misc.md

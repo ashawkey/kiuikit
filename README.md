@@ -1,9 +1,13 @@
 <p align="center">
     <picture>
-    <img alt="kiuikit_logo" src="assets/kiuikit_logo.jpg" width="20%">
+    <img alt="kiuikit_logo" src="docs/source/_static/logo.png" width="100%">
     </picture>
     </br>
     <b>Kiuikit</b>
+    </br>
+    <code>pip install kiui</code>
+    &nbsp;&nbsp;&bull;&nbsp;&nbsp;
+    <a href="https://kit.kiui.moe/">Documentation</a>
 </p>
 
 A toolkit for computer vision (especially 3D vision) tasks.
@@ -24,7 +28,7 @@ pip install kiui[full] # install optional dependencies
 pip install git+https://github.com/ashawkey/kiuikit.git # only the minimal package
 ```
 
-### Usage
+### Basic Usage
 
 ```python
 import kiui

@@ -31,23 +31,18 @@ release = '0.2.0'
 # ones.
 extensions = [
     "sphinx.ext.autodoc",
-    "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
     "sphinx.ext.githubpages",
     "sphinx.ext.viewcode",
+    "sphinx_design",
+    "sphinx_copybutton",
     "m2r2",
 ]
 
 # Pull documentation types from hints
-autodoc_typehints = "both"
-autodoc_class_signature = "separated"
+# autodoc_typehints = "both"
 autodoc_default_options = {
-    "members": True, # will doc all methods and attributes
     "member-order": "bysource",
-    "undoc-members": True, # also doc memebers without a docstring
-    "special-members": "__init__", # doc __init__ too
-    "inherited-members": False,
-    "imported-members": False,
 }
 
 # Add any paths that contain templates here, relative to this directory.
@@ -65,27 +60,15 @@ exclude_patterns = []
 # a list of builtin themes.
 #
 html_theme = 'furo'
-html_title = "kiuikit"
-html_theme_options = {
-    "light_css_variables": {
-        "color-code-background": "#f4f4f4",
-        "color-code-foreground": "#000",
-    },
-    "footer_icons": [
-        {
-            "name": "GitHub",
-            "url": "https://github.com/ashawkey/kiuikit",
-            "class": "",
-        },
-    ],
-    "light_logo": "logo.jpg",
-    "dark_logo": "logo.jpg",
-}
+# html_title = "kiuikit"
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+
+html_favicon = '_static/icon.png'
+html_logo = '_static/logo.png'
 
 sphinx_to_github = True
 sphinx_to_github_verbose = True

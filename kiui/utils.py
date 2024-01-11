@@ -7,7 +7,6 @@ import pickle
 import varname
 from objprint import objstr
 from rich.console import Console
-from typing import Literal, List, Tuple, Any, Optional
 
 import cv2
 from PIL import Image
@@ -15,14 +14,16 @@ from PIL import Image
 import numpy as np
 import torch
 
+from kiui.typing import *
 from kiui.env import is_imported
 
-''' utils
-All functions will be automatically imported as kiui.<func>
-'''
-
-# inspect array like object x and report stats
 def lo(*xs, verbose=0):
+    """inspect array like objects and report statistics.
+
+    Args:
+        xs (Any): array like objects to inspect.
+        verbose (int, optional): level of verbosity, set to 1 to report mean and std, 2 to print the content. Defaults to 0.
+    """
 
     console = Console()
 
@@ -81,6 +82,13 @@ def lo(*xs, verbose=0):
 
 
 def seed_everything(seed=42, verbose=False, strict=False):
+    """auto set seed for random, numpy and torch.
+
+    Args:
+        seed (int, optional): random seed. Defaults to 42.
+        verbose (bool, optional): whether to report each seed setting. Defaults to False.
+        strict (bool, optional): whether to use strict deterministic mode for better torch reproduction. Defaults to False.
+    """
 
     os.environ['PYTHONHASHSEED'] = str(seed)
 
@@ -115,21 +123,49 @@ def seed_everything(seed=42, verbose=False, strict=False):
 
 
 def read_json(path):
+    """load a json file.
+
+    Args:
+        path (str): path to json file.
+
+    Returns:
+        dict: json content.
+    """
     with open(path, "r") as f:
         return json.load(f)
 
 
 def write_json(path, x):
+    """write a json file.
+
+    Args:
+        path (str): path to write json file.
+        x (dict): dict to write.
+    """
     with open(path, "w") as f:
         json.dump(x, f, indent=2)
 
 
 def read_pickle(path):
+    """read a pickle file.
+
+    Args:
+        path (str): path to pickle file.
+
+    Returns:
+        Any: pickle content.
+    """
     with open(path, "rb") as f:
         return pickle.load(f)
 
 
 def write_pickle(path, x):
+    """write a pickle file.
+
+    Args:
+        path (str): path to write pickle file.
+        x (Any): content to write.
+    """
     with open(path, "wb") as f:
         pickle.dump(x, f)
 
@@ -139,6 +175,23 @@ def read_image(
     mode: Literal["float", "uint8", "pil", "torch", "tensor"] = "float", 
     order: Literal["RGB", "RGBA", "BGR", "BGRA"] = "RGB",
 ):
+    """read an image file into various formats and color mode.
+
+    Args:
+        path (str): path to the image file.
+        mode (Literal[&quot;float&quot;, &quot;uint8&quot;, &quot;pil&quot;, &quot;torch&quot;, &quot;tensor&quot;], optional): returned image format. Defaults to "float".
+            float - float32 numpy array, range [0, 1]
+            uint8 - uint8 numpy array, range [0, 255]
+            pil - PIL image
+            torch/tensor - float32 torch tensor, range [0, 1]
+        order (Literal[&quot;RGB&quot;, &quot;RGBA&quot;, &quot;BGR&quot;, &quot;BGRA&quot;], optional): channel order. Defaults to "RGB".
+    
+    Note:
+        By default this function will convert RGBA image to white-background RGB image. Use `order="RGBA"` to keep the alpha channel.
+
+    Returns:
+        Union[np.ndarray, PIL.Image, torch.Tensor]: the image array.
+    """
 
     if mode == "pil":
         return Image.open(path).convert(order)
@@ -175,7 +228,18 @@ def read_image(
         raise ValueError(f"Unknown read_image mode {mode}")
 
 
-def write_image(path, img, order="RGB"):
+def write_image(
+        path: str, 
+        img: Union[Tensor, np.ndarray], 
+        order: Literal["RGB", "BGR"] = "RGB",
+    ):
+    """write an image to various formats.
+
+    Args:
+        path (str): path to write the image file.
+        img (Union[torch.Tensor, np.ndarray]): image to write.
+        order (str, optional): channel order. Defaults to "RGB".
+    """
 
     if torch.is_tensor(img):
         img = img.detach().cpu().numpy()
@@ -198,13 +262,7 @@ def write_image(path, img, order="RGB"):
 
 
 def load_file_from_url(url, model_dir=None, progress=True, file_name=None):
-
-    from torch.hub import download_url_to_file, get_dir
-    from urllib.parse import urlparse
-
     """Load file form http url, will download models if necessary.
-
-    Ref:https://github.com/1adrianb/face-alignment/blob/master/face_alignment/utils.py
 
     Args:
         url (str): URL to be downloaded.
@@ -216,6 +274,10 @@ def load_file_from_url(url, model_dir=None, progress=True, file_name=None):
     Returns:
         str: The path to the downloaded file.
     """
+
+    from torch.hub import download_url_to_file, get_dir
+    from urllib.parse import urlparse
+
     if model_dir is None:  # use the pytorch hub_dir
         hub_dir = get_dir()
         model_dir = os.path.join(hub_dir, "checkpoints")
@@ -233,7 +295,16 @@ def load_file_from_url(url, model_dir=None, progress=True, file_name=None):
     return cached_file
 
 
-def is_format(f, format):
+def is_format(f: str, format: Sequence[str]):
+    """if a file's extension is in a set of format
+
+    Args:
+        f (str): file name.
+        format (Sequence[str]): set of extensions.
+
+    Returns:
+        bool: if the file's extension is in the set.
+    """
     return os.path.splitext(f)[1].lower() in format
 
 def batch_process_files(
@@ -245,9 +316,19 @@ def batch_process_files(
     image_color_order="RGB",
     **kwargs
 ):
-    # process_fn: function that takes input and return output
-    # path, out_path: can be either a file or a directory, if directory, process all files in it
-    
+    """simple function wrapper to batch processing files.
+
+    Args:
+        process_fn (Callable): process function.
+        path (str): path to a file or a directory containing the files to process.
+        out_path (str): output path of a file or a directory.
+        overwrite (bool, optional): whether to overwrite existing results. Defaults to False.
+        in_format (list, optional): input file formats. Defaults to [".jpg", ".jpeg", ".png"].
+        out_format (str, optional): output file format. Defaults to None.
+        image_mode (str, optional): for images, the mode to read. Defaults to 'uint8'.
+        image_color_order (str, optional): for images, the color order. Defaults to "RGB".
+    """
+   
     if os.path.isdir(path):
         file_paths = glob.glob(os.path.join(path, "*"))
         file_paths = [f for f in file_paths if is_format(f, in_format)]
@@ -299,11 +380,3 @@ def batch_process_files(
         except Exception as e:
             print(f"[Error] when processing {file_path} --> {file_out_path}")
             print(e)
-
-def freeze(m: torch.nn.Module):
-    for p in m.parameters():
-        p.requires_grad = False
-
-def unfreeze(m: torch.nn.Module):
-    for p in m.parameters():
-        p.requires_grad = True

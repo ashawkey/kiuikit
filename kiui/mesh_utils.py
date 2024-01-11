@@ -6,9 +6,21 @@ from kiui.op import safe_normalize
 
 
 def decimate_mesh(
-    verts, faces, target, backend="pymeshlab", remesh=False, optimalplacement=True
+    verts, faces, target=5e4, backend="pymeshlab", remesh=False, optimalplacement=True
 ):
-    # optimalplacement: default is True, but for flat mesh must turn False to prevent spike artifect.
+    """ perform mesh decimation.
+
+    Args:
+        verts (np.ndarray): mesh vertices, float [N, 3]
+        faces (np.ndarray): mesh faces, int [M, 3]
+        target (int): targeted number of faces
+        backend (str, optional): algorithm backend, can be "pymeshlab" or "pyfqmr". Defaults to "pymeshlab".
+        remesh (bool, optional): whether to remesh after decimation. Defaults to False.
+        optimalplacement (bool, optional): For flat mesh, use False to prevent spikes. Defaults to True.
+
+    Returns:
+        Tuple[np.ndarray]: vertices and faces after decimation.
+    """
 
     _ori_vert_shape = verts.shape
     _ori_face_shape = faces.shape
@@ -59,6 +71,21 @@ def clean_mesh(
     remesh=True,
     remesh_size=0.01,
 ):
+    """ perform mesh cleaning, including floater removal, non manifold repair, and remeshing.
+
+    Args:
+        verts (np.ndarray): mesh vertices, float [N, 3]
+        faces (np.ndarray): mesh faces, int [M, 3]
+        v_pct (int, optional): percentage threshold to merge close vertices. Defaults to 1.
+        min_f (int, optional): maximal number of faces for isolated component to remove. Defaults to 64.
+        min_d (int, optional): maximal diameter percentage of isolated component to remove. Defaults to 20.
+        repair (bool, optional): whether to repair non-manifold faces (cannot gurantee). Defaults to True.
+        remesh (bool, optional): whether to perform a remeshing after all cleaning. Defaults to True.
+        remesh_size (float, optional): the targeted edge length for remeshing. Defaults to 0.01.
+
+    Returns:
+        Tuple[np.ndarray]: vertices and faces after decimation.
+    """
     # verts: [N, 3]
     # faces: [N, 3]
 
@@ -112,9 +139,18 @@ def clean_mesh(
 
 
 
-### mesh related
+### mesh related losses
 
 def laplacian_uniform(verts, faces):
+    """ calculate laplacian uniform matrix
+
+    Args:
+        verts (torch.Tensor): mesh vertices, float [N, 3]
+        faces (torch.Tensor): mesh faces, long [M, 3]
+
+    Returns:
+        torch.Tensor: sparse laplacian matrix.
+    """
 
     V = verts.shape[0]
     F = faces.shape[0]
@@ -138,6 +174,15 @@ def laplacian_uniform(verts, faces):
 
 
 def laplacian_smooth_loss(verts, faces):
+    """ calculate laplacian smooth loss.
+
+    Args:
+        verts (torch.Tensor): mesh vertices, float [N, 3]
+        faces (torch.Tensor): mesh faces, int [M, 3]
+
+    Returns:
+        torch.Tensor: loss value.
+    """
     with torch.no_grad():
         L = laplacian_uniform(verts, faces.long())
     loss = L.mm(verts)
@@ -147,6 +192,14 @@ def laplacian_smooth_loss(verts, faces):
 
 @torch.no_grad()
 def compute_edge_to_face_mapping(faces):
+    """ compute edge to face mapping.
+
+    Args:
+        faces (torch.Tensor): mesh faces, int [M, 3]
+
+    Returns:
+        torch.Tensor: indices to faces for each edge, long, [N, 2]
+    """
     # Get unique edges
     # Create all edges, packed by triangle
     all_edges = torch.cat((
@@ -179,6 +232,16 @@ def compute_edge_to_face_mapping(faces):
 
 
 def normal_consistency(verts, faces, face_normals=None):
+    """ calculate normal consistency loss.
+
+    Args:
+        verts (torch.Tensor): mesh vertices, float [N, 3]
+        faces (torch.Tensor): mesh faces, int [M, 3]
+        face_normals (Optional[torch.Tensor]): the normal vector for each face, will be calculated if not provided, float [M, 3]
+
+    Returns:
+        torch.Tensor: loss value.
+    """
 
     if face_normals is None:
         
