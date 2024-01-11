@@ -14,19 +14,20 @@ pip install kiui
 <!-- toctree -->
 
 .. toctree::
-   :caption: Tutorials
+   :caption: APIs
    :hidden:
    :maxdepth: 1
    :titlesonly:
 
    ./mesh.md
    ./camera.md
+   ./utils.md
 
 .. toctree::
-   :caption: API
+   :caption: Tools
    :hidden:
    :maxdepth: 1
    :titlesonly:
 
-   ./utils.md
+   ./render.md
    ./cli.md

@@ -1,25 +1,7 @@
 import numpy as np
 from .op import safe_normalize
 from scipy.spatial.transform import Rotation
-from typing import Literal
-
-''' common world coordinate system conventions
-
-OpenGL/MAYA       OpenCV/Colmap     Blender      Unity/DirectX     Unreal       
-Right-handed      Right-handed    Right-handed    Left-handed    Left-handed
-
-     +y                +z           +z  +y         +y  +z           +z                                       
-     |                /             |  /           |  /             |                                  
-     |               /              | /            | /              |                                     
-     |______+x      /______+x       |/_____+x      |/_____+x        |______+x
-    /               |                                              /                                        
-   /                |                                             /                                                     
-  /                 |                                            /                                             
- +z                 +y                                          +y                                                  
-
-A common color code: x = red, y = green, z = blue (XYZ=RGB)
-Left/right-handed notation: roll your left/right palm from x to y, and your thumb should point to z.
-'''
+from kiui.typing import *
 
 # convert between different world coordinate systems
 def convert(
@@ -27,8 +9,17 @@ def convert(
     target: Literal['unity', 'blender', 'opencv', 'colmap', 'opengl'] = 'unity', 
     original: Literal['unity', 'blender', 'opencv', 'colmap', 'opengl'] = 'opengl',
 ):
-    # pose: [4, 4]
-    # target/original: 'unity', 'blender', 'opencv', 'colmap', 'opengl'
+    """A method to convert between different world coordinate systems.
+
+    Args:
+        pose (np.ndarray): camera pose, float [4, 4].
+        target (Literal[&#39;unity&#39;, &#39;blender&#39;, &#39;opencv&#39;, &#39;colmap&#39;, &#39;opengl&#39;], optional): from convention. Defaults to 'unity'.
+        original (Literal[&#39;unity&#39;, &#39;blender&#39;, &#39;opencv&#39;, &#39;colmap&#39;, &#39;opengl&#39;], optional): to convention. Defaults to 'opengl'.
+
+    Returns:
+        np.ndarray: converted camera pose, float [4, 4].
+    """
+    
     if original == 'opengl':
         if target == 'unity':
             pose[2] *= -1
@@ -64,49 +55,18 @@ def convert(
     return pose
 
 
-''' camera pose matrix
-[[Right_x, Up_x, Forward_x, Position_x],
- [Right_y, Up_y, Forward_y, Position_y],
- [Right_z, Up_z, Forward_z, Position_z],
- [0,       0,    0,         1         ]]
-
-The xyz follows corresponding world coordinate system.
-However, the three directions (right, up, forward) can be defined differently:
-(1) forward can be (camera --> target) or (target --> camera).
-(2) up can align with the world-up-axis (y) or world-down-axis (-y).
-(3) right can also be left, depending on it's (up cross forward) or (forward cross up).
-
-Two common camera coordinate conventions:
-
-   OpenGL                OpenCV       
-   Blender               Colmap       
-
-     up  target          forward & target
-     |  /                /         
-     | /                /          
-     |/_____right      /______right   
-    /                  |           
-   /                   |           
-  /                    |           
-forward                up          
-
-A common color code: right = red, up = green, forward = blue (XYZ=RUF=RGB)
-
-But many datasets are just very confusing and combine different conventions together.
-You may check a few poses to make sure what the convention they are using...
-'''
-
-# our camera convention:
-# world coordinate is OpenGL/right-handed, +x = right, +y = up, +z = forward
-# camera coordinate is OpenGL (forward is target --> campos).
-# elevation in (-90, 90), from +y (-90) --> -y (+90)
-# azimuth in (-180, 180), from +z (0/-360) --> +x (90/-270) --> -z (180/-180) --> -x (270/-90) --> +z (360/0)
-
-# construct rotation matrix by look-at
 def look_at(campos, target, opengl=True):
-    # campos: [N, 3], camera/eye position
-    # target: [N, 3], object to look at
-    # return: [N, 3, 3], rotation matrix
+    """construct pose rotation matrix by look-at
+
+    Args:
+        campos (np.ndarray): camera position, float [3]
+        target (np.ndarray): look at target, float [3]
+        opengl (bool, optional): whether use opengl camera convention (forward direction is target --> camera). Defaults to True.
+
+    Returns:
+        np.ndarray: the camera pose rotation matrix, float [3, 3], normalized.
+    """
+   
     if not opengl:
         # forward is camera --> target
         forward_vector = safe_normalize(target - campos)
@@ -123,12 +83,21 @@ def look_at(campos, target, opengl=True):
     return R
 
 
-# elevation & azimuth to pose (cam2world) matrix
 def orbit_camera(elevation, azimuth, radius=1, is_degree=True, target=None, opengl=True):
-    # radius: scalar
-    # elevation: scalar, in (-90, 90), from +y to -y is (-90, 90)
-    # azimuth: scalar, in (-180, 180), from +z to +x is (0, 90)
-    # return: [4, 4], camera pose matrix
+    """construct a camera pose matrix orbiting a target with elevation & azimuth angle.
+
+    Args:
+        elevation (float): elevation in (-90, 90), from +y to -y is (-90, 90)
+        azimuth (float): azimuth in (-180, 180), from +z to +x is (0, 90)
+        radius (int, optional): camera radius. Defaults to 1.
+        is_degree (bool, optional): if the angles are in degree. Defaults to True.
+        target (np.ndarray, optional): look at target position. Defaults to None.
+        opengl (bool, optional): whether to use OpenGL camera convention. Defaults to True.
+
+    Returns:
+        np.ndarray: the camera pose matrix, float [4, 4]
+    """
+    
     if is_degree:
         elevation = np.deg2rad(elevation)
         azimuth = np.deg2rad(azimuth)
@@ -143,10 +112,18 @@ def orbit_camera(elevation, azimuth, radius=1, is_degree=True, target=None, open
     T[:3, 3] = campos
     return T
 
-# orbit pose to elevation & azimuth
+
 def undo_orbit_camera(T, is_degree=True):
-    # T: [4, 4], camera pose matrix
-    # return: elevation, azimuth, radius
+    """ undo an orbital camera pose matrix to elevation & azimuth
+
+    Args:
+        T (np.ndarray): camera pose matrix, float [4, 4], must be an orbital camera targeting at (0, 0, 0)!
+        is_degree (bool, optional): whether to return angles in degree. Defaults to True.
+
+    Returns:
+        Tuple[float]: elevation, azimuth, and radius.
+    """
+    
     campos = T[:3, 3]
     radius = np.linalg.norm(campos)
     elevation = np.arcsin(-campos[1] / radius)
@@ -158,6 +135,17 @@ def undo_orbit_camera(T, is_degree=True):
 
 # perspective matrix
 def get_perspective(fovy, aspect=1, near=0.01, far=1000):
+    """construct a perspective matrix from fovy.
+
+    Args:
+        fovy (float): field of view in degree along y-axis.
+        aspect (int, optional): aspect ratio. Defaults to 1.
+        near (float, optional): near clip plane. Defaults to 0.01.
+        far (int, optional): far clip plane. Defaults to 1000.
+
+    Returns:
+        np.ndarray: perspective matrix, float [4, 4]
+    """
     # fovy: field of view in degree.
     
     y = np.tan(np.deg2rad(fovy) / 2)
@@ -178,6 +166,19 @@ def get_perspective(fovy, aspect=1, near=0.01, far=1000):
 
 
 def get_rays(pose, h, w, fovy, opengl=True, normalize_dir=True):
+    """ construct rays origin and direction from a camera pose.
+
+    Args:
+        pose (np.ndarray): camera pose, float [4, 4]
+        h (int): image height
+        w (int): image width
+        fovy (float): field of view in degree along y-axis.
+        opengl (bool, optional): whether to use the OpenGL camera convention. Defaults to True.
+        normalize_dir (bool, optional): whether to normalize the ray directions. Defaults to True.
+
+    Returns:
+        Tuple[np.ndarray]: rays_o and rays_d, both are float [h, w, 3]
+    """
     # pose: [4, 4]
     # fov: in degree
     # opengl: camera front view convention
@@ -209,9 +210,20 @@ def get_rays(pose, h, w, fovy, opengl=True, normalize_dir=True):
 
     return rays_o, rays_d
 
-
 class OrbitCamera:
+    """ An orbital camera class.
+    """
     def __init__(self, W, H, r=2, fovy=60, near=0.01, far=100):
+        """init function
+
+        Args:
+            W (int): image width
+            H (int): image height
+            r (int, optional): camera radius. Defaults to 2.
+            fovy (int, optional): camera field of view in degree along y-axis. Defaults to 60.
+            near (float, optional): near clip plane. Defaults to 0.01.
+            far (int, optional): far clip plane. Defaults to 100.
+        """
         self.W = W
         self.H = H
         self.radius = r  # camera distance from center
@@ -224,15 +236,30 @@ class OrbitCamera:
 
     @property
     def fovx(self):
+        """get the field of view in radians along x-axis
+
+        Returns:
+            float: field of view in radians along x-axis
+        """
         return 2 * np.arctan(np.tan(self.fovy / 2) * self.W / self.H)
 
     @property
     def campos(self):
+        """get the camera position
+
+        Returns:
+            np.ndarray: camera position, float [3]
+        """
         return self.pose[:3, 3]
 
-    # pose (c2w)
+
     @property
     def pose(self):
+        """get the camera pose matrix (cam2world)
+
+        Returns:
+            np.ndarray: camera pose, float [4, 4]
+        """
         # first move camera to radius
         res = np.eye(4, dtype=np.float32)
         res[2, 3] = self.radius  # opengl convention...
@@ -244,14 +271,24 @@ class OrbitCamera:
         res[:3, 3] -= self.center
         return res
 
-    # view (w2c)
+    
     @property
     def view(self):
+        """get the camera view matrix (world2cam, inverse of cam2world)
+
+        Returns:
+            np.ndarray: camera view, float [4, 4]
+        """
         return np.linalg.inv(self.pose)
 
-    # projection (perspective)
+    
     @property
     def perspective(self):
+        """get the perspective matrix
+
+        Returns:
+            np.ndarray: camera perspective, float [4, 4]
+        """
         y = np.tan(self.fovy / 2)
         aspect = self.W / self.H
         return np.array(
@@ -272,29 +309,63 @@ class OrbitCamera:
     # intrinsics
     @property
     def intrinsics(self):
+        """get the camera intrinsics
+
+        Returns:
+            np.ndarray: intrinsics (fx, fy, cx, cy), float [4]
+        """
         focal = self.H / (2 * np.tan(self.fovy / 2))
         return np.array([focal, focal, self.W // 2, self.H // 2], dtype=np.float32)
 
-    # model-view-perspective
+    
     @property
     def mvp(self):
+        """get the MVP (model-view-perspective) matrix.
+
+        Returns:
+            np.ndarray: camera MVP, float [4, 4]
+        """
         return self.perspective @ np.linalg.inv(self.pose)  # [4, 4]
 
     def orbit(self, dx, dy):
-        # rotate along camera up/side axis!
+        """ rotate along camera up/side axis!
+
+        Args:
+            dx (float): delta step along x (up).
+            dy (float): delta step along y (side).
+        """
         side = self.rot.as_matrix()[:3, 0]
         rotvec_x = self.up * np.radians(-0.05 * dx)
         rotvec_y = side * np.radians(-0.05 * dy)
         self.rot = Rotation.from_rotvec(rotvec_x) * Rotation.from_rotvec(rotvec_y) * self.rot
 
     def scale(self, delta):
+        """scale the camera.
+
+        Args:
+            delta (float): delta step.
+        """
         self.radius *= 1.1 ** (-delta)
 
     def pan(self, dx, dy, dz=0):
+        """pan the camera.
+
+        Args:
+            dx (float): delta step along x.
+            dy (float): delta step along y.
+            dz (float, optional): delta step along x. Defaults to 0.
+        """
         # pan in camera coordinate system (careful on the sensitivity!)
         self.center += 0.0005 * self.rot.as_matrix()[:3, :3] @ np.array([dx, -dy, dz])
 
     def from_angle(self, elevation, azimuth, is_degree=True):
+        """set the camera pose from elevation & azimuth angle.
+
+        Args:
+            elevation (float): elevation in (-90, 90), from +y to -y is (-90, 90)
+            azimuth (float): azimuth in (-180, 180), from +z to +x is (0, 90)
+            is_degree (bool, optional): whether the angles are in degree. Defaults to True.
+        """
         if is_degree:
             elevation = np.deg2rad(elevation)
             azimuth = np.deg2rad(azimuth)

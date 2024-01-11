@@ -9,21 +9,39 @@ from kiui.typing import *
 
 class Mesh:
     """
-    A torch-native tri-mesh class, with support for loading/writing in ply/obj/glb formats.
+    A torch-native trimesh class, with support for `ply/obj/glb` formats.
+
+    Note:
+        This class only supports one mesh with a single texture image (an albedo texture and a metallic-roughness texture).
+        This means only limited features of glb is supported!
     """
     def __init__(
         self,
-        v=None,
-        f=None,
-        vn=None,
-        fn=None,
-        vt=None,
-        ft=None,
-        vc=None, # vertex color
-        albedo=None,
-        metallicRoughness=None,
-        device=None,
+        v: Optional[Tensor] = None,
+        f: Optional[Tensor] = None,
+        vn: Optional[Tensor] = None,
+        fn: Optional[Tensor] = None,
+        vt: Optional[Tensor] = None,
+        ft: Optional[Tensor] = None,
+        vc: Optional[Tensor] = None, # vertex color
+        albedo: Optional[Tensor] = None,
+        metallicRoughness: Optional[Tensor] = None,
+        device: Optional[torch.device] = None,
     ):
+        """Init a mesh directly using all attributes.
+
+        Args:
+            v (Optional[Tensor]): vertices, float [N, 3]. Defaults to None.
+            f (Optional[Tensor]): faces, int [M, 3]. Defaults to None.
+            vn (Optional[Tensor]): vertex normals, float [N, 3]. Defaults to None.
+            fn (Optional[Tensor]): faces for normals, int [M, 3]. Defaults to None.
+            vt (Optional[Tensor]): vertex uv coordinates, float [N, 2]. Defaults to None.
+            ft (Optional[Tensor]): faces for uvs, int [M, 3]. Defaults to None.
+            vc (Optional[Tensor]): vertex colors, float [N, 3]. Defaults to None.
+            albedo (Optional[Tensor]): albedo texture, float [H, W, 3], RGB format. Defaults to None.
+            metallicRoughness (Optional[Tensor]): metallic-roughness texture, float [H, W, 3], metallic(Blue) = metallicRoughness[..., 2], roughness(Green) = metallicRoughness[..., 1]. Defaults to None.
+            device (Optional[torch.device]): torch device. Defaults to None.
+        """
         self.device = device
         self.v = v
         self.vn = vn
@@ -43,12 +61,23 @@ class Mesh:
         self.ori_scale = 1
 
     @classmethod
-    def load(cls, path=None, resize=True, renormal=True, remesh=False, retex=False, bound=0.9, front_dir='+z', **kwargs):
-        # assume init with kwargs
-        if path is None:
-            mesh = cls(**kwargs)
+    def load(cls, path, resize=True, renormal=True, remesh=False, retex=False, bound=0.9, front_dir='+z', **kwargs):
+        """load mesh from path. e.g., `mesh = Mesh.load(path)`
+
+        Args:
+            path (str): path to mesh file, supports ply, obj, glb.
+            resize (bool, optional): auto resize the mesh using ``bound`` into [-bound, bound]^3. Defaults to True.
+            renormal (bool, optional): re-calc the vertex normals. Defaults to True.
+            remesh (bool, optional): perform remeshing. Defaults to False.
+            retex (bool, optional): re-calc the uv coordinates, will overwrite the existing uv coordinates. Defaults to False.
+            bound (float, optional): bound to resize. Defaults to 0.9.
+            front_dir (str, optional): front-view direction of the mesh, should be [+-][xyz][ 123]. Defaults to '+z'.
+
+        Returns:
+            Mesh: the loaded Mesh object.
+        """
         # obj supports face uv
-        elif path.endswith(".obj"):
+        if path.endswith(".obj"):
             mesh = cls.load_obj(path, **kwargs)
         # trimesh only supports vertex uv, but can load more formats
         else:
@@ -106,6 +135,20 @@ class Mesh:
     # load from obj file
     @classmethod
     def load_obj(cls, path, albedo_path=None, device=None):
+        """load an ``obj`` mesh.
+
+        Args:
+            path (str): path to mesh.
+            albedo_path (str, optional): path to the albedo texture image, will overwrite the existing texture path if specified in mtl. Defaults to None.
+            device (torch.device, optional): torch device. Defaults to None.
+        
+        Note: 
+            We will try to read `mtl` path from `obj`, else we assume the file name is the same as `obj` but with `mtl` extension.
+            The `usemtl` statement is ignored, and we only use the last material path in `mtl` file.
+
+        Returns:
+            Mesh: the loaded Mesh object.
+        """
         assert os.path.splitext(path)[-1] == ".obj"
 
         mesh = cls()
@@ -131,7 +174,6 @@ class Mesh:
             xs.extend([-1] * (3 - len(xs)))
             return xs[0], xs[1], xs[2]
 
-        # NOTE: we ignore usemtl, and assume the mesh ONLY uses one material (first in mtl)
         vertices, texcoords, normals = [], [], []
         faces, tfaces, nfaces = [], [], []
         mtl_path = None
@@ -266,6 +308,20 @@ class Mesh:
 
     @classmethod
     def load_trimesh(cls, path, device=None):
+        """load a mesh using `trimesh.load()`.
+
+        Can load various formats like `glb` and serves as a fallback.
+
+        Note:
+            We will try to merge all geometries if the glb contains more than one meshes, and this may lose the texture, since we only support one texture image.
+
+        Args:
+            path (str): path to the mesh file.
+            device (torch.device, optional): torch device. Defaults to None.
+
+        Returns:
+            Mesh: the loaded Mesh object.
+        """
         mesh = cls()
 
         # device
@@ -361,17 +417,29 @@ class Mesh:
 
     # aabb
     def aabb(self):
+        """get the axis-aligned bounding box of the mesh.
+
+        Returns:
+            Tuple[torch.Tensor]: the min xyz and max xyz of the mesh.
+        """
         return torch.min(self.v, dim=0).values, torch.max(self.v, dim=0).values
 
     # unit size
     @torch.no_grad()
     def auto_size(self, bound=0.9):
+        """auto resize the mesh.
+
+        Args:
+            bound (float, optional): resizing into [-bound, bound]^3. Defaults to 0.9.
+        """
         vmin, vmax = self.aabb()
         self.ori_center = (vmax + vmin) / 2
         self.ori_scale = 2 * bound / torch.max(vmax - vmin).item()
         self.v = (self.v - self.ori_center) * self.ori_scale
 
     def auto_normal(self):
+        """auto calculate the vertex normals.
+        """
         i0, i1, i2 = self.f[:, 0].long(), self.f[:, 1].long(), self.f[:, 2].long()
         v0, v1, v2 = self.v[i0, :], self.v[i1, :], self.v[i2, :]
 
@@ -395,6 +463,13 @@ class Mesh:
         self.fn = self.f
 
     def auto_uv(self, cache_path=None, vmap=True):
+        """auto calculate the uv coordinates.
+
+        Args:
+            cache_path (str, optional): path to save/load the uv cache as a npz file, this can avoid calculating uv every time when loading the same mesh, which is time-consuming. Defaults to None.
+            vmap (bool, optional): remap vertices based on uv coordinates, so each v correspond to a unique vt (necessary for formats like gltf). 
+                Usually this will duplicate the vertices on the edge of uv atlas. Defaults to True.
+        """
         # try to load cache
         if cache_path is not None:
             cache_path = os.path.splitext(cache_path)[0] + "_uv.npz"
@@ -423,12 +498,15 @@ class Mesh:
         self.ft = ft
 
         if vmap:
-            # remap v/f to vt/ft, so each v correspond to a unique vt. (necessary for gltf)
             vmapping = torch.from_numpy(vmapping.astype(np.int64)).long().to(self.device)
             self.align_v_to_vt(vmapping)
     
     def align_v_to_vt(self, vmapping=None):
-        # remap v/f and vn/vn to vt/ft.
+        """ remap v/f and vn/fn to vt/ft.
+
+        Args:
+            vmapping (np.ndarray, optional): the mapping relationship from f to ft. Defaults to None.
+        """
         if vmapping is None:
             ft = self.ft.view(-1).long()
             f = self.f.view(-1).long()
@@ -437,12 +515,20 @@ class Mesh:
 
         self.v = self.v[vmapping]
         self.f = self.ft
-        # assume fn == f
+        
         if self.vn is not None:
             self.vn = self.vn[vmapping]
             self.fn = self.ft
 
     def to(self, device):
+        """move all tensor attributes to device.
+
+        Args:
+            device (torch.device): target device.
+
+        Returns:
+            Mesh: self.
+        """
         self.device = device
         for name in ["v", "f", "vn", "fn", "vt", "ft", "albedo", "vc", "metallicRoughness"]:
             tensor = getattr(self, name)
@@ -451,6 +537,11 @@ class Mesh:
         return self
     
     def write(self, path):
+        """write the mesh to a path.
+
+        Args:
+            path (str): path to write, supports ply, obj and glb.
+        """
         if path.endswith(".ply"):
             self.write_ply(path)
         elif path.endswith(".obj"):
@@ -460,8 +551,12 @@ class Mesh:
         else:
             raise NotImplementedError(f"format {path} not supported!")
     
-    # write to ply file (only geom)
     def write_ply(self, path):
+        """write the mesh in ply format. Only for geometry!
+
+        Args:
+            path (str): path to write.
+        """
 
         if self.albedo is not None:
             print(f'[WARN] ply format does not support exporting texture, will ignore!')
@@ -472,8 +567,13 @@ class Mesh:
         _mesh = trimesh.Trimesh(vertices=v_np, faces=f_np)
         _mesh.export(path)
 
-    # write to gltf/glb file (geom + texture)
+
     def write_glb(self, path):
+        """write the mesh in glb/gltf format. This will create a scene with a single mesh.
+
+        Args:
+            path (str): path to write.
+        """
 
         # assert self.v.shape[0] == self.vn.shape[0] and self.v.shape[0] == self.vt.shape[0]
         if self.vt is not None and self.v.shape[0] != self.vt.shape[0]:
@@ -654,8 +754,13 @@ class Mesh:
         # glb = b"".join(gltf.save_to_bytes())
         gltf.save(path)
 
-    # write to obj file (geom + texture)
+
     def write_obj(self, path):
+        """write the mesh in obj format. Will also write the texture and mtl files.
+
+        Args:
+            path (str): path to write.
+        """
 
         mtl_path = path.replace(".obj", ".mtl")
         albedo_path = path.replace(".obj", "_albedo.png")

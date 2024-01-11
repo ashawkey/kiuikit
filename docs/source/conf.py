@@ -38,6 +38,18 @@ extensions = [
     "m2r2",
 ]
 
+# Pull documentation types from hints
+autodoc_typehints = "both"
+autodoc_class_signature = "separated"
+autodoc_default_options = {
+    "members": True, # will doc all methods and attributes
+    "member-order": "bysource",
+    "undoc-members": True, # also doc memebers without a docstring
+    "special-members": "__init__", # doc __init__ too
+    "inherited-members": False,
+    "imported-members": False,
+}
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
