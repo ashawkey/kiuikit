@@ -18,6 +18,8 @@
   body {
     --color-code-background: #f8f8f8;
   --color-code-foreground: black;
+  --color-code-background: #f4f4f4;
+  --color-code-foreground: #000;
   
   }
   @media not print {
@@ -144,11 +146,21 @@
     <div class="sidebar-container">
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="#">
-  
-  
-  <span class="sidebar-brand-text">kiuikit</span>
-  
-</a><form class="sidebar-search-container" method="get" action="search/" role="search">
+    
+    <div class="sidebar-logo-container" style="margin: .5rem auto .5rem auto">
+        <img class="sidebar-logo only-light" src="_static/logo.jpg" alt="Light Logo" />
+        <img class="sidebar-logo only-dark" src="_static/logo.jpg" alt="Dark Logo" />
+    </div>
+</a>
+
+<div style="text-align: center">
+    <script async defer src="https://buttons.github.io/buttons.js"></script>
+    <a class="github-button" href="https://github.com/ashawkey/kiuikit"
+        data-color-scheme="no-preference: light; light: light; dark: light;" data-size="large" data-show-count="true"
+        aria-label="Download buttons/github-buttons on GitHub">
+        Github
+    </a>
+</div><form class="sidebar-search-container" method="get" action="search/" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
   <input type="hidden" name="check_keywords" value="yes">
   <input type="hidden" name="area" value="default">
@@ -200,10 +212,17 @@
         <article role="main">
           <section id="kiuikit">
 <h1>Kiuikit<a class="headerlink" href="#kiuikit" title="Link to this heading">#</a></h1>
-<p><strong>Kiuikit</strong> is a collection of code snippets for computer vision (especially 3D vision) research.</p>
+<section id="todo-this-doc-is-unfinished">
+<h2>TODO: this doc is unfinished!<a class="headerlink" href="#todo-this-doc-is-unfinished" title="Link to this heading">#</a></h2>
+<p>A toolkit for computer vision (especially 3D vision) tasks.</p>
+</section>
 <section id="features">
 <h2>Features<a class="headerlink" href="#features" title="Link to this heading">#</a></h2>
-<p>Blahblah</p>
+<ul class="simple">
+<li><p>Collection of <em>maintained, reusable and trustworthy</em> code snippets.</p></li>
+<li><p>Always using lazy import so the code is not slowed down by <code class="docutils literal notranslate"><span class="pre">import</span> <span class="pre">kiui</span></code>.</p></li>
+<li><p>Useful CLI tools, such as a GUI mesh renderer.</p></li>
+</ul>
 </section>
 <section id="installation">
 <h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">#</a></h2>
@@ -244,7 +263,10 @@
             
           </div>
           <div class="right-details">
-            
+            <div class="icons">
+              <a class="muted-link " href="https://github.com/ashawkey/kiuikit" aria-label="GitHub"></a>
+              
+            </div>
           </div>
         </div>
         
@@ -263,6 +285,7 @@
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">Kiuikit</a><ul>
+<li><a class="reference internal" href="#todo-this-doc-is-unfinished">TODO: this doc is unfinished!</a></li>
 <li><a class="reference internal" href="#features">Features</a></li>
 <li><a class="reference internal" href="#installation">Installation</a><ul>
 </ul>
