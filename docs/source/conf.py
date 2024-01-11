@@ -66,6 +66,21 @@ exclude_patterns = []
 #
 html_theme = 'furo'
 html_title = "kiuikit"
+html_theme_options = {
+    "light_css_variables": {
+        "color-code-background": "#f4f4f4",
+        "color-code-foreground": "#000",
+    },
+    "footer_icons": [
+        {
+            "name": "GitHub",
+            "url": "https://github.com/ashawkey/kiuikit",
+            "class": "",
+        },
+    ],
+    "light_logo": "logo.jpg",
+    "dark_logo": "logo.jpg",
+}
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

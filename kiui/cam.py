@@ -1,6 +1,7 @@
 import numpy as np
-from .op import safe_normalize
 from scipy.spatial.transform import Rotation
+
+from kiui.op import safe_normalize
 from kiui.typing import *
 
 # convert between different world coordinate systems

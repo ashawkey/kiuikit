@@ -1,9 +1,13 @@
 # Kiuikit
 
-**Kiuikit** is a collection of code snippets for computer vision (especially 3D vision) research.
+## TODO: this doc is unfinished!
+
+A toolkit for computer vision (especially 3D vision) tasks.
 
 ## Features
-Blahblah
+* Collection of *maintained, reusable and trustworthy* code snippets.
+* Always using lazy import so the code is not slowed down by `import kiui`.
+* Useful CLI tools, such as a GUI mesh renderer.
 
 ## Installation
 ```bash
