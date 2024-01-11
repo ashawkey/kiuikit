@@ -5,10 +5,12 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="genindex/" /><link rel="search" title="Search" href="search/" /><link rel="next" title="Mesh" href="mesh/" />
 
-    <!-- Generated with Sphinx 7.2.6 and Furo 2023.09.10 -->
-        <title>kiuikit</title>
+    <link rel="shortcut icon" href="_static/icon.png"/><!-- Generated with Sphinx 7.2.6 and Furo 2023.09.10 -->
+        <title>kiui 0.2.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=135e06be" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="_static/design-style.1e8bd061cd6da7fc9cf755528e8ffc24.min.css?v=0a3b3ea7" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=36a5483c" />
     
     
@@ -18,8 +20,6 @@
   body {
     --color-code-background: #f8f8f8;
   --color-code-foreground: black;
-  --color-code-background: #f4f4f4;
-  --color-code-foreground: #000;
   
   }
   @media not print {
@@ -125,7 +125,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="#"><div class="brand">kiuikit</div></a>
+      <a href="#"><div class="brand">kiui 0.2.0 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -147,13 +147,14 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="#">
     
-    <div class="sidebar-logo-container" style="margin: .5rem auto .5rem auto">
-        <img class="sidebar-logo only-light" src="_static/logo.jpg" alt="Light Logo" />
-        <img class="sidebar-logo only-dark" src="_static/logo.jpg" alt="Dark Logo" />
+    <div class="sidebar-logo-container">
+        <img class="sidebar-logo" src="_static/logo.png" alt="Logo" />
     </div>
 </a>
 
 <div style="text-align: center">
+    <b>kiuikit</b>
+    </br>
     <script async defer src="https://buttons.github.io/buttons.js"></script>
     <a class="github-button" href="https://github.com/ashawkey/kiuikit"
         data-color-scheme="no-preference: light; light: light; dark: light;" data-size="large" data-show-count="true"
@@ -171,11 +172,12 @@
 <li class="toctree-l1"><a class="reference internal" href="mesh/">Mesh</a></li>
 <li class="toctree-l1"><a class="reference internal" href="camera/">Camera</a></li>
 <li class="toctree-l1"><a class="reference internal" href="utils/">Utils</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ops/">Operators</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tools</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="render/">Mesh Renderer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="cli/">CLI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="misc/">CLI</a></li>
 </ul>
 
 </div>
@@ -212,10 +214,10 @@
         <article role="main">
           <section id="kiuikit">
 <h1>Kiuikit<a class="headerlink" href="#kiuikit" title="Link to this heading">#</a></h1>
-<section id="todo-this-doc-is-unfinished">
-<h2>TODO: this doc is unfinished!<a class="headerlink" href="#todo-this-doc-is-unfinished" title="Link to this heading">#</a></h2>
+<blockquote>
+<div><p>NOTE: this doc is still unfinished!</p>
+</div></blockquote>
 <p>A toolkit for computer vision (especially 3D vision) tasks.</p>
-</section>
 <section id="features">
 <h2>Features<a class="headerlink" href="#features" title="Link to this heading">#</a></h2>
 <ul class="simple">
@@ -226,7 +228,12 @@
 </section>
 <section id="installation">
 <h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">#</a></h2>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>kiui
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># released</span>
+pip<span class="w"> </span>install<span class="w"> </span>kiui<span class="w"> </span><span class="c1"># install the minimal package</span>
+pip<span class="w"> </span>install<span class="w"> </span>kiui<span class="o">[</span>full<span class="o">]</span><span class="w"> </span><span class="c1"># install optional dependencies</span>
+
+<span class="c1"># latest</span>
+pip<span class="w"> </span>install<span class="w"> </span>-U<span class="w"> </span>git+https://github.com/ashawkey/kiuikit.git
 </pre></div>
 </div>
 <!-- toctree --><div class="toctree-wrapper compound">
@@ -263,10 +270,7 @@
             
           </div>
           <div class="right-details">
-            <div class="icons">
-              <a class="muted-link " href="https://github.com/ashawkey/kiuikit" aria-label="GitHub"></a>
-              
-            </div>
+            
           </div>
         </div>
         
@@ -285,7 +289,6 @@
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">Kiuikit</a><ul>
-<li><a class="reference internal" href="#todo-this-doc-is-unfinished">TODO: this doc is unfinished!</a></li>
 <li><a class="reference internal" href="#features">Features</a></li>
 <li><a class="reference internal" href="#installation">Installation</a><ul>
 </ul>
@@ -305,5 +308,8 @@
     <script src="_static/doctools.js?v=888ff710"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/scripts/furo.js?v=32e29ea5"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <script src="_static/design-tabs.js?v=36754332"></script>
     </body>
 </html>

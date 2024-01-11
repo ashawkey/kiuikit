@@ -5,10 +5,12 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex/" /><link rel="search" title="Search" href="../search/" /><link rel="next" title="Camera" href="../camera/" /><link rel="prev" title="Kiuikit" href="../" />
 
-    <!-- Generated with Sphinx 7.2.6 and Furo 2023.09.10 -->
-        <title>Mesh - kiuikit</title>
+    <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 7.2.6 and Furo 2023.09.10 -->
+        <title>Mesh - kiui 0.2.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=135e06be" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/design-style.1e8bd061cd6da7fc9cf755528e8ffc24.min.css?v=0a3b3ea7" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=36a5483c" />
     
     
@@ -18,8 +20,6 @@
   body {
     --color-code-background: #f8f8f8;
   --color-code-foreground: black;
-  --color-code-background: #f4f4f4;
-  --color-code-foreground: #000;
   
   }
   @media not print {
@@ -125,7 +125,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../"><div class="brand">kiuikit</div></a>
+      <a href="../"><div class="brand">kiui 0.2.0 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -147,13 +147,14 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../">
     
-    <div class="sidebar-logo-container" style="margin: .5rem auto .5rem auto">
-        <img class="sidebar-logo only-light" src="../_static/logo.jpg" alt="Light Logo" />
-        <img class="sidebar-logo only-dark" src="../_static/logo.jpg" alt="Dark Logo" />
+    <div class="sidebar-logo-container">
+        <img class="sidebar-logo" src="../_static/logo.png" alt="Logo" />
     </div>
 </a>
 
 <div style="text-align: center">
+    <b>kiuikit</b>
+    </br>
     <script async defer src="https://buttons.github.io/buttons.js"></script>
     <a class="github-button" href="https://github.com/ashawkey/kiuikit"
         data-color-scheme="no-preference: light; light: light; dark: light;" data-size="large" data-show-count="true"
@@ -171,11 +172,12 @@
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Mesh</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../camera/">Camera</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../utils/">Utils</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../ops/">Operators</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tools</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../render/">Mesh Renderer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../cli/">CLI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../misc/">CLI</a></li>
 </ul>
 
 </div>
@@ -212,42 +214,22 @@
         <article role="main">
           <section id="mesh">
 <h1>Mesh<a class="headerlink" href="#mesh" title="Link to this heading">#</a></h1>
-<p>The <code class="docutils literal notranslate"><span class="pre">Mesh</span></code> class provides an implementation of a triangular mesh in PyTorch.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">kiui.mesh.Mesh</span></code> class provides an implementation of a triangular mesh in PyTorch.
+<code class="docutils literal notranslate"><span class="pre">kiui.mesh_utils</span></code> provides utility functions for mesh processing and loss functions.</p>
+<section id="module-kiui.mesh">
+<span id="api"></span><h2>API<a class="headerlink" href="#module-kiui.mesh" title="Link to this heading">#</a></h2>
 <dl class="py class">
 <dt class="sig sig-object py" id="kiui.mesh.Mesh">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">kiui.mesh.</span></span><span class="sig-name descname"><span class="pre">Mesh</span></span><a class="reference internal" href="../_modules/kiui/mesh/#Mesh"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.mesh.Mesh" title="Link to this definition">#</a></dt>
-<dd><p>A torch-native trimesh class, with support for <cite>ply/obj/glb</cite> formats.</p>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">kiui.mesh.</span></span><span class="sig-name descname"><span class="pre">Mesh</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">v</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ft</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vc</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">albedo</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metallicRoughness</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">device</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/mesh/#Mesh"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.mesh.Mesh" title="Link to this definition">#</a></dt>
+<dd><p>A torch-native trimesh class, with support for <code class="docutils literal notranslate"><span class="pre">ply/obj/glb</span></code> formats.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>This class only supports one mesh with a single texture image (an albedo texture and a metallic-roughness texture).
-This means only limited features of glb is supported!</p>
+<p>This class only supports one mesh with a single texture image (an albedo texture and a metallic-roughness texture).</p>
 </div>
-<dl class="py method">
-<dt class="sig sig-object py" id="kiui.mesh.Mesh.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">v</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ft</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vc</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">albedo</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metallicRoughness</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">device</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/mesh/#Mesh.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.mesh.Mesh.__init__" title="Link to this definition">#</a></dt>
-<dd><p>Init a mesh directly using all attributes.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>v</strong> (<em>Optional</em><em>[</em><em>Tensor</em><em>]</em>) – vertices, float [N, 3]. Defaults to None.</p></li>
-<li><p><strong>f</strong> (<em>Optional</em><em>[</em><em>Tensor</em><em>]</em>) – faces, int [M, 3]. Defaults to None.</p></li>
-<li><p><strong>vn</strong> (<em>Optional</em><em>[</em><em>Tensor</em><em>]</em>) – vertex normals, float [N, 3]. Defaults to None.</p></li>
-<li><p><strong>fn</strong> (<em>Optional</em><em>[</em><em>Tensor</em><em>]</em>) – faces for normals, int [M, 3]. Defaults to None.</p></li>
-<li><p><strong>vt</strong> (<em>Optional</em><em>[</em><em>Tensor</em><em>]</em>) – vertex uv coordinates, float [N, 2]. Defaults to None.</p></li>
-<li><p><strong>ft</strong> (<em>Optional</em><em>[</em><em>Tensor</em><em>]</em>) – faces for uvs, int [M, 3]. Defaults to None.</p></li>
-<li><p><strong>vc</strong> (<em>Optional</em><em>[</em><em>Tensor</em><em>]</em>) – vertex colors, float [N, 3]. Defaults to None.</p></li>
-<li><p><strong>albedo</strong> (<em>Optional</em><em>[</em><em>Tensor</em><em>]</em>) – albedo texture, float [H, W, 3], RGB format. Defaults to None.</p></li>
-<li><p><strong>metallicRoughness</strong> (<em>Optional</em><em>[</em><em>Tensor</em><em>]</em>) – metallic-roughness texture, float [H, W, 3], metallic(Blue) = metallicRoughness[…, 2], roughness(Green) = metallicRoughness[…, 1]. Defaults to None.</p></li>
-<li><p><strong>device</strong> (<em>Optional</em><em>[</em><em>torch.device</em><em>]</em>) – torch device. Defaults to None.</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
 <dl class="py method">
 <dt class="sig sig-object py" id="kiui.mesh.Mesh.load">
 <em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">resize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">renormal</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remesh</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">retex</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bound</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.9</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">front_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'+z'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/mesh/#Mesh.load"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.mesh.Mesh.load" title="Link to this definition">#</a></dt>
-<dd><p>load mesh from path. e.g., <cite>mesh = Mesh.load(path)</cite></p>
+<dd><p>load mesh from path. e.g., <code class="docutils literal notranslate"><span class="pre">mesh</span> <span class="pre">=</span> <span class="pre">Mesh.load(path)</span></code></p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -300,8 +282,8 @@ The <cite>usemtl</cite> statement is ignored, and we only use the last material 
 <dl class="py method">
 <dt class="sig sig-object py" id="kiui.mesh.Mesh.load_trimesh">
 <em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">load_trimesh</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/mesh/#Mesh.load_trimesh"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.mesh.Mesh.load_trimesh" title="Link to this definition">#</a></dt>
-<dd><p>load a mesh using <cite>trimesh.load()</cite>.</p>
-<p>Can load various formats like <cite>glb</cite> and serves as a fallback.</p>
+<dd><p>load a mesh using <code class="docutils literal notranslate"><span class="pre">trimesh.load()</span></code>.</p>
+<p>Can load various formats like <code class="docutils literal notranslate"><span class="pre">glb</span></code> and serves as a fallback.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>We will try to merge all geometries if the glb contains more than one meshes, and this may lose the texture, since we only support one texture image.</p>
@@ -342,7 +324,7 @@ The <cite>usemtl</cite> statement is ignored, and we only use the last material 
 <dd><p>auto resize the mesh.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>bound</strong> (<em>float</em><em>, </em><em>optional</em>) – resizing into [-bound, bound]^3. Defaults to 0.9.</p>
+<dd class="field-odd"><p><strong>bound</strong> (<em>float</em><em>, </em><em>optional</em>) – resizing into <code class="docutils literal notranslate"><span class="pre">[-bound,</span> <span class="pre">bound]^3</span></code>. Defaults to 0.9.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -421,7 +403,10 @@ Usually this will duplicate the vertices on the edge of uv atlas. Defaults to Tr
 <dl class="py method">
 <dt class="sig sig-object py" id="kiui.mesh.Mesh.write_glb">
 <span class="sig-name descname"><span class="pre">write_glb</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/mesh/#Mesh.write_glb"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.mesh.Mesh.write_glb" title="Link to this definition">#</a></dt>
-<dd><p>write the mesh in glb/gltf format. This will create a scene with a single mesh.</p>
+<dd><dl class="simple">
+<dt>write the mesh in glb/gltf format.</dt><dd><p>This will create a scene with a single mesh.</p>
+</dd>
+</dl>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>path</strong> (<em>str</em>) – path to write.</p>
@@ -442,6 +427,7 @@ Usually this will duplicate the vertices on the edge of uv atlas. Defaults to Tr
 
 </dd></dl>
 
+</section>
 </section>
 
         </article>
@@ -481,10 +467,7 @@ Usually this will duplicate the vertices on the edge of uv atlas. Defaults to Tr
             
           </div>
           <div class="right-details">
-            <div class="icons">
-              <a class="muted-link " href="https://github.com/ashawkey/kiuikit" aria-label="GitHub"></a>
-              
-            </div>
+            
           </div>
         </div>
         
@@ -503,8 +486,8 @@ Usually this will duplicate the vertices on the edge of uv atlas. Defaults to Tr
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">Mesh</a><ul>
+<li><a class="reference internal" href="#module-kiui.mesh">API</a><ul>
 <li><a class="reference internal" href="#kiui.mesh.Mesh"><code class="docutils literal notranslate"><span class="pre">Mesh</span></code></a><ul>
-<li><a class="reference internal" href="#kiui.mesh.Mesh.__init__"><code class="docutils literal notranslate"><span class="pre">Mesh.__init__()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.mesh.Mesh.load"><code class="docutils literal notranslate"><span class="pre">Mesh.load()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.mesh.Mesh.load_obj"><code class="docutils literal notranslate"><span class="pre">Mesh.load_obj()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.mesh.Mesh.load_trimesh"><code class="docutils literal notranslate"><span class="pre">Mesh.load_trimesh()</span></code></a></li>
@@ -523,6 +506,8 @@ Usually this will duplicate the vertices on the edge of uv atlas. Defaults to Tr
 </ul>
 </li>
 </ul>
+</li>
+</ul>
 
           </div>
         </div>
@@ -535,5 +520,8 @@ Usually this will duplicate the vertices on the edge of uv atlas. Defaults to Tr
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=32e29ea5"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=36754332"></script>
     </body>
 </html>

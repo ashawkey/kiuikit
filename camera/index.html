@@ -5,10 +5,12 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex/" /><link rel="search" title="Search" href="../search/" /><link rel="next" title="Utils" href="../utils/" /><link rel="prev" title="Mesh" href="../mesh/" />
 
-    <!-- Generated with Sphinx 7.2.6 and Furo 2023.09.10 -->
-        <title>Camera - kiuikit</title>
+    <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 7.2.6 and Furo 2023.09.10 -->
+        <title>Camera - kiui 0.2.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=135e06be" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/design-style.1e8bd061cd6da7fc9cf755528e8ffc24.min.css?v=0a3b3ea7" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=36a5483c" />
     
     
@@ -18,8 +20,6 @@
   body {
     --color-code-background: #f8f8f8;
   --color-code-foreground: black;
-  --color-code-background: #f4f4f4;
-  --color-code-foreground: #000;
   
   }
   @media not print {
@@ -125,7 +125,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../"><div class="brand">kiuikit</div></a>
+      <a href="../"><div class="brand">kiui 0.2.0 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -147,13 +147,14 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../">
     
-    <div class="sidebar-logo-container" style="margin: .5rem auto .5rem auto">
-        <img class="sidebar-logo only-light" src="../_static/logo.jpg" alt="Light Logo" />
-        <img class="sidebar-logo only-dark" src="../_static/logo.jpg" alt="Dark Logo" />
+    <div class="sidebar-logo-container">
+        <img class="sidebar-logo" src="../_static/logo.png" alt="Logo" />
     </div>
 </a>
 
 <div style="text-align: center">
+    <b>kiuikit</b>
+    </br>
     <script async defer src="https://buttons.github.io/buttons.js"></script>
     <a class="github-button" href="https://github.com/ashawkey/kiuikit"
         data-color-scheme="no-preference: light; light: light; dark: light;" data-size="large" data-show-count="true"
@@ -171,11 +172,12 @@
 <li class="toctree-l1"><a class="reference internal" href="../mesh/">Mesh</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Camera</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../utils/">Utils</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../ops/">Operators</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tools</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../render/">Mesh Renderer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../cli/">CLI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../misc/">CLI</a></li>
 </ul>
 
 </div>
@@ -227,8 +229,11 @@
  <span class="o">+</span><span class="n">z</span>                 <span class="o">+</span><span class="n">y</span>                                          <span class="o">+</span><span class="n">y</span>
 </pre></div>
 </div>
-<p>A common color code: x = red, y = green, z = blue (XYZ=RGB)</p>
-<p>Left/right-handed notation: roll your left/right palm from x to y, and your thumb should point to z.</p>
+<p>A common color code: x = <span class="raw-html-m2r"><span style="color:red">red</span></span>, y = <span class="raw-html-m2r"><span style="color:green">green</span></span>, z = <span class="raw-html-m2r"><span style="color:blue">blue</span></span> (XYZ=RGB)</p>
+<blockquote>
+<div><p>Left/right-handed notation:
+roll your left/right palm from x to y, and your thumb should point to z.</p>
+</div></blockquote>
 </section>
 <section id="camera-pose-matrix">
 <h2>Camera pose matrix<a class="headerlink" href="#camera-pose-matrix" title="Link to this heading">#</a></h2>
@@ -241,13 +246,13 @@
 <p>The xyz follows corresponding world coordinate system.
 However, the three directions (right, up, forward) can be defined differently:</p>
 <ul class="simple">
-<li><p>forward can be (camera –&gt; target) or (target –&gt; camera).</p></li>
-<li><p>up can align with the world-up-axis (y) or world-down-axis (-y).</p></li>
-<li><p>right can also be left, depending on it’s (up cross forward) or (forward cross up).</p></li>
+<li><p>forward can be <code class="docutils literal notranslate"><span class="pre">camera</span> <span class="pre">--&gt;</span> <span class="pre">target</span></code> or <code class="docutils literal notranslate"><span class="pre">target</span> <span class="pre">--&gt;</span> <span class="pre">camera</span></code>.</p></li>
+<li><p>up can align with the world-up-axis (<code class="docutils literal notranslate"><span class="pre">y</span></code>) or world-down-axis (<code class="docutils literal notranslate"><span class="pre">-y</span></code>).</p></li>
+<li><p>right can also be left, depending on it’s (<code class="docutils literal notranslate"><span class="pre">up</span> <span class="pre">cross</span> <span class="pre">forward</span></code>) or (<code class="docutils literal notranslate"><span class="pre">forward</span> <span class="pre">cross</span> <span class="pre">up</span></code>).</p></li>
 </ul>
 </section>
 <section id="common-camera-coordinate-conventions">
-<h2>common camera coordinate conventions<a class="headerlink" href="#common-camera-coordinate-conventions" title="Link to this heading">#</a></h2>
+<h2>Common camera coordinate conventions<a class="headerlink" href="#common-camera-coordinate-conventions" title="Link to this heading">#</a></h2>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>   <span class="n">OpenGL</span>                <span class="n">OpenCV</span>
    <span class="n">Blender</span>               <span class="n">Colmap</span>
 
@@ -261,16 +266,19 @@ However, the three directions (right, up, forward) can be defined differently:</
 <span class="n">forward</span>                <span class="n">up</span>
 </pre></div>
 </div>
-<p>A common color code: right = red, up = green, forward = blue (XYZ=RUF=RGB).</p>
+<p>A common color code: right = <span class="raw-html-m2r"><span style="color:red">red</span></span>., up = <span class="raw-html-m2r"><span style="color:green">green</span></span>, forward = <span class="raw-html-m2r"><span style="color:blue">blue</span></span> (XYZ=RUF=RGB).</p>
 </section>
 <section id="our-camera-convention">
 <h2>Our camera convention<a class="headerlink" href="#our-camera-convention" title="Link to this heading">#</a></h2>
 <ul class="simple">
-<li><p>world coordinate is OpenGL/right-handed, +x = right, +y = up, +z = forward</p></li>
-<li><p>camera coordinate is OpenGL (forward is target –&gt; campos).</p></li>
-<li><p>elevation in (-90, 90), from +y (-90) –&gt; -y (+90)</p></li>
-<li><p>azimuth in (-180, 180), from +z (0/-360) –&gt; +x (90/-270) –&gt; -z (180/-180) –&gt; -x (270/-90) –&gt; +z (360/0)</p></li>
+<li><p>world coordinate is OpenGL/right-handed, <code class="docutils literal notranslate"><span class="pre">+x</span> <span class="pre">=</span> <span class="pre">right,</span> <span class="pre">+y</span> <span class="pre">=</span> <span class="pre">up,</span> <span class="pre">+z</span> <span class="pre">=</span> <span class="pre">forward</span></code></p></li>
+<li><p>camera coordinate is OpenGL (forward is <code class="docutils literal notranslate"><span class="pre">target</span> <span class="pre">--&gt;</span> <span class="pre">campos</span></code>).</p></li>
+<li><p>elevation in (-90, 90), from <code class="docutils literal notranslate"><span class="pre">+y</span> <span class="pre">(-90)</span> <span class="pre">--&gt;</span> <span class="pre">-y</span> <span class="pre">(+90)</span></code></p></li>
+<li><p>azimuth in (-180, 180), from <code class="docutils literal notranslate"><span class="pre">+z</span> <span class="pre">(0/-360)</span> <span class="pre">--&gt;</span> <span class="pre">+x</span> <span class="pre">(90/-270)</span> <span class="pre">--&gt;</span> <span class="pre">-z</span> <span class="pre">(180/-180)</span> <span class="pre">--&gt;</span> <span class="pre">-x</span> <span class="pre">(270/-90)</span> <span class="pre">--&gt;</span> <span class="pre">+z</span> <span class="pre">(360/0)</span></code></p></li>
 </ul>
+</section>
+<section id="module-kiui.cam">
+<span id="api"></span><h2>API<a class="headerlink" href="#module-kiui.cam" title="Link to this heading">#</a></h2>
 <dl class="py function">
 <dt class="sig sig-object py" id="kiui.cam.convert">
 <span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">convert</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pose</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">‘unity’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘blender’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘opencv’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘colmap’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘opengl’</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'unity'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">original</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">‘unity’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘blender’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘opencv’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘colmap’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘opengl’</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'opengl'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#convert"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.convert" title="Link to this definition">#</a></dt>
@@ -405,26 +413,8 @@ However, the three directions (right, up, forward) can be defined differently:</
 
 <dl class="py class">
 <dt class="sig sig-object py" id="kiui.cam.OrbitCamera">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">OrbitCamera</span></span><a class="reference internal" href="../_modules/kiui/cam/#OrbitCamera"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.OrbitCamera" title="Link to this definition">#</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">OrbitCamera</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">W</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">H</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fovy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">60</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">near</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.01</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">far</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#OrbitCamera"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.OrbitCamera" title="Link to this definition">#</a></dt>
 <dd><p>An orbital camera class.</p>
-<dl class="py method">
-<dt class="sig sig-object py" id="kiui.cam.OrbitCamera.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">W</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">H</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fovy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">60</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">near</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.01</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">far</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#OrbitCamera.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.OrbitCamera.__init__" title="Link to this definition">#</a></dt>
-<dd><p>init function</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>W</strong> (<em>int</em>) – image width</p></li>
-<li><p><strong>H</strong> (<em>int</em>) – image height</p></li>
-<li><p><strong>r</strong> (<em>int</em><em>, </em><em>optional</em>) – camera radius. Defaults to 2.</p></li>
-<li><p><strong>fovy</strong> (<em>int</em><em>, </em><em>optional</em>) – camera field of view in degree along y-axis. Defaults to 60.</p></li>
-<li><p><strong>near</strong> (<em>float</em><em>, </em><em>optional</em>) – near clip plane. Defaults to 0.01.</p></li>
-<li><p><strong>far</strong> (<em>int</em><em>, </em><em>optional</em>) – far clip plane. Defaults to 100.</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
 <dl class="py property">
 <dt class="sig sig-object py" id="kiui.cam.OrbitCamera.fovx">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">fovx</span></span><a class="headerlink" href="#kiui.cam.OrbitCamera.fovx" title="Link to this definition">#</a></dt>
@@ -620,10 +610,7 @@ However, the three directions (right, up, forward) can be defined differently:</
             
           </div>
           <div class="right-details">
-            <div class="icons">
-              <a class="muted-link " href="https://github.com/ashawkey/kiuikit" aria-label="GitHub"></a>
-              
-            </div>
+            
           </div>
         </div>
         
@@ -644,8 +631,9 @@ However, the three directions (right, up, forward) can be defined differently:</
 <li><a class="reference internal" href="#">Camera</a><ul>
 <li><a class="reference internal" href="#common-world-coordinate-system-conventions">Common world coordinate system conventions</a></li>
 <li><a class="reference internal" href="#camera-pose-matrix">Camera pose matrix</a></li>
-<li><a class="reference internal" href="#common-camera-coordinate-conventions">common camera coordinate conventions</a></li>
-<li><a class="reference internal" href="#our-camera-convention">Our camera convention</a><ul>
+<li><a class="reference internal" href="#common-camera-coordinate-conventions">Common camera coordinate conventions</a></li>
+<li><a class="reference internal" href="#our-camera-convention">Our camera convention</a></li>
+<li><a class="reference internal" href="#module-kiui.cam">API</a><ul>
 <li><a class="reference internal" href="#kiui.cam.convert"><code class="docutils literal notranslate"><span class="pre">convert()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.cam.look_at"><code class="docutils literal notranslate"><span class="pre">look_at()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.cam.orbit_camera"><code class="docutils literal notranslate"><span class="pre">orbit_camera()</span></code></a></li>
@@ -653,7 +641,6 @@ However, the three directions (right, up, forward) can be defined differently:</
 <li><a class="reference internal" href="#kiui.cam.get_perspective"><code class="docutils literal notranslate"><span class="pre">get_perspective()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.cam.get_rays"><code class="docutils literal notranslate"><span class="pre">get_rays()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.cam.OrbitCamera"><code class="docutils literal notranslate"><span class="pre">OrbitCamera</span></code></a><ul>
-<li><a class="reference internal" href="#kiui.cam.OrbitCamera.__init__"><code class="docutils literal notranslate"><span class="pre">OrbitCamera.__init__()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.cam.OrbitCamera.fovx"><code class="docutils literal notranslate"><span class="pre">OrbitCamera.fovx</span></code></a></li>
 <li><a class="reference internal" href="#kiui.cam.OrbitCamera.campos"><code class="docutils literal notranslate"><span class="pre">OrbitCamera.campos</span></code></a></li>
 <li><a class="reference internal" href="#kiui.cam.OrbitCamera.pose"><code class="docutils literal notranslate"><span class="pre">OrbitCamera.pose</span></code></a></li>
@@ -684,5 +671,8 @@ However, the three directions (right, up, forward) can be defined differently:</
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=32e29ea5"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=36754332"></script>
     </body>
 </html>

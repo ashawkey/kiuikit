@@ -14,9 +14,10 @@ Right-handed      Right-handed    Right-handed    Left-handed    Left-handed
   /                 |                                            /      
  +z                 +y                                          +y
 ```
-A common color code: x = red, y = green, z = blue (XYZ=RGB)
+A common color code: x = <span style="color:red">red</span>, y = <span style="color:green">green</span>, z = <span style="color:blue">blue</span> (XYZ=RGB)
 
-Left/right-handed notation: roll your left/right palm from x to y, and your thumb should point to z.
+> Left/right-handed notation: 
+roll your left/right palm from x to y, and your thumb should point to z.
 
 
 ### Camera pose matrix
@@ -29,11 +30,11 @@ Left/right-handed notation: roll your left/right palm from x to y, and your thum
 
 The xyz follows corresponding world coordinate system.
 However, the three directions (right, up, forward) can be defined differently:
-* forward can be (camera --> target) or (target --> camera).
-* up can align with the world-up-axis (y) or world-down-axis (-y).
-* right can also be left, depending on it's (up cross forward) or (forward cross up).
+* forward can be `camera --> target` or `target --> camera`.
+* up can align with the world-up-axis (`y`) or world-down-axis (`-y`).
+* right can also be left, depending on it's (`up cross forward`) or (`forward cross up`).
 
-### common camera coordinate conventions
+### Common camera coordinate conventions
 ```
    OpenGL                OpenCV       
    Blender               Colmap       
@@ -48,18 +49,15 @@ However, the three directions (right, up, forward) can be defined differently:
 forward                up         
 ```
 
-A common color code: right = red, up = green, forward = blue (XYZ=RUF=RGB).
+A common color code: right = <span style="color:red">red</span>., up = <span style="color:green">green</span>, forward = <span style="color:blue">blue</span> (XYZ=RUF=RGB).
 
 ### Our camera convention
-* world coordinate is OpenGL/right-handed, +x = right, +y = up, +z = forward
-* camera coordinate is OpenGL (forward is target --> campos).
-* elevation in (-90, 90), from +y (-90) --> -y (+90)
-* azimuth in (-180, 180), from +z (0/-360) --> +x (90/-270) --> -z (180/-180) --> -x (270/-90) --> +z (360/0)
+* world coordinate is OpenGL/right-handed, `+x = right, +y = up, +z = forward`
+* camera coordinate is OpenGL (forward is `target --> campos`).
+* elevation in (-90, 90), from `+y (-90) --> -y (+90)`
+* azimuth in (-180, 180), from `+z (0/-360) --> +x (90/-270) --> -z (180/-180) --> -x (270/-90) --> +z (360/0)`
 
-.. autofunction:: kiui.cam.convert
-.. autofunction:: kiui.cam.look_at
-.. autofunction:: kiui.cam.orbit_camera
-.. autofunction:: kiui.cam.undo_orbit_camera
-.. autofunction:: kiui.cam.get_perspective
-.. autofunction:: kiui.cam.get_rays
-.. autoclass:: kiui.cam.OrbitCamera
+### API
+
+.. automodule:: kiui.cam
+   :members:
