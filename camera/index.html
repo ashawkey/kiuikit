@@ -271,6 +271,315 @@ However, the three directions (right, up, forward) can be defined differently:</
 <li><p>elevation in (-90, 90), from +y (-90) –&gt; -y (+90)</p></li>
 <li><p>azimuth in (-180, 180), from +z (0/-360) –&gt; +x (90/-270) –&gt; -z (180/-180) –&gt; -x (270/-90) –&gt; +z (360/0)</p></li>
 </ul>
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.cam.convert">
+<span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">convert</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pose</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">‘unity’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘blender’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘opencv’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘colmap’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘opengl’</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'unity'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">original</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">‘unity’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘blender’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘opencv’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘colmap’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘opengl’</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'opengl'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#convert"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.convert" title="Link to this definition">#</a></dt>
+<dd><p>A method to convert between different world coordinate systems.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>pose</strong> (<em>np.ndarray</em>) – camera pose, float [4, 4].</p></li>
+<li><p><strong>target</strong> (<em>Literal</em><em>[</em><em>'unity'</em><em>, </em><em>'blender'</em><em>, </em><em>'opencv'</em><em>, </em><em>'colmap'</em><em>, </em><em>'opengl'</em><em>]</em><em>, </em><em>optional</em>) – from convention. Defaults to ‘unity’.</p></li>
+<li><p><strong>original</strong> (<em>Literal</em><em>[</em><em>'unity'</em><em>, </em><em>'blender'</em><em>, </em><em>'opencv'</em><em>, </em><em>'colmap'</em><em>, </em><em>'opengl'</em><em>]</em><em>, </em><em>optional</em>) – to convention. Defaults to ‘opengl’.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>converted camera pose, float [4, 4].</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.cam.look_at">
+<span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">look_at</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">campos</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">opengl</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#look_at"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.look_at" title="Link to this definition">#</a></dt>
+<dd><p>construct pose rotation matrix by look-at</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>campos</strong> (<em>np.ndarray</em>) – camera position, float [3]</p></li>
+<li><p><strong>target</strong> (<em>np.ndarray</em>) – look at target, float [3]</p></li>
+<li><p><strong>opengl</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether use opengl camera convention (forward direction is target –&gt; camera). Defaults to True.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>the camera pose rotation matrix, float [3, 3], normalized.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.cam.orbit_camera">
+<span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">orbit_camera</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">elevation</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">azimuth</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">radius</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_degree</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">opengl</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#orbit_camera"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.orbit_camera" title="Link to this definition">#</a></dt>
+<dd><p>construct a camera pose matrix orbiting a target with elevation &amp; azimuth angle.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>elevation</strong> (<em>float</em>) – elevation in (-90, 90), from +y to -y is (-90, 90)</p></li>
+<li><p><strong>azimuth</strong> (<em>float</em>) – azimuth in (-180, 180), from +z to +x is (0, 90)</p></li>
+<li><p><strong>radius</strong> (<em>int</em><em>, </em><em>optional</em>) – camera radius. Defaults to 1.</p></li>
+<li><p><strong>is_degree</strong> (<em>bool</em><em>, </em><em>optional</em>) – if the angles are in degree. Defaults to True.</p></li>
+<li><p><strong>target</strong> (<em>np.ndarray</em><em>, </em><em>optional</em>) – look at target position. Defaults to None.</p></li>
+<li><p><strong>opengl</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether to use OpenGL camera convention. Defaults to True.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>the camera pose matrix, float [4, 4]</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.cam.undo_orbit_camera">
+<span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">undo_orbit_camera</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">T</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_degree</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#undo_orbit_camera"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.undo_orbit_camera" title="Link to this definition">#</a></dt>
+<dd><p>undo an orbital camera pose matrix to elevation &amp; azimuth</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>T</strong> (<em>np.ndarray</em>) – camera pose matrix, float [4, 4], must be an orbital camera targeting at (0, 0, 0)!</p></li>
+<li><p><strong>is_degree</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether to return angles in degree. Defaults to True.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>elevation, azimuth, and radius.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tuple[float]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.cam.get_perspective">
+<span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">get_perspective</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fovy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">aspect</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">near</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.01</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">far</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#get_perspective"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.get_perspective" title="Link to this definition">#</a></dt>
+<dd><p>construct a perspective matrix from fovy.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>fovy</strong> (<em>float</em>) – field of view in degree along y-axis.</p></li>
+<li><p><strong>aspect</strong> (<em>int</em><em>, </em><em>optional</em>) – aspect ratio. Defaults to 1.</p></li>
+<li><p><strong>near</strong> (<em>float</em><em>, </em><em>optional</em>) – near clip plane. Defaults to 0.01.</p></li>
+<li><p><strong>far</strong> (<em>int</em><em>, </em><em>optional</em>) – far clip plane. Defaults to 1000.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>perspective matrix, float [4, 4]</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.cam.get_rays">
+<span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">get_rays</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pose</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">h</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">w</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fovy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">opengl</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">normalize_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#get_rays"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.get_rays" title="Link to this definition">#</a></dt>
+<dd><p>construct rays origin and direction from a camera pose.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>pose</strong> (<em>np.ndarray</em>) – camera pose, float [4, 4]</p></li>
+<li><p><strong>h</strong> (<em>int</em>) – image height</p></li>
+<li><p><strong>w</strong> (<em>int</em>) – image width</p></li>
+<li><p><strong>fovy</strong> (<em>float</em>) – field of view in degree along y-axis.</p></li>
+<li><p><strong>opengl</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether to use the OpenGL camera convention. Defaults to True.</p></li>
+<li><p><strong>normalize_dir</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether to normalize the ray directions. Defaults to True.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>rays_o and rays_d, both are float [h, w, 3]</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tuple[np.ndarray]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="kiui.cam.OrbitCamera">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">OrbitCamera</span></span><a class="reference internal" href="../_modules/kiui/cam/#OrbitCamera"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.OrbitCamera" title="Link to this definition">#</a></dt>
+<dd><p>An orbital camera class.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="kiui.cam.OrbitCamera.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">W</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">H</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fovy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">60</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">near</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.01</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">far</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#OrbitCamera.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.OrbitCamera.__init__" title="Link to this definition">#</a></dt>
+<dd><p>init function</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>W</strong> (<em>int</em>) – image width</p></li>
+<li><p><strong>H</strong> (<em>int</em>) – image height</p></li>
+<li><p><strong>r</strong> (<em>int</em><em>, </em><em>optional</em>) – camera radius. Defaults to 2.</p></li>
+<li><p><strong>fovy</strong> (<em>int</em><em>, </em><em>optional</em>) – camera field of view in degree along y-axis. Defaults to 60.</p></li>
+<li><p><strong>near</strong> (<em>float</em><em>, </em><em>optional</em>) – near clip plane. Defaults to 0.01.</p></li>
+<li><p><strong>far</strong> (<em>int</em><em>, </em><em>optional</em>) – far clip plane. Defaults to 100.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="kiui.cam.OrbitCamera.fovx">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">fovx</span></span><a class="headerlink" href="#kiui.cam.OrbitCamera.fovx" title="Link to this definition">#</a></dt>
+<dd><p>get the field of view in radians along x-axis</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>field of view in radians along x-axis</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="kiui.cam.OrbitCamera.campos">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">campos</span></span><a class="headerlink" href="#kiui.cam.OrbitCamera.campos" title="Link to this definition">#</a></dt>
+<dd><p>get the camera position</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>camera position, float [3]</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="kiui.cam.OrbitCamera.pose">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">pose</span></span><a class="headerlink" href="#kiui.cam.OrbitCamera.pose" title="Link to this definition">#</a></dt>
+<dd><p>get the camera pose matrix (cam2world)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>camera pose, float [4, 4]</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="kiui.cam.OrbitCamera.view">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">view</span></span><a class="headerlink" href="#kiui.cam.OrbitCamera.view" title="Link to this definition">#</a></dt>
+<dd><p>get the camera view matrix (world2cam, inverse of cam2world)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>camera view, float [4, 4]</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="kiui.cam.OrbitCamera.perspective">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">perspective</span></span><a class="headerlink" href="#kiui.cam.OrbitCamera.perspective" title="Link to this definition">#</a></dt>
+<dd><p>get the perspective matrix</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>camera perspective, float [4, 4]</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="kiui.cam.OrbitCamera.intrinsics">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">intrinsics</span></span><a class="headerlink" href="#kiui.cam.OrbitCamera.intrinsics" title="Link to this definition">#</a></dt>
+<dd><p>get the camera intrinsics</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>intrinsics (fx, fy, cx, cy), float [4]</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="kiui.cam.OrbitCamera.mvp">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">mvp</span></span><a class="headerlink" href="#kiui.cam.OrbitCamera.mvp" title="Link to this definition">#</a></dt>
+<dd><p>get the MVP (model-view-perspective) matrix.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>camera MVP, float [4, 4]</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="kiui.cam.OrbitCamera.orbit">
+<span class="sig-name descname"><span class="pre">orbit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dy</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#OrbitCamera.orbit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.OrbitCamera.orbit" title="Link to this definition">#</a></dt>
+<dd><p>rotate along camera up/side axis!</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dx</strong> (<em>float</em>) – delta step along x (up).</p></li>
+<li><p><strong>dy</strong> (<em>float</em>) – delta step along y (side).</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="kiui.cam.OrbitCamera.scale">
+<span class="sig-name descname"><span class="pre">scale</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">delta</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#OrbitCamera.scale"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.OrbitCamera.scale" title="Link to this definition">#</a></dt>
+<dd><p>scale the camera.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>delta</strong> (<em>float</em>) – delta step.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="kiui.cam.OrbitCamera.pan">
+<span class="sig-name descname"><span class="pre">pan</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dx</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dz</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#OrbitCamera.pan"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.OrbitCamera.pan" title="Link to this definition">#</a></dt>
+<dd><p>pan the camera.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dx</strong> (<em>float</em>) – delta step along x.</p></li>
+<li><p><strong>dy</strong> (<em>float</em>) – delta step along y.</p></li>
+<li><p><strong>dz</strong> (<em>float</em><em>, </em><em>optional</em>) – delta step along x. Defaults to 0.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="kiui.cam.OrbitCamera.from_angle">
+<span class="sig-name descname"><span class="pre">from_angle</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">elevation</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">azimuth</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_degree</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#OrbitCamera.from_angle"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.OrbitCamera.from_angle" title="Link to this definition">#</a></dt>
+<dd><p>set the camera pose from elevation &amp; azimuth angle.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>elevation</strong> (<em>float</em>) – elevation in (-90, 90), from +y to -y is (-90, 90)</p></li>
+<li><p><strong>azimuth</strong> (<em>float</em>) – azimuth in (-180, 180), from +z to +x is (0, 90)</p></li>
+<li><p><strong>is_degree</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether the angles are in degree. Defaults to True.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
 </section>
 </section>
 
@@ -336,7 +645,30 @@ However, the three directions (right, up, forward) can be defined differently:</
 <li><a class="reference internal" href="#common-world-coordinate-system-conventions">Common world coordinate system conventions</a></li>
 <li><a class="reference internal" href="#camera-pose-matrix">Camera pose matrix</a></li>
 <li><a class="reference internal" href="#common-camera-coordinate-conventions">common camera coordinate conventions</a></li>
-<li><a class="reference internal" href="#our-camera-convention">Our camera convention</a></li>
+<li><a class="reference internal" href="#our-camera-convention">Our camera convention</a><ul>
+<li><a class="reference internal" href="#kiui.cam.convert"><code class="docutils literal notranslate"><span class="pre">convert()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.look_at"><code class="docutils literal notranslate"><span class="pre">look_at()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.orbit_camera"><code class="docutils literal notranslate"><span class="pre">orbit_camera()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.undo_orbit_camera"><code class="docutils literal notranslate"><span class="pre">undo_orbit_camera()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.get_perspective"><code class="docutils literal notranslate"><span class="pre">get_perspective()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.get_rays"><code class="docutils literal notranslate"><span class="pre">get_rays()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.OrbitCamera"><code class="docutils literal notranslate"><span class="pre">OrbitCamera</span></code></a><ul>
+<li><a class="reference internal" href="#kiui.cam.OrbitCamera.__init__"><code class="docutils literal notranslate"><span class="pre">OrbitCamera.__init__()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.OrbitCamera.fovx"><code class="docutils literal notranslate"><span class="pre">OrbitCamera.fovx</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.OrbitCamera.campos"><code class="docutils literal notranslate"><span class="pre">OrbitCamera.campos</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.OrbitCamera.pose"><code class="docutils literal notranslate"><span class="pre">OrbitCamera.pose</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.OrbitCamera.view"><code class="docutils literal notranslate"><span class="pre">OrbitCamera.view</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.OrbitCamera.perspective"><code class="docutils literal notranslate"><span class="pre">OrbitCamera.perspective</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.OrbitCamera.intrinsics"><code class="docutils literal notranslate"><span class="pre">OrbitCamera.intrinsics</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.OrbitCamera.mvp"><code class="docutils literal notranslate"><span class="pre">OrbitCamera.mvp</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.OrbitCamera.orbit"><code class="docutils literal notranslate"><span class="pre">OrbitCamera.orbit()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.OrbitCamera.scale"><code class="docutils literal notranslate"><span class="pre">OrbitCamera.scale()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.OrbitCamera.pan"><code class="docutils literal notranslate"><span class="pre">OrbitCamera.pan()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.OrbitCamera.from_angle"><code class="docutils literal notranslate"><span class="pre">OrbitCamera.from_angle()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
