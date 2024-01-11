@@ -1,0 +1,34 @@
+name: docs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      # Check out source
+      - uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v1
+        with:
+          python-version: "3.10"
+
+      # Build documentation
+      - name: Building documentation
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install -r docs/requirements.txt
+          sphinx-build docs/source docs/build -b dirhtml
+
+      # Deploy
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }} # Note that the GITHUB_TOKEN is NOT a personal access token. A GitHub Actions runner automatically creates a GITHUB_TOKEN secret to authenticate in your workflow. So, you can start to deploy immediately without any configuration.
+          publish_dir: ./docs/build
+          cname: kit.kiui.moe
