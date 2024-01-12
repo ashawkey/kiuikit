@@ -167,17 +167,19 @@
   <input type="hidden" name="area" value="default">
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
-  <p class="caption" role="heading"><span class="caption-text">APIs</span></p>
+  <p class="caption" role="heading"><span class="caption-text">API</span></p>
 <ul class="current">
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Mesh</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../camera/">Camera</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../utils/">Utils</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../ops/">Operators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../vis/">Visualization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../misc_api/">Misc API</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Tools</span></p>
+<p class="caption" role="heading"><span class="caption-text">Tool</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../render/">Mesh Renderer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../misc/">Misc</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../misc/">Misc CLI</a></li>
 </ul>
 
 </div>
@@ -311,7 +313,8 @@ The <cite>usemtl</cite> statement is ignored, and we only use the last material 
 <p>Can load various formats like <code class="docutils literal notranslate"><span class="pre">glb</span></code> and serves as a fallback.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>We will try to merge all geometries if the glb contains more than one meshes, and this may lose the texture, since we only support one texture image.</p>
+<p>We will try to merge all meshes if the glb contains more than one,
+but <strong>this may cause the texture to lose</strong>, since we only support one texture image!</p>
 </div>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>

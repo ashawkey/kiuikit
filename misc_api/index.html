@@ -3,10 +3,10 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex/" /><link rel="search" title="Search" href="../search/" /><link rel="next" title="Misc CLI" href="../misc/" /><link rel="prev" title="Misc API" href="../misc_api/" />
+<link rel="index" title="Index" href="../genindex/" /><link rel="search" title="Search" href="../search/" /><link rel="next" title="Mesh Renderer" href="../render/" /><link rel="prev" title="Visualization" href="../vis/" />
 
     <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 7.2.6 and Furo 2023.09.10 -->
-        <title>Mesh Renderer - kiui 0.2.0 documentation</title>
+        <title>Misc API - kiui 0.2.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=135e06be" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -168,17 +168,17 @@
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <p class="caption" role="heading"><span class="caption-text">API</span></p>
-<ul>
+<ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../mesh/">Mesh</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../camera/">Camera</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../utils/">Utils</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../ops/">Operators</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../vis/">Visualization</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../misc_api/">Misc API</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Misc API</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tool</span></p>
-<ul class="current">
-<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Mesh Renderer</a></li>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../render/">Mesh Renderer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../misc/">Misc CLI</a></li>
 </ul>
 
@@ -214,77 +214,38 @@
           </label>
         </div>
         <article role="main">
-          <section id="mesh-renderer">
-<h1>Mesh Renderer<a class="headerlink" href="#mesh-renderer" title="Link to this heading">#</a></h1>
-<p>We provide a convenient mesh renderer based on:</p>
-<ul class="simple">
-<li><p><a class="reference external" href="mesh.md">kiui.mesh.Mesh</a>: our mesh implementation.</p></li>
-<li><p><a class="reference external" href="https://github.com/NVlabs/nvdiffrast">nvdiffrast</a>: an NVIDIA GPU is required, install with <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">git+https://github.com/NVlabs/nvdiffrast</span></code>.</p></li>
-<li><p><a class="reference external" href="https://github.com/hoffstadt/DearPyGui">dearpygui</a>: <strong>a desktop is required (cannot be forwarded by ssh)</strong>. For headless servers, you can still use <code class="docutils literal notranslate"><span class="pre">--wogui</span></code> for rendering images and videos.</p></li>
-</ul>
-<section id="usage">
-<h2>Usage<a class="headerlink" href="#usage" title="Link to this heading">#</a></h2>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>kire<span class="w"> </span>--help
-<span class="c1"># this is short for</span>
-python<span class="w"> </span>-m<span class="w"> </span>kiui.render<span class="w"> </span>--help
-</pre></div>
-</div>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">usage</span><span class="p">:</span> <span class="n">kire</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">pbr</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">envmap</span> <span class="n">ENVMAP</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">front_dir</span> <span class="n">FRONT_DIR</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">mode</span> <span class="p">{</span><span class="n">lambertian</span><span class="p">,</span><span class="n">albedo</span><span class="p">,</span><span class="n">normal</span><span class="p">,</span><span class="n">depth</span><span class="p">,</span><span class="n">pbr</span><span class="p">}]</span>
-            <span class="p">[</span><span class="o">--</span><span class="n">W</span> <span class="n">W</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">H</span> <span class="n">H</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">radius</span> <span class="n">RADIUS</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">fovy</span> <span class="n">FOVY</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">wogui</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">force_cuda_rast</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">save</span> <span class="n">SAVE</span><span class="p">]</span>
-            <span class="p">[</span><span class="o">--</span><span class="n">elevation</span> <span class="n">ELEVATION</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">num_azimuth</span> <span class="n">NUM_AZIMUTH</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">save_video</span> <span class="n">SAVE_VIDEO</span><span class="p">]</span>
-            <span class="n">mesh</span>
-
-<span class="n">positional</span> <span class="n">arguments</span><span class="p">:</span>
-  <span class="n">mesh</span>                  <span class="n">path</span> <span class="n">to</span> <span class="n">mesh</span> <span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">ply</span><span class="p">,</span> <span class="n">glb</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
-
-<span class="n">optional</span> <span class="n">arguments</span><span class="p">:</span>
-  <span class="o">-</span><span class="n">h</span><span class="p">,</span> <span class="o">--</span><span class="n">help</span>            <span class="n">show</span> <span class="n">this</span> <span class="n">help</span> <span class="n">message</span> <span class="ow">and</span> <span class="n">exit</span>
-  <span class="o">--</span><span class="n">pbr</span>                 <span class="n">enable</span> <span class="n">PBR</span> <span class="n">material</span>
-  <span class="o">--</span><span class="n">envmap</span> <span class="n">ENVMAP</span>       <span class="n">hdr</span> <span class="n">env</span> <span class="nb">map</span> <span class="n">path</span> <span class="k">for</span> <span class="n">pbr</span>
-  <span class="o">--</span><span class="n">front_dir</span> <span class="n">FRONT_DIR</span>
-                        <span class="n">mesh</span> <span class="n">front</span><span class="o">-</span><span class="n">facing</span> <span class="nb">dir</span>
-  <span class="o">--</span><span class="n">mode</span> <span class="p">{</span><span class="n">lambertian</span><span class="p">,</span><span class="n">albedo</span><span class="p">,</span><span class="n">normal</span><span class="p">,</span><span class="n">depth</span><span class="p">,</span><span class="n">pbr</span><span class="p">}</span>
-                        <span class="n">rendering</span> <span class="n">mode</span>
-  <span class="o">--</span><span class="n">W</span> <span class="n">W</span>                 <span class="n">GUI</span> <span class="n">width</span>
-  <span class="o">--</span><span class="n">H</span> <span class="n">H</span>                 <span class="n">GUI</span> <span class="n">height</span>
-  <span class="o">--</span><span class="n">radius</span> <span class="n">RADIUS</span>       <span class="n">default</span> <span class="n">GUI</span> <span class="n">camera</span> <span class="n">radius</span> <span class="kn">from</span> <span class="nn">center</span>
-  <span class="o">--</span><span class="n">fovy</span> <span class="n">FOVY</span>           <span class="n">default</span> <span class="n">GUI</span> <span class="n">camera</span> <span class="n">fovy</span>
-  <span class="o">--</span><span class="n">wogui</span>               <span class="n">disable</span> <span class="nb">all</span> <span class="n">dpg</span> <span class="n">GUI</span>
-  <span class="o">--</span><span class="n">force_cuda_rast</span>     <span class="n">force</span> <span class="n">to</span> <span class="n">use</span> <span class="n">RasterizeCudaContext</span><span class="o">.</span>
-  <span class="o">--</span><span class="n">save</span> <span class="n">SAVE</span>           <span class="n">path</span> <span class="n">to</span> <span class="n">save</span> <span class="n">example</span> <span class="n">rendered</span> <span class="n">images</span>
-  <span class="o">--</span><span class="n">elevation</span> <span class="n">ELEVATION</span>
-                        <span class="n">rendering</span> <span class="n">elevation</span>
-  <span class="o">--</span><span class="n">num_azimuth</span> <span class="n">NUM_AZIMUTH</span>
-                        <span class="n">number</span> <span class="n">of</span> <span class="n">images</span> <span class="n">to</span> <span class="n">render</span> <span class="kn">from</span> <span class="nn">different</span> <span class="n">azimuths</span>
-  <span class="o">--</span><span class="n">save_video</span> <span class="n">SAVE_VIDEO</span>
-                        <span class="n">path</span> <span class="n">to</span> <span class="n">save</span> <span class="n">rendered</span> <span class="n">video</span>
-</pre></div>
-</div>
+          <section id="misc-api">
+<h1>Misc API<a class="headerlink" href="#misc-api" title="Link to this heading">#</a></h1>
+<p>Miscellaneous API.</p>
+<section id="super-resolution">
+<h2>Super-resolution<a class="headerlink" href="#super-resolution" title="Link to this heading">#</a></h2>
 </section>
-<section id="examples">
-<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">#</a></h2>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># open a GUI to render a mesh</span>
-kire<span class="w"> </span>mesh.obj
-kire<span class="w"> </span>mesh.obj<span class="w"> </span>--force_cuda_rast<span class="w"> </span><span class="c1"># if you cannot use OpenGL backend (usually happens for headless servers), this will fallback to CUDA backend with some limitations (ref: https://nvlabs.github.io/nvdiffrast/#rasterizing-with-cuda-vs-opengl-new)</span>
-
-kire<span class="w"> </span>mesh.obj<span class="w"> </span>--front_dir<span class="w"> </span>+x<span class="w"> </span><span class="c1"># specify mesh front-facing dir, default is +z (OpenGL convention). You can use [+-][xyz] to specify axis, and [123] to specify clockwise rotation (per 90 degree).</span>
-
-kire<span class="w"> </span>mesh.glb<span class="w"> </span>--pbr<span class="w"> </span><span class="c1"># render with PBR (metallic + roughness)</span>
-kire<span class="w"> </span>mesh.glb<span class="w"> </span>--pbr<span class="w"> </span>--envmap<span class="w"> </span>env.hdr<span class="w"> </span><span class="c1"># specify hdr file</span>
-
-kire<span class="w"> </span>mesh.obj<span class="w"> </span>--save_video<span class="w"> </span>out.mp4<span class="w"> </span>--wogui<span class="w"> </span><span class="c1"># save 360 degree rotating video</span>
-kire<span class="w"> </span>mesh.obj<span class="w"> </span>--save<span class="w"> </span>out<span class="w"> </span>--wogui<span class="w"> </span><span class="c1"># save rendered images to the out folder (controlled by --elevation and --num_azimuth)</span>
-</pre></div>
-</div>
-<p>In the GUI, you can use:</p>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">Left</span> <span class="pre">Drag</span></code> to rotate camera.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">Middle</span> <span class="pre">Scroll</span></code> to scale camera.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">Right</span> <span class="pre">Drag</span></code> to pan camera.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">Space</span></code> to toggle rendering mode.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">P</span></code> to toggle camera orbital rotation.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">L</span></code> to toggle light rotation.</p></li>
+<section id="grid-put">
+<h2>Grid-put<a class="headerlink" href="#grid-put" title="Link to this heading">#</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.grid_put.grid_put">
+<span class="sig-prename descclassname"><span class="pre">kiui.grid_put.</span></span><span class="sig-name descname"><span class="pre">grid_put</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shape</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">coords</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">values</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">‘nearest’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘linear’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘linear-mipmap’</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'linear-mipmap'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_resolution</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">32</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_count</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="../_modules/kiui/grid_put/#grid_put"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.grid_put.grid_put" title="Link to this definition">#</a></dt>
+<dd><p>put back values to an image according to the coords. inverse operation of <code class="docutils literal notranslate"><span class="pre">F.grid_sample</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>shape</strong> (<em>Sequence</em><em>[</em><em>int</em><em>]</em>) – shape of the image, support 2D image and 3D volume, sequence of [D]</p></li>
+<li><p><strong>coords</strong> (<em>Tensor</em>) – coordinates, float [N, D] in [-1, 1].</p></li>
+<li><p><strong>values</strong> (<em>Tensor</em>) – values, float [N, C].</p></li>
+<li><p><strong>mode</strong> (<em>str</em><em>, </em><em>Literal</em><em>[</em><em>‘nearest’</em><em>, </em><em>‘linear’</em><em>, </em><em>‘linear-mipmap’</em><em>]</em>) – interpolation mode, see <a class="reference external" href="https://github.com/ashawkey/grid_put">https://github.com/ashawkey/grid_put</a> for examples. Defaults to ‘linear-mipmap’.</p></li>
+<li><p><strong>min_resolution</strong> (<em>int</em><em>, </em><em>optional</em>) – minimal resolution for mipmap. Defaults to 32.</p></li>
+<li><p><strong>return_count</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether to return the summed value and weights, instead of the divided results. Defaults to False.</p></li>
 </ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>the restored image/volume, float [H, W, C]/[H, W, D, C].</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
 </section>
 </section>
 
@@ -293,23 +254,23 @@ kire<span class="w"> </span>mesh.obj<span class="w"> </span>--save<span class="w
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="../misc/">
+          <a class="next-page" href="../render/">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">Misc CLI</div>
+                <div class="title">Mesh Renderer</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="../misc_api/">
+          <a class="prev-page" href="../vis/">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">Misc API</div>
+                <div class="title">Visualization</div>
                 
               </div>
             </a>
@@ -343,9 +304,12 @@ kire<span class="w"> </span>mesh.obj<span class="w"> </span>--save<span class="w
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">Mesh Renderer</a><ul>
-<li><a class="reference internal" href="#usage">Usage</a></li>
-<li><a class="reference internal" href="#examples">Examples</a></li>
+<li><a class="reference internal" href="#">Misc API</a><ul>
+<li><a class="reference internal" href="#super-resolution">Super-resolution</a></li>
+<li><a class="reference internal" href="#grid-put">Grid-put</a><ul>
+<li><a class="reference internal" href="#kiui.grid_put.grid_put"><code class="docutils literal notranslate"><span class="pre">grid_put()</span></code></a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>

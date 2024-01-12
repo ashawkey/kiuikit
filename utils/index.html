@@ -167,17 +167,19 @@
   <input type="hidden" name="area" value="default">
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
-  <p class="caption" role="heading"><span class="caption-text">APIs</span></p>
+  <p class="caption" role="heading"><span class="caption-text">API</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../mesh/">Mesh</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../camera/">Camera</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Utils</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../ops/">Operators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../vis/">Visualization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../misc_api/">Misc API</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Tools</span></p>
+<p class="caption" role="heading"><span class="caption-text">Tool</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../render/">Mesh Renderer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../misc/">Misc</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../misc/">Misc CLI</a></li>
 </ul>
 
 </div>
@@ -215,13 +217,16 @@
           <section id="utils">
 <h1>Utils<a class="headerlink" href="#utils" title="Link to this heading">#</a></h1>
 <p>A set of utility functions.
-All of the functions can be imported from <code class="docutils literal notranslate"><span class="pre">kiui</span></code> directly, e.g.:</p>
+All of the functions can be imported from <code class="docutils literal notranslate"><span class="pre">kiui</span></code> directly.</p>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">#</a></h2>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">kiui</span>
 
 <span class="n">x</span> <span class="o">=</span> <span class="n">kiui</span><span class="o">.</span><span class="n">read_image</span><span class="p">(</span><span class="s1">&#39;image.png&#39;</span><span class="p">)</span>
 <span class="n">kiui</span><span class="o">.</span><span class="n">lo</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 </pre></div>
 </div>
+</section>
 <section id="module-kiui.utils">
 <span id="api"></span><h2>API<a class="headerlink" href="#module-kiui.utils" title="Link to this heading">#</a></h2>
 <dl class="py function">
@@ -483,6 +488,7 @@ Default: None.</p></li>
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">Utils</a><ul>
+<li><a class="reference internal" href="#examples">Examples</a></li>
 <li><a class="reference internal" href="#module-kiui.utils">API</a><ul>
 <li><a class="reference internal" href="#kiui.utils.lo"><code class="docutils literal notranslate"><span class="pre">lo()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.utils.seed_everything"><code class="docutils literal notranslate"><span class="pre">seed_everything()</span></code></a></li>

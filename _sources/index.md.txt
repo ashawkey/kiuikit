@@ -1,6 +1,6 @@
 # Kiuikit
 
-> NOTE: this doc is still unfinished!
+> NOTE: this doc is still under construction!
 
 A toolkit for computer vision (especially 3D vision) tasks.
 
@@ -22,7 +22,7 @@ pip install -U git+https://github.com/ashawkey/kiuikit.git
 <!-- toctree -->
 
 .. toctree::
-   :caption: APIs
+   :caption: API
    :hidden:
    :maxdepth: 1
    :titlesonly:
@@ -31,9 +31,11 @@ pip install -U git+https://github.com/ashawkey/kiuikit.git
    ./camera.md
    ./utils.md
    ./ops.md
+   ./vis.md
+   ./misc_api.md
 
 .. toctree::
-   :caption: Tools
+   :caption: Tool
    :hidden:
    :maxdepth: 1
    :titlesonly:

@@ -6,7 +6,7 @@
 <link rel="index" title="Index" href="../genindex/" /><link rel="search" title="Search" href="../search/" /><link rel="prev" title="Mesh Renderer" href="../render/" />
 
     <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 7.2.6 and Furo 2023.09.10 -->
-        <title>Misc - kiui 0.2.0 documentation</title>
+        <title>Misc CLI - kiui 0.2.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=135e06be" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -136,7 +136,7 @@
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
         <div class="visually-hidden">Toggle table of contents sidebar</div>
         <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
       </label>
@@ -167,17 +167,19 @@
   <input type="hidden" name="area" value="default">
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
-  <p class="caption" role="heading"><span class="caption-text">APIs</span></p>
+  <p class="caption" role="heading"><span class="caption-text">API</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../mesh/">Mesh</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../camera/">Camera</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../utils/">Utils</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../ops/">Operators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../vis/">Visualization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../misc_api/">Misc API</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Tools</span></p>
+<p class="caption" role="heading"><span class="caption-text">Tool</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../render/">Mesh Renderer</a></li>
-<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Misc</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Misc CLI</a></li>
 </ul>
 
 </div>
@@ -206,14 +208,61 @@
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
             <div class="visually-hidden">Toggle table of contents sidebar</div>
             <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
           </label>
         </div>
         <article role="main">
-          <section id="misc">
-<h1>Misc<a class="headerlink" href="#misc" title="Link to this heading">#</a></h1>
+          <section id="misc-cli">
+<h1>Misc CLI<a class="headerlink" href="#misc-cli" title="Link to this heading">#</a></h1>
+<p>Misceallaneous command line interfaces.</p>
+<section id="usage">
+<h2>Usage<a class="headerlink" href="#usage" title="Link to this heading">#</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># background removal utils</span>
+<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">bg</span> <span class="o">--</span><span class="n">help</span>
+<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">bg</span> <span class="nb">input</span><span class="o">.</span><span class="n">png</span> <span class="n">output</span><span class="o">.</span><span class="n">png</span>
+<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">bg</span> <span class="n">input_folder</span> <span class="n">output_folder</span>
+
+<span class="c1"># openpose detector</span>
+<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">pose</span> <span class="o">--</span><span class="n">help</span>
+
+<span class="c1"># blip2 image captioning</span>
+<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">blip</span> <span class="o">--</span><span class="n">help</span>
+
+<span class="c1"># hed edge detector</span>
+<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">hed</span> <span class="o">--</span><span class="n">help</span>
+
+<span class="c1"># zoe depth estimation (extra dep: pip install timm==0.6.11)</span>
+<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">depth_zoe</span> <span class="o">--</span><span class="n">help</span>
+
+<span class="c1"># midas depth estimation (dpt-large)</span>
+<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">depth_midas</span> <span class="o">--</span><span class="n">help</span>
+
+<span class="c1"># sr (Real-ESRGAN from https://github.com/ai-forever/Real-ESRGAN/tree/main)</span>
+<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">sr</span> <span class="o">--</span><span class="n">help</span>
+<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">sr</span> <span class="n">image</span><span class="o">.</span><span class="n">jpg</span> <span class="o">--</span><span class="n">scale</span> <span class="mi">2</span> <span class="c1"># save to image_2x.jpg</span>
+<span class="n">kisr</span> <span class="n">image</span><span class="o">.</span><span class="n">jpg</span> <span class="o">--</span><span class="n">scale</span> <span class="mi">2</span> <span class="c1"># short cut cmd</span>
+
+<span class="c1"># made-in-heaven timer (https://github.com/ashawkey/made-in-heaven-timer)</span>
+<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">timer</span> <span class="o">--</span><span class="n">help</span>
+
+<span class="c1"># mesh format conversion (only for a single textured mesh in obj/glb)</span>
+<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">convert</span> <span class="nb">input</span><span class="o">.</span><span class="n">obj</span> <span class="n">output</span><span class="o">.</span><span class="n">glb</span>
+<span class="n">kico</span> <span class="nb">input</span><span class="o">.</span><span class="n">obj</span> <span class="n">output</span><span class="o">.</span><span class="n">glb</span> <span class="c1"># short cut cmd</span>
+<span class="n">kico</span> <span class="n">mesh_folder</span><span class="o">/</span> <span class="n">video_folder</span> <span class="o">--</span><span class="n">fmt</span> <span class="o">.</span><span class="n">mp4</span> <span class="c1"># render all meshes into rotating videos</span>
+
+<span class="c1"># aesthetic predictor v2 (https://github.com/christophschuhmann/improved-aesthetic-predictor)</span>
+<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">aes</span> <span class="o">--</span><span class="n">help</span>
+
+<span class="c1"># compare content of two directories</span>
+<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">dircmp</span> <span class="o">&lt;</span><span class="n">dir1</span><span class="o">&gt;</span> <span class="o">&lt;</span><span class="n">dir2</span><span class="o">&gt;</span>
+
+<span class="c1"># lock requirements.txt package versions based on current environment</span>
+<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">lock_version</span> <span class="o">&lt;</span><span class="n">requirements</span><span class="o">.</span><span class="n">txt</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+</section>
 </section>
 
         </article>
@@ -251,8 +300,27 @@
         
       </footer>
     </div>
-    <aside class="toc-drawer no-toc">
+    <aside class="toc-drawer">
       
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Misc CLI</a><ul>
+<li><a class="reference internal" href="#usage">Usage</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
       
       
     </aside>
