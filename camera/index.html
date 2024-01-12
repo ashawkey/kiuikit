@@ -177,7 +177,7 @@
 <p class="caption" role="heading"><span class="caption-text">Tools</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../render/">Mesh Renderer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../misc/">CLI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../misc/">Misc</a></li>
 </ul>
 
 </div>
@@ -214,8 +214,8 @@
         <article role="main">
           <section id="camera">
 <h1>Camera<a class="headerlink" href="#camera" title="Link to this heading">#</a></h1>
-<section id="common-world-coordinate-system-conventions">
-<h2>Common world coordinate system conventions<a class="headerlink" href="#common-world-coordinate-system-conventions" title="Link to this heading">#</a></h2>
+<section id="common-world-coordinate-systems">
+<h2>Common world coordinate systems<a class="headerlink" href="#common-world-coordinate-systems" title="Link to this heading">#</a></h2>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">OpenGL</span><span class="o">/</span><span class="n">MAYA</span>       <span class="n">OpenCV</span><span class="o">/</span><span class="n">Colmap</span>     <span class="n">Blender</span>      <span class="n">Unity</span><span class="o">/</span><span class="n">DirectX</span>     <span class="n">Unreal</span>
 <span class="n">Right</span><span class="o">-</span><span class="n">handed</span>      <span class="n">Right</span><span class="o">-</span><span class="n">handed</span>    <span class="n">Right</span><span class="o">-</span><span class="n">handed</span>    <span class="n">Left</span><span class="o">-</span><span class="n">handed</span>    <span class="n">Left</span><span class="o">-</span><span class="n">handed</span>
 
@@ -231,8 +231,7 @@
 </div>
 <p>A common color code: x = <span class="raw-html-m2r"><span style="color:red">red</span></span>, y = <span class="raw-html-m2r"><span style="color:green">green</span></span>, z = <span class="raw-html-m2r"><span style="color:blue">blue</span></span> (XYZ=RGB)</p>
 <blockquote>
-<div><p>Left/right-handed notation:
-roll your left/right palm from x to y, and your thumb should point to z.</p>
+<div><p><strong>Left/right-handed notation</strong>: roll your left/right palm from x to y, and your thumb should point to z.</p>
 </div></blockquote>
 </section>
 <section id="camera-pose-matrix">
@@ -251,8 +250,8 @@ However, the three directions (right, up, forward) can be defined differently:</
 <li><p>right can also be left, depending on it’s (<code class="docutils literal notranslate"><span class="pre">up</span> <span class="pre">cross</span> <span class="pre">forward</span></code>) or (<code class="docutils literal notranslate"><span class="pre">forward</span> <span class="pre">cross</span> <span class="pre">up</span></code>).</p></li>
 </ul>
 </section>
-<section id="common-camera-coordinate-conventions">
-<h2>Common camera coordinate conventions<a class="headerlink" href="#common-camera-coordinate-conventions" title="Link to this heading">#</a></h2>
+<section id="common-camera-coordinate-systems">
+<h2>Common camera coordinate systems<a class="headerlink" href="#common-camera-coordinate-systems" title="Link to this heading">#</a></h2>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>   <span class="n">OpenGL</span>                <span class="n">OpenCV</span>
    <span class="n">Blender</span>               <span class="n">Colmap</span>
 
@@ -277,9 +276,10 @@ However, the three directions (right, up, forward) can be defined differently:</
 <li><p>azimuth in (-180, 180), from <code class="docutils literal notranslate"><span class="pre">+z</span> <span class="pre">(0/-360)</span> <span class="pre">--&gt;</span> <span class="pre">+x</span> <span class="pre">(90/-270)</span> <span class="pre">--&gt;</span> <span class="pre">-z</span> <span class="pre">(180/-180)</span> <span class="pre">--&gt;</span> <span class="pre">-x</span> <span class="pre">(270/-90)</span> <span class="pre">--&gt;</span> <span class="pre">+z</span> <span class="pre">(360/0)</span></code></p></li>
 </ul>
 </section>
-<section id="module-kiui.cam">
-<span id="api"></span><h2>API<a class="headerlink" href="#module-kiui.cam" title="Link to this heading">#</a></h2>
-<dl class="py function">
+<section id="api">
+<h2>API<a class="headerlink" href="#api" title="Link to this heading">#</a></h2>
+<p>Note that the camera API is designed to be <code class="docutils literal notranslate"><span class="pre">numpy</span></code> based and un-batched!</p>
+<dl class="py function" id="module-kiui.cam">
 <dt class="sig sig-object py" id="kiui.cam.convert">
 <span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">convert</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pose</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">‘unity’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘blender’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘opencv’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘colmap’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘opengl’</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'unity'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">original</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">‘unity’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘blender’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘opencv’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘colmap’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘opengl’</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'opengl'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#convert"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.convert" title="Link to this definition">#</a></dt>
 <dd><p>A method to convert between different world coordinate systems.</p>
@@ -629,11 +629,11 @@ However, the three directions (right, up, forward) can be defined differently:</
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">Camera</a><ul>
-<li><a class="reference internal" href="#common-world-coordinate-system-conventions">Common world coordinate system conventions</a></li>
+<li><a class="reference internal" href="#common-world-coordinate-systems">Common world coordinate systems</a></li>
 <li><a class="reference internal" href="#camera-pose-matrix">Camera pose matrix</a></li>
-<li><a class="reference internal" href="#common-camera-coordinate-conventions">Common camera coordinate conventions</a></li>
+<li><a class="reference internal" href="#common-camera-coordinate-systems">Common camera coordinate systems</a></li>
 <li><a class="reference internal" href="#our-camera-convention">Our camera convention</a></li>
-<li><a class="reference internal" href="#module-kiui.cam">API</a><ul>
+<li><a class="reference internal" href="#api">API</a><ul>
 <li><a class="reference internal" href="#kiui.cam.convert"><code class="docutils literal notranslate"><span class="pre">convert()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.cam.look_at"><code class="docutils literal notranslate"><span class="pre">look_at()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.cam.orbit_camera"><code class="docutils literal notranslate"><span class="pre">orbit_camera()</span></code></a></li>

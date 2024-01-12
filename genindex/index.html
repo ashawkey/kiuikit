@@ -175,7 +175,7 @@
 <p class="caption" role="heading"><span class="caption-text">Tools</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../render/">Mesh Renderer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../misc/">CLI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../misc/">Misc</a></li>
 </ul>
 
 </div>
@@ -212,7 +212,7 @@
           
 <section class="genindex-section">
   <h1 id="index">Index</h1>
-  <div class="genindex-jumpbox"><a href="#A"><strong>A</strong></a> | <a href="#B"><strong>B</strong></a> | <a href="#C"><strong>C</strong></a> | <a href="#F"><strong>F</strong></a> | <a href="#G"><strong>G</strong></a> | <a href="#I"><strong>I</strong></a> | <a href="#K"><strong>K</strong></a> | <a href="#L"><strong>L</strong></a> | <a href="#M"><strong>M</strong></a> | <a href="#O"><strong>O</strong></a> | <a href="#P"><strong>P</strong></a> | <a href="#R"><strong>R</strong></a> | <a href="#S"><strong>S</strong></a> | <a href="#T"><strong>T</strong></a> | <a href="#U"><strong>U</strong></a> | <a href="#V"><strong>V</strong></a> | <a href="#W"><strong>W</strong></a></div>
+  <div class="genindex-jumpbox"><a href="#A"><strong>A</strong></a> | <a href="#B"><strong>B</strong></a> | <a href="#C"><strong>C</strong></a> | <a href="#D"><strong>D</strong></a> | <a href="#F"><strong>F</strong></a> | <a href="#G"><strong>G</strong></a> | <a href="#I"><strong>I</strong></a> | <a href="#K"><strong>K</strong></a> | <a href="#L"><strong>L</strong></a> | <a href="#M"><strong>M</strong></a> | <a href="#N"><strong>N</strong></a> | <a href="#O"><strong>O</strong></a> | <a href="#P"><strong>P</strong></a> | <a href="#R"><strong>R</strong></a> | <a href="#S"><strong>S</strong></a> | <a href="#T"><strong>T</strong></a> | <a href="#U"><strong>U</strong></a> | <a href="#V"><strong>V</strong></a> | <a href="#W"><strong>W</strong></a></div>
 </section>
 <section id="A" class="genindex-section">
   <h2>A</h2>
@@ -250,9 +250,27 @@
     <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="../camera/#kiui.cam.OrbitCamera.campos">campos (kiui.cam.OrbitCamera property)</a>
 </li>
+        <li><a href="../mesh/#kiui.mesh_utils.clean_mesh">clean_mesh() (in module kiui.mesh_utils)</a>
+</li>
     </ul></td>
     <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="../mesh/#kiui.mesh_utils.compute_edge_to_face_mapping">compute_edge_to_face_mapping() (in module kiui.mesh_utils)</a>
+</li>
         <li><a href="../camera/#kiui.cam.convert">convert() (in module kiui.cam)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="D" class="genindex-section">
+  <h2>D</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="../mesh/#kiui.mesh_utils.decimate_mesh">decimate_mesh() (in module kiui.mesh_utils)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="../ops/#kiui.op.dot">dot() (in module kiui.op)</a>
 </li>
     </ul></td>
   </tr></table>
@@ -318,8 +336,22 @@
           <li><a href="../mesh/#module-kiui.mesh">module</a>
 </li>
         </ul></li>
+        <li>
+    kiui.mesh_utils
+
+        <ul>
+          <li><a href="../mesh/#module-kiui.mesh_utils">module</a>
+</li>
+        </ul></li>
     </ul></td>
     <td style="width: 33%; vertical-align: top;"><ul>
+        <li>
+    kiui.op
+
+        <ul>
+          <li><a href="../ops/#module-kiui.op">module</a>
+</li>
+        </ul></li>
         <li>
     kiui.utils
 
@@ -335,14 +367,20 @@
   <h2>L</h2>
   <table style="width: 100%" class="indextable genindextable"><tr>
     <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="../mesh/#kiui.mesh_utils.laplacian_smooth_loss">laplacian_smooth_loss() (in module kiui.mesh_utils)</a>
+</li>
+        <li><a href="../mesh/#kiui.mesh_utils.laplacian_uniform">laplacian_uniform() (in module kiui.mesh_utils)</a>
+</li>
+        <li><a href="../ops/#kiui.op.length">length() (in module kiui.op)</a>
+</li>
         <li><a href="../utils/#kiui.utils.lo">lo() (in module kiui.utils)</a>
 </li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="../mesh/#kiui.mesh.Mesh.load">load() (kiui.mesh.Mesh class method)</a>
 </li>
         <li><a href="../utils/#kiui.utils.load_file_from_url">load_file_from_url() (in module kiui.utils)</a>
 </li>
-    </ul></td>
-    <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="../mesh/#kiui.mesh.Mesh.load_obj">load_obj() (kiui.mesh.Mesh class method)</a>
 </li>
         <li><a href="../mesh/#kiui.mesh.Mesh.load_trimesh">load_trimesh() (kiui.mesh.Mesh class method)</a>
@@ -357,6 +395,8 @@
   <h2>M</h2>
   <table style="width: 100%" class="indextable genindextable"><tr>
     <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="../ops/#kiui.op.make_divisible">make_divisible() (in module kiui.op)</a>
+</li>
         <li><a href="../mesh/#kiui.mesh.Mesh">Mesh (class in kiui.mesh)</a>
 </li>
         <li>
@@ -367,12 +407,26 @@
 </li>
           <li><a href="../mesh/#module-kiui.mesh">kiui.mesh</a>
 </li>
+          <li><a href="../mesh/#module-kiui.mesh_utils">kiui.mesh_utils</a>
+</li>
+          <li><a href="../ops/#module-kiui.op">kiui.op</a>
+</li>
           <li><a href="../utils/#module-kiui.utils">kiui.utils</a>
 </li>
         </ul></li>
     </ul></td>
     <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="../camera/#kiui.cam.OrbitCamera.mvp">mvp (kiui.cam.OrbitCamera property)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="N" class="genindex-section">
+  <h2>N</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="../mesh/#kiui.mesh_utils.normal_consistency">normal_consistency() (in module kiui.mesh_utils)</a>
 </li>
     </ul></td>
   </tr></table>
@@ -430,10 +484,20 @@
   <h2>S</h2>
   <table style="width: 100%" class="indextable genindextable"><tr>
     <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="../ops/#kiui.op.safe_normalize">safe_normalize() (in module kiui.op)</a>
+</li>
         <li><a href="../camera/#kiui.cam.OrbitCamera.scale">scale() (kiui.cam.OrbitCamera method)</a>
+</li>
+        <li><a href="../ops/#kiui.op.scale_img_hw">scale_img_hw() (in module kiui.op)</a>
 </li>
     </ul></td>
     <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="../ops/#kiui.op.scale_img_hwc">scale_img_hwc() (in module kiui.op)</a>
+</li>
+        <li><a href="../ops/#kiui.op.scale_img_nhw">scale_img_nhw() (in module kiui.op)</a>
+</li>
+        <li><a href="../ops/#kiui.op.scale_img_nhwc">scale_img_nhwc() (in module kiui.op)</a>
+</li>
         <li><a href="../utils/#kiui.utils.seed_everything">seed_everything() (in module kiui.utils)</a>
 </li>
     </ul></td>
@@ -447,6 +511,10 @@
         <li><a href="../mesh/#kiui.mesh.Mesh.to">to() (kiui.mesh.Mesh method)</a>
 </li>
     </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="../ops/#kiui.op.trunc_rev_sigmoid">trunc_rev_sigmoid() (in module kiui.op)</a>
+</li>
+    </ul></td>
   </tr></table>
 </section>
 
@@ -455,6 +523,10 @@
   <table style="width: 100%" class="indextable genindextable"><tr>
     <td style="width: 33%; vertical-align: top;"><ul>
         <li><a href="../camera/#kiui.cam.undo_orbit_camera">undo_orbit_camera() (in module kiui.cam)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="../ops/#kiui.op.uv_padding">uv_padding() (in module kiui.op)</a>
 </li>
     </ul></td>
   </tr></table>

@@ -176,7 +176,7 @@
 <p class="caption" role="heading"><span class="caption-text">Tools</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../render/">Mesh Renderer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../misc/">CLI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../misc/">Misc</a></li>
 </ul>
 
 </div>
@@ -278,7 +278,7 @@
 <a class="viewcode-back" href="../../../mesh/#kiui.mesh.Mesh.load">[docs]</a>
     <span class="nd">@classmethod</span>
     <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">resize</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">renormal</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">remesh</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">retex</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">front_dir</span><span class="o">=</span><span class="s1">&#39;+z&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;load mesh from path. e.g., ``mesh = Mesh.load(path)``</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;load mesh from path.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            path (str): path to mesh file, supports ply, obj, glb.</span>
@@ -288,6 +288,11 @@
 <span class="sd">            retex (bool, optional): re-calc the uv coordinates, will overwrite the existing uv coordinates. Defaults to False.</span>
 <span class="sd">            bound (float, optional): bound to resize. Defaults to 0.9.</span>
 <span class="sd">            front_dir (str, optional): front-view direction of the mesh, should be [+-][xyz][ 123]. Defaults to &#39;+z&#39;.</span>
+<span class="sd">            device (torch.device, optional): torch device. Defaults to None.</span>
+<span class="sd">        </span>
+<span class="sd">        Note:</span>
+<span class="sd">            a ``device`` keyword argument can be provided to specify the torch device. </span>
+<span class="sd">            If it&#39;s not provided, we will try to use ``&#39;cuda&#39;`` as the device if it&#39;s available.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            Mesh: the loaded Mesh object.</span>

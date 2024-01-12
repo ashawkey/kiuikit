@@ -136,7 +136,7 @@
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
         <div class="visually-hidden">Toggle table of contents sidebar</div>
         <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
       </label>
@@ -177,7 +177,7 @@
 <p class="caption" role="heading"><span class="caption-text">Tools</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../render/">Mesh Renderer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../misc/">CLI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../misc/">Misc</a></li>
 </ul>
 
 </div>
@@ -206,7 +206,7 @@
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
             <div class="visually-hidden">Toggle table of contents sidebar</div>
             <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
           </label>
@@ -214,6 +214,223 @@
         <article role="main">
           <section id="operators">
 <h1>Operators<a class="headerlink" href="#operators" title="Link to this heading">#</a></h1>
+<p>A collection of operators for <code class="docutils literal notranslate"><span class="pre">numpy</span></code> and <code class="docutils literal notranslate"><span class="pre">torch</span></code>.</p>
+<section id="module-kiui.op">
+<span id="api"></span><h2>API<a class="headerlink" href="#module-kiui.op" title="Link to this heading">#</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.op.dot">
+<span class="sig-prename descclassname"><span class="pre">kiui.op.</span></span><span class="sig-name descname"><span class="pre">dot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span></span></span><a class="reference internal" href="../_modules/kiui/op/#dot"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.op.dot" title="Link to this definition">#</a></dt>
+<dd><p>dot product (along the last dim).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<em>Union</em><em>[</em><em>Tensor</em><em>, </em><em>ndarray</em><em>]</em>) – x, […, C]</p></li>
+<li><p><strong>y</strong> (<em>Union</em><em>[</em><em>Tensor</em><em>, </em><em>ndarray</em><em>]</em>) – y, […, C]</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>x dot y, […, 1]</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Union[Tensor, ndarray]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.op.length">
+<span class="sig-prename descclassname"><span class="pre">kiui.op.</span></span><span class="sig-name descname"><span class="pre">length</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-20</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span></span></span><a class="reference internal" href="../_modules/kiui/op/#length"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.op.length" title="Link to this definition">#</a></dt>
+<dd><p>length of an array (along the last dim).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<em>Union</em><em>[</em><em>Tensor</em><em>, </em><em>ndarray</em><em>]</em>) – x, […, C]</p></li>
+<li><p><strong>eps</strong> (<em>float</em><em>, </em><em>optional</em>) – eps. Defaults to 1e-20.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>length, […, 1]</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Union[Tensor, ndarray]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.op.safe_normalize">
+<span class="sig-prename descclassname"><span class="pre">kiui.op.</span></span><span class="sig-name descname"><span class="pre">safe_normalize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-20</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span></span></span><a class="reference internal" href="../_modules/kiui/op/#safe_normalize"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.op.safe_normalize" title="Link to this definition">#</a></dt>
+<dd><p>normalize an array (along the last dim).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<em>Union</em><em>[</em><em>Tensor</em><em>, </em><em>ndarray</em><em>]</em>) – x, […, C]</p></li>
+<li><p><strong>eps</strong> (<em>float</em><em>, </em><em>optional</em>) – eps. Defaults to 1e-20.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>normalized x, […, C]</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Union[Tensor, ndarray]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.op.make_divisible">
+<span class="sig-prename descclassname"><span class="pre">kiui.op.</span></span><span class="sig-name descname"><span class="pre">make_divisible</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">m</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">8</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/op/#make_divisible"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.op.make_divisible" title="Link to this definition">#</a></dt>
+<dd><p>make an int x divisible by m.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<em>int</em>) – x</p></li>
+<li><p><strong>m</strong> (<em>int</em><em>, </em><em>optional</em>) – <ol class="loweralpha simple" start="13">
+<li><p>Defaults to 8.</p></li>
+</ol>
+</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>x + (m - x % m)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.op.trunc_rev_sigmoid">
+<span class="sig-prename descclassname"><span class="pre">kiui.op.</span></span><span class="sig-name descname"><span class="pre">trunc_rev_sigmoid</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-06</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="../_modules/kiui/op/#trunc_rev_sigmoid"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.op.trunc_rev_sigmoid" title="Link to this definition">#</a></dt>
+<dd><p>inversion of sigmoid function.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<em>Tensor</em>) – x</p></li>
+<li><p><strong>eps</strong> (<em>float</em><em>, </em><em>optional</em>) – eps. Defaults to 1e-6.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>log(x / (1 - x))</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.op.scale_img_nhwc">
+<span class="sig-prename descclassname"><span class="pre">kiui.op.</span></span><span class="sig-name descname"><span class="pre">scale_img_nhwc</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mag</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'bilinear'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'bilinear'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="../_modules/kiui/op/#scale_img_nhwc"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.op.scale_img_nhwc" title="Link to this definition">#</a></dt>
+<dd><p>image scaling helper.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<em>Tensor</em>) – input image, float [N, H, W, C]</p></li>
+<li><p><strong>size</strong> (<em>Sequence</em><em>[</em><em>int</em><em>]</em>) – target size, tuple of [H’, W’]</p></li>
+<li><p><strong>mag</strong> (<em>str</em><em>, </em><em>optional</em>) – upscale interpolation mode. Defaults to ‘bilinear’.</p></li>
+<li><p><strong>min</strong> (<em>str</em><em>, </em><em>optional</em>) – downscale interpolation mode. Defaults to ‘bilinear’.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>rescaled image, float [N, H’, W’, C]</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.op.scale_img_hwc">
+<span class="sig-prename descclassname"><span class="pre">kiui.op.</span></span><span class="sig-name descname"><span class="pre">scale_img_hwc</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mag</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'bilinear'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'bilinear'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="../_modules/kiui/op/#scale_img_hwc"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.op.scale_img_hwc" title="Link to this definition">#</a></dt>
+<dd><p>image scaling helper.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<em>Tensor</em>) – input image, float [H, W, C]</p></li>
+<li><p><strong>size</strong> (<em>Sequence</em><em>[</em><em>int</em><em>]</em>) – target size, tuple of [H’, W’]</p></li>
+<li><p><strong>mag</strong> (<em>str</em><em>, </em><em>optional</em>) – upscale interpolation mode. Defaults to ‘bilinear’.</p></li>
+<li><p><strong>min</strong> (<em>str</em><em>, </em><em>optional</em>) – downscale interpolation mode. Defaults to ‘bilinear’.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>rescaled image, float [H’, W’, C]</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.op.scale_img_nhw">
+<span class="sig-prename descclassname"><span class="pre">kiui.op.</span></span><span class="sig-name descname"><span class="pre">scale_img_nhw</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mag</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'bilinear'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'bilinear'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="../_modules/kiui/op/#scale_img_nhw"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.op.scale_img_nhw" title="Link to this definition">#</a></dt>
+<dd><p>image scaling helper.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<em>Tensor</em>) – input image, float [N, H, W]</p></li>
+<li><p><strong>size</strong> (<em>Sequence</em><em>[</em><em>int</em><em>]</em>) – target size, tuple of [H’, W’]</p></li>
+<li><p><strong>mag</strong> (<em>str</em><em>, </em><em>optional</em>) – upscale interpolation mode. Defaults to ‘bilinear’.</p></li>
+<li><p><strong>min</strong> (<em>str</em><em>, </em><em>optional</em>) – downscale interpolation mode. Defaults to ‘bilinear’.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>rescaled image, float [N, H’, W’]</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.op.scale_img_hw">
+<span class="sig-prename descclassname"><span class="pre">kiui.op.</span></span><span class="sig-name descname"><span class="pre">scale_img_hw</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mag</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'bilinear'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'bilinear'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="../_modules/kiui/op/#scale_img_hw"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.op.scale_img_hw" title="Link to this definition">#</a></dt>
+<dd><p>image scaling helper.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<em>Tensor</em>) – input image, float [H, W]</p></li>
+<li><p><strong>size</strong> (<em>Sequence</em><em>[</em><em>int</em><em>]</em>) – target size, tuple of [H’, W’]</p></li>
+<li><p><strong>mag</strong> (<em>str</em><em>, </em><em>optional</em>) – upscale interpolation mode. Defaults to ‘bilinear’.</p></li>
+<li><p><strong>min</strong> (<em>str</em><em>, </em><em>optional</em>) – downscale interpolation mode. Defaults to ‘bilinear’.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>rescaled image, float [H’, W’]</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.op.uv_padding">
+<span class="sig-prename descclassname"><span class="pre">kiui.op.</span></span><span class="sig-name descname"><span class="pre">uv_padding</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mask</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">‘knn’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘cv2’</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'knn'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/op/#uv_padding"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.op.uv_padding" title="Link to this definition">#</a></dt>
+<dd><p>padding the uv-space texture image to avoid seam artifacts.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>image</strong> (<em>Union</em><em>[</em><em>Tensor</em><em>, </em><em>ndarray</em><em>]</em>) – texture image, float, [H, W, C] in [0, 1].</p></li>
+<li><p><strong>mask</strong> (<em>Union</em><em>[</em><em>Tensor</em><em>, </em><em>ndarray</em><em>]</em>) – valid uv region, bool, [H, W].</p></li>
+<li><p><strong>padding</strong> (<em>int</em><em>, </em><em>optional</em>) – padding size into the unmasked region. Defaults to 2.</p></li>
+<li><p><strong>backend</strong> (<em>Literal</em><em>[</em><em>'knn'</em><em>, </em><em>'cv2'</em><em>]</em><em>, </em><em>optional</em>) – algorithm backend, knn is faster. Defaults to ‘knn’.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>padded texture image. float, [H, W, C].</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Union[Tensor, ndarray]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
 </section>
 
         </article>
@@ -259,8 +476,39 @@
         
       </footer>
     </div>
-    <aside class="toc-drawer no-toc">
+    <aside class="toc-drawer">
       
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Operators</a><ul>
+<li><a class="reference internal" href="#module-kiui.op">API</a><ul>
+<li><a class="reference internal" href="#kiui.op.dot"><code class="docutils literal notranslate"><span class="pre">dot()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.op.length"><code class="docutils literal notranslate"><span class="pre">length()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.op.safe_normalize"><code class="docutils literal notranslate"><span class="pre">safe_normalize()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.op.make_divisible"><code class="docutils literal notranslate"><span class="pre">make_divisible()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.op.trunc_rev_sigmoid"><code class="docutils literal notranslate"><span class="pre">trunc_rev_sigmoid()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.op.scale_img_nhwc"><code class="docutils literal notranslate"><span class="pre">scale_img_nhwc()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.op.scale_img_hwc"><code class="docutils literal notranslate"><span class="pre">scale_img_hwc()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.op.scale_img_nhw"><code class="docutils literal notranslate"><span class="pre">scale_img_nhw()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.op.scale_img_hw"><code class="docutils literal notranslate"><span class="pre">scale_img_hw()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.op.uv_padding"><code class="docutils literal notranslate"><span class="pre">uv_padding()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
       
       
     </aside>
