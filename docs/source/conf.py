@@ -40,9 +40,9 @@ extensions = [
 ]
 
 # Pull documentation types from hints
-# autodoc_typehints = "both"
 autodoc_default_options = {
-    "member-order": "bysource",
+    "member-order": "bysource", # sort by source order
+    "special-members": '__init__', # also doc __init__
 }
 
 # Add any paths that contain templates here, relative to this directory.

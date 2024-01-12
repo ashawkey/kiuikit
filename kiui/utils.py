@@ -179,15 +179,15 @@ def read_image(
 
     Args:
         path (str): path to the image file.
-        mode (Literal[&quot;float&quot;, &quot;uint8&quot;, &quot;pil&quot;, &quot;torch&quot;, &quot;tensor&quot;], optional): returned image format. Defaults to "float".
-            float - float32 numpy array, range [0, 1]
-            uint8 - uint8 numpy array, range [0, 255]
-            pil - PIL image
-            torch/tensor - float32 torch tensor, range [0, 1]
-        order (Literal[&quot;RGB&quot;, &quot;RGBA&quot;, &quot;BGR&quot;, &quot;BGRA&quot;], optional): channel order. Defaults to "RGB".
+        mode (Literal["float", "uint8", "pil", "torch", "tensor"], optional): returned image format. Defaults to "float".
+            float: float32 numpy array, range [0, 1];
+            uint8: uint8 numpy array, range [0, 255];
+            pil: PIL image;
+            torch/tensor: float32 torch tensor, range [0, 1];
+        order (Literal["RGB", "RGBA", "BGR", "BGRA"], optional): channel order. Defaults to "RGB".
     
     Note:
-        By default this function will convert RGBA image to white-background RGB image. Use `order="RGBA"` to keep the alpha channel.
+        By default this function will convert RGBA image to white-background RGB image. Use ``order="RGBA"`` to keep the alpha channel.
 
     Returns:
         Union[np.ndarray, PIL.Image, torch.Tensor]: the image array.
