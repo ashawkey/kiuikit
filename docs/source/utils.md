@@ -1,7 +1,9 @@
 # Utils
 
 A set of utility functions.
-All of the functions can be imported from `kiui` directly, e.g.:
+All of the functions can be imported from `kiui` directly.
+
+### Examples
 
 ```python
 import kiui

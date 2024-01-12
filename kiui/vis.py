@@ -5,10 +5,22 @@ import numpy as np
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 
-from .utils import lo, write_image
+from kiui.typing import *
+from kiui.utils import lo, write_image
 
 
-def map_color(value, cmap_name="viridis", vmin=None, vmax=None):
+def map_color(value: ndarray, cmap_name: str="viridis", vmin: float=None, vmax: float=None):
+    """ map a 1D array to continuous color.
+
+    Args:
+        value (ndarray): array of float, [N]
+        cmap_name (str, optional): color map name, ref: https://matplotlib.org/stable/users/explain/colors/colormaps.html#classes-of-colormaps. Defaults to "viridis".
+        vmin (float, optional): min value. Defaults to None.
+        vmax (float, optional): max value. Defaults to None.
+
+    Returns:
+        ndarray: array of color, [N, 3] in [0, 1]
+    """
     # value: [N], float
     # return: RGB, [N, 3], float in [0, 1]
 
@@ -22,41 +34,16 @@ def map_color(value, cmap_name="viridis", vmin=None, vmax=None):
     return rgb
 
 
-# visualize some 2D matrix, different from plot_image, this will keep the original range and plot channel-by-channel
-def plot_matrix(*xs):
-    # x: [B, C, H, W], [C, H, W], or [H, W] torch.Tensor
-    #    [B, H, W, C], [H, W, C], or [H, W] numpy.ndarray
-
-    def _plot_matrix(matrix):
-
-        lo(matrix)
-
-        if isinstance(matrix, torch.Tensor):
-            if len(matrix.shape) == 3:
-                matrix = matrix.permute(1, 2, 0).squeeze()
-            matrix = matrix.detach().cpu().numpy()
-
-        if len(matrix.shape) == 3:
-            # per channel
-            for i in range(matrix.shape[-1]):
-                plt.matshow(matrix[..., i])
-                plt.show()
-        else:
-            plt.matshow(matrix.astype(np.float32))
-            plt.show()
-
-    for x in xs:
-        if len(x.shape) == 4:
-            for i in range(x.shape[0]):
-                _plot_matrix(x[i])
-        else: # 3 or 2
-            _plot_matrix(x)
-
-
-# sequentially plot provided images, optionally save to current dir.
 def plot_image(*xs, normalize=False, save=False):
-    # x: [B, 3, H, W], [3, H, W], [H, W, 3], [1, H, W], [H, W, 1] or [H, W] torch.Tensor
-    #    [B, H, W, 3], [H, W, 3], [3, H, W], [H, W, 1], [1, H, W] or [H, W] numpy.ndarray
+    """ sequentially plot provided images, optionally save to current dir.
+    
+    Args:
+        xs (Sequence[Union[torch.Tensor, numpy.ndarray]]): can be uint8 or float32.
+            [B, 4/3/1, H, W], [B, H, W, 4/3/1], [4/3/1, H, W], [H, W, 4/3/1], [H, W] torch.Tensor
+            [B, H, W, 4/3/1], [B, 4/3/1, H, W], [H, W, 4/3/1], [4/3/1, H, W], [H, W] numpy.ndarray
+        normalize (bool, optional): whether to renormalize the image to [0, 1]. Defaults to False.
+        save (bool, optional): whether to save the image to current dir (in case the plot cannot be showed, like in vscode remote). Defaults to False.
+    """
 
     _cnt = 0
     _signature = str(time.time())
@@ -102,11 +89,59 @@ def plot_image(*xs, normalize=False, save=False):
             _plot_image(x)
 
 
-def plot_pointcloud(pc, color=None):
-    # pc: [N, 3]
-    # color: [N, 3/4]
+def plot_matrix(*xs):
+    """visualize some 2D matrix, different from ``kiui.vis.plot_image``, 
+       this will keep the original range and plot channel-by-channel.
+    
+    Args:
+        xs (Sequence[Union[torch.Tensor, numpy.ndarray]]): 
+            [B, C, H, W], [C, H, W], or [H, W] torch.Tensor
+            [B, H, W, C], [H, W, C], or [H, W] numpy.ndarray
+    """
+    
+    def _plot_matrix(matrix):
 
+        lo(matrix)
+
+        if isinstance(matrix, torch.Tensor):
+            if len(matrix.shape) == 3:
+                matrix = matrix.permute(1, 2, 0).squeeze()
+            matrix = matrix.detach().cpu().numpy()
+
+        if len(matrix.shape) == 3:
+            # per channel
+            for i in range(matrix.shape[-1]):
+                plt.matshow(matrix[..., i])
+                plt.show()
+        else:
+            plt.matshow(matrix.astype(np.float32))
+            plt.show()
+
+    for x in xs:
+        if len(x.shape) == 4:
+            for i in range(x.shape[0]):
+                _plot_matrix(x[i])
+        else: # 3 or 2
+            _plot_matrix(x)
+
+
+def plot_pointcloud(pc, color=None):
+    """plot point cloud.
+
+    Args:
+        pc (ndarray): point cloud positions, float [N, 3].
+        color (ndarray, optional): point cloud colors, float/uint8 [N, 3/4]. Defaults to None.
+    
+    Note:
+        This function requires a desktop (cannot be forwarded by ssh)!
+    """
+    
     lo(pc)
+
+    if color is not None:
+        lo(color)
+        if color.dtype == np.float32:
+            color = (color * 255).astype(np.uint8)
 
     if color is None or color.shape[-1] == 3:
         # use o3d as it's better to control
@@ -132,7 +167,19 @@ def plot_pointcloud(pc, color=None):
 
 
 def plot_poses(poses, size=0.1, bound=1, points=None, mesh=None, opengl=True):
-    # poses: [B, 4, 4]
+    """plot camera poses.
+
+    Args:
+        poses (ndarray): camera poses, float [N, 4, 4].
+        size (float, optional): line width. Defaults to 0.1.
+        bound (int, optional): bounding box bound. Defaults to 1.
+        points (ndarray, optional): also draw point clouds, float [M, 3]. Defaults to None.
+        mesh (trimesh.Trimesh, optional): also draw mesh. Defaults to None.
+        opengl (bool, optional): use OpenGL camera convention. Defaults to True.
+    
+    Note:
+        This function requires a desktop (cannot be forwarded by ssh)!
+    """
 
     lo(poses)
 

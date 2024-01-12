@@ -317,7 +317,8 @@ class Mesh:
         Can load various formats like ``glb`` and serves as a fallback.
 
         Note:
-            We will try to merge all geometries if the glb contains more than one meshes, and this may lose the texture, since we only support one texture image.
+            We will try to merge all meshes if the glb contains more than one, 
+            but **this may cause the texture to lose**, since we only support one texture image!
 
         Args:
             path (str): path to the mesh file.

@@ -1,6 +1,8 @@
 import torch
 import torch.nn.functional as F
 
+from kiui.typing import *
+
 def stride_from_shape(shape):
     stride = [1]
     for x in reversed(shape[1:]):
@@ -273,11 +275,21 @@ def mipmap_linear_grid_put_3d(H, W, D, coords, values, min_resolution=32, return
     return result
 
 
-def grid_put(shape, coords, values, mode='linear-mipmap', min_resolution=32, return_count=False):
-    # shape: [D], list/tuple
-    # coords: [N, D], float in [-1, 1]
-    # values: [N, C]
+def grid_put(shape: Sequence[int], coords: Tensor, values: Tensor, mode: Literal['nearest', 'linear', 'linear-mipmap']='linear-mipmap', min_resolution: int=32, return_count: bool=False) -> Tensor:
+    """ put back values to an image according to the coords. inverse operation of ``F.grid_sample``.
 
+    Args:
+        shape (Sequence[int]): shape of the image, support 2D image and 3D volume, sequence of [D]
+        coords (Tensor): coordinates, float [N, D] in [-1, 1].
+        values (Tensor): values, float [N, C].
+        mode (str, Literal['nearest', 'linear', 'linear-mipmap']): interpolation mode, see https://github.com/ashawkey/grid_put for examples. Defaults to 'linear-mipmap'.
+        min_resolution (int, optional): minimal resolution for mipmap. Defaults to 32.
+        return_count (bool, optional): whether to return the summed value and weights, instead of the divided results. Defaults to False.
+
+    Returns:
+        Tensor: the restored image/volume, float [H, W, C]/[H, W, D, C].
+    """
+    
     D = len(shape)
     assert D in [2, 3], f'only support D == 2 or 3, but got D == {D}'
 
