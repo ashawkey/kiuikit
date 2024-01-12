@@ -61,7 +61,7 @@ class Mesh:
 
     @classmethod
     def load(cls, path, resize=True, renormal=True, remesh=False, retex=False, bound=0.9, front_dir='+z', **kwargs):
-        """load mesh from path. e.g., ``mesh = Mesh.load(path)``
+        """load mesh from path.
 
         Args:
             path (str): path to mesh file, supports ply, obj, glb.
@@ -71,6 +71,11 @@ class Mesh:
             retex (bool, optional): re-calc the uv coordinates, will overwrite the existing uv coordinates. Defaults to False.
             bound (float, optional): bound to resize. Defaults to 0.9.
             front_dir (str, optional): front-view direction of the mesh, should be [+-][xyz][ 123]. Defaults to '+z'.
+            device (torch.device, optional): torch device. Defaults to None.
+        
+        Note:
+            a ``device`` keyword argument can be provided to specify the torch device. 
+            If it's not provided, we will try to use ``'cuda'`` as the device if it's available.
 
         Returns:
             Mesh: the loaded Mesh object.

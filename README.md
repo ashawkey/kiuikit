@@ -1,6 +1,6 @@
 <p align="center">
     <picture>
-    <img alt="kiuikit_logo" src="docs/source/_static/logo.png" width="100%">
+    <img alt="kiuikit_logo" src="docs/source/_static/logo.png" width="50%">
     </picture>
     </br>
     <b>Kiuikit</b>

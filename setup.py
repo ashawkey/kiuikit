@@ -49,6 +49,7 @@ if __name__ == "__main__":
                 "dearpygui",
                 'tyro',
                 'viser',
+                'pymeshlab',
             ],
         },
     )

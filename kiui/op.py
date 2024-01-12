@@ -2,33 +2,91 @@ import cv2
 import torch
 import numpy as np
 
+from kiui.typing import *
 from kiui.grid_put import grid_put
 
 # torch / numpy math utils
-def dot(x, y):
+def dot(x: Union[Tensor, ndarray], y: Union[Tensor, ndarray]) -> Union[Tensor, ndarray]:
+    """dot product (along the last dim).
+
+    Args:
+        x (Union[Tensor, ndarray]): x, [..., C]
+        y (Union[Tensor, ndarray]): y, [..., C]
+
+    Returns:
+        Union[Tensor, ndarray]: x dot y, [..., 1]
+    """
     if isinstance(x, np.ndarray):
         return np.sum(x * y, -1, keepdims=True)
     else:
         return torch.sum(x * y, -1, keepdim=True)
 
-def length(x, eps=1e-20):
+def length(x: Union[Tensor, ndarray], eps=1e-20) -> Union[Tensor, ndarray]:
+    """length of an array (along the last dim).
+
+    Args:
+        x (Union[Tensor, ndarray]): x, [..., C]
+        eps (float, optional): eps. Defaults to 1e-20.
+
+    Returns:
+        Union[Tensor, ndarray]: length, [..., 1]
+    """
     if isinstance(x, np.ndarray):
         return np.sqrt(np.maximum(np.sum(x * x, axis=-1, keepdims=True), eps))
     else:
         return torch.sqrt(torch.clamp(dot(x, x), min=eps))
 
-def safe_normalize(x, eps=1e-20):
+def safe_normalize(x: Union[Tensor, ndarray], eps=1e-20) -> Union[Tensor, ndarray]:
+    """normalize an array (along the last dim).
+
+    Args:
+        x (Union[Tensor, ndarray]): x, [..., C]
+        eps (float, optional): eps. Defaults to 1e-20.
+
+    Returns:
+        Union[Tensor, ndarray]: normalized x, [..., C]
+    """
+
     return x / length(x, eps)
 
-def make_divisible(x, m=8):
+def make_divisible(x: int, m: int = 8):
+    """make an int x divisible by m.
+
+    Args:
+        x (int): x
+        m (int, optional): m. Defaults to 8.
+
+    Returns:
+        int: x + (m - x % m)
+    """
     return int(x + (m - x % m))
 
-def trunc_rev_sigmoid(x, eps=1e-6):
+def trunc_rev_sigmoid(x: Tensor, eps=1e-6) -> Tensor:
+    """inversion of sigmoid function.
+
+    Args:
+        x (Tensor): x
+        eps (float, optional): eps. Defaults to 1e-6.
+
+    Returns:
+        Tensor: log(x / (1 - x))
+    """
     x = x.clamp(eps, 1 - eps)
     return torch.log(x / (1 - x))
 
 # torch image scaling
-def scale_img_nhwc(x, size, mag='bilinear', min='bilinear'):
+def scale_img_nhwc(x: Tensor, size: Sequence[int], mag='bilinear', min='bilinear') -> Tensor:
+    """image scaling helper.
+
+    Args:
+        x (Tensor): input image, float [N, H, W, C]
+        size (Sequence[int]): target size, tuple of [H', W']
+        mag (str, optional): upscale interpolation mode. Defaults to 'bilinear'.
+        min (str, optional): downscale interpolation mode. Defaults to 'bilinear'.
+
+    Returns:
+        Tensor: rescaled image, float [N, H', W', C]
+    """
     assert (x.shape[1] >= size[0] and x.shape[2] >= size[1]) or (x.shape[1] < size[0] and x.shape[2] < size[1]), "Trying to magnify image in one dimension and minify in the other"
     y = x.permute(0, 3, 1, 2) # NHWC -> NCHW
     if x.shape[1] > size[0] and x.shape[2] > size[1]: # Minification, previous size was bigger
@@ -40,21 +98,62 @@ def scale_img_nhwc(x, size, mag='bilinear', min='bilinear'):
             y = torch.nn.functional.interpolate(y, size, mode=mag)
     return y.permute(0, 2, 3, 1).contiguous() # NCHW -> NHWC
 
-def scale_img_hwc(x, size, mag='bilinear', min='bilinear'):
+def scale_img_hwc(x: Tensor, size: Sequence[int], mag='bilinear', min='bilinear') -> Tensor:
+    """image scaling helper.
+
+    Args:
+        x (Tensor): input image, float [H, W, C]
+        size (Sequence[int]): target size, tuple of [H', W']
+        mag (str, optional): upscale interpolation mode. Defaults to 'bilinear'.
+        min (str, optional): downscale interpolation mode. Defaults to 'bilinear'.
+
+    Returns:
+        Tensor: rescaled image, float [H', W', C]
+    """
     return scale_img_nhwc(x[None, ...], size, mag, min)[0]
 
-def scale_img_nhw(x, size, mag='bilinear', min='bilinear'):
+def scale_img_nhw(x: Tensor, size: Sequence[int], mag='bilinear', min='bilinear') -> Tensor:
+    """image scaling helper.
+
+    Args:
+        x (Tensor): input image, float [N, H, W]
+        size (Sequence[int]): target size, tuple of [H', W']
+        mag (str, optional): upscale interpolation mode. Defaults to 'bilinear'.
+        min (str, optional): downscale interpolation mode. Defaults to 'bilinear'.
+
+    Returns:
+        Tensor: rescaled image, float [N, H', W']
+    """
     return scale_img_nhwc(x[..., None], size, mag, min)[..., 0]
 
-def scale_img_hw(x, size, mag='bilinear', min='bilinear'):
+def scale_img_hw(x: Tensor, size: Sequence[int], mag='bilinear', min='bilinear') -> Tensor:
+    """image scaling helper.
+
+    Args:
+        x (Tensor): input image, float [H, W]
+        size (Sequence[int]): target size, tuple of [H', W']
+        mag (str, optional): upscale interpolation mode. Defaults to 'bilinear'.
+        min (str, optional): downscale interpolation mode. Defaults to 'bilinear'.
+
+    Returns:
+        Tensor: rescaled image, float [H', W']
+    """
     return scale_img_nhwc(x[None, ..., None], size, mag, min)[0, ..., 0]
 
 
-# uv padding from threestudio
-def uv_padding(image, mask, padding=2, backend='knn'):
-    # image: [H, W, 3] torch.tensor or np.ndarray in [0, 1]
-    # mask: [H, W] torch.tensor or np.ndarray, bool, regions with texture.
-    # padding: size to pad into mask
+def uv_padding(image: Union[Tensor, ndarray], mask: Union[Tensor, ndarray], padding: int = 2, backend: Literal['knn', 'cv2'] = 'knn'):
+    """padding the uv-space texture image to avoid seam artifacts.
+
+    Args:
+        image (Union[Tensor, ndarray]): texture image, float, [H, W, C] in [0, 1].
+        mask (Union[Tensor, ndarray]): valid uv region, bool, [H, W].
+        padding (int, optional): padding size into the unmasked region. Defaults to 2.
+        backend (Literal[&#39;knn&#39;, &#39;cv2&#39;], optional): algorithm backend, knn is faster. Defaults to 'knn'.
+
+    Returns:
+        Union[Tensor, ndarray]: padded texture image. float, [H, W, C].
+    """
+    
 
     if torch.is_tensor(image):
         image_input = image.detach().cpu().numpy()
