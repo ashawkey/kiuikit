@@ -328,18 +328,18 @@ All of the functions can be imported from <code class="docutils literal notransl
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>path</strong> (<em>str</em>) – path to the image file.</p></li>
-<li><p><strong>mode</strong> (<em>Literal</em><em>[</em><em>&amp;quot;float&amp;quot;</em><em>, </em><em>&amp;quot;uint8&amp;quot;</em><em>, </em><em>&amp;quot;pil&amp;quot;</em><em>, </em><em>&amp;quot;torch&amp;quot;</em><em>, </em><em>&amp;quot;tensor&amp;quot;</em><em>]</em><em>, </em><em>optional</em>) – returned image format. Defaults to “float”.
-float - float32 numpy array, range [0, 1]
-uint8 - uint8 numpy array, range [0, 255]
-pil - PIL image
-torch/tensor - float32 torch tensor, range [0, 1]</p></li>
-<li><p><strong>order</strong> (<em>Literal</em><em>[</em><em>&amp;quot;RGB&amp;quot;</em><em>, </em><em>&amp;quot;RGBA&amp;quot;</em><em>, </em><em>&amp;quot;BGR&amp;quot;</em><em>, </em><em>&amp;quot;BGRA&amp;quot;</em><em>]</em><em>, </em><em>optional</em>) – channel order. Defaults to “RGB”.</p></li>
+<li><p><strong>mode</strong> (<em>Literal</em><em>[</em><em>“float”</em><em>, </em><em>“uint8”</em><em>, </em><em>“pil”</em><em>, </em><em>“torch”</em><em>, </em><em>“tensor”</em><em>]</em><em>, </em><em>optional</em>) – returned image format. Defaults to “float”.
+float: float32 numpy array, range [0, 1];
+uint8: uint8 numpy array, range [0, 255];
+pil: PIL image;
+torch/tensor: float32 torch tensor, range [0, 1];</p></li>
+<li><p><strong>order</strong> (<em>Literal</em><em>[</em><em>“RGB”</em><em>, </em><em>“RGBA”</em><em>, </em><em>“BGR”</em><em>, </em><em>“BGRA”</em><em>]</em><em>, </em><em>optional</em>) – channel order. Defaults to “RGB”.</p></li>
 </ul>
 </dd>
 </dl>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>By default this function will convert RGBA image to white-background RGB image. Use <cite>order=”RGBA”</cite> to keep the alpha channel.</p>
+<p>By default this function will convert RGBA image to white-background RGB image. Use <code class="docutils literal notranslate"><span class="pre">order=&quot;RGBA&quot;</span></code> to keep the alpha channel.</p>
 </div>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>

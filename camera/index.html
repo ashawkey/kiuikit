@@ -417,6 +417,24 @@ However, the three directions (right, up, forward) can be defined differently:</
 <dt class="sig sig-object py" id="kiui.cam.OrbitCamera">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">OrbitCamera</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">W</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">H</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fovy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">60</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">near</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.01</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">far</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#OrbitCamera"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.OrbitCamera" title="Link to this definition">#</a></dt>
 <dd><p>An orbital camera class.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="kiui.cam.OrbitCamera.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">W</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">H</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fovy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">60</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">near</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.01</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">far</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">100</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#OrbitCamera.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.OrbitCamera.__init__" title="Link to this definition">#</a></dt>
+<dd><p>init function</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>W</strong> (<em>int</em>) – image width</p></li>
+<li><p><strong>H</strong> (<em>int</em>) – image height</p></li>
+<li><p><strong>r</strong> (<em>int</em><em>, </em><em>optional</em>) – camera radius. Defaults to 2.</p></li>
+<li><p><strong>fovy</strong> (<em>int</em><em>, </em><em>optional</em>) – camera field of view in degree along y-axis. Defaults to 60.</p></li>
+<li><p><strong>near</strong> (<em>float</em><em>, </em><em>optional</em>) – near clip plane. Defaults to 0.01.</p></li>
+<li><p><strong>far</strong> (<em>int</em><em>, </em><em>optional</em>) – far clip plane. Defaults to 100.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
 <dl class="py property">
 <dt class="sig sig-object py" id="kiui.cam.OrbitCamera.fovx">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">fovx</span></span><a class="headerlink" href="#kiui.cam.OrbitCamera.fovx" title="Link to this definition">#</a></dt>
@@ -643,6 +661,7 @@ However, the three directions (right, up, forward) can be defined differently:</
 <li><a class="reference internal" href="#kiui.cam.get_perspective"><code class="docutils literal notranslate"><span class="pre">get_perspective()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.cam.get_rays"><code class="docutils literal notranslate"><span class="pre">get_rays()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.cam.OrbitCamera"><code class="docutils literal notranslate"><span class="pre">OrbitCamera</span></code></a><ul>
+<li><a class="reference internal" href="#kiui.cam.OrbitCamera.__init__"><code class="docutils literal notranslate"><span class="pre">OrbitCamera.__init__()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.cam.OrbitCamera.fovx"><code class="docutils literal notranslate"><span class="pre">OrbitCamera.fovx</span></code></a></li>
 <li><a class="reference internal" href="#kiui.cam.OrbitCamera.campos"><code class="docutils literal notranslate"><span class="pre">OrbitCamera.campos</span></code></a></li>
 <li><a class="reference internal" href="#kiui.cam.OrbitCamera.pose"><code class="docutils literal notranslate"><span class="pre">OrbitCamera.pose</span></code></a></li>

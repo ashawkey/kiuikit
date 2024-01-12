@@ -219,6 +219,27 @@
 <p>Miscellaneous API.</p>
 <section id="super-resolution">
 <h2>Super-resolution<a class="headerlink" href="#super-resolution" title="Link to this heading">#</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.sr.sr">
+<span class="sig-prename descclassname"><span class="pre">kiui.sr.</span></span><span class="sig-name descname"><span class="pre">sr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scale</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="m"><span class="pre">2</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="m"><span class="pre">4</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="m"><span class="pre">8</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/sr/#sr"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.sr.sr" title="Link to this definition">#</a></dt>
+<dd><p>lazy load functional super-resolution API for convenience.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>image</strong> (<em>ndarray</em>) – input image, uint8/float32 [H, W, 3]</p></li>
+<li><p><strong>scale</strong> (<em>Literal</em><em>[</em><em>2</em><em>, </em><em>4</em><em>, </em><em>8</em><em>]</em><em>, </em><em>optional</em>) – upscale factor. Defaults to 2.</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em><em>, </em><em>optional</em>) – device to put SR models, if not provided, will try to use ‘cuda’. Defaults to None.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>super-resolutioned image, uint8/float32 [H * scale, W * scale, 3]</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
 </section>
 <section id="grid-put">
 <h2>Grid-put<a class="headerlink" href="#grid-put" title="Link to this heading">#</a></h2>
@@ -305,7 +326,10 @@
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">Misc API</a><ul>
-<li><a class="reference internal" href="#super-resolution">Super-resolution</a></li>
+<li><a class="reference internal" href="#super-resolution">Super-resolution</a><ul>
+<li><a class="reference internal" href="#kiui.sr.sr"><code class="docutils literal notranslate"><span class="pre">sr()</span></code></a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#grid-put">Grid-put</a><ul>
 <li><a class="reference internal" href="#kiui.grid_put.grid_put"><code class="docutils literal notranslate"><span class="pre">grid_put()</span></code></a></li>
 </ul>

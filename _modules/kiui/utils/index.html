@@ -414,15 +414,15 @@
 
 <span class="sd">    Args:</span>
 <span class="sd">        path (str): path to the image file.</span>
-<span class="sd">        mode (Literal[&amp;quot;float&amp;quot;, &amp;quot;uint8&amp;quot;, &amp;quot;pil&amp;quot;, &amp;quot;torch&amp;quot;, &amp;quot;tensor&amp;quot;], optional): returned image format. Defaults to &quot;float&quot;.</span>
-<span class="sd">            float - float32 numpy array, range [0, 1]</span>
-<span class="sd">            uint8 - uint8 numpy array, range [0, 255]</span>
-<span class="sd">            pil - PIL image</span>
-<span class="sd">            torch/tensor - float32 torch tensor, range [0, 1]</span>
-<span class="sd">        order (Literal[&amp;quot;RGB&amp;quot;, &amp;quot;RGBA&amp;quot;, &amp;quot;BGR&amp;quot;, &amp;quot;BGRA&amp;quot;], optional): channel order. Defaults to &quot;RGB&quot;.</span>
+<span class="sd">        mode (Literal[&quot;float&quot;, &quot;uint8&quot;, &quot;pil&quot;, &quot;torch&quot;, &quot;tensor&quot;], optional): returned image format. Defaults to &quot;float&quot;.</span>
+<span class="sd">            float: float32 numpy array, range [0, 1];</span>
+<span class="sd">            uint8: uint8 numpy array, range [0, 255];</span>
+<span class="sd">            pil: PIL image;</span>
+<span class="sd">            torch/tensor: float32 torch tensor, range [0, 1];</span>
+<span class="sd">        order (Literal[&quot;RGB&quot;, &quot;RGBA&quot;, &quot;BGR&quot;, &quot;BGRA&quot;], optional): channel order. Defaults to &quot;RGB&quot;.</span>
 <span class="sd">    </span>
 <span class="sd">    Note:</span>
-<span class="sd">        By default this function will convert RGBA image to white-background RGB image. Use `order=&quot;RGBA&quot;` to keep the alpha channel.</span>
+<span class="sd">        By default this function will convert RGBA image to white-background RGB image. Use ``order=&quot;RGBA&quot;`` to keep the alpha channel.</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        Union[np.ndarray, PIL.Image, torch.Tensor]: the image array.</span>

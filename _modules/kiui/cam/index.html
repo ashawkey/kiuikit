@@ -449,6 +449,8 @@
 <span class="k">class</span> <span class="nc">OrbitCamera</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot; An orbital camera class.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+<div class="viewcode-block" id="OrbitCamera.__init__">
+<a class="viewcode-back" href="../../../camera/#kiui.cam.OrbitCamera.__init__">[docs]</a>
     <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">W</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">r</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">fovy</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span> <span class="n">near</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span> <span class="n">far</span><span class="o">=</span><span class="mi">100</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;init function</span>
 
@@ -468,7 +470,8 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">far</span> <span class="o">=</span> <span class="n">far</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">center</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>  <span class="c1"># look at this point</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">rot</span> <span class="o">=</span> <span class="n">Rotation</span><span class="o">.</span><span class="n">from_matrix</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">up</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>  <span class="c1"># need to be normalized!</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">up</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>  <span class="c1"># need to be normalized!</span></div>
+
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">fovx</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
