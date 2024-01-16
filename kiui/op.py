@@ -200,3 +200,50 @@ def uv_padding(image: Union[Tensor, ndarray], mask: Union[Tensor, ndarray], padd
         inpaint_image = torch.from_numpy(inpaint_image).to(image)
     
     return inpaint_image
+
+
+def recenter(image: ndarray, mask: ndarray, border_ratio: float = 0.2) -> ndarray:
+    """ recenter an image to leave some empty space at the image border.
+
+    Args:
+        image (ndarray): input image, float/uint8 [H, W, 3/4]
+        mask (ndarray): alpha mask, bool [H, W]
+        border_ratio (float, optional): border ratio, image will be resized to (1 - border_ratio). Defaults to 0.2.
+
+    Returns:
+        ndarray: output image, float/uint8 [H, W, 3/4]
+    """
+    
+    return_int = False
+    if image.dtype == np.uint8:
+        image = image.astype(np.float32) / 255
+        return_int = True
+    
+    H, W, C = image.shape
+    size = max(H, W)
+
+    # default to white bg if rgb, but use 0 if rgba
+    if C == 3:
+        result = np.ones((size, size, C), dtype=np.float32)
+    else:
+        result = np.zeros((size, size, C), dtype=np.float32)
+            
+    coords = np.nonzero(mask)
+    x_min, x_max = coords[0].min(), coords[0].max()
+    y_min, y_max = coords[1].min(), coords[1].max()
+    h = x_max - x_min
+    w = y_max - y_min
+    desired_size = int(size * (1 - border_ratio))
+    scale = desired_size / max(h, w)
+    h2 = int(h * scale)
+    w2 = int(w * scale)
+    x2_min = (size - h2) // 2
+    x2_max = x2_min + h2
+    y2_min = (size - w2) // 2
+    y2_max = y2_min + w2
+    result[x2_min:x2_max, y2_min:y2_max] = cv2.resize(image[x_min:x_max, y_min:y_max], (w2, h2), interpolation=cv2.INTER_AREA)
+
+    if return_int:
+        result = (result * 255).astype(np.uint8)
+
+    return result
