@@ -420,6 +420,21 @@ class Mesh:
 
         return mesh
 
+    # sample surface (using trimesh)
+    def sample_surface(self, count: int):
+        """sample points on the surface of the mesh.
+
+        Args:
+            count (int): number of points to sample.
+
+        Returns:
+            torch.Tensor: the sampled points, float [count, 3].
+        """
+        _mesh = trimesh.Trimesh(vertices=self.v.detach().cpu().numpy(), faces=self.f.detach().cpu().numpy())
+        points, face_idx = trimesh.sample.sample_surface(_mesh, count)
+        points = torch.from_numpy(points).float().to(self.device)
+        return points
+
     # aabb
     def aabb(self):
         """get the axis-aligned bounding box of the mesh.

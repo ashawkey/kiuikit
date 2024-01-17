@@ -61,7 +61,7 @@ def make_divisible(x: int, m: int = 8):
     """
     return int(x + (m - x % m))
 
-def trunc_rev_sigmoid(x: Tensor, eps=1e-6) -> Tensor:
+def inverse_sigmoid(x: Tensor, eps=1e-6) -> Tensor:
     """inversion of sigmoid function.
 
     Args:
@@ -73,6 +73,18 @@ def trunc_rev_sigmoid(x: Tensor, eps=1e-6) -> Tensor:
     """
     x = x.clamp(eps, 1 - eps)
     return torch.log(x / (1 - x))
+
+def inverse_softplus(x: Tensor) -> Tensor:
+    """inversion of softplus function.
+    
+    Args:
+        x (Tensor): x
+    
+    Returns:
+        Tensor: log(exp(x) - 1)
+    """
+    # a numerically stable equation (ref: https://github.com/pytorch/pytorch/issues/72759)
+    return x + torch.log(-torch.expm1(-x))
 
 # torch image scaling
 def scale_img_nhwc(x: Tensor, size: Sequence[int], mag='bilinear', min='bilinear') -> Tensor:
