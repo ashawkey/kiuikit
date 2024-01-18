@@ -288,9 +288,9 @@
     <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">x</span> <span class="o">+</span> <span class="p">(</span><span class="n">m</span> <span class="o">-</span> <span class="n">x</span> <span class="o">%</span> <span class="n">m</span><span class="p">))</span></div>
 
 
-<div class="viewcode-block" id="trunc_rev_sigmoid">
-<a class="viewcode-back" href="../../../ops/#kiui.op.trunc_rev_sigmoid">[docs]</a>
-<span class="k">def</span> <span class="nf">trunc_rev_sigmoid</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
+<div class="viewcode-block" id="inverse_sigmoid">
+<a class="viewcode-back" href="../../../ops/#kiui.op.inverse_sigmoid">[docs]</a>
+<span class="k">def</span> <span class="nf">inverse_sigmoid</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;inversion of sigmoid function.</span>
 
 <span class="sd">    Args:</span>
@@ -302,6 +302,21 @@
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">clamp</span><span class="p">(</span><span class="n">eps</span><span class="p">,</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">eps</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">x</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">x</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="inverse_softplus">
+<a class="viewcode-back" href="../../../ops/#kiui.op.inverse_softplus">[docs]</a>
+<span class="k">def</span> <span class="nf">inverse_softplus</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;inversion of softplus function.</span>
+<span class="sd">    </span>
+<span class="sd">    Args:</span>
+<span class="sd">        x (Tensor): x</span>
+<span class="sd">    </span>
+<span class="sd">    Returns:</span>
+<span class="sd">        Tensor: log(exp(x) - 1)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># a numerically stable equation (ref: https://github.com/pytorch/pytorch/issues/72759)</span>
+    <span class="k">return</span> <span class="n">x</span> <span class="o">+</span> <span class="n">torch</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="o">-</span><span class="n">torch</span><span class="o">.</span><span class="n">expm1</span><span class="p">(</span><span class="o">-</span><span class="n">x</span><span class="p">))</span></div>
 
 
 <span class="c1"># torch image scaling</span>
@@ -444,6 +459,56 @@
         <span class="n">inpaint_image</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">inpaint_image</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
     
     <span class="k">return</span> <span class="n">inpaint_image</span></div>
+
+
+
+<div class="viewcode-block" id="recenter">
+<a class="viewcode-back" href="../../../ops/#kiui.op.recenter">[docs]</a>
+<span class="k">def</span> <span class="nf">recenter</span><span class="p">(</span><span class="n">image</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">mask</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">border_ratio</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.2</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; recenter an image to leave some empty space at the image border.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        image (ndarray): input image, float/uint8 [H, W, 3/4]</span>
+<span class="sd">        mask (ndarray): alpha mask, bool [H, W]</span>
+<span class="sd">        border_ratio (float, optional): border ratio, image will be resized to (1 - border_ratio). Defaults to 0.2.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        ndarray: output image, float/uint8 [H, W, 3/4]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+    <span class="n">return_int</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="k">if</span> <span class="n">image</span><span class="o">.</span><span class="n">dtype</span> <span class="o">==</span> <span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">:</span>
+        <span class="n">image</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="o">/</span> <span class="mi">255</span>
+        <span class="n">return_int</span> <span class="o">=</span> <span class="kc">True</span>
+    
+    <span class="n">H</span><span class="p">,</span> <span class="n">W</span><span class="p">,</span> <span class="n">C</span> <span class="o">=</span> <span class="n">image</span><span class="o">.</span><span class="n">shape</span>
+    <span class="n">size</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">H</span><span class="p">,</span> <span class="n">W</span><span class="p">)</span>
+
+    <span class="c1"># default to white bg if rgb, but use 0 if rgba</span>
+    <span class="k">if</span> <span class="n">C</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">size</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">C</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">size</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">C</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+            
+    <span class="n">coords</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nonzero</span><span class="p">(</span><span class="n">mask</span><span class="p">)</span>
+    <span class="n">x_min</span><span class="p">,</span> <span class="n">x_max</span> <span class="o">=</span> <span class="n">coords</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">(),</span> <span class="n">coords</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+    <span class="n">y_min</span><span class="p">,</span> <span class="n">y_max</span> <span class="o">=</span> <span class="n">coords</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">min</span><span class="p">(),</span> <span class="n">coords</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+    <span class="n">h</span> <span class="o">=</span> <span class="n">x_max</span> <span class="o">-</span> <span class="n">x_min</span>
+    <span class="n">w</span> <span class="o">=</span> <span class="n">y_max</span> <span class="o">-</span> <span class="n">y_min</span>
+    <span class="n">desired_size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">size</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">border_ratio</span><span class="p">))</span>
+    <span class="n">scale</span> <span class="o">=</span> <span class="n">desired_size</span> <span class="o">/</span> <span class="nb">max</span><span class="p">(</span><span class="n">h</span><span class="p">,</span> <span class="n">w</span><span class="p">)</span>
+    <span class="n">h2</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">h</span> <span class="o">*</span> <span class="n">scale</span><span class="p">)</span>
+    <span class="n">w2</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">w</span> <span class="o">*</span> <span class="n">scale</span><span class="p">)</span>
+    <span class="n">x2_min</span> <span class="o">=</span> <span class="p">(</span><span class="n">size</span> <span class="o">-</span> <span class="n">h2</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span>
+    <span class="n">x2_max</span> <span class="o">=</span> <span class="n">x2_min</span> <span class="o">+</span> <span class="n">h2</span>
+    <span class="n">y2_min</span> <span class="o">=</span> <span class="p">(</span><span class="n">size</span> <span class="o">-</span> <span class="n">w2</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span>
+    <span class="n">y2_max</span> <span class="o">=</span> <span class="n">y2_min</span> <span class="o">+</span> <span class="n">w2</span>
+    <span class="n">result</span><span class="p">[</span><span class="n">x2_min</span><span class="p">:</span><span class="n">x2_max</span><span class="p">,</span> <span class="n">y2_min</span><span class="p">:</span><span class="n">y2_max</span><span class="p">]</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="n">image</span><span class="p">[</span><span class="n">x_min</span><span class="p">:</span><span class="n">x_max</span><span class="p">,</span> <span class="n">y_min</span><span class="p">:</span><span class="n">y_max</span><span class="p">],</span> <span class="p">(</span><span class="n">w2</span><span class="p">,</span> <span class="n">h2</span><span class="p">),</span> <span class="n">interpolation</span><span class="o">=</span><span class="n">cv2</span><span class="o">.</span><span class="n">INTER_AREA</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">return_int</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="p">(</span><span class="n">result</span> <span class="o">*</span> <span class="mi">255</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">result</span></div>
 
 </pre></div>
         </article>

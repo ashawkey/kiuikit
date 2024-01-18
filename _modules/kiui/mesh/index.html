@@ -282,14 +282,14 @@
 <div class="viewcode-block" id="Mesh.load">
 <a class="viewcode-back" href="../../../mesh/#kiui.mesh.Mesh.load">[docs]</a>
     <span class="nd">@classmethod</span>
-    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">resize</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">renormal</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">remesh</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">retex</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">front_dir</span><span class="o">=</span><span class="s1">&#39;+z&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">resize</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">clean</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">renormal</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">retex</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span> <span class="n">front_dir</span><span class="o">=</span><span class="s1">&#39;+z&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;load mesh from path.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            path (str): path to mesh file, supports ply, obj, glb.</span>
+<span class="sd">            clean (bool, optional): perform mesh cleaning at load (e.g., merge close vertices). Defaults to False.</span>
 <span class="sd">            resize (bool, optional): auto resize the mesh using ``bound`` into [-bound, bound]^3. Defaults to True.</span>
 <span class="sd">            renormal (bool, optional): re-calc the vertex normals. Defaults to True.</span>
-<span class="sd">            remesh (bool, optional): perform remeshing. Defaults to False.</span>
 <span class="sd">            retex (bool, optional): re-calc the uv coordinates, will overwrite the existing uv coordinates. Defaults to False.</span>
 <span class="sd">            bound (float, optional): bound to resize. Defaults to 0.9.</span>
 <span class="sd">            front_dir (str, optional): front-view direction of the mesh, should be [+-][xyz][ 123]. Defaults to &#39;+z&#39;.</span>
@@ -309,14 +309,14 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="n">mesh</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">load_trimesh</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
         
-        <span class="c1"># remesh</span>
-        <span class="k">if</span> <span class="n">remesh</span><span class="p">:</span>
+        <span class="c1"># clean</span>
+        <span class="k">if</span> <span class="n">clean</span><span class="p">:</span>
             <span class="kn">from</span> <span class="nn">kiui.mesh_utils</span> <span class="kn">import</span> <span class="n">clean_mesh</span>
             <span class="n">vertices</span> <span class="o">=</span> <span class="n">mesh</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
             <span class="n">triangles</span> <span class="o">=</span> <span class="n">mesh</span><span class="o">.</span><span class="n">f</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
-            <span class="n">vertices</span><span class="p">,</span> <span class="n">triangles</span> <span class="o">=</span> <span class="n">clean_mesh</span><span class="p">(</span><span class="n">vertices</span><span class="p">,</span> <span class="n">triangles</span><span class="p">,</span> <span class="n">remesh</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">remesh_size</span><span class="o">=</span><span class="mf">0.01</span><span class="p">)</span>
-            <span class="n">mesh</span><span class="o">.</span><span class="n">v</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">vertices</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">()</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">mesh</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-            <span class="n">mesh</span><span class="o">.</span><span class="n">f</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">triangles</span><span class="p">)</span><span class="o">.</span><span class="n">int</span><span class="p">()</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">mesh</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+            <span class="n">vertices</span><span class="p">,</span> <span class="n">triangles</span> <span class="o">=</span> <span class="n">clean_mesh</span><span class="p">(</span><span class="n">vertices</span><span class="p">,</span> <span class="n">triangles</span><span class="p">,</span> <span class="n">remesh</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="n">mesh</span><span class="o">.</span><span class="n">v</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">vertices</span><span class="p">)</span><span class="o">.</span><span class="n">contiguous</span><span class="p">()</span><span class="o">.</span><span class="n">float</span><span class="p">()</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">mesh</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+            <span class="n">mesh</span><span class="o">.</span><span class="n">f</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">triangles</span><span class="p">)</span><span class="o">.</span><span class="n">contiguous</span><span class="p">()</span><span class="o">.</span><span class="n">int</span><span class="p">()</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">mesh</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
 
         <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Mesh loading] v: </span><span class="si">{</span><span class="n">mesh</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">, f: </span><span class="si">{</span><span class="n">mesh</span><span class="o">.</span><span class="n">f</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="c1"># auto-normalize</span>
@@ -647,6 +647,24 @@
         <span class="p">)</span>
 
         <span class="k">return</span> <span class="n">mesh</span></div>
+
+
+    <span class="c1"># sample surface (using trimesh)</span>
+<div class="viewcode-block" id="Mesh.sample_surface">
+<a class="viewcode-back" href="../../../mesh/#kiui.mesh.Mesh.sample_surface">[docs]</a>
+    <span class="k">def</span> <span class="nf">sample_surface</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">count</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;sample points on the surface of the mesh.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            count (int): number of points to sample.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            torch.Tensor: the sampled points, float [count, 3].</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">_mesh</span> <span class="o">=</span> <span class="n">trimesh</span><span class="o">.</span><span class="n">Trimesh</span><span class="p">(</span><span class="n">vertices</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">(),</span> <span class="n">faces</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">f</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">())</span>
+        <span class="n">points</span><span class="p">,</span> <span class="n">face_idx</span> <span class="o">=</span> <span class="n">trimesh</span><span class="o">.</span><span class="n">sample</span><span class="o">.</span><span class="n">sample_surface</span><span class="p">(</span><span class="n">_mesh</span><span class="p">,</span> <span class="n">count</span><span class="p">)</span>
+        <span class="n">points</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">points</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">()</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">points</span></div>
 
 
     <span class="c1"># aabb</span>

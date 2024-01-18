@@ -215,9 +215,29 @@
           <h1>Source code for kiui.mesh_utils</h1><div class="highlight"><pre>
 <span></span><span class="kn">import</span> <span class="nn">torch</span>
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
-<span class="kn">import</span> <span class="nn">pymeshlab</span> <span class="k">as</span> <span class="nn">pml</span>
 
 <span class="kn">from</span> <span class="nn">kiui.op</span> <span class="kn">import</span> <span class="n">safe_normalize</span>
+
+<span class="kn">import</span> <span class="nn">pymeshlab</span> <span class="k">as</span> <span class="nn">pml</span>
+<span class="kn">from</span> <span class="nn">importlib.metadata</span> <span class="kn">import</span> <span class="n">version</span>
+
+<span class="n">PML_VER</span> <span class="o">=</span> <span class="n">version</span><span class="p">(</span><span class="s1">&#39;pymeshlab&#39;</span><span class="p">)</span> 
+
+<span class="c1"># monkey patch for 0.2</span>
+<span class="k">if</span> <span class="n">PML_VER</span> <span class="o">==</span> <span class="s1">&#39;0.2&#39;</span><span class="p">:</span>
+    <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">meshing_decimation_quadric_edge_collapse</span> <span class="o">=</span> <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">simplification_quadric_edge_collapse_decimation</span>
+    <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">meshing_isotropic_explicit_remeshing</span> <span class="o">=</span> <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">remeshing_isotropic_explicit_remeshing</span>
+    <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">meshing_remove_unreferenced_vertices</span> <span class="o">=</span> <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">remove_unreferenced_vertices</span>
+    <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">meshing_merge_close_vertices</span> <span class="o">=</span> <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">merge_close_vertices</span>
+    <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">meshing_remove_duplicate_faces</span> <span class="o">=</span> <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">remove_duplicate_faces</span>
+    <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">meshing_remove_null_faces</span> <span class="o">=</span> <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">remove_zero_area_faces</span>
+    <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">meshing_remove_connected_component_by_diameter</span> <span class="o">=</span> <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">remove_isolated_pieces_wrt_diameter</span>
+    <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">meshing_remove_connected_component_by_face_number</span> <span class="o">=</span> <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">remove_isolated_pieces_wrt_face_num</span>
+    <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">meshing_repair_non_manifold_edges</span> <span class="o">=</span> <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">repair_non_manifold_edges_by_removing_faces</span>
+    <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">meshing_repair_non_manifold_vertices</span> <span class="o">=</span> <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">repair_non_manifold_vertices_by_splitting</span>
+
+    <span class="n">pml</span><span class="o">.</span><span class="n">PercentageValue</span> <span class="o">=</span> <span class="n">pml</span><span class="o">.</span><span class="n">Percentage</span>
+    <span class="c1"># pml.PureValue = pml.AbsoluteValue # there is even no absolutevalue by then ????</span>
 
 
 <div class="viewcode-block" id="decimate_mesh">
@@ -227,7 +247,7 @@
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot; perform mesh decimation.</span>
 
-<span class="sd">    Args:</span>
+<span class="sd">    Args:pml</span>
 <span class="sd">        verts (np.ndarray): mesh vertices, float [N, 3]</span>
 <span class="sd">        faces (np.ndarray): mesh faces, int [M, 3]</span>
 <span class="sd">        target (int): targeted number of faces</span>
@@ -342,9 +362,14 @@
 
     <span class="k">if</span> <span class="n">remesh</span><span class="p">:</span>
         <span class="c1"># ms.apply_coord_taubin_smoothing()</span>
-        <span class="n">ms</span><span class="o">.</span><span class="n">meshing_isotropic_explicit_remeshing</span><span class="p">(</span>
-            <span class="n">iterations</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">targetlen</span><span class="o">=</span><span class="n">pml</span><span class="o">.</span><span class="n">PureValue</span><span class="p">(</span><span class="n">remesh_size</span><span class="p">)</span>
-        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">PML_VER</span> <span class="o">==</span> <span class="s1">&#39;0.2&#39;</span><span class="p">:</span>
+            <span class="n">ms</span><span class="o">.</span><span class="n">meshing_isotropic_explicit_remeshing</span><span class="p">(</span>
+                <span class="n">iterations</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">targetlen</span><span class="o">=</span><span class="n">pml</span><span class="o">.</span><span class="n">Percentage</span><span class="p">(</span><span class="n">remesh_size</span> <span class="o">*</span> <span class="mi">50</span><span class="p">)</span> <span class="c1"># an approximation...</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">ms</span><span class="o">.</span><span class="n">meshing_isotropic_explicit_remeshing</span><span class="p">(</span>
+                <span class="n">iterations</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">targetlen</span><span class="o">=</span><span class="n">pml</span><span class="o">.</span><span class="n">PureValue</span><span class="p">(</span><span class="n">remesh_size</span><span class="p">)</span>
+            <span class="p">)</span>
 
     <span class="c1"># extract mesh</span>
     <span class="n">m</span> <span class="o">=</span> <span class="n">ms</span><span class="o">.</span><span class="n">current_mesh</span><span class="p">()</span>

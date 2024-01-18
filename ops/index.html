@@ -303,8 +303,8 @@
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="kiui.op.trunc_rev_sigmoid">
-<span class="sig-prename descclassname"><span class="pre">kiui.op.</span></span><span class="sig-name descname"><span class="pre">trunc_rev_sigmoid</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-06</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="../_modules/kiui/op/#trunc_rev_sigmoid"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.op.trunc_rev_sigmoid" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="kiui.op.inverse_sigmoid">
+<span class="sig-prename descclassname"><span class="pre">kiui.op.</span></span><span class="sig-name descname"><span class="pre">inverse_sigmoid</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-06</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="../_modules/kiui/op/#inverse_sigmoid"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.op.inverse_sigmoid" title="Link to this definition">#</a></dt>
 <dd><p>inversion of sigmoid function.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -315,6 +315,23 @@
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>log(x / (1 - x))</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.op.inverse_softplus">
+<span class="sig-prename descclassname"><span class="pre">kiui.op.</span></span><span class="sig-name descname"><span class="pre">inverse_softplus</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="../_modules/kiui/op/#inverse_softplus"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.op.inverse_softplus" title="Link to this definition">#</a></dt>
+<dd><p>inversion of softplus function.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>x</strong> (<em>Tensor</em>) – x</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>log(exp(x) - 1)</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>Tensor</p>
@@ -432,6 +449,27 @@
 </dl>
 </dd></dl>
 
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.op.recenter">
+<span class="sig-prename descclassname"><span class="pre">kiui.op.</span></span><span class="sig-name descname"><span class="pre">recenter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mask</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">border_ratio</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.2</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="reference internal" href="../_modules/kiui/op/#recenter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.op.recenter" title="Link to this definition">#</a></dt>
+<dd><p>recenter an image to leave some empty space at the image border.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>image</strong> (<em>ndarray</em>) – input image, float/uint8 [H, W, 3/4]</p></li>
+<li><p><strong>mask</strong> (<em>ndarray</em>) – alpha mask, bool [H, W]</p></li>
+<li><p><strong>border_ratio</strong> (<em>float</em><em>, </em><em>optional</em>) – border ratio, image will be resized to (1 - border_ratio). Defaults to 0.2.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>output image, float/uint8 [H, W, 3/4]</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
 </section>
 </section>
 
@@ -496,12 +534,14 @@
 <li><a class="reference internal" href="#kiui.op.length"><code class="docutils literal notranslate"><span class="pre">length()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.op.safe_normalize"><code class="docutils literal notranslate"><span class="pre">safe_normalize()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.op.make_divisible"><code class="docutils literal notranslate"><span class="pre">make_divisible()</span></code></a></li>
-<li><a class="reference internal" href="#kiui.op.trunc_rev_sigmoid"><code class="docutils literal notranslate"><span class="pre">trunc_rev_sigmoid()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.op.inverse_sigmoid"><code class="docutils literal notranslate"><span class="pre">inverse_sigmoid()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.op.inverse_softplus"><code class="docutils literal notranslate"><span class="pre">inverse_softplus()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.op.scale_img_nhwc"><code class="docutils literal notranslate"><span class="pre">scale_img_nhwc()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.op.scale_img_hwc"><code class="docutils literal notranslate"><span class="pre">scale_img_hwc()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.op.scale_img_nhw"><code class="docutils literal notranslate"><span class="pre">scale_img_nhw()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.op.scale_img_hw"><code class="docutils literal notranslate"><span class="pre">scale_img_hw()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.op.uv_padding"><code class="docutils literal notranslate"><span class="pre">uv_padding()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.op.recenter"><code class="docutils literal notranslate"><span class="pre">recenter()</span></code></a></li>
 </ul>
 </li>
 </ul>

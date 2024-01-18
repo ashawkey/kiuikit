@@ -269,15 +269,15 @@
 
 <dl class="py method">
 <dt class="sig sig-object py" id="kiui.mesh.Mesh.load">
-<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">resize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">renormal</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remesh</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">retex</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bound</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.9</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">front_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'+z'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/mesh/#Mesh.load"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.mesh.Mesh.load" title="Link to this definition">#</a></dt>
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">resize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">clean</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">renormal</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">retex</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bound</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.9</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">front_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'+z'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/mesh/#Mesh.load"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.mesh.Mesh.load" title="Link to this definition">#</a></dt>
 <dd><p>load mesh from path.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>path</strong> (<em>str</em>) – path to mesh file, supports ply, obj, glb.</p></li>
+<li><p><strong>clean</strong> (<em>bool</em><em>, </em><em>optional</em>) – perform mesh cleaning at load (e.g., merge close vertices). Defaults to False.</p></li>
 <li><p><strong>resize</strong> (<em>bool</em><em>, </em><em>optional</em>) – auto resize the mesh using <code class="docutils literal notranslate"><span class="pre">bound</span></code> into [-bound, bound]^3. Defaults to True.</p></li>
 <li><p><strong>renormal</strong> (<em>bool</em><em>, </em><em>optional</em>) – re-calc the vertex normals. Defaults to True.</p></li>
-<li><p><strong>remesh</strong> (<em>bool</em><em>, </em><em>optional</em>) – perform remeshing. Defaults to False.</p></li>
 <li><p><strong>retex</strong> (<em>bool</em><em>, </em><em>optional</em>) – re-calc the uv coordinates, will overwrite the existing uv coordinates. Defaults to False.</p></li>
 <li><p><strong>bound</strong> (<em>float</em><em>, </em><em>optional</em>) – bound to resize. Defaults to 0.9.</p></li>
 <li><p><strong>front_dir</strong> (<em>str</em><em>, </em><em>optional</em>) – front-view direction of the mesh, should be [+-][xyz][ 123]. Defaults to ‘+z’.</p></li>
@@ -350,6 +350,23 @@ but <strong>this may cause the texture to lose</strong>, since we only support o
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference internal" href="#kiui.mesh.Mesh" title="kiui.mesh.Mesh">Mesh</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="kiui.mesh.Mesh.sample_surface">
+<span class="sig-name descname"><span class="pre">sample_surface</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">count</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/mesh/#Mesh.sample_surface"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.mesh.Mesh.sample_surface" title="Link to this definition">#</a></dt>
+<dd><p>sample points on the surface of the mesh.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>count</strong> (<em>int</em>) – number of points to sample.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>the sampled points, float [count, 3].</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>torch.Tensor</p>
 </dd>
 </dl>
 </dd></dl>
@@ -481,22 +498,21 @@ Usually this will duplicate the vertices on the edge of uv atlas. Defaults to Tr
 <dt class="sig sig-object py" id="kiui.mesh_utils.decimate_mesh">
 <span class="sig-prename descclassname"><span class="pre">kiui.mesh_utils.</span></span><span class="sig-name descname"><span class="pre">decimate_mesh</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">verts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">faces</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50000.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'pymeshlab'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remesh</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">optimalplacement</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/mesh_utils/#decimate_mesh"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.mesh_utils.decimate_mesh" title="Link to this definition">#</a></dt>
 <dd><p>perform mesh decimation.</p>
+<dl class="simple">
+<dt>Args:pml</dt><dd><p>verts (np.ndarray): mesh vertices, float [N, 3]
+faces (np.ndarray): mesh faces, int [M, 3]
+target (int): targeted number of faces
+backend (str, optional): algorithm backend, can be “pymeshlab” or “pyfqmr”. Defaults to “pymeshlab”.
+remesh (bool, optional): whether to remesh after decimation. Defaults to False.
+optimalplacement (bool, optional): For flat mesh, use False to prevent spikes. Defaults to True.</p>
+</dd>
+</dl>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>verts</strong> (<em>np.ndarray</em>) – mesh vertices, float [N, 3]</p></li>
-<li><p><strong>faces</strong> (<em>np.ndarray</em>) – mesh faces, int [M, 3]</p></li>
-<li><p><strong>target</strong> (<em>int</em>) – targeted number of faces</p></li>
-<li><p><strong>backend</strong> (<em>str</em><em>, </em><em>optional</em>) – algorithm backend, can be “pymeshlab” or “pyfqmr”. Defaults to “pymeshlab”.</p></li>
-<li><p><strong>remesh</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether to remesh after decimation. Defaults to False.</p></li>
-<li><p><strong>optimalplacement</strong> (<em>bool</em><em>, </em><em>optional</em>) – For flat mesh, use False to prevent spikes. Defaults to True.</p></li>
-</ul>
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>vertices and faces after decimation.</p>
 </dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>vertices and faces after decimation.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Tuple[np.ndarray]</p>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>Tuple[np.ndarray]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -671,6 +687,7 @@ Usually this will duplicate the vertices on the edge of uv atlas. Defaults to Tr
 <li><a class="reference internal" href="#kiui.mesh.Mesh.load"><code class="docutils literal notranslate"><span class="pre">Mesh.load()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.mesh.Mesh.load_obj"><code class="docutils literal notranslate"><span class="pre">Mesh.load_obj()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.mesh.Mesh.load_trimesh"><code class="docutils literal notranslate"><span class="pre">Mesh.load_trimesh()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.mesh.Mesh.sample_surface"><code class="docutils literal notranslate"><span class="pre">Mesh.sample_surface()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.mesh.Mesh.aabb"><code class="docutils literal notranslate"><span class="pre">Mesh.aabb()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.mesh.Mesh.auto_size"><code class="docutils literal notranslate"><span class="pre">Mesh.auto_size()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.mesh.Mesh.auto_normal"><code class="docutils literal notranslate"><span class="pre">Mesh.auto_normal()</span></code></a></li>
