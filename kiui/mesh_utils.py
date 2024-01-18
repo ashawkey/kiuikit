@@ -1,8 +1,28 @@
 import torch
 import numpy as np
-import pymeshlab as pml
 
 from kiui.op import safe_normalize
+
+import pymeshlab as pml
+from importlib.metadata import version
+
+PML_VER = version('pymeshlab') 
+
+# monkey patch for 0.2
+if PML_VER == '0.2':
+    pml.MeshSet.meshing_decimation_quadric_edge_collapse = pml.MeshSet.simplification_quadric_edge_collapse_decimation
+    pml.MeshSet.meshing_isotropic_explicit_remeshing = pml.MeshSet.remeshing_isotropic_explicit_remeshing
+    pml.MeshSet.meshing_remove_unreferenced_vertices = pml.MeshSet.remove_unreferenced_vertices
+    pml.MeshSet.meshing_merge_close_vertices = pml.MeshSet.merge_close_vertices
+    pml.MeshSet.meshing_remove_duplicate_faces = pml.MeshSet.remove_duplicate_faces
+    pml.MeshSet.meshing_remove_null_faces = pml.MeshSet.remove_zero_area_faces
+    pml.MeshSet.meshing_remove_connected_component_by_diameter = pml.MeshSet.remove_isolated_pieces_wrt_diameter
+    pml.MeshSet.meshing_remove_connected_component_by_face_number = pml.MeshSet.remove_isolated_pieces_wrt_face_num
+    pml.MeshSet.meshing_repair_non_manifold_edges = pml.MeshSet.repair_non_manifold_edges_by_removing_faces
+    pml.MeshSet.meshing_repair_non_manifold_vertices = pml.MeshSet.repair_non_manifold_vertices_by_splitting
+
+    pml.PercentageValue = pml.Percentage
+    # pml.PureValue = pml.AbsoluteValue # there is even no absolutevalue by then ????
 
 
 def decimate_mesh(
@@ -10,7 +30,7 @@ def decimate_mesh(
 ):
     """ perform mesh decimation.
 
-    Args:
+    Args:pml
         verts (np.ndarray): mesh vertices, float [N, 3]
         faces (np.ndarray): mesh faces, int [M, 3]
         target (int): targeted number of faces
@@ -122,9 +142,14 @@ def clean_mesh(
 
     if remesh:
         # ms.apply_coord_taubin_smoothing()
-        ms.meshing_isotropic_explicit_remeshing(
-            iterations=3, targetlen=pml.PureValue(remesh_size)
-        )
+        if PML_VER == '0.2':
+            ms.meshing_isotropic_explicit_remeshing(
+                iterations=3, targetlen=pml.Percentage(remesh_size * 50) # an approximation...
+            )
+        else:
+            ms.meshing_isotropic_explicit_remeshing(
+                iterations=3, targetlen=pml.PureValue(remesh_size)
+            )
 
     # extract mesh
     m = ms.current_mesh()

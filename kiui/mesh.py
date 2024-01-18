@@ -60,14 +60,14 @@ class Mesh:
         self.ori_scale = 1
 
     @classmethod
-    def load(cls, path, resize=True, renormal=True, remesh=False, retex=False, bound=0.9, front_dir='+z', **kwargs):
+    def load(cls, path, resize=True, clean=False, renormal=True, retex=False, bound=0.9, front_dir='+z', **kwargs):
         """load mesh from path.
 
         Args:
             path (str): path to mesh file, supports ply, obj, glb.
+            clean (bool, optional): perform mesh cleaning at load (e.g., merge close vertices). Defaults to False.
             resize (bool, optional): auto resize the mesh using ``bound`` into [-bound, bound]^3. Defaults to True.
             renormal (bool, optional): re-calc the vertex normals. Defaults to True.
-            remesh (bool, optional): perform remeshing. Defaults to False.
             retex (bool, optional): re-calc the uv coordinates, will overwrite the existing uv coordinates. Defaults to False.
             bound (float, optional): bound to resize. Defaults to 0.9.
             front_dir (str, optional): front-view direction of the mesh, should be [+-][xyz][ 123]. Defaults to '+z'.
@@ -87,14 +87,14 @@ class Mesh:
         else:
             mesh = cls.load_trimesh(path, **kwargs)
         
-        # remesh
-        if remesh:
+        # clean
+        if clean:
             from kiui.mesh_utils import clean_mesh
             vertices = mesh.v.detach().cpu().numpy()
             triangles = mesh.f.detach().cpu().numpy()
-            vertices, triangles = clean_mesh(vertices, triangles, remesh=True, remesh_size=0.01)
-            mesh.v = torch.from_numpy(vertices).float().to(mesh.device)
-            mesh.f = torch.from_numpy(triangles).int().to(mesh.device)
+            vertices, triangles = clean_mesh(vertices, triangles, remesh=False)
+            mesh.v = torch.from_numpy(vertices).contiguous().float().to(mesh.device)
+            mesh.f = torch.from_numpy(triangles).contiguous().int().to(mesh.device)
 
         print(f"[Mesh loading] v: {mesh.v.shape}, f: {mesh.f.shape}")
         # auto-normalize
