@@ -8,7 +8,11 @@ import torch
 import torch.nn.functional as F
 import nvdiffrast.torch as dr
 
-import dearpygui.dearpygui as dpg
+GUI_AVAILABLE = True
+try:
+    import dearpygui.dearpygui as dpg
+except Exception as e:
+    GUI_AVAILABLE = False
 
 from kiui.mesh import Mesh
 from kiui.cam import OrbitCamera
@@ -20,7 +24,9 @@ class GUI:
         self.opt = opt
         self.W = opt.W
         self.H = opt.H
-        self.wogui = opt.wogui # disable gui and run in cmd
+        if not GUI_AVAILABLE and not opt.wogui:
+            print(f'[WARN] cannot import dearpygui, assume without --wogui')
+        self.wogui = not GUI_AVAILABLE or opt.wogui # disable gui and run in cmd
         self.cam = OrbitCamera(opt.W, opt.H, r=opt.radius, fovy=opt.fovy)
         self.bg_color = torch.ones(3, dtype=torch.float32).cuda() # default white bg
         # self.bg_color = torch.zeros(3, dtype=torch.float32).cuda() # black bg

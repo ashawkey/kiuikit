@@ -300,12 +300,13 @@ def is_format(f: str, format: Sequence[str]):
 
     Args:
         f (str): file name.
-        format (Sequence[str]): set of extensions.
+        format (Sequence[str]): set of extensions (both '.jpg' or 'jpg' is ok).
 
     Returns:
         bool: if the file's extension is in the set.
     """
-    return os.path.splitext(f)[1].lower() in format
+    ext = os.path.splitext(f)[1].lower() # include the dot
+    return ext in format or ext[1:] in format
 
 def batch_process_files(
     process_fn, path, out_path, 
