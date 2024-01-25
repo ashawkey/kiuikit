@@ -415,8 +415,8 @@ def main():
         import imageio
         images = []
         elevation = [opt.elevation,]
-        # azimuth = np.arange(-180, 180, 2, dtype=np.int32) # back-->front-->back
-        azimuth = np.arange(0, 360, 2, dtype=np.int32) # front-->back-->front
+        # azimuth = np.arange(-180, 180, 3, dtype=np.int32) # back-->front-->back
+        azimuth = np.arange(0, 360, 3, dtype=np.int32) # front-->back-->front
         for ele in tqdm.tqdm(elevation):
             for azi in tqdm.tqdm(azimuth):
                 gui.cam.from_angle(ele, azi)
@@ -428,7 +428,7 @@ def main():
                 image = (gui.render_buffer * 255).astype(np.uint8)
                 images.append(image)
         images = np.stack(images, axis=0)
-        # ~6 seconds, 180 frames at 30 fps
+        # ~4 seconds, 120 frames at 30 fps
         imageio.mimwrite(opt.save_video, images, fps=30, quality=8, macro_block_size=1)
     else:
         gui.render()

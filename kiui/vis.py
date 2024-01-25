@@ -39,8 +39,7 @@ def plot_image(*xs, normalize=False, save=False):
     
     Args:
         xs (Sequence[Union[torch.Tensor, numpy.ndarray]]): can be uint8 or float32.
-            [B, 4/3/1, H, W], [B, H, W, 4/3/1], [4/3/1, H, W], [H, W, 4/3/1], [H, W] torch.Tensor
-            [B, H, W, 4/3/1], [B, 4/3/1, H, W], [H, W, 4/3/1], [4/3/1, H, W], [H, W] numpy.ndarray
+            [B, 4/3/1, H, W], [B, H, W, 4/3/1], [4/3/1, H, W], [H, W, 4/3/1], [H, W] torch.Tensor or numpy.ndarray
         normalize (bool, optional): whether to renormalize the image to [0, 1]. Defaults to False.
         save (bool, optional): whether to save the image to current dir (in case the plot cannot be showed, like in vscode remote). Defaults to False.
     """
@@ -90,13 +89,10 @@ def plot_image(*xs, normalize=False, save=False):
 
 
 def plot_matrix(*xs):
-    """visualize some 2D matrix, different from ``kiui.vis.plot_image``, 
-       this will keep the original range and plot channel-by-channel.
+    """ visualize some 2D matrix, different from ``kiui.vis.plot_image``, this will keep the original range and plot channel-by-channel.
     
     Args:
-        xs (Sequence[Union[torch.Tensor, numpy.ndarray]]): 
-            [B, C, H, W], [C, H, W], or [H, W] torch.Tensor
-            [B, H, W, C], [H, W, C], or [H, W] numpy.ndarray
+        xs (Sequence[Union[torch.Tensor, numpy.ndarray]]): [B, C, H, W], [C, H, W], or [H, W] torch.Tensor or numpy.ndarray
     """
     
     def _plot_matrix(matrix):
