@@ -5,7 +5,7 @@
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex/" /><link rel="search" title="Search" href="../../../search/" />
 
     <link rel="shortcut icon" href="../../../_static/icon.png"/><!-- Generated with Sphinx 7.2.6 and Furo 2023.09.10 -->
-        <title>kiui.vis - kiui 0.2.0 documentation</title>
+        <title>kiui.vis - kiui 0.2.2 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=135e06be" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
@@ -124,7 +124,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../"><div class="brand">kiui 0.2.0 documentation</div></a>
+      <a href="../../../"><div class="brand">kiui 0.2.2 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -259,8 +259,7 @@
 <span class="sd">    </span>
 <span class="sd">    Args:</span>
 <span class="sd">        xs (Sequence[Union[torch.Tensor, numpy.ndarray]]): can be uint8 or float32.</span>
-<span class="sd">            [B, 4/3/1, H, W], [B, H, W, 4/3/1], [4/3/1, H, W], [H, W, 4/3/1], [H, W] torch.Tensor</span>
-<span class="sd">            [B, H, W, 4/3/1], [B, 4/3/1, H, W], [H, W, 4/3/1], [4/3/1, H, W], [H, W] numpy.ndarray</span>
+<span class="sd">            [B, 4/3/1, H, W], [B, H, W, 4/3/1], [4/3/1, H, W], [H, W, 4/3/1], [H, W] torch.Tensor or numpy.ndarray</span>
 <span class="sd">        normalize (bool, optional): whether to renormalize the image to [0, 1]. Defaults to False.</span>
 <span class="sd">        save (bool, optional): whether to save the image to current dir (in case the plot cannot be showed, like in vscode remote). Defaults to False.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -313,13 +312,10 @@
 <div class="viewcode-block" id="plot_matrix">
 <a class="viewcode-back" href="../../../vis/#kiui.vis.plot_matrix">[docs]</a>
 <span class="k">def</span> <span class="nf">plot_matrix</span><span class="p">(</span><span class="o">*</span><span class="n">xs</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;visualize some 2D matrix, different from ``kiui.vis.plot_image``, </span>
-<span class="sd">       this will keep the original range and plot channel-by-channel.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; visualize some 2D matrix, different from ``kiui.vis.plot_image``, this will keep the original range and plot channel-by-channel.</span>
 <span class="sd">    </span>
 <span class="sd">    Args:</span>
-<span class="sd">        xs (Sequence[Union[torch.Tensor, numpy.ndarray]]): </span>
-<span class="sd">            [B, C, H, W], [C, H, W], or [H, W] torch.Tensor</span>
-<span class="sd">            [B, H, W, C], [H, W, C], or [H, W] numpy.ndarray</span>
+<span class="sd">        xs (Sequence[Union[torch.Tensor, numpy.ndarray]]): [B, C, H, W], [C, H, W], or [H, W] torch.Tensor or numpy.ndarray</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     
     <span class="k">def</span> <span class="nf">_plot_matrix</span><span class="p">(</span><span class="n">matrix</span><span class="p">):</span>
@@ -513,7 +509,7 @@
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=c8c5a04b"></script>
+</div><script src="../../../_static/documentation_options.js?v=ed49d87f"></script>
     <script src="../../../_static/doctools.js?v=888ff710"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=32e29ea5"></script>

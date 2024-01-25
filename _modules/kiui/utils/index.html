@@ -5,7 +5,7 @@
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex/" /><link rel="search" title="Search" href="../../../search/" />
 
     <link rel="shortcut icon" href="../../../_static/icon.png"/><!-- Generated with Sphinx 7.2.6 and Furo 2023.09.10 -->
-        <title>kiui.utils - kiui 0.2.0 documentation</title>
+        <title>kiui.utils - kiui 0.2.2 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=135e06be" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
@@ -124,7 +124,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../"><div class="brand">kiui 0.2.0 documentation</div></a>
+      <a href="../../../"><div class="brand">kiui 0.2.2 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -544,12 +544,13 @@
 
 <span class="sd">    Args:</span>
 <span class="sd">        f (str): file name.</span>
-<span class="sd">        format (Sequence[str]): set of extensions.</span>
+<span class="sd">        format (Sequence[str]): set of extensions (both &#39;.jpg&#39; or &#39;jpg&#39; is ok).</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        bool: if the file&#39;s extension is in the set.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">f</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="nb">format</span></div>
+    <span class="n">ext</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">f</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="c1"># include the dot</span>
+    <span class="k">return</span> <span class="n">ext</span> <span class="ow">in</span> <span class="nb">format</span> <span class="ow">or</span> <span class="n">ext</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span> <span class="ow">in</span> <span class="nb">format</span></div>
 
 
 <div class="viewcode-block" id="batch_process_files">
@@ -660,7 +661,7 @@
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=c8c5a04b"></script>
+</div><script src="../../../_static/documentation_options.js?v=ed49d87f"></script>
     <script src="../../../_static/doctools.js?v=888ff710"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=32e29ea5"></script>

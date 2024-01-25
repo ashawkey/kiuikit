@@ -6,7 +6,7 @@
 <link rel="index" title="Index" href="../genindex/" /><link rel="search" title="Search" href="../search/" /><link rel="next" title="Misc API" href="../misc_api/" /><link rel="prev" title="Operators" href="../ops/" />
 
     <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 7.2.6 and Furo 2023.09.10 -->
-        <title>Visualization - kiui 0.2.0 documentation</title>
+        <title>Visualization - kiui 0.2.2 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=135e06be" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -125,7 +125,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../"><div class="brand">kiui 0.2.0 documentation</div></a>
+      <a href="../"><div class="brand">kiui 0.2.2 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -249,8 +249,7 @@
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>xs</strong> (<em>Sequence</em><em>[</em><em>Union</em><em>[</em><em>torch.Tensor</em><em>, </em><em>numpy.ndarray</em><em>]</em><em>]</em>) – can be uint8 or float32.
-[B, 4/3/1, H, W], [B, H, W, 4/3/1], [4/3/1, H, W], [H, W, 4/3/1], [H, W] torch.Tensor
-[B, H, W, 4/3/1], [B, 4/3/1, H, W], [H, W, 4/3/1], [4/3/1, H, W], [H, W] numpy.ndarray</p></li>
+[B, 4/3/1, H, W], [B, H, W, 4/3/1], [4/3/1, H, W], [H, W, 4/3/1], [H, W] torch.Tensor or numpy.ndarray</p></li>
 <li><p><strong>normalize</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether to renormalize the image to [0, 1]. Defaults to False.</p></li>
 <li><p><strong>save</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether to save the image to current dir (in case the plot cannot be showed, like in vscode remote). Defaults to False.</p></li>
 </ul>
@@ -261,14 +260,10 @@
 <dl class="py function">
 <dt class="sig sig-object py" id="kiui.vis.plot_matrix">
 <span class="sig-prename descclassname"><span class="pre">kiui.vis.</span></span><span class="sig-name descname"><span class="pre">plot_matrix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">xs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/vis/#plot_matrix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.vis.plot_matrix" title="Link to this definition">#</a></dt>
-<dd><dl class="simple">
-<dt>visualize some 2D matrix, different from <code class="docutils literal notranslate"><span class="pre">kiui.vis.plot_image</span></code>,</dt><dd><p>this will keep the original range and plot channel-by-channel.</p>
-</dd>
-</dl>
+<dd><p>visualize some 2D matrix, different from <code class="docutils literal notranslate"><span class="pre">kiui.vis.plot_image</span></code>, this will keep the original range and plot channel-by-channel.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>xs</strong> (<em>Sequence</em><em>[</em><em>Union</em><em>[</em><em>torch.Tensor</em><em>, </em><em>numpy.ndarray</em><em>]</em><em>]</em>) – [B, C, H, W], [C, H, W], or [H, W] torch.Tensor
-[B, H, W, C], [H, W, C], or [H, W] numpy.ndarray</p>
+<dd class="field-odd"><p><strong>xs</strong> (<em>Sequence</em><em>[</em><em>Union</em><em>[</em><em>torch.Tensor</em><em>, </em><em>numpy.ndarray</em><em>]</em><em>]</em>) – [B, C, H, W], [C, H, W], or [H, W] torch.Tensor or numpy.ndarray</p>
 </dd>
 </dl>
 </dd></dl>
@@ -391,7 +386,7 @@
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=c8c5a04b"></script>
+</div><script src="../_static/documentation_options.js?v=ed49d87f"></script>
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=32e29ea5"></script>
