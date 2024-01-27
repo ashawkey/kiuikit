@@ -122,6 +122,32 @@ def seed_everything(seed=42, verbose=False, strict=False):
         if verbose: print(f'[INFO] torch not imported, skip setting seed')
 
 
+def tolerant_load(model: torch.nn.Module, ckpt: Dict, verbose: bool=False):
+    """loading params from ckpt into model with matching shape (warn instead of error for mismatched shapes compared to torch.load unstrict mode)
+
+    Args:
+        model (torch.nn.Module): model.
+        ckpt (Dict): state_dict to load.
+        verbose (bool): whether to log mismatching params. Defaults to False.
+    """
+    state_dict = model.state_dict()
+    seen = {k: False  for k in state_dict}
+    for k, v in ckpt.items():
+        if k in state_dict: 
+            if state_dict[k].shape == v.shape:
+                state_dict[k].copy_(v)
+            else:
+                if verbose: print(f'[WARN] mismatching shape for param {k}: ckpt {v.shape} != model {state_dict[k].shape}, ignored.')
+            seen[k] = True
+        else:
+            if verbose: print(f'[WARN] unexpected param {k} in ckpt: {v.shape}')
+            
+    if verbose: 
+        for k, v in seen.items():
+            if not v:
+                print(f'[WARN] missing param {k} in model: {state_dict[k].shape}')
+
+
 def read_json(path):
     """load a json file.
 
