@@ -5,8 +5,8 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex/" /><link rel="search" title="Search" href="../search/" /><link rel="next" title="Camera" href="../camera/" /><link rel="prev" title="Kiuikit" href="../" />
 
-    <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 7.2.6 and Furo 2023.09.10 -->
-        <title>Mesh - kiui 0.2.2 documentation</title>
+    <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 7.2.6 and Furo 2024.01.29 -->
+        <title>Mesh - kiui 0.2.3 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=135e06be" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -125,7 +125,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../"><div class="brand">kiui 0.2.2 documentation</div></a>
+      <a href="../"><div class="brand">kiui 0.2.3 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -519,7 +519,7 @@ optimalplacement (bool, optional): For flat mesh, use False to prevent spikes. D
 
 <dl class="py function">
 <dt class="sig sig-object py" id="kiui.mesh_utils.clean_mesh">
-<span class="sig-prename descclassname"><span class="pre">kiui.mesh_utils.</span></span><span class="sig-name descname"><span class="pre">clean_mesh</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">verts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">faces</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">v_pct</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_f</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_d</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">repair</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remesh</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remesh_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.01</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/mesh_utils/#clean_mesh"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.mesh_utils.clean_mesh" title="Link to this definition">#</a></dt>
+<span class="sig-prename descclassname"><span class="pre">kiui.mesh_utils.</span></span><span class="sig-name descname"><span class="pre">clean_mesh</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">verts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">faces</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">v_pct</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_f</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">64</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_d</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">repair</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remesh</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remesh_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.01</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remesh_iters</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/mesh_utils/#clean_mesh"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.mesh_utils.clean_mesh" title="Link to this definition">#</a></dt>
 <dd><p>perform mesh cleaning, including floater removal, non manifold repair, and remeshing.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -532,6 +532,7 @@ optimalplacement (bool, optional): For flat mesh, use False to prevent spikes. D
 <li><p><strong>repair</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether to repair non-manifold faces (cannot gurantee). Defaults to True.</p></li>
 <li><p><strong>remesh</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether to perform a remeshing after all cleaning. Defaults to True.</p></li>
 <li><p><strong>remesh_size</strong> (<em>float</em><em>, </em><em>optional</em>) – the targeted edge length for remeshing. Defaults to 0.01.</p></li>
+<li><p><strong>remesh_iters</strong> (<em>int</em><em>, </em><em>optional</em>) – the iterations of remeshing. Defaults to 3.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -719,7 +720,7 @@ optimalplacement (bool, optional): For flat mesh, use False to prevent spikes. D
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=ed49d87f"></script>
+</div><script src="../_static/documentation_options.js?v=ff8fe465"></script>
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=32e29ea5"></script>

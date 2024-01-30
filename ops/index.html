@@ -5,8 +5,8 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex/" /><link rel="search" title="Search" href="../search/" /><link rel="next" title="Visualization" href="../vis/" /><link rel="prev" title="Utils" href="../utils/" />
 
-    <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 7.2.6 and Furo 2023.09.10 -->
-        <title>Operators - kiui 0.2.2 documentation</title>
+    <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 7.2.6 and Furo 2024.01.29 -->
+        <title>Operators - kiui 0.2.3 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=135e06be" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -125,7 +125,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../"><div class="brand">kiui 0.2.2 documentation</div></a>
+      <a href="../"><div class="brand">kiui 0.2.3 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -429,14 +429,14 @@
 
 <dl class="py function">
 <dt class="sig sig-object py" id="kiui.op.uv_padding">
-<span class="sig-prename descclassname"><span class="pre">kiui.op.</span></span><span class="sig-name descname"><span class="pre">uv_padding</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mask</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">‘knn’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘cv2’</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'knn'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/op/#uv_padding"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.op.uv_padding" title="Link to this definition">#</a></dt>
-<dd><p>padding the uv-space texture image to avoid seam artifacts.</p>
+<span class="sig-prename descclassname"><span class="pre">kiui.op.</span></span><span class="sig-name descname"><span class="pre">uv_padding</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mask</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">‘knn’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘cv2’</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'knn'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/op/#uv_padding"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.op.uv_padding" title="Link to this definition">#</a></dt>
+<dd><p>padding the uv-space texture image to avoid seam artifacts in mipmaps.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>image</strong> (<em>Union</em><em>[</em><em>Tensor</em><em>, </em><em>ndarray</em><em>]</em>) – texture image, float, [H, W, C] in [0, 1].</p></li>
 <li><p><strong>mask</strong> (<em>Union</em><em>[</em><em>Tensor</em><em>, </em><em>ndarray</em><em>]</em>) – valid uv region, bool, [H, W].</p></li>
-<li><p><strong>padding</strong> (<em>int</em><em>, </em><em>optional</em>) – padding size into the unmasked region. Defaults to 2.</p></li>
+<li><p><strong>padding</strong> (<em>int</em><em>, </em><em>optional</em>) – padding size into the unmasked region. Defaults to 0.1 * max(H, W).</p></li>
 <li><p><strong>backend</strong> (<em>Literal</em><em>[</em><em>'knn'</em><em>, </em><em>'cv2'</em><em>]</em><em>, </em><em>optional</em>) – algorithm backend, knn is faster. Defaults to ‘knn’.</p></li>
 </ul>
 </dd>
@@ -555,7 +555,7 @@
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=ed49d87f"></script>
+</div><script src="../_static/documentation_options.js?v=ff8fe465"></script>
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=32e29ea5"></script>
