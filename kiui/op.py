@@ -153,20 +153,19 @@ def scale_img_hw(x: Tensor, size: Sequence[int], mag='bilinear', min='bilinear')
     return scale_img_nhwc(x[None, ..., None], size, mag, min)[0, ..., 0]
 
 
-def uv_padding(image: Union[Tensor, ndarray], mask: Union[Tensor, ndarray], padding: int = 2, backend: Literal['knn', 'cv2'] = 'knn'):
-    """padding the uv-space texture image to avoid seam artifacts.
+def uv_padding(image: Union[Tensor, ndarray], mask: Union[Tensor, ndarray], padding: Optional[int] = None, backend: Literal['knn', 'cv2'] = 'knn'):
+    """padding the uv-space texture image to avoid seam artifacts in mipmaps.
 
     Args:
         image (Union[Tensor, ndarray]): texture image, float, [H, W, C] in [0, 1].
         mask (Union[Tensor, ndarray]): valid uv region, bool, [H, W].
-        padding (int, optional): padding size into the unmasked region. Defaults to 2.
+        padding (int, optional): padding size into the unmasked region. Defaults to 0.1 * max(H, W).
         backend (Literal[&#39;knn&#39;, &#39;cv2&#39;], optional): algorithm backend, knn is faster. Defaults to 'knn'.
 
     Returns:
         Union[Tensor, ndarray]: padded texture image. float, [H, W, C].
     """
     
-
     if torch.is_tensor(image):
         image_input = image.detach().cpu().numpy()
     else:
@@ -176,6 +175,10 @@ def uv_padding(image: Union[Tensor, ndarray], mask: Union[Tensor, ndarray], padd
         mask_input = mask.detach().cpu().numpy()
     else:
         mask_input = mask
+    
+    if padding is None:
+        H, W = image_input.shape[:2]
+        padding = int(0.1 * max(H, W))
     
     # padding backend
     if backend == 'knn':

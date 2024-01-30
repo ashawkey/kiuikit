@@ -90,6 +90,7 @@ def clean_mesh(
     repair=True,
     remesh=True,
     remesh_size=0.01,
+    remesh_iters=3,
 ):
     """ perform mesh cleaning, including floater removal, non manifold repair, and remeshing.
 
@@ -102,6 +103,7 @@ def clean_mesh(
         repair (bool, optional): whether to repair non-manifold faces (cannot gurantee). Defaults to True.
         remesh (bool, optional): whether to perform a remeshing after all cleaning. Defaults to True.
         remesh_size (float, optional): the targeted edge length for remeshing. Defaults to 0.01.
+        remesh_iters (int, optional): the iterations of remeshing. Defaults to 3.
 
     Returns:
         Tuple[np.ndarray]: vertices and faces after decimation.
@@ -144,11 +146,11 @@ def clean_mesh(
         # ms.apply_coord_taubin_smoothing()
         if PML_VER == '0.2':
             ms.meshing_isotropic_explicit_remeshing(
-                iterations=3, targetlen=pml.Percentage(remesh_size * 50) # an approximation...
+                iterations=remesh_iters, targetlen=pml.Percentage(remesh_size * 50) # an approximation...
             )
         else:
             ms.meshing_isotropic_explicit_remeshing(
-                iterations=3, targetlen=pml.PureValue(remesh_size)
+                iterations=remesh_iters, targetlen=pml.PureValue(remesh_size)
             )
 
     # extract mesh
