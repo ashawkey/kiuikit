@@ -22,7 +22,7 @@ if PML_VER == '0.2':
     pml.MeshSet.meshing_repair_non_manifold_vertices = pml.MeshSet.repair_non_manifold_vertices_by_splitting
 
     pml.PercentageValue = pml.Percentage
-    # pml.PureValue = pml.AbsoluteValue # there is even no absolutevalue by then ????
+    pml.PureValue = float
 
 
 def decimate_mesh(
@@ -71,6 +71,7 @@ def decimate_mesh(
 
         # extract mesh
         m = ms.current_mesh()
+        m.compact()
         verts = m.vertex_matrix()
         faces = m.face_matrix()
 
@@ -144,17 +145,13 @@ def clean_mesh(
 
     if remesh:
         # ms.apply_coord_taubin_smoothing()
-        if PML_VER == '0.2':
-            ms.meshing_isotropic_explicit_remeshing(
-                iterations=remesh_iters, targetlen=pml.Percentage(remesh_size * 50) # an approximation...
-            )
-        else:
-            ms.meshing_isotropic_explicit_remeshing(
-                iterations=remesh_iters, targetlen=pml.PureValue(remesh_size)
-            )
+        ms.meshing_isotropic_explicit_remeshing(
+            iterations=remesh_iters, targetlen=pml.PureValue(remesh_size)
+        )
 
     # extract mesh
     m = ms.current_mesh()
+    m.compact()
     verts = m.vertex_matrix()
     faces = m.face_matrix()
 
