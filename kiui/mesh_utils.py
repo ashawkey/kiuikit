@@ -24,6 +24,11 @@ if PML_VER == '0.2':
     pml.PercentageValue = pml.Percentage
     pml.PureValue = float
 
+# monkey patch for 2022.2.post3
+if PML_VER == '2022.2.post3':
+    pml.PercentageValue = pml.Percentage
+    pml.PureValue = pml.AbsoluteValue
+
 
 def decimate_mesh(
     verts, faces, target=5e4, backend="pymeshlab", remesh=False, optimalplacement=True
