@@ -97,7 +97,7 @@ grid_encode = _grid_encode.apply
 
 
 class GridEncoder(nn.Module):
-    def __init__(self, input_dim=3, num_levels=16, level_dim=2, per_level_scale=2, base_resolution=16, log2_hashmap_size=19, desired_resolution=None, gridtype='hash', align_corners=False, interpolation='linear'):
+    def __init__(self, input_dim=3, num_levels=16, level_dim=2, per_level_scale=2, base_resolution=16, log2_hashmap_size=19, desired_resolution=2048, gridtype='hash', align_corners=False, interpolation='linear'):
         super().__init__()
 
         # the finest resolution desired at the last level, if provided, overridee per_level_scale

@@ -7,9 +7,10 @@ import pymeshlab as pml
 from importlib.metadata import version
 
 PML_VER = version('pymeshlab') 
+# NOTE: assume the latest 2023.12 version
 
-# monkey patch for 0.2
-if PML_VER == '0.2':
+if PML_VER.startswith('0.2'):
+    # monkey patch for 0.2 (only the used functions in this file!)
     pml.MeshSet.meshing_decimation_quadric_edge_collapse = pml.MeshSet.simplification_quadric_edge_collapse_decimation
     pml.MeshSet.meshing_isotropic_explicit_remeshing = pml.MeshSet.remeshing_isotropic_explicit_remeshing
     pml.MeshSet.meshing_remove_unreferenced_vertices = pml.MeshSet.remove_unreferenced_vertices
@@ -20,12 +21,10 @@ if PML_VER == '0.2':
     pml.MeshSet.meshing_remove_connected_component_by_face_number = pml.MeshSet.remove_isolated_pieces_wrt_face_num
     pml.MeshSet.meshing_repair_non_manifold_edges = pml.MeshSet.repair_non_manifold_edges_by_removing_faces
     pml.MeshSet.meshing_repair_non_manifold_vertices = pml.MeshSet.repair_non_manifold_vertices_by_splitting
-
     pml.PercentageValue = pml.Percentage
     pml.PureValue = float
-
-# monkey patch for 2022.2.post3
-if PML_VER == '2022.2.post3':
+elif PML_VER.startswith('2022.2'):
+    # monkey patch for 2022.2
     pml.PercentageValue = pml.Percentage
     pml.PureValue = pml.AbsoluteValue
 
