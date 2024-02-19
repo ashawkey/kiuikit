@@ -256,16 +256,20 @@ def read_image(
 
 def write_image(
         path: str, 
-        img: Union[Tensor, np.ndarray], 
+        img: Union[Tensor, np.ndarray, Image.Image], 
         order: Literal["RGB", "BGR"] = "RGB",
     ):
     """write an image to various formats.
 
     Args:
         path (str): path to write the image file.
-        img (Union[torch.Tensor, np.ndarray]): image to write.
+        img (Union[torch.Tensor, np.ndarray, PIL.Image.Image]): image to write.
         order (str, optional): channel order. Defaults to "RGB".
     """
+
+    if isinstance(img, Image.Image):
+        img.save(path)
+        return
 
     if torch.is_tensor(img):
         img = img.detach().cpu().numpy()

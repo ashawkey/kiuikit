@@ -3,9 +3,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.autograd import Function
-from torch.autograd.function import once_differentiable
 from torch.cuda.amp import custom_bwd, custom_fwd 
 
+from kiui.typing import *
 from .backend import _backend
 
 _gridtype_to_id = {
@@ -97,7 +97,27 @@ grid_encode = _grid_encode.apply
 
 
 class GridEncoder(nn.Module):
-    def __init__(self, input_dim=3, num_levels=16, level_dim=2, per_level_scale=2, base_resolution=16, log2_hashmap_size=19, desired_resolution=2048, gridtype='hash', align_corners=False, interpolation='linear'):
+    def __init__(
+            self, 
+            input_dim=3, num_levels=16, level_dim=2, per_level_scale=2, base_resolution=16, log2_hashmap_size=19, desired_resolution=2048, 
+            gridtype: Literal['hash', 'tiled'] = 'hash', 
+            interpolation: Literal['linear', 'smoothstep'] = 'linear',
+            align_corners=False, 
+        ):
+        """Multi-resolutional HashGrid Encoder as described in Instant-NGP.
+
+        Args:
+            input_dim (int, optional): encoding dimensions, can be in [2, 3, 4, 5]. Defaults to 3.
+            num_levels (int, optional): level of resolutions. Defaults to 16.
+            level_dim (int, optional): feature dimension for each level of resolution. Defaults to 2.
+            per_level_scale (int, optional): resolution scale for each level, will be ignored if `desired_resolution` is provided. Defaults to 2.
+            base_resolution (int, optional): base resolution for the first level. Defaults to 16.
+            log2_hashmap_size (int, optional): log2(hashmap size). Defaults to 19.
+            desired_resolution (int, optional): desired resolution at the last level, will override `per_level_scale`. Defaults to 2048.
+            gridtype (Literal['hash', 'tiled']): type of grid encoder. Defaults to 'hash'.
+            interpolation (Literal['linear', 'smoothstep']): interpolation method. Defaults to 'linear'.
+            align_corners (bool, optional): whether to align corner in interpolation. Defaults to False.
+        """
         super().__init__()
 
         # the finest resolution desired at the last level, if provided, overridee per_level_scale
