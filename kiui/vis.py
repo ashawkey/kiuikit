@@ -76,9 +76,9 @@ def plot_image(*xs, normalize=False, save=False):
             _cnt += 1
             write_image(_path, image.astype(np.float32))
             print(f'[kiui.vis.plot_image] write image to {_path}')
-    
-        plt.imshow(image.astype(np.float32))
-        plt.show()
+        else:
+            plt.imshow(image.astype(np.float32))
+            plt.show()
 
     for x in xs:
         if len(x.shape) == 4:
