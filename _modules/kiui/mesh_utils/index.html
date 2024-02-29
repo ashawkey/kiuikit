@@ -5,7 +5,7 @@
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex/" /><link rel="search" title="Search" href="../../../search/" />
 
     <link rel="shortcut icon" href="../../../_static/icon.png"/><!-- Generated with Sphinx 7.2.6 and Furo 2024.01.29 -->
-        <title>kiui.mesh_utils - kiui 0.2.3 documentation</title>
+        <title>kiui.mesh_utils - kiui 0.2.4 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=135e06be" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
@@ -124,7 +124,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../"><div class="brand">kiui 0.2.3 documentation</div></a>
+      <a href="../../../"><div class="brand">kiui 0.2.4 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -222,9 +222,10 @@
 <span class="kn">from</span> <span class="nn">importlib.metadata</span> <span class="kn">import</span> <span class="n">version</span>
 
 <span class="n">PML_VER</span> <span class="o">=</span> <span class="n">version</span><span class="p">(</span><span class="s1">&#39;pymeshlab&#39;</span><span class="p">)</span> 
+<span class="c1"># NOTE: assume the latest 2023.12 version</span>
 
-<span class="c1"># monkey patch for 0.2</span>
-<span class="k">if</span> <span class="n">PML_VER</span> <span class="o">==</span> <span class="s1">&#39;0.2&#39;</span><span class="p">:</span>
+<span class="k">if</span> <span class="n">PML_VER</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;0.2&#39;</span><span class="p">):</span>
+    <span class="c1"># monkey patch for 0.2 (only the used functions in this file!)</span>
     <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">meshing_decimation_quadric_edge_collapse</span> <span class="o">=</span> <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">simplification_quadric_edge_collapse_decimation</span>
     <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">meshing_isotropic_explicit_remeshing</span> <span class="o">=</span> <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">remeshing_isotropic_explicit_remeshing</span>
     <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">meshing_remove_unreferenced_vertices</span> <span class="o">=</span> <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">remove_unreferenced_vertices</span>
@@ -235,9 +236,12 @@
     <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">meshing_remove_connected_component_by_face_number</span> <span class="o">=</span> <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">remove_isolated_pieces_wrt_face_num</span>
     <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">meshing_repair_non_manifold_edges</span> <span class="o">=</span> <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">repair_non_manifold_edges_by_removing_faces</span>
     <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">meshing_repair_non_manifold_vertices</span> <span class="o">=</span> <span class="n">pml</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">repair_non_manifold_vertices_by_splitting</span>
-
     <span class="n">pml</span><span class="o">.</span><span class="n">PercentageValue</span> <span class="o">=</span> <span class="n">pml</span><span class="o">.</span><span class="n">Percentage</span>
     <span class="n">pml</span><span class="o">.</span><span class="n">PureValue</span> <span class="o">=</span> <span class="nb">float</span>
+<span class="k">elif</span> <span class="n">PML_VER</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;2022.2&#39;</span><span class="p">):</span>
+    <span class="c1"># monkey patch for 2022.2</span>
+    <span class="n">pml</span><span class="o">.</span><span class="n">PercentageValue</span> <span class="o">=</span> <span class="n">pml</span><span class="o">.</span><span class="n">Percentage</span>
+    <span class="n">pml</span><span class="o">.</span><span class="n">PureValue</span> <span class="o">=</span> <span class="n">pml</span><span class="o">.</span><span class="n">AbsoluteValue</span>
 
 
 <div class="viewcode-block" id="decimate_mesh">
@@ -551,7 +555,7 @@
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=ff8fe465"></script>
+</div><script src="../../../_static/documentation_options.js?v=83dd5023"></script>
     <script src="../../../_static/doctools.js?v=888ff710"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=32e29ea5"></script>
