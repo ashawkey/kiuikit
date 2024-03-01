@@ -96,18 +96,18 @@ class Mesh:
             mesh.v = torch.from_numpy(vertices).contiguous().float().to(mesh.device)
             mesh.f = torch.from_numpy(triangles).contiguous().int().to(mesh.device)
 
-        print(f"[Mesh loading] v: {mesh.v.shape}, f: {mesh.f.shape}")
+        print(f"[INFO] load mesh, v: {mesh.v.shape}, f: {mesh.f.shape}")
         # auto-normalize
         if resize:
             mesh.auto_size(bound=bound)
         # auto-fix normal
         if renormal or mesh.vn is None:
             mesh.auto_normal()
-            print(f"[Mesh loading] vn: {mesh.vn.shape}, fn: {mesh.fn.shape}")
+            print(f"[INFO] load mesh, vn: {mesh.vn.shape}, fn: {mesh.fn.shape}")
         # auto-fix texcoords
         if retex or (mesh.albedo is not None and mesh.vt is None):
             mesh.auto_uv(cache_path=path)
-            print(f"[Mesh loading] vt: {mesh.vt.shape}, ft: {mesh.ft.shape}")
+            print(f"[INFO] load mesh, vt: {mesh.vt.shape}, ft: {mesh.ft.shape}")
 
         # rotate front dir to +z
         if front_dir != "+z":
@@ -243,7 +243,7 @@ class Mesh:
             use_vertex_color = True
             mesh.vc = mesh.v[:, 3:]
             mesh.v = mesh.v[:, :3]
-            print(f"[load_obj] use vertex color: {mesh.vc.shape}")
+            print(f"[INFO] load obj mesh: use vertex color: {mesh.vc.shape}")
 
         # try to load texture image
         if not use_vertex_color:
@@ -277,7 +277,7 @@ class Mesh:
                     if "map_Kd" in prefix:
                         # assume relative path!
                         albedo_path = os.path.join(os.path.dirname(path), split_line[1])
-                        print(f"[load_obj] use texture from: {albedo_path}")
+                        print(f"[INFO] load obj mesh: use texture from: {albedo_path}")
                     elif "map_Pm" in prefix:
                         metallic_path = os.path.join(os.path.dirname(path), split_line[1])
                     elif "map_Pr" in prefix:
@@ -286,20 +286,20 @@ class Mesh:
             # still not found albedo_path, or the path doesn't exist
             if albedo_path is None or not os.path.exists(albedo_path):
                 # init an empty texture
-                print(f"[load_obj] init empty albedo!")
+                print(f"[INFO] load obj mesh: init empty albedo!")
                 # albedo = np.random.rand(1024, 1024, 3).astype(np.float32)
                 albedo = np.ones((1024, 1024, 3), dtype=np.float32) * np.array([0.5, 0.5, 0.5])  # default color
             else:
                 albedo = cv2.imread(albedo_path, cv2.IMREAD_UNCHANGED)
                 albedo = cv2.cvtColor(albedo, cv2.COLOR_BGR2RGB)
                 albedo = albedo.astype(np.float32) / 255
-                print(f"[load_obj] load texture: {albedo.shape}")
+                print(f"[INFO] load obj mesh: load texture: {albedo.shape}")
             
             mesh.albedo = torch.tensor(albedo, dtype=torch.float32, device=device)
             
             # try to load metallic and roughness
             if metallic_path is not None and roughness_path is not None:
-                print(f"[load_obj] load metallicRoughness from: {metallic_path}, {roughness_path}")
+                print(f"[INFO] load obj mesh: load metallicRoughness from: {metallic_path}, {roughness_path}")
                 metallic = cv2.imread(metallic_path, cv2.IMREAD_UNCHANGED)
                 metallic = metallic.astype(np.float32) / 255
                 roughness = cv2.imread(roughness_path, cv2.IMREAD_UNCHANGED)
@@ -341,7 +341,7 @@ class Mesh:
             if len(_data.geometry) == 1:
                 _mesh = list(_data.geometry.values())[0]
             else:
-                print(f"[load_trimesh] concatenating {len(_data.geometry)} meshes.")
+                print(f"[INFO] load trimesh: concatenating {len(_data.geometry)} meshes.")
                 _concat = []
                 # loop the scene graph and apply transform to each mesh
                 scene_graph = _data.graph.to_flattened() # dict {name: {transform: 4x4 mat, geometry: str}}
@@ -358,7 +358,7 @@ class Mesh:
             vertex_colors = _mesh.visual.vertex_colors
             vertex_colors = np.array(vertex_colors[..., :3]).astype(np.float32) / 255
             mesh.vc = torch.tensor(vertex_colors, dtype=torch.float32, device=device)
-            print(f"[load_trimesh] use vertex color: {mesh.vc.shape}")
+            print(f"[INFO] load trimesh: use vertex color: {mesh.vc.shape}")
         elif _mesh.visual.kind == 'texture':
             _material = _mesh.visual.material
             if isinstance(_material, trimesh.visual.material.PBRMaterial):
@@ -372,11 +372,11 @@ class Mesh:
             else:
                 raise NotImplementedError(f"material type {type(_material)} not supported!")
             mesh.albedo = torch.tensor(texture[..., :3], dtype=torch.float32, device=device).contiguous()
-            print(f"[load_trimesh] load texture: {texture.shape}")
+            print(f"[INFO] load trimesh: load texture: {texture.shape}")
         else:
             texture = np.ones((1024, 1024, 3), dtype=np.float32) * np.array([0.5, 0.5, 0.5])
             mesh.albedo = torch.tensor(texture, dtype=torch.float32, device=device)
-            print(f"[load_trimesh] failed to load texture.")
+            print(f"[INFO] load trimesh: failed to load texture.")
 
         vertices = _mesh.vertices
 

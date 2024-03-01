@@ -79,9 +79,7 @@ def decimate_mesh(
         verts = m.vertex_matrix()
         faces = m.face_matrix()
 
-    print(
-        f"[INFO] mesh decimation: {_ori_vert_shape} --> {verts.shape}, {_ori_face_shape} --> {faces.shape}"
-    )
+    print(f"[INFO] mesh decimation: {_ori_vert_shape} --> {verts.shape}, {_ori_face_shape} --> {faces.shape}")
 
     return verts, faces
 
@@ -159,9 +157,7 @@ def clean_mesh(
     verts = m.vertex_matrix()
     faces = m.face_matrix()
 
-    print(
-        f"[INFO] mesh cleaning: {_ori_vert_shape} --> {verts.shape}, {_ori_face_shape} --> {faces.shape}"
-    )
+    print(f"[INFO] mesh cleaning: {_ori_vert_shape} --> {verts.shape}, {_ori_face_shape} --> {faces.shape}")
 
     return verts, faces
 
