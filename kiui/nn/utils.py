@@ -1,6 +1,8 @@
 import math
 import torch
 
+from kiui.typing import *
+
 # cosine lr scheduler with warm up
 # ref: https://github.com/huggingface/diffusers/blob/main/src/diffusers/optimization.py#L154C1-L185C54
 def get_cosine_schedule_with_warmup(
@@ -37,3 +39,38 @@ def get_cosine_schedule_with_warmup(
         return max(0.0, 0.5 * (1.0 + math.cos(math.pi * float(num_cycles) * 2.0 * progress)))
 
     return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda, last_epoch)
+
+
+def count_parameters(model: torch.nn.Module):
+    total, trainable = 0, 0
+    for p in model.parameters():
+        total += p.numel()
+        if p.requires_grad:
+            trainable += p.numel()
+    return total, trainable
+
+
+def tolerant_load(model: torch.nn.Module, ckpt: dict, verbose: bool=False):
+    """loading params from ckpt into model with matching shape (warn instead of error for mismatched shapes compared to torch.load unstrict mode)
+
+    Args:
+        model (torch.nn.Module): model.
+        ckpt (Dict): state_dict to load.
+        verbose (bool): whether to log mismatching params. Defaults to False.
+    """
+    state_dict = model.state_dict()
+    seen = {k: False  for k in state_dict}
+    for k, v in ckpt.items():
+        if k in state_dict: 
+            if state_dict[k].shape == v.shape:
+                state_dict[k].copy_(v)
+            else:
+                if verbose: print(f'[WARN] mismatching shape for param {k}: ckpt {v.shape} != model {state_dict[k].shape}, ignored.')
+            seen[k] = True
+        else:
+            if verbose: print(f'[WARN] unexpected param {k} in ckpt: {v.shape}')
+            
+    if verbose: 
+        for k, v in seen.items():
+            if not v:
+                print(f'[WARN] missing param {k} in model: {state_dict[k].shape}')
