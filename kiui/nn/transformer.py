@@ -13,7 +13,6 @@ class FeedForward(nn.Module):
         hidden_features: Optional[int] = None,
         out_features: Optional[int] = None,
         act_layer: Callable[..., nn.Module] = nn.GELU,
-        drop: float = 0.0,
         bias: bool = True,
     ) -> None:
         super().__init__()
@@ -22,14 +21,11 @@ class FeedForward(nn.Module):
         self.fc1 = nn.Linear(in_features, hidden_features, bias=bias)
         self.act = act_layer()
         self.fc2 = nn.Linear(hidden_features, out_features, bias=bias)
-        self.drop = nn.Dropout(drop)
 
     def forward(self, x):
         x = self.fc1(x)
         x = self.act(x)
-        x = self.drop(x)
         x = self.fc2(x)
-        x = self.drop(x)
         return x
     
 
@@ -65,4 +61,33 @@ class ResAttBlock(nn.Module):
 
         x = x + self.mlp(self.ln3(x)) # [B, N, dim]
 
+        return x
+
+# RMSNorm used in llama in place of LayerNorm
+class RMSNorm(nn.Module):
+    def __init__(self, dim, eps=1e-6):
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(dim))
+        self.variance_epsilon = eps
+
+    def forward(self, x: torch.Tensor):
+        # x: [B, N, dim]
+        dtype = x.dtype
+        x = x.to(torch.float32)
+        variance = x.pow(2).mean(-1, keepdim=True)
+        x = x * torch.rsqrt(variance + self.variance_epsilon)
+        return self.weight * x.to(dtype)
+
+class LlamaMLP(nn.Module):
+    def __init__(self, in_features, hidden_features=None):
+        super().__init__()
+
+        self.gate_proj = nn.Linear(in_features, hidden_features, bias=False)
+        self.up_proj = nn.Linear(in_features, hidden_features, bias=False)
+        self.down_proj = nn.Linear(hidden_features, in_features, bias=False)
+        self.act = F.silu
+
+    def forward(self, x):
+        # x: [..., C]
+        x = self.down_proj(self.act(self.gate_proj(x)) * self.up_proj(x))
         return x
