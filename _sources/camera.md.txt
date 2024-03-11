@@ -59,7 +59,7 @@ A common color code: right = <span style="color:red">red</span>., up = <span sty
 
 ### API
 
-Note that the camera API is designed to be `numpy` based and un-batched!
+**Note that the camera API is designed to be `numpy` based and un-batched!**
 
 .. automodule:: kiui.cam
    :members:

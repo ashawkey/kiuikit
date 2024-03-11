@@ -5,7 +5,7 @@
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex/" /><link rel="search" title="Search" href="../../../search/" />
 
     <link rel="shortcut icon" href="../../../_static/icon.png"/><!-- Generated with Sphinx 7.2.6 and Furo 2024.01.29 -->
-        <title>kiui.vis - kiui 0.2.4 documentation</title>
+        <title>kiui.vis - kiui 0.2.5 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=135e06be" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
@@ -124,7 +124,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../"><div class="brand">kiui 0.2.4 documentation</div></a>
+      <a href="../../../"><div class="brand">kiui 0.2.5 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -216,6 +216,7 @@
 <span></span><span class="kn">import</span> <span class="nn">time</span>
 <span class="kn">import</span> <span class="nn">torch</span>
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span>
 
 <span class="kn">import</span> <span class="nn">matplotlib.cm</span> <span class="k">as</span> <span class="nn">cm</span>
 <span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
@@ -254,7 +255,7 @@
 
 <div class="viewcode-block" id="plot_image">
 <a class="viewcode-back" href="../../../vis/#kiui.vis.plot_image">[docs]</a>
-<span class="k">def</span> <span class="nf">plot_image</span><span class="p">(</span><span class="o">*</span><span class="n">xs</span><span class="p">,</span> <span class="n">normalize</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">save</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="k">def</span> <span class="nf">plot_image</span><span class="p">(</span><span class="o">*</span><span class="n">xs</span><span class="p">,</span> <span class="n">normalize</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">save</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">prefix</span><span class="o">=</span><span class="s1">&#39;kiui_vis_plot_image&#39;</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot; sequentially plot provided images, optionally save to current dir.</span>
 <span class="sd">    </span>
 <span class="sd">    Args:</span>
@@ -262,10 +263,11 @@
 <span class="sd">            [B, 4/3/1, H, W], [B, H, W, 4/3/1], [4/3/1, H, W], [H, W, 4/3/1], [H, W] torch.Tensor or numpy.ndarray</span>
 <span class="sd">        normalize (bool, optional): whether to renormalize the image to [0, 1]. Defaults to False.</span>
 <span class="sd">        save (bool, optional): whether to save the image to current dir (in case the plot cannot be showed, like in vscode remote). Defaults to False.</span>
+<span class="sd">        prefix (str, optional): image save name prefix if save=True.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">_cnt</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="n">_signature</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">())</span>
+    <span class="n">_signature</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s1">&#39;%Y_%m_</span><span class="si">%d</span><span class="s1">_%H_%M_%S_</span><span class="si">%f</span><span class="s1">&#39;</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="nf">_plot_image</span><span class="p">(</span><span class="n">image</span><span class="p">):</span>
 
@@ -292,10 +294,10 @@
             <span class="p">)</span>
 
         <span class="k">if</span> <span class="n">save</span><span class="p">:</span>
-            <span class="n">_path</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;kiui_vis_plot_image_</span><span class="si">{</span><span class="n">_signature</span><span class="si">}</span><span class="s1">_</span><span class="si">{</span><span class="n">_cnt</span><span class="si">}</span><span class="s1">.png&#39;</span>
+            <span class="n">_path</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s1">_</span><span class="si">{</span><span class="n">_signature</span><span class="si">}</span><span class="s1">_</span><span class="si">{</span><span class="n">_cnt</span><span class="si">}</span><span class="s1">.png&#39;</span>
             <span class="n">_cnt</span> <span class="o">+=</span> <span class="mi">1</span>
             <span class="n">write_image</span><span class="p">(</span><span class="n">_path</span><span class="p">,</span> <span class="n">image</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">))</span>
-            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;[kiui.vis.plot_image] write image to </span><span class="si">{</span><span class="n">_path</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;[INFO] write image to </span><span class="si">{</span><span class="n">_path</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">plt</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">))</span>
             <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
@@ -509,7 +511,7 @@
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=83dd5023"></script>
+</div><script src="../../../_static/documentation_options.js?v=911b6c39"></script>
     <script src="../../../_static/doctools.js?v=888ff710"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=32e29ea5"></script>
