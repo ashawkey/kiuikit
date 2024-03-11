@@ -50,11 +50,11 @@ class GUI:
         if self.opt.pbr:
             import envlight
             if self.opt.envmap is None:
-                hdr_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lights/mud_road_puresky_1k.hdr')
+                hdr_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets/lights/mud_road_puresky_1k.hdr')
             else:
                 hdr_path = self.opt.envmap
             self.light = envlight.EnvLight(hdr_path, scale=2, device='cuda')
-            self.FG_LUT = torch.from_numpy(np.fromfile(os.path.join(os.path.dirname(os.path.abspath(__file__)), "lights/bsdf_256_256.bin"), dtype=np.float32).reshape(1, 256, 256, 2)).cuda()
+            self.FG_LUT = torch.from_numpy(np.fromfile(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets/lights/bsdf_256_256.bin"), dtype=np.float32).reshape(1, 256, 256, 2)).cuda()
 
             self.metallic_factor = 1
             self.roughness_factor = 1
