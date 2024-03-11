@@ -337,20 +337,18 @@ class Mesh:
 
         # use trimesh to load ply/glb
         _data = trimesh.load(path)
+        # always convert scene to mesh, and apply all transforms...
         if isinstance(_data, trimesh.Scene):
-            if len(_data.geometry) == 1:
-                _mesh = list(_data.geometry.values())[0]
-            else:
-                print(f"[INFO] load trimesh: concatenating {len(_data.geometry)} meshes.")
-                _concat = []
-                # loop the scene graph and apply transform to each mesh
-                scene_graph = _data.graph.to_flattened() # dict {name: {transform: 4x4 mat, geometry: str}}
-                for k, v in scene_graph.items():
-                    name = v['geometry']
-                    if name in _data.geometry and isinstance(_data.geometry[name], trimesh.Trimesh):
-                        transform = v['transform']
-                        _concat.append(_data.geometry[name].apply_transform(transform))
-                _mesh = trimesh.util.concatenate(_concat)
+            print(f"[INFO] load trimesh: concatenating {len(_data.geometry)} meshes.")
+            _concat = []
+            # loop the scene graph and apply transform to each mesh
+            scene_graph = _data.graph.to_flattened() # dict {name: {transform: 4x4 mat, geometry: str}}
+            for k, v in scene_graph.items():
+                name = v['geometry']
+                if name in _data.geometry and isinstance(_data.geometry[name], trimesh.Trimesh):
+                    transform = v['transform']
+                    _concat.append(_data.geometry[name].apply_transform(transform))
+            _mesh = trimesh.util.concatenate(_concat)
         else:
             _mesh = _data
         
