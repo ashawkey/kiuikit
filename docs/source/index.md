@@ -1,6 +1,7 @@
 # Kiuikit
 
-> NOTE: this doc is still under construction!
+> NOTE: this doc is still under construction, and cannot cover all code. 
+> You are always encouraged to directly read the code!
 
 A toolkit for computer vision (especially 3D vision) tasks.
 

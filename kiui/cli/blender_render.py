@@ -54,6 +54,9 @@ def reset_scene():
         bpy.data.images.remove(image, do_unlink=True)
 
 def setup_rendering(args):
+    ### ref obj to return
+    refs = {}
+
     ### render parameters
     bpy.context.scene.render.engine = args.engine
 
@@ -65,58 +68,89 @@ def setup_rendering(args):
     bpy.context.scene.render.image_settings.file_format = "PNG"
     bpy.context.scene.render.image_settings.color_mode = "RGBA"
 
+    ### camera
+    cam = bpy.context.scene.objects["Camera"]
+
+    cam_constraint = cam.constraints.new(type="TRACK_TO")
+    cam_constraint.track_axis = "TRACK_NEGATIVE_Z"
+    cam_constraint.up_axis = "UP_Y"
+
+    refs['cam'] = cam
+    refs['cam_constraint'] = cam_constraint
+
     ### use nodes system for rendering
     bpy.context.scene.use_nodes = True
 
-    ### render nodes (if you want to render more than a shaded image)
+    ### world nodes
+    world_nodes = bpy.context.scene.world.node_tree.nodes
+    world_links = bpy.context.scene.world.node_tree.links
+    world_nodes.clear()
 
-    # nodes = bpy.context.scene.node_tree.nodes
-    # links = bpy.context.scene.node_tree.links
-    # nodes.clear()
-    # render_layers = nodes.new("CompositorNodeRLayers")
+    node_world_output = world_nodes.new(type='ShaderNodeOutputWorld')
+    node_background = world_nodes.new(type='ShaderNodeBackground')
+    node_hdri = world_nodes.new('ShaderNodeTexEnvironment')
+    
+    world_links.new(node_hdri.outputs["Color"], node_background.inputs["Color"])
+    world_links.new(node_background.outputs["Background"], node_world_output.inputs["Surface"])
 
-    # depth
-    # bpy.context.view_layer.use_pass_z = True
-    # depth_file_output = nodes.new(type="CompositorNodeOutputFile")
-    # depth_file_output.label = "Depth Output"
-    # depth_file_output.base_path = ""
-    # depth_file_output.file_slots[0].use_node_format = True
-    # depth_file_output.format.file_format = "OPEN_EXR"
-    # depth_file_output.format.color_depth = "16"
-    # links.new(render_layers.outputs["Depth"], depth_file_output.inputs[0])
+    refs['node_hdri'] = node_hdri
 
-    # normal 
-    # bpy.context.view_layer.use_pass_normal = True
-    # scale_node = nodes.new(type="CompositorNodeMixRGB")
-    # scale_node.blend_type = "MULTIPLY"
-    # scale_node.inputs[2].default_value = (0.5, 0.5, 0.5, 1)
-    # links.new(render_layers.outputs["Normal"], scale_node.inputs[1])
-    # bias_node = nodes.new(type="CompositorNodeMixRGB")
-    # bias_node.blend_type = "ADD"
-    # bias_node.inputs[2].default_value = (0.5, 0.5, 0.5, 0)
-    # links.new(scale_node.outputs[0], bias_node.inputs[1])
+    ### render nodes 
+    nodes = bpy.context.scene.node_tree.nodes
+    links = bpy.context.scene.node_tree.links
+    nodes.clear()
+    render_layers = nodes.new("CompositorNodeRLayers")
 
-    # normal_file_output = nodes.new(type="CompositorNodeOutputFile")
-    # normal_file_output.label = "Normal Output"
-    # normal_file_output.base_path = ""
-    # normal_file_output.file_slots[0].use_node_format = True
-    # normal_file_output.format.file_format = "PNG"
-    # normal_file_output.format.color_mode = "RGBA"
-    # links.new(bias_node.outputs[0], normal_file_output.inputs[0])
+    ## depth
+    if args.depth:
+        bpy.context.view_layer.use_pass_z = True
+        node_depth = nodes.new(type="CompositorNodeOutputFile")
+        node_depth.label = "Depth Output"
+        node_depth.base_path = ""
+        node_depth.file_slots[0].use_node_format = True
+        node_depth.format.file_format = "OPEN_EXR"
+        node_depth.format.color_depth = "16"
+        links.new(render_layers.outputs["Depth"], node_depth.inputs[0])
 
-    # albedo
-    # bpy.context.view_layer.use_pass_diffuse_color = True
-    # alpha_albedo = nodes.new(type="CompositorNodeSetAlpha")
-    # links.new(render_layers.outputs["DiffCol"], alpha_albedo.inputs["Image"])
-    # links.new(render_layers.outputs["Alpha"], alpha_albedo.inputs["Alpha"])
+        refs['node_depth'] = node_depth
 
-    # albedo_file_output = nodes.new(type="CompositorNodeOutputFile")
-    # albedo_file_output.label = "Albedo Output"
-    # albedo_file_output.base_path = ""
-    # albedo_file_output.file_slots[0].use_node_format = True
-    # albedo_file_output.format.file_format = "PNG"
-    # albedo_file_output.format.color_mode = "RGBA"
-    # links.new(alpha_albedo.outputs["Image"], albedo_file_output.inputs[0])
+    ## normal 
+    if args.normal:
+        bpy.context.view_layer.use_pass_normal = True
+        # rescale [-1, 1] * 0.5 + 0.5 to [0, 1]
+        node_normal_scale = nodes.new(type="CompositorNodeMixRGB")
+        node_normal_scale.blend_type = "MULTIPLY"
+        node_normal_scale.inputs[2].default_value = (0.5, 0.5, 0.5, 1)
+        links.new(render_layers.outputs["Normal"], node_normal_scale.inputs[1])
+        node_normal_bias = nodes.new(type="CompositorNodeMixRGB")
+        node_normal_bias.blend_type = "ADD"
+        node_normal_bias.inputs[2].default_value = (0.5, 0.5, 0.5, 0)
+        links.new(node_normal_scale.outputs[0], node_normal_bias.inputs[1])
+        node_normal = nodes.new(type="CompositorNodeOutputFile")
+        node_normal.label = "Normal Output"
+        node_normal.base_path = ""
+        node_normal.file_slots[0].use_node_format = True
+        node_normal.format.file_format = "PNG"
+        node_normal.format.color_mode = "RGBA"
+        links.new(node_normal_bias.outputs[0], node_normal.inputs[0])
+
+        refs['node_normal'] = node_normal
+
+    ## albedo
+    if args.albedo:
+        bpy.context.view_layer.use_pass_diffuse_color = True
+        node_albedo_alpha = nodes.new(type="CompositorNodeSetAlpha")
+        links.new(render_layers.outputs["DiffCol"], node_albedo_alpha.inputs["Image"])
+        links.new(render_layers.outputs["Alpha"], node_albedo_alpha.inputs["Alpha"])
+        node_albedo = nodes.new(type="CompositorNodeOutputFile")
+        node_albedo.label = "Albedo Output"
+        node_albedo.base_path = ""
+        node_albedo.file_slots[0].use_node_format = True
+        node_albedo.format.file_format = "PNG"
+        node_albedo.format.color_mode = "RGBA"
+        links.new(node_albedo_alpha.outputs["Image"], node_albedo.inputs[0])
+
+        refs['node_albedo'] = node_albedo
 
     # NOTE: blender cannot render metallic and roughness as image...
 
@@ -144,6 +178,9 @@ def setup_rendering(args):
                 device.use = False
 
         bpy.context.preferences.addons["cycles"].preferences.compute_device_type = "CUDA" # or "OPENCL"
+
+    return refs
+
 
 # a brute-force way to remove the annoying planes under the mesh
 # this can be a little dangerous to delete really meaningful part...
@@ -188,21 +225,6 @@ def get_calibration_matrix_K_from_blender(camera):
                     (0, 0, 1)),np.float32)
     return K
 
-def load_hdri(hdri_path):
-    
-    # use world nodes
-    world_nodes = bpy.context.scene.world.node_tree.nodes
-    world_links = bpy.context.scene.world.node_tree.links
-    world_nodes.clear()
-
-    node_world_output = world_nodes.new(type='ShaderNodeOutputWorld')
-    node_background = world_nodes.new(type='ShaderNodeBackground')
-    node_hdri = world_nodes.new('ShaderNodeTexEnvironment')
-    
-    world_links.new(node_hdri.outputs["Color"], node_background.inputs["Color"])
-    world_links.new(node_background.outputs["Background"], node_world_output.inputs["Surface"])
-
-    node_hdri.image = bpy.data.images.load(hdri_path)
 
 def load_object(mesh):
     if mesh.endswith(".glb"):
@@ -212,10 +234,12 @@ def load_object(mesh):
     else:
         raise ValueError(f"Unsupported file type: {mesh}")
 
+
 def get_scene_meshes():
     for obj in bpy.context.scene.objects.values():
         if isinstance(obj.data, (bpy.types.Mesh)):
             yield obj
+
 
 def get_scene_bbox(single_obj=None, ignore_matrix=False):
     bbox_min = (math.inf,) * 3
@@ -233,10 +257,12 @@ def get_scene_bbox(single_obj=None, ignore_matrix=False):
         raise RuntimeError("no objects in scene to compute bounding box for")
     return Vector(bbox_min), Vector(bbox_max)
 
+
 def get_scene_root_objects():
     for obj in bpy.context.scene.objects.values():
         if not obj.parent:
             yield obj
+
 
 def normalize_scene(bound=0.9):
     # bound: normalize to [-bound, bound]
@@ -255,7 +281,8 @@ def normalize_scene(bound=0.9):
 
 def main(args):
 
-    setup_rendering(args)
+    refs = setup_rendering(args)
+    cam = refs['cam']
 
     # reset scene
     reset_scene()
@@ -274,25 +301,20 @@ def main(args):
     # load random hdri
     hdri_paths = glob.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../assets/blender_lights/*.exr'))
     random_hdri_path = random.choice(hdri_paths)
-    load_hdri(random_hdri_path)
+    print(f'[INFO] using hdri: {random_hdri_path}')
+    refs['node_hdri'].image = bpy.data.images.load(random_hdri_path)
 
     # orbit camera
-    cam = bpy.context.scene.objects["Camera"]
     cam.data.angle = np.deg2rad(args.fovy)
-
-    cam_constraint = cam.constraints.new(type="TRACK_TO")
-    cam_constraint.track_axis = "TRACK_NEGATIVE_Z"
-    cam_constraint.up_axis = "UP_Y"
-
     empty = bpy.data.objects.new("Empty", None)
     bpy.context.scene.collection.objects.link(empty)
-    cam_constraint.target = empty
+    refs['cam_constraint'].target = empty
 
-    # place cameras (following zero123++ v1.2 6 views)
+    # place cameras (following zero123++ v1.2, front view + 6 side views)
     # azimuth in [0, 2pi], elevation in [-pi/2, pi/2]
     # for objaverse, most objects' front view is 270 azimuth!
-    azimuths = np.deg2rad(np.array([300, 0, 60, 120, 180, 240]))
-    elevations = np.deg2rad(np.array([-20, 10, -20, 10, -20, 10]))
+    azimuths = np.deg2rad(np.array([270, 300, 0, 60, 120, 180, 240]))
+    elevations = np.deg2rad(np.array([0, -20, 10, -20, 10, -20, 10]))
     
     # get camera positions in blender coordinate system
     x = args.radius * np.cos(azimuths) * np.cos(elevations)
@@ -323,9 +345,13 @@ def main(args):
         # render image
         render_file_path = os.path.join(args.outdir, name, f"{i:03d}")
         bpy.context.scene.render.filepath = render_file_path
-        # depth_file_output.file_slots[0].path = render_file_path + "_depth"
-        # normal_file_output.file_slots[0].path = render_file_path + "_normal"
-        # albedo_file_output.file_slots[0].path = render_file_path + "_albedo"
+
+        if args.depth:
+            refs['node_depth'].file_slots[0].path = render_file_path + "_depth"
+        if args.normal:
+            refs['node_normal'].file_slots[0].path = render_file_path + "_normal"
+        if args.albedo:
+            refs['node_albedo'].file_slots[0].path = render_file_path + "_albedo"
 
         if os.path.exists(render_file_path) and not args.overwrite: 
             continue
@@ -349,17 +375,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--mesh", type=str, required=True)
     parser.add_argument("--outdir", type=str, default='./')
-    parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--engine", type=str, default='CYCLES', choices=['BLENDER_EEVEE', 'CYCLES'])
+    parser.add_argument("--gpu", type=int, default=0)
 
     # saving parameters
-    parser.add_argument('--save_blend', action='store_true')
-    parser.add_argument('--save_camera', action='store_true')
+    parser.add_argument('--blend', action='store_true')
+    parser.add_argument('--camera', action='store_true')
+    parser.add_argument('--depth', action='store_true')
+    parser.add_argument('--normal', action='store_true')
+    parser.add_argument('--albedo', action='store_true')
     parser.add_argument('--overwrite', action='store_true')
 
     # rendering parameters
     parser.add_argument("--resolution", type=int, default=512)
-    parser.add_argument("--bound", type=float, default=0.95)
+    parser.add_argument("--bound", type=float, default=0.9)
     parser.add_argument("--radius", type=float, default=2.5)
     parser.add_argument("--fovy", type=float, default=49.1)
 
