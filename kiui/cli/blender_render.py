@@ -12,7 +12,7 @@ from contextlib import contextmanager
 import bpy
 from mathutils import Vector, Matrix
 
-# print(bpy.app.version_string)
+print(bpy.app.version_string)
 
 @contextmanager
 def stdout_redirected(to=os.devnull):
@@ -155,7 +155,7 @@ def setup_rendering(args):
     # NOTE: blender cannot render metallic and roughness as image...
 
     ### render engine
-    # EEVEE will use OpenGL, CYCLES will use GPU + CUDA
+    # EEVEE will use OpenGL, CYCLES will use GPU + CUDA/OPTIX
     if bpy.context.scene.render.engine == 'CYCLES':
         bpy.context.scene.cycles.device = "GPU"
         bpy.context.scene.cycles.samples = 64 # 128
@@ -177,7 +177,7 @@ def setup_rendering(args):
             else:
                 device.use = False
 
-        bpy.context.preferences.addons["cycles"].preferences.compute_device_type = "CUDA" # or "OPENCL"
+        bpy.context.preferences.addons["cycles"].preferences.compute_device_type = args.device
 
     return refs
 
@@ -299,7 +299,7 @@ def main(args):
     normalize_scene(bound=args.bound)
 
     # load random hdri
-    hdri_paths = glob.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../assets/blender_lights/*.exr'))
+    hdri_paths = glob.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lights/*.exr'))
     random_hdri_path = random.choice(hdri_paths)
     print(f'[INFO] using hdri: {random_hdri_path}')
     refs['node_hdri'].image = bpy.data.images.load(random_hdri_path)
@@ -355,18 +355,21 @@ def main(args):
 
         if os.path.exists(render_file_path) and not args.overwrite: 
             continue
-
-        with stdout_redirected(): # suppress tons of rendering logs
+        
+        if args.verbose:
             bpy.ops.render.render(write_still=True)
+        else:
+            with stdout_redirected(): # suppress tons of rendering logs
+                bpy.ops.render.render(write_still=True)
 
     # write camera
-    if args.save_camera:
+    if args.camera:
         K = get_calibration_matrix_K_from_blender(cam)
         cam_poses = np.stack(cam_poses, 0)
         np.savez(os.path.join(args.outdir, name, 'cameras.npz'), K=K, poses=cam_poses)
 
     # save blend file for debugging
-    if args.save_blend:
+    if args.blend:
         blend_path = os.path.join(args.outdir, name, f"{name}.blend")
         bpy.ops.wm.save_as_mainfile(filepath=blend_path)
 
@@ -376,7 +379,9 @@ if __name__ == "__main__":
     parser.add_argument("--mesh", type=str, required=True)
     parser.add_argument("--outdir", type=str, default='./')
     parser.add_argument("--engine", type=str, default='CYCLES', choices=['BLENDER_EEVEE', 'CYCLES'])
+    parser.add_argument("--device", type=str, default='OPTIX', choices=['OPTIX', 'CUDA', 'OPENCL'])
     parser.add_argument("--gpu", type=int, default=0)
+    parser.add_argument('--verbose', action='store_true')
 
     # saving parameters
     parser.add_argument('--blend', action='store_true')
