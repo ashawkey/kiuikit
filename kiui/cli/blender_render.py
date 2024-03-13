@@ -299,7 +299,7 @@ def main(args):
     normalize_scene(bound=args.bound)
 
     # load random hdri
-    hdri_paths = glob.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lights/*.exr'))
+    hdri_paths = glob.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../assets/blender_lights/*.exr'))
     random_hdri_path = random.choice(hdri_paths)
     print(f'[INFO] using hdri: {random_hdri_path}')
     refs['node_hdri'].image = bpy.data.images.load(random_hdri_path)
