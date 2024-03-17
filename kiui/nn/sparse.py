@@ -5,6 +5,14 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
+''' install from source
+sudo apt install libsparsehash-dev
+git clone https://github.com/mit-han-lab/torchsparse
+cd torchsparse
+pip install -r requirements.txt
+pip install .
+'''
+
 import torchsparse
 from torchsparse import SparseTensor
 from torchsparse import nn as spnn
