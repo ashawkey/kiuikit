@@ -1,5 +1,6 @@
-from typing import List, Tuple, Union
+import math
 import numpy as np
+from typing import List, Tuple, Union
 
 import torch
 from torch import nn
@@ -16,6 +17,64 @@ from torchsparse import SparseTensor
 from torchsparse import nn as spnn
 from torchsparse.utils.collate import sparse_collate, sparse_collate_fn
 from torchsparse.utils.quantize import sparse_quantize
+
+class ToDenseBEVConvolution(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        shape: Union[List[int], Tuple[int, int, int], torch.Tensor],
+        offset: Tuple[int, int, int] = (0, 0, 0),
+        dim: int = 1,
+        bias: bool = False,
+    ) -> None:
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.register_buffer("offset", torch.IntTensor([list(offset) + [0]]))
+        if isinstance(shape, torch.Tensor):
+            self.register_buffer("shape", shape.int())
+        else:
+            self.register_buffer("shape", torch.IntTensor(shape))
+        self.dim = dim
+        self.n_kernels = int(self.shape[self.dim])
+        self.bev_dims = [i for i in range(3) if i != self.dim]
+        self.bev_shape = self.shape[self.bev_dims]
+        self.kernel = nn.Parameter(torch.zeros(self.n_kernels, in_channels, out_channels))
+        self.bias = nn.Parameter(torch.zeros(1, out_channels)) if bias else 0
+        self.reset_parameters()
+
+    def extra_repr(self):
+        return "in_channels={}, out_channels={}, n_kernels={}".format(
+            self.in_channels, self.out_channels, self.n_kernels
+        )
+
+    def reset_parameters(self):
+        std = 1.0 / math.sqrt(self.in_channels)
+        self.kernel.data.uniform_(-std, std)
+
+    def forward(self, input: SparseTensor) -> torch.Tensor:
+        coords, feats, stride = input.coords, input.feats, input.stride
+        stride = torch.tensor(stride).unsqueeze(dim=0).to(feats)[:, self.dim]
+
+        kernel = torch.index_select(self.kernel, 0, torch.div(coords[:, self.dim], stride).trunc().long())
+        feats = (feats.unsqueeze(dim=-1) * kernel).sum(1) + self.bias
+        coords = (coords - self.offset).t()[[0] + self.bev_dims].long() # fix ref: https://github.com/mit-han-lab/torchsparse/issues/296
+        coords[1:] = torch.div(coords[1:], stride).trunc().long()
+        indices = (
+            coords[0] * int(self.bev_shape.prod())
+            + coords[1] * int(self.bev_shape[1])
+            + coords[2]
+        )
+        batch_size = coords[0].max().item() + 1
+        output = torch.sparse_coo_tensor(
+            indices.unsqueeze(dim=0),
+            feats,
+            torch.Size([batch_size * int(self.bev_shape.prod()), feats.size(-1)]),
+        ).to_dense()
+        output = output.view(batch_size, *self.bev_shape, -1)
+        output = output.permute(0, 3, 1, 2).contiguous()
+        return output
 
 class SparseConvBlock(nn.Sequential):
     def __init__(
@@ -69,9 +128,9 @@ class SparseEncoder(nn.Module):
         self,
         in_channels=3,
         out_channels=256,
-        block_channels=[16, 32, 64, 128], # 4 downscale, 512 --> 32 resolution
+        block_channels=[32, 64, 128, 256], # 4 downscale, 512 --> 32 resolution
         layers_per_block=3,
-        triplane_resolution=32,
+        resolution=32,
     ):
         super().__init__()
 
@@ -89,9 +148,9 @@ class SparseEncoder(nn.Module):
         self.blocks = nn.ModuleList(blocks)
 
         # to triplane
-        self.out0 = spnn.ToDenseBEVConvolution(cin, out_channels, shape=[triplane_resolution] * 3, dim=0)
-        self.out1 = spnn.ToDenseBEVConvolution(cin, out_channels, shape=[triplane_resolution] * 3, dim=1)
-        self.out2 = spnn.ToDenseBEVConvolution(cin, out_channels, shape=[triplane_resolution] * 3, dim=2)
+        self.out0 = ToDenseBEVConvolution(cin, out_channels, shape=[resolution] * 3, dim=0)
+        self.out1 = ToDenseBEVConvolution(cin, out_channels, shape=[resolution] * 3, dim=1)
+        self.out2 = ToDenseBEVConvolution(cin, out_channels, shape=[resolution] * 3, dim=2)
     
     def forward(self, x: SparseTensor):
         # x: B pointclouds
@@ -115,7 +174,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model = SparseEncoder().to(device)
-    print(model)
+    # print(model)
     
     total, trainable = count_parameters(model)
     print(f'[INFO] param total: {total/1024**2:.2f}M, trainable: {trainable/1024**2:.2f}M')
@@ -130,6 +189,7 @@ if __name__ == "__main__":
         return points
 
     x = sparse_collate([get_random_input() for _ in range(2)]).to(device)
+    # kiui.lo(x)
     
     with torch.autocast(device_type='cuda', dtype=torch.float16):
         y = model(x)
