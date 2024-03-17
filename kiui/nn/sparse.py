@@ -5,12 +5,10 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-''' install from source
+''' 
+# install from source (modified from the original repo to make installation simpler)
 sudo apt install libsparsehash-dev
-git clone https://github.com/mit-han-lab/torchsparse
-cd torchsparse
-pip install -r requirements.txt
-pip install .
+pip install git+https://github.com/ashawkey/torchsparse
 '''
 
 import torchsparse
