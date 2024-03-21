@@ -191,7 +191,11 @@ def clean_scene_meshes():
             # typical for a two-triangle plane
             if len(obj.data.vertices) <= 6:
                 bpy.data.objects.remove(obj, do_unlink=True)
-        
+
+# remove all animations, which will disturb normalization
+def clear_animation():
+    for obj in bpy.data.objects:
+        obj.animation_data_clear()
 
 def get_calibration_matrix_K_from_blender(camera):
     f_in_mm = camera.data.lens
@@ -296,6 +300,7 @@ def main(args):
     clean_scene_meshes()
 
     # normalize objects to [-b, b]^3
+    clear_animation()
     normalize_scene(bound=args.bound)
 
     # load random hdri
