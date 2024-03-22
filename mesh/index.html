@@ -6,7 +6,7 @@
 <link rel="index" title="Index" href="../genindex/" /><link rel="search" title="Search" href="../search/" /><link rel="next" title="Camera" href="../camera/" /><link rel="prev" title="Kiuikit" href="../" />
 
     <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 7.2.6 and Furo 2024.01.29 -->
-        <title>Mesh - kiui 0.2.5 documentation</title>
+        <title>Mesh - kiui 0.2.6 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=135e06be" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -125,7 +125,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../"><div class="brand">kiui 0.2.5 documentation</div></a>
+      <a href="../"><div class="brand">kiui 0.2.6 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -179,6 +179,7 @@
 <p class="caption" role="heading"><span class="caption-text">Tool</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../render/">Mesh Renderer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../blender/">Blender Scripts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../misc/">Misc CLI</a></li>
 </ul>
 
@@ -216,7 +217,7 @@
         <article role="main">
           <section id="mesh">
 <h1>Mesh<a class="headerlink" href="#mesh" title="Link to this heading">#</a></h1>
-<p><code class="docutils literal notranslate"><span class="pre">kiui.mesh.Mesh</span></code> class provides an implementation of a triangular mesh in PyTorch.</p>
+<p><code class="docutils literal notranslate"><span class="pre">kiui.mesh.Mesh</span></code> class provides an implementation of triangle meshes in PyTorch.</p>
 <p><code class="docutils literal notranslate"><span class="pre">kiui.mesh_utils</span></code> provides utility functions for mesh processing and loss functions.</p>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">#</a></h2>
@@ -498,21 +499,22 @@ Usually this will duplicate the vertices on the edge of uv atlas. Defaults to Tr
 <dt class="sig sig-object py" id="kiui.mesh_utils.decimate_mesh">
 <span class="sig-prename descclassname"><span class="pre">kiui.mesh_utils.</span></span><span class="sig-name descname"><span class="pre">decimate_mesh</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">verts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">faces</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50000.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'pymeshlab'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remesh</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">optimalplacement</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/mesh_utils/#decimate_mesh"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.mesh_utils.decimate_mesh" title="Link to this definition">#</a></dt>
 <dd><p>perform mesh decimation.</p>
-<dl class="simple">
-<dt>Args:pml</dt><dd><p>verts (np.ndarray): mesh vertices, float [N, 3]
-faces (np.ndarray): mesh faces, int [M, 3]
-target (int): targeted number of faces
-backend (str, optional): algorithm backend, can be “pymeshlab” or “pyfqmr”. Defaults to “pymeshlab”.
-remesh (bool, optional): whether to remesh after decimation. Defaults to False.
-optimalplacement (bool, optional): For flat mesh, use False to prevent spikes. Defaults to True.</p>
-</dd>
-</dl>
 <dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>vertices and faces after decimation.</p>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>verts</strong> (<em>np.ndarray</em>) – mesh vertices, float [N, 3]</p></li>
+<li><p><strong>faces</strong> (<em>np.ndarray</em>) – mesh faces, int [M, 3]</p></li>
+<li><p><strong>target</strong> (<em>int</em>) – targeted number of faces</p></li>
+<li><p><strong>backend</strong> (<em>str</em><em>, </em><em>optional</em>) – algorithm backend, can be “pymeshlab” or “pyfqmr”. Defaults to “pymeshlab”.</p></li>
+<li><p><strong>remesh</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether to remesh after decimation. Defaults to False.</p></li>
+<li><p><strong>optimalplacement</strong> (<em>bool</em><em>, </em><em>optional</em>) – For flat mesh, use False to prevent spikes. Defaults to True.</p></li>
+</ul>
 </dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>Tuple[np.ndarray]</p>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>vertices and faces after decimation.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tuple[np.ndarray]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -720,7 +722,7 @@ optimalplacement (bool, optional): For flat mesh, use False to prevent spikes. D
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=911b6c39"></script>
+</div><script src="../_static/documentation_options.js?v=a6512817"></script>
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=32e29ea5"></script>

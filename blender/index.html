@@ -2,10 +2,12 @@
 <html class="no-js" lang="en" data-content_root="../">
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../genindex/" /><link rel="search" title="Search" href="../search/" />
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex/" /><link rel="search" title="Search" href="../search/" /><link rel="next" title="Misc CLI" href="../misc/" /><link rel="prev" title="Mesh Renderer" href="../render/" />
 
-    <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 7.2.6 and Furo 2024.01.29 --><title>Python Module Index - kiui 0.2.6 documentation</title>
-<link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+    <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 7.2.6 and Furo 2024.01.29 -->
+        <title>Blender Scripts - kiui 0.2.6 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=135e06be" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/design-style.1e8bd061cd6da7fc9cf755528e8ffc24.min.css?v=0a3b3ea7" />
@@ -175,9 +177,9 @@
 <li class="toctree-l1"><a class="reference internal" href="../misc_api/">Misc API</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tool</span></p>
-<ul>
+<ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../render/">Mesh Renderer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../blender/">Blender Scripts</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Blender Scripts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../misc/">Misc CLI</a></li>
 </ul>
 
@@ -198,7 +200,8 @@
           <span>Back to top</span>
         </a>
         <div class="content-icon-container">
-          <div class="theme-toggle-container theme-toggle-content">
+          
+<div class="theme-toggle-container theme-toggle-content">
             <button class="theme-toggle">
               <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
               <svg class="theme-icon-when-auto"><use href="#svg-sun-half"></use></svg>
@@ -212,70 +215,54 @@
           </label>
         </div>
         <article role="main">
-          
-<section class="domainindex-section">
-  <h1>Python Module Index</h1>
-  <div class="domainindex-jumpbox"><a href="#cap-k"><strong>k</strong></a></div>
+          <section id="blender-scripts">
+<h1>Blender Scripts<a class="headerlink" href="#blender-scripts" title="Link to this heading">#</a></h1>
+<p>To render complex 3D models (specifically with multiple submeshes), the only choice is to use <code class="docutils literal notranslate"><span class="pre">blender</span></code> and <code class="docutils literal notranslate"><span class="pre">bpy</span></code>.</p>
+<p>We provide an example code for rendering with blender:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># make sure you are using python&gt;=3.10, tested with bpy==4.0.0</span>
+pip<span class="w"> </span>install<span class="w"> </span>bpy<span class="w"> </span>mathutils
+
+<span class="c1"># help</span>
+python<span class="w"> </span>-m<span class="w"> </span>kiui.cli.blender_render<span class="w"> </span>--help
+
+<span class="c1"># example</span>
+python<span class="w"> </span>-m<span class="w"> </span>kiui.cli.blender_render<span class="w"> </span>--mesh<span class="w"> </span>chest.glb<span class="w"> </span>--gpu<span class="w"> </span><span class="m">0</span><span class="w"> </span>--depth<span class="w"> </span>--normal<span class="w"> </span>--albedo<span class="w"> </span>--camera<span class="w"> </span>--blend
+</pre></div>
+</div>
+<p>Features include:</p>
+<ul class="simple">
+<li><p>Set which GPU to use with <code class="docutils literal notranslate"><span class="pre">--gpu</span> <span class="pre">0</span></code> for <code class="docutils literal notranslate"><span class="pre">CYCLES</span></code> rendering engine.</p></li>
+<li><p>Render with random built-in HDRI environment texture shading (check <code class="docutils literal notranslate"><span class="pre">assets/blender_lights</span></code>).</p></li>
+<li><p>Optionally render depth (<code class="docutils literal notranslate"><span class="pre">exr</span></code>), normal, and albedo.</p></li>
+<li><p>Empirical cleaning of the scene (remove the annoying plane under the object).</p></li>
+</ul>
 </section>
-<table class="domainindex-table">
-  <tr class="pcap">
-    <td></td><td>&#160;</td><td></td>
-  </tr>
-  <tr class="cap" id="cap-k">
-    <td></td><td><strong>k</strong></td><td></td>
-  </tr>
-  <tr>
-    <td><img src="../_static/minus.png" class="toggler"
-              id="toggle-1" style="display: none" alt="-" /></td>
-    <td>
-        <code class="xref">kiui</code></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="../camera/#module-kiui.cam"><code class="xref">kiui.cam</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="../mesh/#module-kiui.mesh"><code class="xref">kiui.mesh</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="../mesh/#module-kiui.mesh_utils"><code class="xref">kiui.mesh_utils</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="../ops/#module-kiui.op"><code class="xref">kiui.op</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="../utils/#module-kiui.utils"><code class="xref">kiui.utils</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="../vis/#module-kiui.vis"><code class="xref">kiui.vis</code></a></td><td>
-    <em></em></td>
-  </tr>
-</table>
 
         </article>
       </div>
       <footer>
         
         <div class="related-pages">
-          
-          
+          <a class="next-page" href="../misc/">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Misc CLI</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="../render/">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Mesh Renderer</div>
+                
+              </div>
+            </a>
         </div>
         <div class="bottom-of-page">
           <div class="left-details">
