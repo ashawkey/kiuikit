@@ -285,17 +285,14 @@ class Mesh:
                     
             # still not found albedo_path, or the path doesn't exist
             if albedo_path is None or not os.path.exists(albedo_path):
-                # init an empty texture
-                print(f"[INFO] load obj mesh: init empty albedo!")
-                # albedo = np.random.rand(1024, 1024, 3).astype(np.float32)
-                albedo = np.ones((1024, 1024, 3), dtype=np.float32) * np.array([0.5, 0.5, 0.5])  # default color
+                print(f"[INFO] load obj mesh: failed to load texture!")
+                mesh.albedo = None
             else:
                 albedo = cv2.imread(albedo_path, cv2.IMREAD_UNCHANGED)
                 albedo = cv2.cvtColor(albedo, cv2.COLOR_BGR2RGB)
                 albedo = albedo.astype(np.float32) / 255
                 print(f"[INFO] load obj mesh: load texture: {albedo.shape}")
-            
-            mesh.albedo = torch.tensor(albedo, dtype=torch.float32, device=device)
+                mesh.albedo = torch.tensor(albedo, dtype=torch.float32, device=device)
             
             # try to load metallic and roughness
             if metallic_path is not None and roughness_path is not None:
@@ -372,8 +369,7 @@ class Mesh:
             mesh.albedo = torch.tensor(texture[..., :3], dtype=torch.float32, device=device).contiguous()
             print(f"[INFO] load trimesh: load texture: {texture.shape}")
         else:
-            texture = np.ones((1024, 1024, 3), dtype=np.float32) * np.array([0.5, 0.5, 0.5])
-            mesh.albedo = torch.tensor(texture, dtype=torch.float32, device=device)
+            mesh.albedo = None
             print(f"[INFO] load trimesh: failed to load texture.")
 
         vertices = _mesh.vertices

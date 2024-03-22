@@ -40,11 +40,20 @@ class GUI:
         self.auto_rotate_cam = False
         self.auto_rotate_light = False
         
-        self.mode = opt.mode
-        self.render_modes = ['albedo', 'depth', 'normal', 'lambertian']
 
         # load mesh
         self.mesh = Mesh.load(opt.mesh, front_dir=opt.front_dir)
+
+        # render_mode
+        self.render_modes = ['depth', 'normal']
+        if self.mesh.albedo is not None or self.mesh.vc is not None:
+            self.render_modes.extend(['albedo', 'lambertian'])
+        
+        if opt.mode in self.render_modes:
+            self.mode = opt.mode
+        else:
+            print(f'[WARN] mode {opt.mode} not supported, fallback to render normal')
+            self.mode = 'normal' # fallback
 
         # load pbr if enabled
         if self.opt.pbr:
@@ -100,12 +109,18 @@ class GUI:
             depth, _ = dr.interpolate(-v_cam[..., [2]], rast, self.mesh.f) # [1, H, W, 1]
             depth = (depth - depth.min()) / (depth.max() - depth.min() + 1e-20)
             buffer = depth.squeeze(0).detach().cpu().numpy().repeat(3, -1) # [H, W, 3]
+        elif self.mode == 'normal':
+            normal, _ = dr.interpolate(self.mesh.vn.unsqueeze(0).contiguous(), rast, self.mesh.fn)
+            normal = safe_normalize(normal)
+            normal_image = (normal[0] + 1) / 2
+            normal_image = torch.where(rast[..., 3:] > 0, normal_image, torch.tensor(1).to(normal_image.device)) # remove background
+            buffer = normal_image.detach().cpu().numpy()
         else:
             # use vertex color if exists
             if self.mesh.vc is not None:
                 albedo, _ = dr.interpolate(self.mesh.vc.unsqueeze(0).contiguous(), rast, self.mesh.f)
             # use texture image
-            else:
+            else: # assert mesh.albedo is not None
                 texc, _ = dr.interpolate(self.mesh.vt.unsqueeze(0).contiguous(), rast, self.mesh.ft)
                 albedo = dr.texture(self.mesh.albedo.unsqueeze(0), texc, filter_mode='linear') # [1, H, W, 3]
 
@@ -118,11 +133,8 @@ class GUI:
             else:
                 normal, _ = dr.interpolate(self.mesh.vn.unsqueeze(0).contiguous(), rast, self.mesh.fn)
                 normal = safe_normalize(normal)
-                if self.mode == 'normal':
-                    normal_image = (normal[0] + 1) / 2
-                    normal_image = torch.where(rast[..., 3:] > 0, normal_image, torch.tensor(1).to(normal_image.device)) # remove background
-                    buffer = normal_image.detach().cpu().numpy()
-                elif self.mode == 'lambertian':
+                
+                if self.mode == 'lambertian':
                     light_d = np.deg2rad(self.light_dir)
                     light_d = np.array([
                         np.cos(light_d[0]) * np.sin(light_d[1]),
