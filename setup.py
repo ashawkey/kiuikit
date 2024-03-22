@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 if __name__ == "__main__":
     setup(
         name="kiui",
-        version="0.2.5",
+        version="0.2.6",
         description="A toolkit for 3D vision",
         long_description=open("README.md", encoding="utf-8").read(),
         long_description_content_type="text/markdown",

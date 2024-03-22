@@ -34,7 +34,7 @@ def decimate_mesh(
 ):
     """ perform mesh decimation.
 
-    Args:pml
+    Args:
         verts (np.ndarray): mesh vertices, float [N, 3]
         faces (np.ndarray): mesh faces, int [M, 3]
         target (int): targeted number of faces
