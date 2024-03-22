@@ -7,8 +7,8 @@ import pymeshlab as pml
 from importlib.metadata import version
 
 PML_VER = version('pymeshlab') 
-# NOTE: assume the latest 2023.12 version
 
+# the code assumes the latest 2023.12 version, but we can patch older versions
 if PML_VER.startswith('0.2'):
     # monkey patch for 0.2 (only the used functions in this file!)
     pml.MeshSet.meshing_decimation_quadric_edge_collapse = pml.MeshSet.simplification_quadric_edge_collapse_decimation

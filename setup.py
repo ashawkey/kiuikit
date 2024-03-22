@@ -51,6 +51,7 @@ if __name__ == "__main__":
                 'viser',
                 'pymeshlab',
                 'huggingface_hub',
+                'PyMCubes',
             ],
         },
     )
