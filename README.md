@@ -19,7 +19,7 @@ A toolkit for computer vision (especially 3D vision) tasks.
 
 https://github.com/ashawkey/kiuikit/assets/25863658/d8cbcf0f-a6d8-4fa7-aee9-afbbf25ed167
 
-> "Seahourse3" (https://skfb.ly/6TwFv) by seanhepburn is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+> ["Seahourse3"](https://skfb.ly/6TwFv) by seanhepburn is licensed under [Creative Commons Attribution](http://creativecommons.org/licenses/by/4.0/).
 
 ### Install
 
