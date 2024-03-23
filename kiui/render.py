@@ -40,7 +40,6 @@ class GUI:
         self.auto_rotate_cam = False
         self.auto_rotate_light = False
         
-
         # load mesh
         self.mesh = Mesh.load(opt.mesh, front_dir=opt.front_dir)
 
@@ -54,6 +53,9 @@ class GUI:
         else:
             print(f'[WARN] mode {opt.mode} not supported, fallback to render normal')
             self.mode = 'normal' # fallback
+
+        # display wireframe
+        self.show_wire = False
 
         # load pbr if enabled
         if self.opt.pbr:
@@ -114,7 +116,7 @@ class GUI:
             normal = safe_normalize(normal)
             normal_image = (normal[0] + 1) / 2
             normal_image = torch.where(rast[..., 3:] > 0, normal_image, torch.tensor(1).to(normal_image.device)) # remove background
-            buffer = normal_image.detach().cpu().numpy()
+            buffer = normal_image[0].detach().cpu().numpy()
         else:
             # use vertex color if exists
             if self.mesh.vc is not None:
@@ -181,7 +183,14 @@ class GUI:
                     color = color * alpha + self.bg_color * (1 - alpha)
 
                     buffer = color[0].detach().cpu().numpy()
-                    
+
+        if self.show_wire:
+            u = rast[..., 0] # [1, h, w]
+            v = rast[..., 1] # [1, h, w]
+            w = 1 - u - v
+            mask = rast[..., 2]
+            near_edge = (((w < 0.01) | (u < 0.01) | (v < 0.01)) & (mask > 0))[0].detach().cpu().numpy() # [h, w]
+            buffer[near_edge] = np.array([0, 0, 0], dtype=np.float32) # black wire
 
         ender.record()
         torch.cuda.synchronize()
@@ -246,6 +255,14 @@ class GUI:
                 
                 dpg.add_combo(self.render_modes, label='mode', default_value=self.mode, tag="_mode_combo", callback=callback_change_mode)
 
+                # show wireframe
+                def callback_toggle_wireframe(sender, app_data):
+                    self.show_wire = not self.show_wire
+                    dpg.set_value("_checkbox_wire", self.show_wire)
+                    self.need_update = True
+
+                dpg.add_checkbox(label="wireframe", tag="_checkbox_wire", default_value=self.show_wire, callback=callback_toggle_wireframe)
+
                 # bg_color picker
                 def callback_change_bg(sender, app_data):
                     self.bg_color = torch.tensor(app_data[:3], dtype=torch.float32).cuda() # only need RGB in [0, 1]
@@ -296,8 +313,6 @@ class GUI:
                         self.need_update = True
 
                     dpg.add_slider_float(label="roughness", min_value=0, max_value=1.0, format="%.5f", default_value=self.roughness_factor, callback=callback_set_roughness)
-
-
 
         ### register IO handlers
 
@@ -358,6 +373,7 @@ class GUI:
             dpg.add_key_press_handler(dpg.mvKey_Spacebar, callback=callback_space_toggle_mode)
             dpg.add_key_press_handler(dpg.mvKey_P, callback=callback_toggle_auto_rotate_cam)
             dpg.add_key_press_handler(dpg.mvKey_L, callback=callback_toggle_auto_rotate_light)
+            dpg.add_key_press_handler(dpg.mvKey_W, callback=callback_toggle_wireframe)
 
         
         dpg.create_viewport(title='mesh viewer', width=self.W, height=self.H, resizable=False)
