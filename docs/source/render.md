@@ -1,5 +1,7 @@
 # Mesh Renderer
 
+[[source]](https://github.com/ashawkey/kiuikit/blob/main/kiui/render.py)
+
 We provide a convenient mesh renderer based on:
 * [kiui.mesh.Mesh](mesh.md): our mesh implementation.
 * [nvdiffrast](https://github.com/NVlabs/nvdiffrast): an NVIDIA GPU is required, install with `pip install git+https://github.com/NVlabs/nvdiffrast`.

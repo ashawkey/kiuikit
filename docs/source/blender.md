@@ -1,5 +1,7 @@
 # Blender Scripts
 
+[[source]](https://github.com/ashawkey/kiuikit/blob/main/kiui/cli/blender_render.py)
+
 To render complex 3D models (specifically with multiple submeshes), the only choice is to use `blender` and `bpy`.
 
 We provide an example code for rendering with blender:

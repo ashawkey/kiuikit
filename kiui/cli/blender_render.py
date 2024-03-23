@@ -12,7 +12,7 @@ from contextlib import contextmanager
 import bpy
 from mathutils import Vector, Matrix
 
-print(bpy.app.version_string)
+# print(bpy.app.version_string)
 
 @contextmanager
 def stdout_redirected(to=os.devnull):
