@@ -48,8 +48,8 @@ class ImageAttention(nn.Module):
             
         return x
 
-class DiagonalGaussianDistribution(object):
-    def __init__(self, parameters: torch.Tensor, deterministic: bool = False):
+class DiagonalGaussianDistribution:
+    def __init__(self, parameters, deterministic=False):
         # parameters: [B, 2C, ...]
         self.parameters = parameters
         self.mean, self.logvar = torch.chunk(parameters, 2, dim=1)
@@ -59,21 +59,18 @@ class DiagonalGaussianDistribution(object):
         self.var = torch.exp(self.logvar)
         if self.deterministic:
             self.var = self.std = torch.zeros_like(self.mean, device=self.parameters.device, dtype=self.parameters.dtype)
-
-    def sample(self) -> torch.FloatTensor:
+        
+    def sample(self):
         sample = torch.randn(self.mean.shape, device=self.parameters.device, dtype=self.parameters.dtype)
         x = self.mean + self.std * sample
         return x
 
-    def kl(self, other: "DiagonalGaussianDistribution" = None) -> torch.Tensor:
+    def kl(self, other=None, dims=[1, 2, 3]):
         if self.deterministic:
             return torch.Tensor([0.0])
         else:
             if other is None:
-                return 0.5 * torch.sum(
-                    torch.pow(self.mean, 2) + self.var - 1.0 - self.logvar,
-                    dim=[1, 2, 3],
-                )
+                return 0.5 * torch.sum(torch.pow(self.mean, 2) + self.var - 1.0 - self.logvar, dim=dims)
             else:
                 return 0.5 * torch.sum(
                     torch.pow(self.mean - other.mean, 2) / other.var
@@ -81,19 +78,16 @@ class DiagonalGaussianDistribution(object):
                     - 1.0
                     - self.logvar
                     + other.logvar,
-                    dim=[1, 2, 3],
+                    dim=dims,
                 )
 
-    def nll(self, sample: torch.Tensor, dims: Tuple[int, ...] = [1, 2, 3]) -> torch.Tensor:
+    def nll(self, sample, dims=[1, 2, 3]):
         if self.deterministic:
             return torch.Tensor([0.0])
         logtwopi = np.log(2.0 * np.pi)
-        return 0.5 * torch.sum(
-            logtwopi + self.logvar + torch.pow(sample - self.mean, 2) / self.var,
-            dim=dims,
-        )
+        return 0.5 * torch.sum(logtwopi + self.logvar + torch.pow(sample - self.mean, 2) / self.var, dim=dims)
 
-    def mode(self) -> torch.Tensor:
+    def mode(self):
         return self.mean
     
 
@@ -435,7 +429,7 @@ class VAE(nn.Module):
         x = self.decoder(x)
         return x
 
-    def forward(self, x, sample=False):
+    def forward(self, x, sample=True):
         # x: [B, Cin, H, W, D]
 
         p = self.encode(x)
@@ -465,15 +459,17 @@ if __name__ == '__main__':
     # test forward
     x = torch.randn(4, 3, 512, 512, device=device)
     kiui.lo(x)
-
+    
     with torch.autocast(device_type='cuda', dtype=torch.float16):
         y, p = model(x)
         kiui.lo(y)
+        kiui.lo(p.mean)
 
         mem_free, mem_total = torch.cuda.mem_get_info()
         print(f'[INFO] mem forward: {(mem_total-mem_free)/1024**3:.2f}/{mem_total/1024**3:.2f}G')
 
         # test backward
-        y.sum().backward()
+        loss = y.mean() + 1e-6 * p.kl().mean()
+        loss.backward()
         mem_free, mem_total = torch.cuda.mem_get_info()
         print(f'[INFO] mem backward: {(mem_total-mem_free)/1024**3:.2f}/{mem_total/1024**3:.2f}G')

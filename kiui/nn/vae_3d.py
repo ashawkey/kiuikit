@@ -47,8 +47,9 @@ class VolumeAttention(nn.Module):
             
         return x
 
-class DiagonalGaussianDistribution(object):
-    def __init__(self, parameters: torch.Tensor, deterministic: bool = False):
+
+class DiagonalGaussianDistribution:
+    def __init__(self, parameters, deterministic=False):
         # parameters: [B, 2C, ...]
         self.parameters = parameters
         self.mean, self.logvar = torch.chunk(parameters, 2, dim=1)
@@ -58,21 +59,18 @@ class DiagonalGaussianDistribution(object):
         self.var = torch.exp(self.logvar)
         if self.deterministic:
             self.var = self.std = torch.zeros_like(self.mean, device=self.parameters.device, dtype=self.parameters.dtype)
-
-    def sample(self) -> torch.FloatTensor:
+        
+    def sample(self):
         sample = torch.randn(self.mean.shape, device=self.parameters.device, dtype=self.parameters.dtype)
         x = self.mean + self.std * sample
         return x
 
-    def kl(self, other: "DiagonalGaussianDistribution" = None) -> torch.Tensor:
+    def kl(self, other=None, dims=[1, 2, 3, 4]):
         if self.deterministic:
             return torch.Tensor([0.0])
         else:
             if other is None:
-                return 0.5 * torch.sum(
-                    torch.pow(self.mean, 2) + self.var - 1.0 - self.logvar,
-                    dim=[1, 2, 3],
-                )
+                return 0.5 * torch.sum(torch.pow(self.mean, 2) + self.var - 1.0 - self.logvar, dim=dims)
             else:
                 return 0.5 * torch.sum(
                     torch.pow(self.mean - other.mean, 2) / other.var
@@ -80,19 +78,16 @@ class DiagonalGaussianDistribution(object):
                     - 1.0
                     - self.logvar
                     + other.logvar,
-                    dim=[1, 2, 3],
+                    dim=dims,
                 )
 
-    def nll(self, sample: torch.Tensor, dims: Tuple[int, ...] = [1, 2, 3]) -> torch.Tensor:
+    def nll(self, sample, dims=[1, 2, 3, 4]):
         if self.deterministic:
             return torch.Tensor([0.0])
         logtwopi = np.log(2.0 * np.pi)
-        return 0.5 * torch.sum(
-            logtwopi + self.logvar + torch.pow(sample - self.mean, 2) / self.var,
-            dim=dims,
-        )
+        return 0.5 * torch.sum(logtwopi + self.logvar + torch.pow(sample - self.mean, 2) / self.var, dim=dims)
 
-    def mode(self) -> torch.Tensor:
+    def mode(self):
         return self.mean
     
 
@@ -158,8 +153,10 @@ class DownBlock(nn.Module):
         num_layers: int = 1,
         downsample: bool = True,
         skip_scale: float = 1,
+        gradient_checkpointing: bool = False,
     ):
         super().__init__()
+        self.gradient_checkpointing = gradient_checkpointing
  
         nets = []
         for i in range(num_layers):
@@ -172,6 +169,12 @@ class DownBlock(nn.Module):
             self.downsample = nn.Conv3d(out_channels, out_channels, kernel_size=3, stride=2, padding=1)
 
     def forward(self, x):
+        if self.training and self.gradient_checkpointing:
+            return checkpoint(self._forward, x, use_reentrant=False)
+        else:
+            return self._forward(x)
+
+    def _forward(self, x):
         
         for net in self.nets:
             x = net(x)
@@ -188,10 +191,12 @@ class MidBlock(nn.Module):
         in_channels: int,
         num_layers: int = 1,
         attention: bool = True,
-        attention_heads: int = 16,
+        attention_heads: int = 8,
         skip_scale: float = 1,
+        gradient_checkpointing: bool = False,
     ):
         super().__init__()
+        self.gradient_checkpointing = gradient_checkpointing
 
         nets = []
         attns = []
@@ -208,6 +213,12 @@ class MidBlock(nn.Module):
         self.attns = nn.ModuleList(attns)
         
     def forward(self, x):
+        if self.training and self.gradient_checkpointing:
+            return checkpoint(self._forward, x, use_reentrant=False)
+        else:
+            return self._forward(x)
+
+    def _forward(self, x):
         x = self.nets[0](x)
         for attn, net in zip(self.attns, self.nets[1:]):
             if attn:
@@ -224,8 +235,10 @@ class UpBlock(nn.Module):
         num_layers: int = 1,
         upsample: bool = True,
         skip_scale: float = 1,
+        gradient_checkpointing: bool = False,
     ):
         super().__init__()
+        self.gradient_checkpointing = gradient_checkpointing
 
         nets = []
         for i in range(num_layers):
@@ -236,15 +249,20 @@ class UpBlock(nn.Module):
 
         self.upsample = None
         if upsample:
-            self.upsample = nn.Conv3d(out_channels, out_channels, kernel_size=3, stride=1, padding=1)
-
+            self.upsample = nn.ConvTranspose3d(out_channels, out_channels, kernel_size=2, stride=2)
+    
     def forward(self, x):
+        if self.training and self.gradient_checkpointing:
+            return checkpoint(self._forward, x, use_reentrant=False)
+        else:
+            return self._forward(x)
+
+    def _forward(self, x):
 
         for net in self.nets:
             x = net(x)
             
         if self.upsample:
-            x = F.interpolate(x, scale_factor=2.0, mode='nearest')
             x = self.upsample(x)
 
         return x
@@ -254,18 +272,17 @@ class Encoder(nn.Module):
     def __init__(
         self,
         in_channels: int = 1,
-        out_channels: int = 2, # double_z
-        down_channels: Tuple[int, ...] = (64, 128, 256, 512, 512),
+        out_channels: int = 2 * 16, # double_z
+        down_channels: Tuple[int, ...] = (8, 16, 32, 64),
         mid_attention: bool = True,
         layers_per_block: int = 2,
         skip_scale: float = np.sqrt(0.5),
         gradient_checkpointing: bool = False,
     ):
         super().__init__()
-        self.gradient_checkpointing = gradient_checkpointing
-
-        # first
-        self.conv_in = nn.Conv3d(in_channels, down_channels[0], kernel_size=3, stride=1, padding=1)
+      
+        # input (first downsample)
+        self.conv_in = nn.Conv3d(in_channels, down_channels[0], kernel_size=2, stride=2, padding=0)
 
         # down
         down_blocks = []
@@ -279,6 +296,7 @@ class Encoder(nn.Module):
                 num_layers=layers_per_block, 
                 downsample=(i != len(down_channels) - 1), # not final layer
                 skip_scale=skip_scale,
+                gradient_checkpointing=gradient_checkpointing,
             ))
         self.down_blocks = nn.ModuleList(down_blocks)
 
@@ -290,12 +308,6 @@ class Encoder(nn.Module):
         self.conv_out = nn.Conv3d(down_channels[-1], out_channels, kernel_size=3, stride=1, padding=1)
     
     def forward(self, x):
-        if self.training and self.gradient_checkpointing:
-            return checkpoint(self._forward, x, use_reentrant=False)
-        else:
-            return self._forward(x)
-    
-    def _forward(self, x):
         # x: [B, Cin, H, W, D]
 
         # first
@@ -319,17 +331,16 @@ class Encoder(nn.Module):
 class Decoder(nn.Module):
     def __init__(
         self,
-        in_channels: int = 1,
+        in_channels: int = 16,
         out_channels: int = 1,
-        up_channels: Tuple[int, ...] = (512, 256, 128, 64, 64),
+        up_channels: Tuple[int, ...] = (64, 32, 16, 8),
         mid_attention: bool = True,
         layers_per_block: int = 2,
         skip_scale: float = np.sqrt(0.5),
         gradient_checkpointing: bool = False,
     ):
         super().__init__()
-        self.gradient_checkpointing = gradient_checkpointing
-
+     
         # first
         self.conv_in = nn.Conv3d(in_channels, up_channels[0], kernel_size=3, stride=1, padding=1)
 
@@ -345,23 +356,18 @@ class Decoder(nn.Module):
             
             up_blocks.append(UpBlock(
                 cin, cout, 
-                num_layers=layers_per_block + 1, # one more layer for up
+                num_layers=layers_per_block,
                 upsample=(i != len(up_channels) - 1), # not final layer
                 skip_scale=skip_scale,
+                gradient_checkpointing=gradient_checkpointing,
             ))
         self.up_blocks = nn.ModuleList(up_blocks)
 
-        # last
+        # last (upsample)
         self.norm_out = nn.GroupNorm(num_channels=up_channels[-1], num_groups=min(32, up_channels[-1]), eps=1e-5)
-        self.conv_out = nn.Conv3d(up_channels[-1], out_channels, kernel_size=3, stride=1, padding=1)
+        self.conv_out = nn.ConvTranspose3d(up_channels[-1], out_channels, kernel_size=2, stride=2, padding=0)
 
     def forward(self, x):
-        if self.training and self.gradient_checkpointing:
-            return checkpoint(self._forward, x, use_reentrant=False)
-        else:
-            return self._forward(x)
-    
-    def _forward(self, x):
         # x: [B, Cin, H, W, D]
 
         # first
@@ -386,11 +392,11 @@ class VAE(nn.Module):
     def __init__(
         self,
         in_channels: int = 1,
-        latent_channels: int = 1,
+        latent_channels: int = 16,
         out_channels: int = 1,
-        down_channels: Tuple[int, ...] = (4, 16, 64, 256),
+        down_channels: Tuple[int, ...] = (16, 32, 64, 128, 256),
         mid_attention: bool = True,
-        up_channels: Tuple[int, ...] = (256, 64, 16, 4),
+        up_channels: Tuple[int, ...] = (256, 128, 64, 32, 16),
         layers_per_block: int = 2,
         skip_scale: float = np.sqrt(0.5),
         gradient_checkpointing: bool = False,
@@ -434,7 +440,7 @@ class VAE(nn.Module):
         x = self.decoder(x)
         return x
 
-    def forward(self, x, sample=False):
+    def forward(self, x, sample=True):
         # x: [B, Cin, H, W, D]
 
         p = self.encode(x)
@@ -462,17 +468,19 @@ if __name__ == '__main__':
     print(f'[INFO] param total: {total/1024**2:.2f}M, trainable: {trainable/1024**2:.2f}M')
 
     # test forward
-    x = torch.randn(2, 1, 384, 384, 384, device=device)
+    x = torch.randn(1, 1, 512, 512, 512, device=device, dtype=torch.float16)
     kiui.lo(x)
-
+    
     with torch.autocast(device_type='cuda', dtype=torch.float16):
         y, p = model(x)
         kiui.lo(y)
-
+        kiui.lo(p.mean)
+        
         mem_free, mem_total = torch.cuda.mem_get_info()
         print(f'[INFO] mem forward: {(mem_total-mem_free)/1024**3:.2f}/{mem_total/1024**3:.2f}G')
 
         # test backward
-        y.sum().backward()
+        loss = y.mean() + 1e-6 * p.kl().mean()
+        loss.backward()
         mem_free, mem_total = torch.cuda.mem_get_info()
         print(f'[INFO] mem backward: {(mem_total-mem_free)/1024**3:.2f}/{mem_total/1024**3:.2f}G')
