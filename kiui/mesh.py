@@ -371,7 +371,7 @@ class Mesh:
                 vertex_colors = _mesh.visual.vertex_colors
                 vertex_colors = np.array(vertex_colors[..., :3]).astype(np.float32) / 255
                 mesh.vc = torch.tensor(vertex_colors, dtype=torch.float32, device=device)
-                print(f"[load_trimesh] use vertex color: {mesh.vc.shape}")
+                print(f"[INFO] load trimesh: use vertex color: {mesh.vc.shape}")
             elif _mesh.visual.kind == 'texture':
                 _material = _mesh.visual.material
                 if isinstance(_material, trimesh.visual.material.PBRMaterial):
@@ -388,11 +388,10 @@ class Mesh:
                 else:
                     raise NotImplementedError(f"material type {type(_material)} not supported!")
                 mesh.albedo = torch.tensor(texture[..., :3], dtype=torch.float32, device=device).contiguous()
-                print(f"[load_trimesh] load texture: {texture.shape}")
+                print(f"[INFO] load trimesh: load texture: {texture.shape}")
             else:
-                texture = np.ones((1024, 1024, 3), dtype=np.float32) * np.array([0.5, 0.5, 0.5])
-                mesh.albedo = torch.tensor(texture, dtype=torch.float32, device=device)
-                print(f"[load_trimesh] failed to load texture.")
+                mesh.albedo = None
+                print(f"[INFO] load trimesh: failed to load texture.")
 
         vertices = _mesh.vertices
 
