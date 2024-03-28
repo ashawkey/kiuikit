@@ -1,6 +1,6 @@
 # Camera
 
-### Common world coordinate systems
+### World coordinate systems
 ```
 OpenGL/MAYA       OpenCV/Colmap     Blender      Unity/DirectX     Unreal   
 Right-handed      Right-handed    Right-handed    Left-handed    Left-handed
@@ -20,7 +20,9 @@ A common color code: x = <span style="color:red">red</span>, y = <span style="co
 > **Left/right-handed notation**: roll your left/right palm from x to y, and your thumb should point to z.
 
 
-### Camera pose matrix
+### Camera pose coordinate systems
+
+A Camera pose matrix (camera to world transformation) is in the form of:
 ```
 [[Right_x, Up_x, Forward_x, Position_x],
  [Right_y, Up_y, Forward_y, Position_y],
@@ -34,7 +36,7 @@ However, the three directions (right, up, forward) can be defined differently:
 * up can align with the world-up-axis (`y`) or world-down-axis (`-y`).
 * right can also be left, depending on it's (`up cross forward`) or (`forward cross up`).
 
-### Common camera coordinate systems
+This leads to two common camera conventions:
 ```
    OpenGL                OpenCV       
    Blender               Colmap       
@@ -59,7 +61,8 @@ A common color code: right = <span style="color:red">red</span>., up = <span sty
 
 ### API
 
-Note that the camera API is designed to be `numpy` based and un-batched!
+.. note::
+   the camera API is designed to be `numpy` based and un-batched!
 
 .. automodule:: kiui.cam
    :members:

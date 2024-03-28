@@ -1,19 +1,30 @@
 import os
 import shutil
+import torch
 from rich.console import Console
 from torch.utils.cpp_extension import load, _get_build_directory
 
 _src_path = os.path.dirname(os.path.abspath(__file__))
 
+cpp_standard = 17 # assume CUDA > 11.0, change to 14 otherwise
 nvcc_flags = [
-    '-O3', '-std=c++17',
-    '-U__CUDA_NO_HALF_OPERATORS__', '-U__CUDA_NO_HALF_CONVERSIONS__', '-U__CUDA_NO_HALF2_OPERATORS__',
+    '-O3', f'-std=c++{cpp_standard}',
+    '-U__CUDA_NO_HALF_OPERATORS__', 
+    '-U__CUDA_NO_HALF_CONVERSIONS__', 
+    '-U__CUDA_NO_HALF2_OPERATORS__',
 ]
 
+# get CUDA compute capability
+assert torch.cuda.is_available(), "CUDA is not available"
+major, minor = torch.cuda.get_device_capability()
+compute_capability = major * 10 + minor
+
+nvcc_flags += [f"-gencode=arch=compute_{compute_capability},code={code}_{compute_capability}" for code in ["compute", "sm"]]
+
 if os.name == "posix":
-    c_flags = ['-O3', '-std=c++17']
+    c_flags = ['-O3', f'-std=c++{cpp_standard}']
 elif os.name == "nt":
-    c_flags = ['/O2', '/std:c++17']
+    c_flags = ['/O2', f'/std:c++{cpp_standard}']
 
     # find cl.exe
     def find_cl_path():

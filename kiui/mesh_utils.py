@@ -8,8 +8,9 @@ from importlib.metadata import version
 
 PML_VER = version('pymeshlab') 
 
-# monkey patch for 0.2
-if PML_VER == '0.2':
+# the code assumes the latest 2023.12 version, but we can patch older versions
+if PML_VER.startswith('0.2'):
+    # monkey patch for 0.2 (only the used functions in this file!)
     pml.MeshSet.meshing_decimation_quadric_edge_collapse = pml.MeshSet.simplification_quadric_edge_collapse_decimation
     pml.MeshSet.meshing_isotropic_explicit_remeshing = pml.MeshSet.remeshing_isotropic_explicit_remeshing
     pml.MeshSet.meshing_remove_unreferenced_vertices = pml.MeshSet.remove_unreferenced_vertices
@@ -20,9 +21,12 @@ if PML_VER == '0.2':
     pml.MeshSet.meshing_remove_connected_component_by_face_number = pml.MeshSet.remove_isolated_pieces_wrt_face_num
     pml.MeshSet.meshing_repair_non_manifold_edges = pml.MeshSet.repair_non_manifold_edges_by_removing_faces
     pml.MeshSet.meshing_repair_non_manifold_vertices = pml.MeshSet.repair_non_manifold_vertices_by_splitting
-
     pml.PercentageValue = pml.Percentage
     pml.PureValue = float
+elif PML_VER.startswith('2022.2'):
+    # monkey patch for 2022.2
+    pml.PercentageValue = pml.Percentage
+    pml.PureValue = pml.AbsoluteValue
 
 
 def decimate_mesh(
@@ -30,7 +34,7 @@ def decimate_mesh(
 ):
     """ perform mesh decimation.
 
-    Args:pml
+    Args:
         verts (np.ndarray): mesh vertices, float [N, 3]
         faces (np.ndarray): mesh faces, int [M, 3]
         target (int): targeted number of faces
@@ -75,9 +79,7 @@ def decimate_mesh(
         verts = m.vertex_matrix()
         faces = m.face_matrix()
 
-    print(
-        f"[INFO] mesh decimation: {_ori_vert_shape} --> {verts.shape}, {_ori_face_shape} --> {faces.shape}"
-    )
+    print(f"[INFO] mesh decimation: {_ori_vert_shape} --> {verts.shape}, {_ori_face_shape} --> {faces.shape}")
 
     return verts, faces
 
@@ -155,9 +157,7 @@ def clean_mesh(
     verts = m.vertex_matrix()
     faces = m.face_matrix()
 
-    print(
-        f"[INFO] mesh cleaning: {_ori_vert_shape} --> {verts.shape}, {_ori_face_shape} --> {faces.shape}"
-    )
+    print(f"[INFO] mesh cleaning: {_ori_vert_shape} --> {verts.shape}, {_ori_face_shape} --> {faces.shape}")
 
     return verts, faces
 

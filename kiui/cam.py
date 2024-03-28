@@ -57,7 +57,7 @@ def convert(
 
 
 def look_at(campos, target, opengl=True):
-    """construct pose rotation matrix by look-at
+    """construct pose rotation matrix by look-at.
 
     Args:
         campos (np.ndarray): camera position, float [3]

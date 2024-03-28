@@ -17,6 +17,10 @@ A toolkit for computer vision (especially 3D vision) tasks.
 * Always using lazy import so the code is not slowed down by `import kiui`.
 * Useful CLI tools, such as a GUI mesh renderer.
 
+https://github.com/ashawkey/kiuikit/assets/25863658/d8cbcf0f-a6d8-4fa7-aee9-afbbf25ed167
+
+> ["Seahourse3"](https://skfb.ly/6TwFv) by seanhepburn is licensed under [Creative Commons Attribution](http://creativecommons.org/licenses/by/4.0/).
+
 ### Install
 
 ```bash
@@ -33,18 +37,12 @@ pip install git+https://github.com/ashawkey/kiuikit.git # only the minimal packa
 ```python
 import kiui
 
-### auto import
-kiui.env() # os, glob, math, time, random, argparse
-kiui.env('data') # above + np, plt, cv2, Image, ...
-kiui.env('torch') # above + torch, nn, F, ...
-
 ### quick inspection of array-like object
 x = torch.tensor(...)
 y = np.array(...)
 
 kiui.lo(x)
 kiui.lo(x, y) # support multiple objects
-
 kiui.lo(kiui) # or any other object (just print with name)
 
 ### io utils
@@ -74,38 +72,15 @@ loss = lpips(input, target) # [B, 3, H, W] image in [-1, 1]
 
 CLI tools:
 ```bash
-# background removal utils
-python -m kiui.cli.bg --help
-python -m kiui.cli.bg input.png output.png
-python -m kiui.cli.bg input_folder output_folder
-
-# openpose detector
-python -m kiui.cli.pose --help
-
-# blip2 image captioning
-python -m kiui.cli.blip --help
-
-# hed edge detector
-python -m kiui.cli.hed --help
-
-# zoe depth estimation (extra dep: pip install timm==0.6.11)
-python -m kiui.cli.depth_zoe --help
-
-# midas depth estimation (dpt-large)
-python -m kiui.cli.depth_midas --help
-
 # sr (Real-ESRGAN from https://github.com/ai-forever/Real-ESRGAN/tree/main)
 python -m kiui.sr --help
 python -m kiui.sr image.jpg --scale 2 # save to image_2x.jpg
 kisr image.jpg --scale 2 # short cut cmd
 
-# made-in-heaven timer (https://github.com/ashawkey/made-in-heaven-timer)
-python -m kiui.cli.timer --help
-
 # mesh format conversion (only for a single textured mesh in obj/glb)
 python -m kiui.cli.convert input.obj output.glb
 kico input.obj output.glb # short cut cmd
-kico mesh_folder/ video_folder --fmt .mp4 # render all meshes into rotating videos
+kico mesh_folder video_folder --in_fmt .glb --out_fmt .mp4 # render all glb meshes into rotating videos
 
 # aesthetic predictor v2 (https://github.com/christophschuhmann/improved-aesthetic-predictor)
 python -m kiui.cli.aes --help
@@ -129,11 +104,4 @@ kire --help # short cut cmd
 # open a GUI to render and edit pose (openpose convention, controlnet compatible)
 python -m kiui.poser --help
 python -m kiui.poser --load 3head # load preset 3 headed skeleton
-```
-
-WebGUI tools:
-```bash
-# open a web GUI to render a mesh (extra dep: viser)
-python -m kiui.render_viser --help
-vire --help # short cut cmd
 ```

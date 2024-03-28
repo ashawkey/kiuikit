@@ -40,21 +40,32 @@ class GUI:
         self.auto_rotate_cam = False
         self.auto_rotate_light = False
         
-        self.mode = opt.mode
-        self.render_modes = ['albedo', 'depth', 'normal', 'lambertian']
-
         # load mesh
         self.mesh = Mesh.load(opt.mesh, front_dir=opt.front_dir)
+
+        # render_mode
+        self.render_modes = ['depth', 'normal']
+        if self.mesh.albedo is not None or self.mesh.vc is not None:
+            self.render_modes.extend(['albedo', 'lambertian'])
+        
+        if opt.mode in self.render_modes:
+            self.mode = opt.mode
+        else:
+            print(f'[WARN] mode {opt.mode} not supported, fallback to render normal')
+            self.mode = 'normal' # fallback
+
+        # display wireframe
+        self.show_wire = False
 
         # load pbr if enabled
         if self.opt.pbr:
             import envlight
             if self.opt.envmap is None:
-                hdr_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lights/mud_road_puresky_1k.hdr')
+                hdr_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets/lights/mud_road_puresky_1k.hdr')
             else:
                 hdr_path = self.opt.envmap
             self.light = envlight.EnvLight(hdr_path, scale=2, device='cuda')
-            self.FG_LUT = torch.from_numpy(np.fromfile(os.path.join(os.path.dirname(os.path.abspath(__file__)), "lights/bsdf_256_256.bin"), dtype=np.float32).reshape(1, 256, 256, 2)).cuda()
+            self.FG_LUT = torch.from_numpy(np.fromfile(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets/lights/bsdf_256_256.bin"), dtype=np.float32).reshape(1, 256, 256, 2)).cuda()
 
             self.metallic_factor = 1
             self.roughness_factor = 1
@@ -100,12 +111,18 @@ class GUI:
             depth, _ = dr.interpolate(-v_cam[..., [2]], rast, self.mesh.f) # [1, H, W, 1]
             depth = (depth - depth.min()) / (depth.max() - depth.min() + 1e-20)
             buffer = depth.squeeze(0).detach().cpu().numpy().repeat(3, -1) # [H, W, 3]
+        elif self.mode == 'normal':
+            normal, _ = dr.interpolate(self.mesh.vn.unsqueeze(0).contiguous(), rast, self.mesh.fn)
+            normal = safe_normalize(normal)
+            normal_image = (normal[0] + 1) / 2
+            normal_image = torch.where(rast[..., 3:] > 0, normal_image, torch.tensor(1).to(normal_image.device)) # remove background
+            buffer = normal_image[0].detach().cpu().numpy()
         else:
             # use vertex color if exists
             if self.mesh.vc is not None:
                 albedo, _ = dr.interpolate(self.mesh.vc.unsqueeze(0).contiguous(), rast, self.mesh.f)
             # use texture image
-            else:
+            else: # assert mesh.albedo is not None
                 texc, _ = dr.interpolate(self.mesh.vt.unsqueeze(0).contiguous(), rast, self.mesh.ft)
                 albedo = dr.texture(self.mesh.albedo.unsqueeze(0), texc, filter_mode='linear') # [1, H, W, 3]
 
@@ -118,11 +135,8 @@ class GUI:
             else:
                 normal, _ = dr.interpolate(self.mesh.vn.unsqueeze(0).contiguous(), rast, self.mesh.fn)
                 normal = safe_normalize(normal)
-                if self.mode == 'normal':
-                    normal_image = (normal[0] + 1) / 2
-                    normal_image = torch.where(rast[..., 3:] > 0, normal_image, torch.tensor(1).to(normal_image.device)) # remove background
-                    buffer = normal_image.detach().cpu().numpy()
-                elif self.mode == 'lambertian':
+                
+                if self.mode == 'lambertian':
                     light_d = np.deg2rad(self.light_dir)
                     light_d = np.array([
                         np.cos(light_d[0]) * np.sin(light_d[1]),
@@ -169,7 +183,14 @@ class GUI:
                     color = color * alpha + self.bg_color * (1 - alpha)
 
                     buffer = color[0].detach().cpu().numpy()
-                    
+
+        if self.show_wire:
+            u = rast[..., 0] # [1, h, w]
+            v = rast[..., 1] # [1, h, w]
+            w = 1 - u - v
+            mask = rast[..., 2]
+            near_edge = (((w < 0.01) | (u < 0.01) | (v < 0.01)) & (mask > 0))[0].detach().cpu().numpy() # [h, w]
+            buffer[near_edge] = np.array([0, 0, 0], dtype=np.float32) # black wire
 
         ender.record()
         torch.cuda.synchronize()
@@ -234,6 +255,14 @@ class GUI:
                 
                 dpg.add_combo(self.render_modes, label='mode', default_value=self.mode, tag="_mode_combo", callback=callback_change_mode)
 
+                # show wireframe
+                def callback_toggle_wireframe(sender, app_data):
+                    self.show_wire = not self.show_wire
+                    dpg.set_value("_checkbox_wire", self.show_wire)
+                    self.need_update = True
+
+                dpg.add_checkbox(label="wireframe", tag="_checkbox_wire", default_value=self.show_wire, callback=callback_toggle_wireframe)
+
                 # bg_color picker
                 def callback_change_bg(sender, app_data):
                     self.bg_color = torch.tensor(app_data[:3], dtype=torch.float32).cuda() # only need RGB in [0, 1]
@@ -284,8 +313,6 @@ class GUI:
                         self.need_update = True
 
                     dpg.add_slider_float(label="roughness", min_value=0, max_value=1.0, format="%.5f", default_value=self.roughness_factor, callback=callback_set_roughness)
-
-
 
         ### register IO handlers
 
@@ -346,6 +373,7 @@ class GUI:
             dpg.add_key_press_handler(dpg.mvKey_Spacebar, callback=callback_space_toggle_mode)
             dpg.add_key_press_handler(dpg.mvKey_P, callback=callback_toggle_auto_rotate_cam)
             dpg.add_key_press_handler(dpg.mvKey_L, callback=callback_toggle_auto_rotate_light)
+            dpg.add_key_press_handler(dpg.mvKey_W, callback=callback_toggle_wireframe)
 
         
         dpg.create_viewport(title='mesh viewer', width=self.W, height=self.H, resizable=False)

@@ -122,32 +122,6 @@ def seed_everything(seed=42, verbose=False, strict=False):
         if verbose: print(f'[INFO] torch not imported, skip setting seed')
 
 
-def tolerant_load(model: torch.nn.Module, ckpt: Dict, verbose: bool=False):
-    """loading params from ckpt into model with matching shape (warn instead of error for mismatched shapes compared to torch.load unstrict mode)
-
-    Args:
-        model (torch.nn.Module): model.
-        ckpt (Dict): state_dict to load.
-        verbose (bool): whether to log mismatching params. Defaults to False.
-    """
-    state_dict = model.state_dict()
-    seen = {k: False  for k in state_dict}
-    for k, v in ckpt.items():
-        if k in state_dict: 
-            if state_dict[k].shape == v.shape:
-                state_dict[k].copy_(v)
-            else:
-                if verbose: print(f'[WARN] mismatching shape for param {k}: ckpt {v.shape} != model {state_dict[k].shape}, ignored.')
-            seen[k] = True
-        else:
-            if verbose: print(f'[WARN] unexpected param {k} in ckpt: {v.shape}')
-            
-    if verbose: 
-        for k, v in seen.items():
-            if not v:
-                print(f'[WARN] missing param {k} in model: {state_dict[k].shape}')
-
-
 def read_json(path):
     """load a json file.
 
@@ -256,16 +230,20 @@ def read_image(
 
 def write_image(
         path: str, 
-        img: Union[Tensor, np.ndarray], 
+        img: Union[Tensor, np.ndarray, Image.Image], 
         order: Literal["RGB", "BGR"] = "RGB",
     ):
     """write an image to various formats.
 
     Args:
         path (str): path to write the image file.
-        img (Union[torch.Tensor, np.ndarray]): image to write.
+        img (Union[torch.Tensor, np.ndarray, PIL.Image.Image]): image to write.
         order (str, optional): channel order. Defaults to "RGB".
     """
+
+    if isinstance(img, Image.Image):
+        img.save(path)
+        return
 
     if torch.is_tensor(img):
         img = img.detach().cpu().numpy()
@@ -316,7 +294,7 @@ def load_file_from_url(url, model_dir=None, progress=True, file_name=None):
         filename = file_name
     cached_file = os.path.abspath(os.path.join(model_dir, filename))
     if not os.path.exists(cached_file):
-        print(f'Downloading: "{url}" to {cached_file}\n')
+        print(f'[INFO] Downloading: "{url}" to {cached_file}\n')
         download_url_to_file(url, cached_file, hash_prefix=None, progress=progress)
     return cached_file
 
@@ -405,5 +383,5 @@ def batch_process_files(
                     f.write(output)
 
         except Exception as e:
-            print(f"[Error] when processing {file_path} --> {file_out_path}")
+            print(f"[ERROR] when processing {file_path} --> {file_out_path}")
             print(e)

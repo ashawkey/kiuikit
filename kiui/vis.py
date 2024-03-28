@@ -1,6 +1,7 @@
 import time
 import torch
 import numpy as np
+from datetime import datetime
 
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
@@ -34,7 +35,7 @@ def map_color(value: ndarray, cmap_name: str="viridis", vmin: float=None, vmax: 
     return rgb
 
 
-def plot_image(*xs, normalize=False, save=False):
+def plot_image(*xs, normalize=False, save=False, prefix='kiui_vis_plot_image'):
     """ sequentially plot provided images, optionally save to current dir.
     
     Args:
@@ -42,10 +43,11 @@ def plot_image(*xs, normalize=False, save=False):
             [B, 4/3/1, H, W], [B, H, W, 4/3/1], [4/3/1, H, W], [H, W, 4/3/1], [H, W] torch.Tensor or numpy.ndarray
         normalize (bool, optional): whether to renormalize the image to [0, 1]. Defaults to False.
         save (bool, optional): whether to save the image to current dir (in case the plot cannot be showed, like in vscode remote). Defaults to False.
+        prefix (str, optional): image save name prefix if save=True.
     """
 
     _cnt = 0
-    _signature = str(time.time())
+    _signature = datetime.now().strftime('%Y_%m_%d_%H_%M_%S_%f')
 
     def _plot_image(image):
 
@@ -72,13 +74,13 @@ def plot_image(*xs, normalize=False, save=False):
             )
 
         if save:
-            _path = f'kiui_vis_plot_image_{_signature}_{_cnt}.png'
+            _path = f'{prefix}_{_signature}_{_cnt}.png'
             _cnt += 1
             write_image(_path, image.astype(np.float32))
-            print(f'[kiui.vis.plot_image] write image to {_path}')
-    
-        plt.imshow(image.astype(np.float32))
-        plt.show()
+            print(f'[INFO] write image to {_path}')
+        else:
+            plt.imshow(image.astype(np.float32))
+            plt.show()
 
     for x in xs:
         if len(x.shape) == 4:
