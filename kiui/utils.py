@@ -250,9 +250,14 @@ def write_image(
 
     if img.dtype == np.float32 or img.dtype == np.float64:
         img = (img * 255).astype(np.uint8)
-
-    # cvtColor
+    
+    if len(img.shape) == 4:
+        if img.shape[0] > 1:
+            raise ValueError(f'only support saving a single image! current image: {img.shape}')
+        img = img[0]
+        
     if len(img.shape) == 3:
+        # cvtColor
         if order == "RGB":
             if img.shape[-1] == 4:
                 img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGRA)
