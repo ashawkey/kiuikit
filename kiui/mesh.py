@@ -3,6 +3,7 @@ import cv2
 import torch
 import trimesh
 import numpy as np
+from packaging import version
 
 from kiui.op import safe_normalize, dot
 from kiui.typing import *
@@ -58,6 +59,15 @@ class Mesh:
 
         self.ori_center = 0
         self.ori_scale = 1
+    
+    def __repr__(self):
+        out = f'<kiui.mesh.Mesh>'
+        if self.v is not None: out += f' v={self.v.shape}'
+        if self.f is not None: out += f' f={self.f.shape}'
+        if self.vc is not None: out += f' vc={self.vc.shape}'
+        if self.albedo is not None: out += f' albedo={self.albedo.shape}'
+        if self.metallicRoughness is not None: out += f' metallicRoughness={self.metallicRoughness.shape}'
+        return out
 
     @classmethod
     def load(cls, path, resize=True, clean=False, renormal=True, retex=False, bound=0.9, front_dir='+z', **kwargs):
@@ -69,6 +79,7 @@ class Mesh:
             resize (bool, optional): auto resize the mesh using ``bound`` into [-bound, bound]^3. Defaults to True.
             renormal (bool, optional): re-calc the vertex normals. Defaults to True.
             retex (bool, optional): re-calc the uv coordinates, will overwrite the existing uv coordinates. Defaults to False.
+            wotex (bool, optional): do not try to load any texture. Defaults to False.
             bound (float, optional): bound to resize. Defaults to 0.9.
             front_dir (str, optional): front-view direction of the mesh, should be [+-][xyz][ 123]. Defaults to '+z'.
             device (torch.device, optional): torch device. Defaults to None.
@@ -138,11 +149,12 @@ class Mesh:
 
     # load from obj file
     @classmethod
-    def load_obj(cls, path, albedo_path=None, device=None):
+    def load_obj(cls, path, wotex=False, albedo_path=None, device=None):
         """load an ``obj`` mesh.
 
         Args:
             path (str): path to mesh.
+            wotex (bool, optional): do not try to load any texture. Defaults to False.
             albedo_path (str, optional): path to the albedo texture image, will overwrite the existing texture path if specified in mtl. Defaults to None.
             device (torch.device, optional): torch device. Defaults to None.
         
@@ -237,6 +249,10 @@ class Mesh:
             else None
         )
 
+        # if not loading texture
+        if wotex:
+            return mesh
+
         # see if there is vertex color
         use_vertex_color = False
         if mesh.v.shape[1] == 6:
@@ -311,7 +327,7 @@ class Mesh:
         return mesh
 
     @classmethod
-    def load_trimesh(cls, path, device=None):
+    def load_trimesh(cls, path, wotex=False, device=None):
         """load a mesh using ``trimesh.load()``.
 
         Can load various formats like ``glb`` and serves as a fallback.
@@ -322,6 +338,7 @@ class Mesh:
 
         Args:
             path (str): path to the mesh file.
+            wotex (bool, optional): do not try to load any texture. Defaults to False.
             device (torch.device, optional): torch device. Defaults to None.
 
         Returns:
@@ -354,29 +371,33 @@ class Mesh:
         else:
             _mesh = _data
         
-        if _mesh.visual.kind == 'vertex':
-            vertex_colors = _mesh.visual.vertex_colors
-            vertex_colors = np.array(vertex_colors[..., :3]).astype(np.float32) / 255
-            mesh.vc = torch.tensor(vertex_colors, dtype=torch.float32, device=device)
-            print(f"[load_trimesh] use vertex color: {mesh.vc.shape}")
-        elif _mesh.visual.kind == 'texture':
-            _material = _mesh.visual.material
-            if isinstance(_material, trimesh.visual.material.PBRMaterial):
-                texture = np.array(_material.baseColorTexture).astype(np.float32) / 255
-                # load metallicRoughness if present
-                if _material.metallicRoughnessTexture is not None:
-                    metallicRoughness = np.array(_material.metallicRoughnessTexture).astype(np.float32) / 255
-                    mesh.metallicRoughness = torch.tensor(metallicRoughness, dtype=torch.float32, device=device).contiguous()
-            elif isinstance(_material, trimesh.visual.material.SimpleMaterial):
-                texture = np.array(_material.to_pbr().baseColorTexture).astype(np.float32) / 255
+        if not wotex:
+            if _mesh.visual.kind == 'vertex':
+                vertex_colors = _mesh.visual.vertex_colors
+                vertex_colors = np.array(vertex_colors[..., :3]).astype(np.float32) / 255
+                mesh.vc = torch.tensor(vertex_colors, dtype=torch.float32, device=device)
+                print(f"[load_trimesh] use vertex color: {mesh.vc.shape}")
+            elif _mesh.visual.kind == 'texture':
+                _material = _mesh.visual.material
+                if isinstance(_material, trimesh.visual.material.PBRMaterial):
+                    texture = np.array(_material.baseColorTexture).astype(np.float32) / 255
+                    # load metallicRoughness if present
+                    if _material.metallicRoughnessTexture is not None:
+                        metallicRoughness = np.array(_material.metallicRoughnessTexture).astype(np.float32) / 255
+                        # NOTE: fix a bug in trimesh that loads metallicRoughness in wrong channels: https://github.com/mikedh/trimesh/issues/2195
+                        if version.parse(trimesh.__version__) < version.parse('4.2.2'):
+                            metallicRoughness = metallicRoughness[..., [2, 1, 0]]
+                        mesh.metallicRoughness = torch.tensor(metallicRoughness, dtype=torch.float32, device=device).contiguous()
+                elif isinstance(_material, trimesh.visual.material.SimpleMaterial):
+                    texture = np.array(_material.to_pbr().baseColorTexture).astype(np.float32) / 255
+                else:
+                    raise NotImplementedError(f"material type {type(_material)} not supported!")
+                mesh.albedo = torch.tensor(texture[..., :3], dtype=torch.float32, device=device).contiguous()
+                print(f"[load_trimesh] load texture: {texture.shape}")
             else:
-                raise NotImplementedError(f"material type {type(_material)} not supported!")
-            mesh.albedo = torch.tensor(texture[..., :3], dtype=torch.float32, device=device).contiguous()
-            print(f"[load_trimesh] load texture: {texture.shape}")
-        else:
-            texture = np.ones((1024, 1024, 3), dtype=np.float32) * np.array([0.5, 0.5, 0.5])
-            mesh.albedo = torch.tensor(texture, dtype=torch.float32, device=device)
-            print(f"[load_trimesh] failed to load texture.")
+                texture = np.ones((1024, 1024, 3), dtype=np.float32) * np.array([0.5, 0.5, 0.5])
+                mesh.albedo = torch.tensor(texture, dtype=torch.float32, device=device)
+                print(f"[load_trimesh] failed to load texture.")
 
         vertices = _mesh.vertices
 
@@ -463,7 +484,7 @@ class Mesh:
         i0, i1, i2 = self.f[:, 0].long(), self.f[:, 1].long(), self.f[:, 2].long()
         v0, v1, v2 = self.v[i0, :], self.v[i1, :], self.v[i2, :]
 
-        face_normals = torch.cross(v1 - v0, v2 - v0)
+        face_normals = torch.cross(v1 - v0, v2 - v0, dim=-1)
 
         # Splat face normals to vertices
         vn = torch.zeros_like(self.v)
