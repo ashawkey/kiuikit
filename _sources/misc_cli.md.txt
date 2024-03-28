@@ -1,5 +1,7 @@
 # Misc CLI
 
+[[source]](https://github.com/ashawkey/kiuikit/blob/main/kiui/cli/)
+
 Misceallaneous command line interfaces.
 
 ### Usage

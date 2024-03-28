@@ -6,7 +6,7 @@
 <link rel="index" title="Index" href="../genindex/" /><link rel="search" title="Search" href="../search/" /><link rel="next" title="Camera" href="../camera/" /><link rel="prev" title="Kiuikit" href="../" />
 
     <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 7.2.6 and Furo 2024.01.29 -->
-        <title>Mesh - kiui 0.2.6 documentation</title>
+        <title>Mesh - kiui 0.2.7 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=135e06be" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -125,7 +125,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../"><div class="brand">kiui 0.2.6 documentation</div></a>
+      <a href="../"><div class="brand">kiui 0.2.7 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -180,7 +180,8 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../render/">Mesh Renderer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../blender/">Blender Scripts</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../misc/">Misc CLI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../remesh/">Remesh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../misc_cli/">Misc CLI</a></li>
 </ul>
 
 </div>
@@ -280,6 +281,7 @@
 <li><p><strong>resize</strong> (<em>bool</em><em>, </em><em>optional</em>) – auto resize the mesh using <code class="docutils literal notranslate"><span class="pre">bound</span></code> into [-bound, bound]^3. Defaults to True.</p></li>
 <li><p><strong>renormal</strong> (<em>bool</em><em>, </em><em>optional</em>) – re-calc the vertex normals. Defaults to True.</p></li>
 <li><p><strong>retex</strong> (<em>bool</em><em>, </em><em>optional</em>) – re-calc the uv coordinates, will overwrite the existing uv coordinates. Defaults to False.</p></li>
+<li><p><strong>wotex</strong> (<em>bool</em><em>, </em><em>optional</em>) – do not try to load any texture. Defaults to False.</p></li>
 <li><p><strong>bound</strong> (<em>float</em><em>, </em><em>optional</em>) – bound to resize. Defaults to 0.9.</p></li>
 <li><p><strong>front_dir</strong> (<em>str</em><em>, </em><em>optional</em>) – front-view direction of the mesh, should be [+-][xyz][ 123]. Defaults to ‘+z’.</p></li>
 <li><p><strong>device</strong> (<em>torch.device</em><em>, </em><em>optional</em>) – torch device. Defaults to None.</p></li>
@@ -303,12 +305,13 @@ If it’s not provided, we will try to use <code class="docutils literal notrans
 
 <dl class="py method">
 <dt class="sig sig-object py" id="kiui.mesh.Mesh.load_obj">
-<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">load_obj</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">albedo_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/mesh/#Mesh.load_obj"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.mesh.Mesh.load_obj" title="Link to this definition">#</a></dt>
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">load_obj</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wotex</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">albedo_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/mesh/#Mesh.load_obj"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.mesh.Mesh.load_obj" title="Link to this definition">#</a></dt>
 <dd><p>load an <code class="docutils literal notranslate"><span class="pre">obj</span></code> mesh.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>path</strong> (<em>str</em>) – path to mesh.</p></li>
+<li><p><strong>wotex</strong> (<em>bool</em><em>, </em><em>optional</em>) – do not try to load any texture. Defaults to False.</p></li>
 <li><p><strong>albedo_path</strong> (<em>str</em><em>, </em><em>optional</em>) – path to the albedo texture image, will overwrite the existing texture path if specified in mtl. Defaults to None.</p></li>
 <li><p><strong>device</strong> (<em>torch.device</em><em>, </em><em>optional</em>) – torch device. Defaults to None.</p></li>
 </ul>
@@ -331,7 +334,7 @@ The <cite>usemtl</cite> statement is ignored, and we only use the last material 
 
 <dl class="py method">
 <dt class="sig sig-object py" id="kiui.mesh.Mesh.load_trimesh">
-<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">load_trimesh</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/mesh/#Mesh.load_trimesh"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.mesh.Mesh.load_trimesh" title="Link to this definition">#</a></dt>
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">load_trimesh</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wotex</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/mesh/#Mesh.load_trimesh"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.mesh.Mesh.load_trimesh" title="Link to this definition">#</a></dt>
 <dd><p>load a mesh using <code class="docutils literal notranslate"><span class="pre">trimesh.load()</span></code>.</p>
 <p>Can load various formats like <code class="docutils literal notranslate"><span class="pre">glb</span></code> and serves as a fallback.</p>
 <div class="admonition note">
@@ -343,6 +346,7 @@ but <strong>this may cause the texture to lose</strong>, since we only support o
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>path</strong> (<em>str</em>) – path to the mesh file.</p></li>
+<li><p><strong>wotex</strong> (<em>bool</em><em>, </em><em>optional</em>) – do not try to load any texture. Defaults to False.</p></li>
 <li><p><strong>device</strong> (<em>torch.device</em><em>, </em><em>optional</em>) – torch device. Defaults to None.</p></li>
 </ul>
 </dd>
@@ -722,7 +726,7 @@ Usually this will duplicate the vertices on the edge of uv atlas. Defaults to Tr
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=a6512817"></script>
+</div><script src="../_static/documentation_options.js?v=b497140d"></script>
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=32e29ea5"></script>

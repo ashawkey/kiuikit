@@ -2,10 +2,11 @@
 <html class="no-js" lang="en" data-content_root="../">
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../genindex/" /><link rel="search" title="Search" href="../search/" />
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex/" /><link rel="search" title="Search" href="../search/" /><link rel="next" title="Misc CLI" href="../misc_cli/" /><link rel="prev" title="Blender Scripts" href="../blender/" />
 
     <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 7.2.6 and Furo 2024.01.29 -->
-        <title>Overview: module code - kiui 0.2.7 documentation</title>
+        <title>Remesh - kiui 0.2.7 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=135e06be" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -176,10 +177,10 @@
 <li class="toctree-l1"><a class="reference internal" href="../misc_api/">Misc API</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tool</span></p>
-<ul>
+<ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../render/">Mesh Renderer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../blender/">Blender Scripts</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../remesh/">Remesh</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Remesh</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../misc_cli/">Misc CLI</a></li>
 </ul>
 
@@ -200,7 +201,8 @@
           <span>Back to top</span>
         </a>
         <div class="content-icon-container">
-          <div class="theme-toggle-container theme-toggle-content">
+          
+<div class="theme-toggle-container theme-toggle-content">
             <button class="theme-toggle">
               <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
               <svg class="theme-icon-when-auto"><use href="#svg-sun-half"></use></svg>
@@ -214,23 +216,48 @@
           </label>
         </div>
         <article role="main">
-          <h1>All modules for which code is available</h1>
-<ul><li><a href="kiui/cam/">kiui.cam</a></li>
-<li><a href="kiui/grid_put/">kiui.grid_put</a></li>
-<li><a href="kiui/mesh/">kiui.mesh</a></li>
-<li><a href="kiui/mesh_utils/">kiui.mesh_utils</a></li>
-<li><a href="kiui/op/">kiui.op</a></li>
-<li><a href="kiui/sr/">kiui.sr</a></li>
-<li><a href="kiui/utils/">kiui.utils</a></li>
-<li><a href="kiui/vis/">kiui.vis</a></li>
-</ul>
+          <section id="remesh">
+<h1>Remesh<a class="headerlink" href="#remesh" title="Link to this heading">#</a></h1>
+<p><a class="reference external" href="https://github.com/ashawkey/kiuikit/blob/main/kiui/cli/remesh.py">[source]</a></p>
+<p>We provide a wrapper of <a class="reference external" href="https://github.com/Profactor/continuous-remeshing">Continuous Remeshing</a> for convenience.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># install torch_scatter following https://github.com/rusty1s/pytorch_scatter</span>
+<span class="c1"># e.g., for torch2.1.0+cu121</span>
+pip<span class="w"> </span>install<span class="w"> </span>torch-scatter<span class="w"> </span>-f<span class="w"> </span>https://data.pyg.org/whl/torch-2.1.0+cu121.html
+
+<span class="c1"># help</span>
+python<span class="w"> </span>-m<span class="w"> </span>kiui.cli.remesh<span class="w"> </span>--help
+
+<span class="c1"># example</span>
+python<span class="w"> </span>-m<span class="w"> </span>kiui.cli.remesh<span class="w"> </span>--mesh<span class="w"> </span>chest.glb<span class="w"> </span>--iters<span class="w"> </span><span class="m">1000</span>
+</pre></div>
+</div>
+</section>
+
         </article>
       </div>
       <footer>
         
         <div class="related-pages">
-          
-          
+          <a class="next-page" href="../misc_cli/">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Misc CLI</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="../blender/">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Blender Scripts</div>
+                
+              </div>
+            </a>
         </div>
         <div class="bottom-of-page">
           <div class="left-details">

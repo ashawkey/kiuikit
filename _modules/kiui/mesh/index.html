@@ -5,7 +5,7 @@
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex/" /><link rel="search" title="Search" href="../../../search/" />
 
     <link rel="shortcut icon" href="../../../_static/icon.png"/><!-- Generated with Sphinx 7.2.6 and Furo 2024.01.29 -->
-        <title>kiui.mesh - kiui 0.2.6 documentation</title>
+        <title>kiui.mesh - kiui 0.2.7 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=135e06be" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
@@ -124,7 +124,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../"><div class="brand">kiui 0.2.6 documentation</div></a>
+      <a href="../../../"><div class="brand">kiui 0.2.7 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -179,7 +179,8 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../render/">Mesh Renderer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../blender/">Blender Scripts</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../../misc/">Misc CLI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../remesh/">Remesh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../misc_cli/">Misc CLI</a></li>
 </ul>
 
 </div>
@@ -219,6 +220,7 @@
 <span class="kn">import</span> <span class="nn">torch</span>
 <span class="kn">import</span> <span class="nn">trimesh</span>
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">packaging</span> <span class="kn">import</span> <span class="n">version</span>
 
 <span class="kn">from</span> <span class="nn">kiui.op</span> <span class="kn">import</span> <span class="n">safe_normalize</span><span class="p">,</span> <span class="n">dot</span>
 <span class="kn">from</span> <span class="nn">kiui.typing</span> <span class="kn">import</span> <span class="o">*</span>
@@ -279,6 +281,15 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">ori_center</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">ori_scale</span> <span class="o">=</span> <span class="mi">1</span></div>
 
+    
+    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;&lt;kiui.mesh.Mesh&gt;&#39;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span> <span class="n">out</span> <span class="o">+=</span> <span class="sa">f</span><span class="s1">&#39; v=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s1">&#39;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">f</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span> <span class="n">out</span> <span class="o">+=</span> <span class="sa">f</span><span class="s1">&#39; f=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">f</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s1">&#39;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">vc</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span> <span class="n">out</span> <span class="o">+=</span> <span class="sa">f</span><span class="s1">&#39; vc=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">vc</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s1">&#39;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">albedo</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span> <span class="n">out</span> <span class="o">+=</span> <span class="sa">f</span><span class="s1">&#39; albedo=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">albedo</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s1">&#39;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">metallicRoughness</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span> <span class="n">out</span> <span class="o">+=</span> <span class="sa">f</span><span class="s1">&#39; metallicRoughness=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">metallicRoughness</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s1">&#39;</span>
+        <span class="k">return</span> <span class="n">out</span>
 
 <div class="viewcode-block" id="Mesh.load">
 <a class="viewcode-back" href="../../../mesh/#kiui.mesh.Mesh.load">[docs]</a>
@@ -292,6 +303,7 @@
 <span class="sd">            resize (bool, optional): auto resize the mesh using ``bound`` into [-bound, bound]^3. Defaults to True.</span>
 <span class="sd">            renormal (bool, optional): re-calc the vertex normals. Defaults to True.</span>
 <span class="sd">            retex (bool, optional): re-calc the uv coordinates, will overwrite the existing uv coordinates. Defaults to False.</span>
+<span class="sd">            wotex (bool, optional): do not try to load any texture. Defaults to False.</span>
 <span class="sd">            bound (float, optional): bound to resize. Defaults to 0.9.</span>
 <span class="sd">            front_dir (str, optional): front-view direction of the mesh, should be [+-][xyz][ 123]. Defaults to &#39;+z&#39;.</span>
 <span class="sd">            device (torch.device, optional): torch device. Defaults to None.</span>
@@ -364,11 +376,12 @@
 <div class="viewcode-block" id="Mesh.load_obj">
 <a class="viewcode-back" href="../../../mesh/#kiui.mesh.Mesh.load_obj">[docs]</a>
     <span class="nd">@classmethod</span>
-    <span class="k">def</span> <span class="nf">load_obj</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">albedo_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">load_obj</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">wotex</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">albedo_path</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;load an ``obj`` mesh.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            path (str): path to mesh.</span>
+<span class="sd">            wotex (bool, optional): do not try to load any texture. Defaults to False.</span>
 <span class="sd">            albedo_path (str, optional): path to the albedo texture image, will overwrite the existing texture path if specified in mtl. Defaults to None.</span>
 <span class="sd">            device (torch.device, optional): torch device. Defaults to None.</span>
 <span class="sd">        </span>
@@ -463,6 +476,10 @@
             <span class="k">else</span> <span class="kc">None</span>
         <span class="p">)</span>
 
+        <span class="c1"># if not loading texture</span>
+        <span class="k">if</span> <span class="n">wotex</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">mesh</span>
+
         <span class="c1"># see if there is vertex color</span>
         <span class="n">use_vertex_color</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="k">if</span> <span class="n">mesh</span><span class="o">.</span><span class="n">v</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">6</span><span class="p">:</span>
@@ -511,17 +528,14 @@
                     
             <span class="c1"># still not found albedo_path, or the path doesn&#39;t exist</span>
             <span class="k">if</span> <span class="n">albedo_path</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">albedo_path</span><span class="p">):</span>
-                <span class="c1"># init an empty texture</span>
-                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[INFO] load obj mesh: init empty albedo!&quot;</span><span class="p">)</span>
-                <span class="c1"># albedo = np.random.rand(1024, 1024, 3).astype(np.float32)</span>
-                <span class="n">albedo</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">1024</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">])</span>  <span class="c1"># default color</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[INFO] load obj mesh: failed to load texture!&quot;</span><span class="p">)</span>
+                <span class="n">mesh</span><span class="o">.</span><span class="n">albedo</span> <span class="o">=</span> <span class="kc">None</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">albedo</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">imread</span><span class="p">(</span><span class="n">albedo_path</span><span class="p">,</span> <span class="n">cv2</span><span class="o">.</span><span class="n">IMREAD_UNCHANGED</span><span class="p">)</span>
                 <span class="n">albedo</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">cvtColor</span><span class="p">(</span><span class="n">albedo</span><span class="p">,</span> <span class="n">cv2</span><span class="o">.</span><span class="n">COLOR_BGR2RGB</span><span class="p">)</span>
                 <span class="n">albedo</span> <span class="o">=</span> <span class="n">albedo</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="o">/</span> <span class="mi">255</span>
                 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[INFO] load obj mesh: load texture: </span><span class="si">{</span><span class="n">albedo</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-            
-            <span class="n">mesh</span><span class="o">.</span><span class="n">albedo</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">albedo</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+                <span class="n">mesh</span><span class="o">.</span><span class="n">albedo</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">albedo</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
             
             <span class="c1"># try to load metallic and roughness</span>
             <span class="k">if</span> <span class="n">metallic_path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">roughness_path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -540,7 +554,7 @@
 <div class="viewcode-block" id="Mesh.load_trimesh">
 <a class="viewcode-back" href="../../../mesh/#kiui.mesh.Mesh.load_trimesh">[docs]</a>
     <span class="nd">@classmethod</span>
-    <span class="k">def</span> <span class="nf">load_trimesh</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">load_trimesh</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">wotex</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;load a mesh using ``trimesh.load()``.</span>
 
 <span class="sd">        Can load various formats like ``glb`` and serves as a fallback.</span>
@@ -551,6 +565,7 @@
 
 <span class="sd">        Args:</span>
 <span class="sd">            path (str): path to the mesh file.</span>
+<span class="sd">            wotex (bool, optional): do not try to load any texture. Defaults to False.</span>
 <span class="sd">            device (torch.device, optional): torch device. Defaults to None.</span>
 
 <span class="sd">        Returns:</span>
@@ -581,29 +596,32 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="n">_mesh</span> <span class="o">=</span> <span class="n">_data</span>
         
-        <span class="k">if</span> <span class="n">_mesh</span><span class="o">.</span><span class="n">visual</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;vertex&#39;</span><span class="p">:</span>
-            <span class="n">vertex_colors</span> <span class="o">=</span> <span class="n">_mesh</span><span class="o">.</span><span class="n">visual</span><span class="o">.</span><span class="n">vertex_colors</span>
-            <span class="n">vertex_colors</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">vertex_colors</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="p">:</span><span class="mi">3</span><span class="p">])</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="o">/</span> <span class="mi">255</span>
-            <span class="n">mesh</span><span class="o">.</span><span class="n">vc</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">vertex_colors</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
-            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[INFO] load trimesh: use vertex color: </span><span class="si">{</span><span class="n">mesh</span><span class="o">.</span><span class="n">vc</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="n">_mesh</span><span class="o">.</span><span class="n">visual</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;texture&#39;</span><span class="p">:</span>
-            <span class="n">_material</span> <span class="o">=</span> <span class="n">_mesh</span><span class="o">.</span><span class="n">visual</span><span class="o">.</span><span class="n">material</span>
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_material</span><span class="p">,</span> <span class="n">trimesh</span><span class="o">.</span><span class="n">visual</span><span class="o">.</span><span class="n">material</span><span class="o">.</span><span class="n">PBRMaterial</span><span class="p">):</span>
-                <span class="n">texture</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">_material</span><span class="o">.</span><span class="n">baseColorTexture</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="o">/</span> <span class="mi">255</span>
-                <span class="c1"># load metallicRoughness if present</span>
-                <span class="k">if</span> <span class="n">_material</span><span class="o">.</span><span class="n">metallicRoughnessTexture</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                    <span class="n">metallicRoughness</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">_material</span><span class="o">.</span><span class="n">metallicRoughnessTexture</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="o">/</span> <span class="mi">255</span>
-                    <span class="n">mesh</span><span class="o">.</span><span class="n">metallicRoughness</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">metallicRoughness</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">contiguous</span><span class="p">()</span>
-            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_material</span><span class="p">,</span> <span class="n">trimesh</span><span class="o">.</span><span class="n">visual</span><span class="o">.</span><span class="n">material</span><span class="o">.</span><span class="n">SimpleMaterial</span><span class="p">):</span>
-                <span class="n">texture</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">_material</span><span class="o">.</span><span class="n">to_pbr</span><span class="p">()</span><span class="o">.</span><span class="n">baseColorTexture</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="o">/</span> <span class="mi">255</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">wotex</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">_mesh</span><span class="o">.</span><span class="n">visual</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;vertex&#39;</span><span class="p">:</span>
+                <span class="n">vertex_colors</span> <span class="o">=</span> <span class="n">_mesh</span><span class="o">.</span><span class="n">visual</span><span class="o">.</span><span class="n">vertex_colors</span>
+                <span class="n">vertex_colors</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">vertex_colors</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="p">:</span><span class="mi">3</span><span class="p">])</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="o">/</span> <span class="mi">255</span>
+                <span class="n">mesh</span><span class="o">.</span><span class="n">vc</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">vertex_colors</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[INFO] load trimesh: use vertex color: </span><span class="si">{</span><span class="n">mesh</span><span class="o">.</span><span class="n">vc</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">_mesh</span><span class="o">.</span><span class="n">visual</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;texture&#39;</span><span class="p">:</span>
+                <span class="n">_material</span> <span class="o">=</span> <span class="n">_mesh</span><span class="o">.</span><span class="n">visual</span><span class="o">.</span><span class="n">material</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_material</span><span class="p">,</span> <span class="n">trimesh</span><span class="o">.</span><span class="n">visual</span><span class="o">.</span><span class="n">material</span><span class="o">.</span><span class="n">PBRMaterial</span><span class="p">):</span>
+                    <span class="n">texture</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">_material</span><span class="o">.</span><span class="n">baseColorTexture</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="o">/</span> <span class="mi">255</span>
+                    <span class="c1"># load metallicRoughness if present</span>
+                    <span class="k">if</span> <span class="n">_material</span><span class="o">.</span><span class="n">metallicRoughnessTexture</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="n">metallicRoughness</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">_material</span><span class="o">.</span><span class="n">metallicRoughnessTexture</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="o">/</span> <span class="mi">255</span>
+                        <span class="c1"># NOTE: fix a bug in trimesh that loads metallicRoughness in wrong channels: https://github.com/mikedh/trimesh/issues/2195</span>
+                        <span class="k">if</span> <span class="n">version</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">trimesh</span><span class="o">.</span><span class="n">__version__</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">version</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="s1">&#39;4.2.2&#39;</span><span class="p">):</span>
+                            <span class="n">metallicRoughness</span> <span class="o">=</span> <span class="n">metallicRoughness</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">]]</span>
+                        <span class="n">mesh</span><span class="o">.</span><span class="n">metallicRoughness</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">metallicRoughness</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">contiguous</span><span class="p">()</span>
+                <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_material</span><span class="p">,</span> <span class="n">trimesh</span><span class="o">.</span><span class="n">visual</span><span class="o">.</span><span class="n">material</span><span class="o">.</span><span class="n">SimpleMaterial</span><span class="p">):</span>
+                    <span class="n">texture</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">_material</span><span class="o">.</span><span class="n">to_pbr</span><span class="p">()</span><span class="o">.</span><span class="n">baseColorTexture</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="o">/</span> <span class="mi">255</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;material type </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">_material</span><span class="p">)</span><span class="si">}</span><span class="s2"> not supported!&quot;</span><span class="p">)</span>
+                <span class="n">mesh</span><span class="o">.</span><span class="n">albedo</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">texture</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="p">:</span><span class="mi">3</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">contiguous</span><span class="p">()</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[INFO] load trimesh: load texture: </span><span class="si">{</span><span class="n">texture</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;material type </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">_material</span><span class="p">)</span><span class="si">}</span><span class="s2"> not supported!&quot;</span><span class="p">)</span>
-            <span class="n">mesh</span><span class="o">.</span><span class="n">albedo</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">texture</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="p">:</span><span class="mi">3</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">contiguous</span><span class="p">()</span>
-            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[INFO] load trimesh: load texture: </span><span class="si">{</span><span class="n">texture</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">texture</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">1024</span><span class="p">,</span> <span class="mi">1024</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">])</span>
-            <span class="n">mesh</span><span class="o">.</span><span class="n">albedo</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">texture</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
-            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[INFO] load trimesh: failed to load texture.&quot;</span><span class="p">)</span>
+                <span class="n">mesh</span><span class="o">.</span><span class="n">albedo</span> <span class="o">=</span> <span class="kc">None</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[INFO] load trimesh: failed to load texture.&quot;</span><span class="p">)</span>
 
         <span class="n">vertices</span> <span class="o">=</span> <span class="n">_mesh</span><span class="o">.</span><span class="n">vertices</span>
 
@@ -702,7 +720,7 @@
         <span class="n">i0</span><span class="p">,</span> <span class="n">i1</span><span class="p">,</span> <span class="n">i2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">f</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">long</span><span class="p">(),</span> <span class="bp">self</span><span class="o">.</span><span class="n">f</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">long</span><span class="p">(),</span> <span class="bp">self</span><span class="o">.</span><span class="n">f</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">long</span><span class="p">()</span>
         <span class="n">v0</span><span class="p">,</span> <span class="n">v1</span><span class="p">,</span> <span class="n">v2</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">[</span><span class="n">i0</span><span class="p">,</span> <span class="p">:],</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">[</span><span class="n">i1</span><span class="p">,</span> <span class="p">:],</span> <span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">[</span><span class="n">i2</span><span class="p">,</span> <span class="p">:]</span>
 
-        <span class="n">face_normals</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cross</span><span class="p">(</span><span class="n">v1</span> <span class="o">-</span> <span class="n">v0</span><span class="p">,</span> <span class="n">v2</span> <span class="o">-</span> <span class="n">v0</span><span class="p">)</span>
+        <span class="n">face_normals</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cross</span><span class="p">(</span><span class="n">v1</span> <span class="o">-</span> <span class="n">v0</span><span class="p">,</span> <span class="n">v2</span> <span class="o">-</span> <span class="n">v0</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
 
         <span class="c1"># Splat face normals to vertices</span>
         <span class="n">vn</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">v</span><span class="p">)</span>
@@ -1137,7 +1155,7 @@
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=a6512817"></script>
+</div><script src="../../../_static/documentation_options.js?v=b497140d"></script>
     <script src="../../../_static/doctools.js?v=888ff710"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=32e29ea5"></script>

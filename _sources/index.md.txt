@@ -43,4 +43,5 @@ pip install -U git+https://github.com/ashawkey/kiuikit.git
 
    ./render.md
    ./blender.md
-   ./misc.md
+   ./remesh.md
+   ./misc_cli.md
