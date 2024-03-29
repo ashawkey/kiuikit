@@ -107,17 +107,20 @@ class Mesh:
             mesh.v = torch.from_numpy(vertices).contiguous().float().to(mesh.device)
             mesh.f = torch.from_numpy(triangles).contiguous().int().to(mesh.device)
 
-        print(f"[INFO] load mesh, v: {mesh.v.shape}, f: {mesh.f.shape}")
         # auto-normalize
         if resize:
             mesh.auto_size(bound=bound)
+        print(f"[INFO] load mesh, v: {mesh.v.shape}, f: {mesh.f.shape}")
+        
         # auto-fix normal
         if renormal or mesh.vn is None:
             mesh.auto_normal()
-            print(f"[INFO] load mesh, vn: {mesh.vn.shape}, fn: {mesh.fn.shape}")
+        print(f"[INFO] load mesh, vn: {mesh.vn.shape}, fn: {mesh.fn.shape}")
+
         # auto-fix texcoords
-        if retex or (mesh.albedo is not None and mesh.vt is None):
+        if retex:
             mesh.auto_uv(cache_path=path)
+        if mesh.vt is not None:
             print(f"[INFO] load mesh, vt: {mesh.vt.shape}, ft: {mesh.ft.shape}")
 
         # rotate front dir to +z
