@@ -25,7 +25,7 @@ class GUI:
         self.W = opt.W
         self.H = opt.H
         if not GUI_AVAILABLE and not opt.wogui:
-            print(f'[WARN] cannot import dearpygui, assume without --wogui')
+            print(f'[WARN] cannot import dearpygui, assume running with --wogui')
         self.wogui = not GUI_AVAILABLE or opt.wogui # disable gui and run in cmd
         self.cam = OrbitCamera(opt.W, opt.H, r=opt.radius, fovy=opt.fovy)
         self.bg_color = torch.ones(3, dtype=torch.float32).cuda() # default white bg
@@ -102,7 +102,8 @@ class GUI:
         v_cam = torch.matmul(F.pad(self.mesh.v, pad=(0, 1), mode='constant', value=1.0), torch.inverse(pose).T).float().unsqueeze(0)
         v_clip = v_cam @ proj.T
 
-        rast, rast_db = dr.rasterize(self.glctx, v_clip, self.mesh.f, (self.H, self.W))
+        H, W = int(self.opt.ssaa * self.H), int(self.opt.ssaa * self.W)
+        rast, rast_db = dr.rasterize(self.glctx, v_clip, self.mesh.f, (H, W))
 
         alpha = (rast[..., 3:] > 0).float()
         alpha = dr.antialias(alpha, rast, v_clip, self.mesh.f).squeeze(0).clamp(0, 1) # [H, W, 3]
@@ -172,7 +173,7 @@ class GUI:
                         fg_uv.reshape(1, -1, 1, 2).contiguous(),
                         filter_mode="linear",
                         boundary_mode="clamp",
-                    ).reshape(1, self.H, self.W, 2)
+                    ).reshape(1, H, W, 2)
                     F0 = (1 - metallic) * 0.04 + metallic * albedo
                     specular_albedo = F0 * fg[..., 0:1] + fg[..., 1:2]
 
@@ -191,6 +192,10 @@ class GUI:
             mask = rast[..., 2]
             near_edge = (((w < 0.01) | (u < 0.01) | (v < 0.01)) & (mask > 0))[0].detach().cpu().numpy() # [h, w]
             buffer[near_edge] = np.array([0, 0, 0], dtype=np.float32) # black wire
+        
+        # ssaa rescale
+        if H != self.H or W != self.W:
+            buffer = cv2.resize(buffer, (self.H, self.W), interpolation=cv2.INTER_AREA)
 
         ender.record()
         torch.cuda.synchronize()
@@ -411,6 +416,7 @@ def main():
     parser.add_argument('--mode', default='albedo', type=str, choices=['lambertian', 'albedo', 'normal', 'depth', 'pbr'], help="rendering mode")
     parser.add_argument('--W', type=int, default=800, help="GUI width")
     parser.add_argument('--H', type=int, default=800, help="GUI height")
+    parser.add_argument('--ssaa', type=float, default=1, help="super-sampling anti-aliasing ratio")
     parser.add_argument('--radius', type=float, default=3, help="default GUI camera radius from center")
     parser.add_argument('--fovy', type=float, default=50, help="default GUI camera fovy")
     parser.add_argument("--wogui", action='store_true', help="disable all dpg GUI")

@@ -525,6 +525,8 @@ class Options:
     fix_cameras: bool = True 
 
     ## params for remeshing
+    # smallest and largest allowed reference edge length (controls final triangle sizes!)
+    edge_len_lims: Tuple[float, ...] = (0.01, 0.15) 
     # learning rate
     lr: float = 0.3 
     # betas[0:2] are the same as in Adam, betas[2] may be used to time-smooth the relative velocity nu
@@ -533,8 +535,6 @@ class Options:
     gammas: Tuple[float, ...] = (0, 0, 0) 
     # reference velocity for edge length controller
     nu_ref: float = 0.3 
-    # smallest and largest allowed reference edge length
-    edge_len_lims: Tuple[float, ...] = (0.01, 0.15) 
     # edge length tolerance for split and collapse
     edge_len_tol: float = 0.5 
     # gain value for edge length controller
@@ -563,7 +563,7 @@ class Remesher(nn.Module):
         self.device = torch.device("cuda")
 
         # load input mesh
-        self.mesh = Mesh.load(opt.mesh, bound=0.9, device=self.device)
+        self.mesh = Mesh.load(opt.mesh, bound=0.9, wotex=True, device=self.device)
 
         # init primitive (icosphere now)
         vertices, self.faces = self.init_primitives(level=2, bound=0.5)
@@ -738,7 +738,7 @@ class Remesher(nn.Module):
     def fit(self, iters=300):
 
         if self.opt.fix_cameras:
-            # ca.optche gt renders
+            # cache gt renders
             poses = self.get_cameras()
             images_gt = self.render_gt(poses, self.opt.resolution)
 
@@ -746,7 +746,7 @@ class Remesher(nn.Module):
         for i in pbar:
 
             if not self.opt.fix_cameras:
-                # ra.optndom orbital camera pose
+                # random orbital camera pose
                 poses = self.get_cameras()
                 images_gt = self.render_gt(poses, self.opt.resolution)
 
@@ -765,7 +765,7 @@ class Remesher(nn.Module):
             # zero grad
             self.vertices.grad = None
 
-            pbar.set_description(f"loss = {loss.item():.6f}")
+            pbar.set_description(f"loss={loss.item():.6f} v={self.vertices.shape} f={self.faces.shape}")
 
     def export(self, path):
         mesh = Mesh(v=self.vertices, f=self.faces)
