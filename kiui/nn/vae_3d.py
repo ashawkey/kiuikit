@@ -47,7 +47,6 @@ class VolumeAttention(nn.Module):
             
         return x
 
-
 class DiagonalGaussianDistribution:
     def __init__(self, parameters, deterministic=False):
         # parameters: [B, 2C, ...]
@@ -70,9 +69,9 @@ class DiagonalGaussianDistribution:
             return torch.Tensor([0.0])
         else:
             if other is None:
-                return 0.5 * torch.sum(torch.pow(self.mean, 2) + self.var - 1.0 - self.logvar, dim=dims)
+                return 0.5 * torch.mean(torch.pow(self.mean, 2) + self.var - 1.0 - self.logvar, dim=dims)
             else:
-                return 0.5 * torch.sum(
+                return 0.5 * torch.mean(
                     torch.pow(self.mean - other.mean, 2) / other.var
                     + self.var / other.var
                     - 1.0
@@ -461,14 +460,26 @@ if __name__ == '__main__':
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model = VAE(gradient_checkpointing=True).to(device)
+    # model = VAE(gradient_checkpointing=True).to(device)
+    model = VAE(
+        in_channels = 6,
+        latent_channels = 128,
+        out_channels = 6,
+        down_channels = (32, 128, 512),
+        mid_attention = True,
+        up_channels = (512, 128, 32),
+        layers_per_block = 2,
+        skip_scale = np.sqrt(0.5),
+        gradient_checkpointing = True,
+    ).to(device)
     print(model)
     
     total, trainable = count_parameters(model)
     print(f'[INFO] param total: {total/1024**2:.2f}M, trainable: {trainable/1024**2:.2f}M')
 
     # test forward
-    x = torch.randn(1, 1, 512, 512, 512, device=device, dtype=torch.float16)
+    # x = torch.randn(1, 1, 512, 512, 512, device=device, dtype=torch.float16)
+    x = torch.randn(2048, 6, 8, 8, 8, device=device, dtype=torch.float16)
     kiui.lo(x)
     
     with torch.autocast(device_type='cuda', dtype=torch.float16):
@@ -480,7 +491,7 @@ if __name__ == '__main__':
         print(f'[INFO] mem forward: {(mem_total-mem_free)/1024**3:.2f}/{mem_total/1024**3:.2f}G')
 
         # test backward
-        loss = y.mean() + 1e-6 * p.kl().mean()
+        loss = y.mean() + 1e-3 * p.kl().mean()
         loss.backward()
         mem_free, mem_total = torch.cuda.mem_get_info()
         print(f'[INFO] mem backward: {(mem_total-mem_free)/1024**3:.2f}/{mem_total/1024**3:.2f}G')

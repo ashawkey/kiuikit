@@ -9,7 +9,6 @@ from torch.utils.checkpoint import checkpoint
 from kiui.typing import *
 from kiui.nn.attention import MemEffAttention
 
-
 class ImageAttention(nn.Module):
     def __init__(
         self, 
@@ -70,9 +69,9 @@ class DiagonalGaussianDistribution:
             return torch.Tensor([0.0])
         else:
             if other is None:
-                return 0.5 * torch.sum(torch.pow(self.mean, 2) + self.var - 1.0 - self.logvar, dim=dims)
+                return 0.5 * torch.mean(torch.pow(self.mean, 2) + self.var - 1.0 - self.logvar, dim=dims)
             else:
-                return 0.5 * torch.sum(
+                return 0.5 * torch.mean(
                     torch.pow(self.mean - other.mean, 2) / other.var
                     + self.var / other.var
                     - 1.0
@@ -469,7 +468,7 @@ if __name__ == '__main__':
         print(f'[INFO] mem forward: {(mem_total-mem_free)/1024**3:.2f}/{mem_total/1024**3:.2f}G')
 
         # test backward
-        loss = y.mean() + 1e-6 * p.kl().mean()
+        loss = y.mean() + 1e-3 * p.kl().mean()
         loss.backward()
         mem_free, mem_total = torch.cuda.mem_get_info()
         print(f'[INFO] mem backward: {(mem_total-mem_free)/1024**3:.2f}/{mem_total/1024**3:.2f}G')
