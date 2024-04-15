@@ -52,6 +52,7 @@ if __name__ == '__main__':
     parser.add_argument('--mode', default='albedo', type=str, choices=['lambertian', 'albedo', 'normal', 'depth', 'pbr'], help="rendering mode")
     parser.add_argument('--W', type=int, default=800, help="GUI width")
     parser.add_argument('--H', type=int, default=800, help="GUI height")
+    parser.add_argument('--ssaa', type=float, default=1, help="super-sampling anti-aliasing ratio")
     parser.add_argument('--radius', type=float, default=3, help="default GUI camera radius from center")
     parser.add_argument('--fovy', type=float, default=50, help="default GUI camera fovy")
     parser.add_argument("--force_cuda_rast", action='store_true', help="force to use RasterizeCudaContext.")
