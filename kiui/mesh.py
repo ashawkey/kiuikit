@@ -376,22 +376,29 @@ class Mesh:
                 mesh.vc = torch.tensor(vertex_colors, dtype=torch.float32, device=device)
                 print(f"[INFO] load trimesh: use vertex color: {mesh.vc.shape}")
             elif _mesh.visual.kind == 'texture':
-                _material = _mesh.visual.material
-                if isinstance(_material, trimesh.visual.material.PBRMaterial):
-                    texture = np.array(_material.baseColorTexture).astype(np.float32) / 255
-                    # load metallicRoughness if present
-                    if _material.metallicRoughnessTexture is not None:
-                        metallicRoughness = np.array(_material.metallicRoughnessTexture).astype(np.float32) / 255
-                        # NOTE: fix a bug in trimesh that loads metallicRoughness in wrong channels: https://github.com/mikedh/trimesh/issues/2195
-                        if version.parse(trimesh.__version__) < version.parse('4.2.2'):
-                            metallicRoughness = metallicRoughness[..., [2, 1, 0]]
-                        mesh.metallicRoughness = torch.tensor(metallicRoughness, dtype=torch.float32, device=device).contiguous()
-                elif isinstance(_material, trimesh.visual.material.SimpleMaterial):
-                    texture = np.array(_material.to_pbr().baseColorTexture).astype(np.float32) / 255
-                else:
-                    raise NotImplementedError(f"material type {type(_material)} not supported!")
-                mesh.albedo = torch.tensor(texture[..., :3], dtype=torch.float32, device=device).contiguous()
-                print(f"[INFO] load trimesh: load texture: {texture.shape}")
+                try:
+                    _material = _mesh.visual.material
+                    if isinstance(_material, trimesh.visual.material.PBRMaterial):
+                        texture = np.array(_material.baseColorTexture).astype(np.float32) / 255
+                        # load metallicRoughness if present
+                        if _material.metallicRoughnessTexture is not None:
+                            metallicRoughness = np.array(_material.metallicRoughnessTexture).astype(np.float32) / 255
+                            # NOTE: fix a bug in trimesh that loads metallicRoughness in wrong channels: https://github.com/mikedh/trimesh/issues/2195
+                            if version.parse(trimesh.__version__) < version.parse('4.2.2'):
+                                metallicRoughness = metallicRoughness[..., [2, 1, 0]]
+                            mesh.metallicRoughness = torch.tensor(metallicRoughness, dtype=torch.float32, device=device).contiguous()
+                    elif isinstance(_material, trimesh.visual.material.SimpleMaterial):
+                        texture = np.array(_material.to_pbr().baseColorTexture).astype(np.float32) / 255
+                    else:
+                        raise NotImplementedError(f"material type {type(_material)} not supported!")
+                    if len(texture.shape) == 2:
+                        texture = texture[..., None].repeat(3, axis=-1)
+                    mesh.albedo = torch.tensor(texture[..., :3], dtype=torch.float32, device=device).contiguous()
+                    print(f"[INFO] load trimesh: load texture: {texture.shape}")
+                # there really can be lots of mysterious errors...
+                except Exception as e:
+                    mesh.albedo = None
+                    print(f"[INFO] load trimesh: failed to load texture.")
             else:
                 mesh.albedo = None
                 print(f"[INFO] load trimesh: failed to load texture.")

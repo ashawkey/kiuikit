@@ -297,7 +297,7 @@ def main(args):
     load_object(args.mesh)
 
     # clever clean scene
-    clean_scene_meshes()
+    # clean_scene_meshes()
 
     # normalize objects to [-b, b]^3
     clear_animation()
