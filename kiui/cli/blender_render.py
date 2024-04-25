@@ -106,7 +106,7 @@ def setup_rendering(args):
         bpy.context.view_layer.use_pass_z = True
         node_depth = nodes.new(type="CompositorNodeOutputFile")
         node_depth.label = "Depth Output"
-        node_depth.base_path = ""
+        node_depth.base_path = "/" # use absolute save path
         node_depth.file_slots[0].use_node_format = True
         node_depth.format.file_format = "OPEN_EXR"
         node_depth.format.color_depth = "16"
@@ -128,7 +128,7 @@ def setup_rendering(args):
         links.new(node_normal_scale.outputs[0], node_normal_bias.inputs[1])
         node_normal = nodes.new(type="CompositorNodeOutputFile")
         node_normal.label = "Normal Output"
-        node_normal.base_path = ""
+        node_normal.base_path = "/"
         node_normal.file_slots[0].use_node_format = True
         node_normal.format.file_format = "PNG"
         node_normal.format.color_mode = "RGBA"
@@ -144,7 +144,7 @@ def setup_rendering(args):
         links.new(render_layers.outputs["Alpha"], node_albedo_alpha.inputs["Alpha"])
         node_albedo = nodes.new(type="CompositorNodeOutputFile")
         node_albedo.label = "Albedo Output"
-        node_albedo.base_path = ""
+        node_albedo.base_path = "/"
         node_albedo.file_slots[0].use_node_format = True
         node_albedo.format.file_format = "PNG"
         node_albedo.format.color_mode = "RGBA"
@@ -349,6 +349,7 @@ def main(args):
 
         # render image
         render_file_path = os.path.join(args.outdir, name, f"{i:03d}")
+        render_file_path = os.path.abspath(render_file_path) # relative path leads to problems for depth/normal/albedo nodes...
         bpy.context.scene.render.filepath = render_file_path
 
         if args.depth:
@@ -399,8 +400,8 @@ if __name__ == "__main__":
     # rendering parameters
     parser.add_argument("--resolution", type=int, default=512)
     parser.add_argument("--bound", type=float, default=0.9)
-    parser.add_argument("--radius", type=float, default=2.5)
-    parser.add_argument("--fovy", type=float, default=49.1)
+    parser.add_argument("--radius", type=float, default=4.5)
+    parser.add_argument("--fovy", type=float, default=30)
 
     args = parser.parse_args()
 
