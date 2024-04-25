@@ -5,8 +5,8 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex/" /><link rel="search" title="Search" href="../search/" /><link rel="next" title="Blender Scripts" href="../blender/" /><link rel="prev" title="Misc API" href="../misc_api/" />
 
-    <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 7.2.6 and Furo 2024.01.29 -->
-        <title>Mesh Renderer - kiui 0.2.7 documentation</title>
+    <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 7.3.7 and Furo 2024.01.29 -->
+        <title>Mesh Renderer - kiui 0.2.8 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=135e06be" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -125,7 +125,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../"><div class="brand">kiui 0.2.7 documentation</div></a>
+      <a href="../"><div class="brand">kiui 0.2.8 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -217,7 +217,7 @@
         </div>
         <article role="main">
           <section id="mesh-renderer">
-<h1>Mesh Renderer<a class="headerlink" href="#mesh-renderer" title="Link to this heading">#</a></h1>
+<h1>Mesh Renderer<a class="headerlink" href="#mesh-renderer" title="Link to this heading">¶</a></h1>
 <p><a class="reference external" href="https://github.com/ashawkey/kiuikit/blob/main/kiui/render.py">[source]</a></p>
 <p>We provide a convenient mesh renderer based on:</p>
 <ul class="simple">
@@ -226,55 +226,27 @@
 <li><p><a class="reference external" href="https://github.com/hoffstadt/DearPyGui">dearpygui</a>: <strong>a desktop is required (cannot be forwarded by ssh)</strong>. For headless servers, you can still use <code class="docutils literal notranslate"><span class="pre">--wogui</span></code> for rendering images and videos.</p></li>
 </ul>
 <section id="usage">
-<h2>Usage<a class="headerlink" href="#usage" title="Link to this heading">#</a></h2>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>kire<span class="w"> </span>--help
+<h2>Usage<a class="headerlink" href="#usage" title="Link to this heading">¶</a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># invoke renderer</span>
+kire<span class="w"> </span>--help
 <span class="c1"># this is short for</span>
 python<span class="w"> </span>-m<span class="w"> </span>kiui.render<span class="w"> </span>--help
 </pre></div>
 </div>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">usage</span><span class="p">:</span> <span class="n">kire</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">pbr</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">envmap</span> <span class="n">ENVMAP</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">front_dir</span> <span class="n">FRONT_DIR</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">mode</span> <span class="p">{</span><span class="n">lambertian</span><span class="p">,</span><span class="n">albedo</span><span class="p">,</span><span class="n">normal</span><span class="p">,</span><span class="n">depth</span><span class="p">,</span><span class="n">pbr</span><span class="p">}]</span>
-            <span class="p">[</span><span class="o">--</span><span class="n">W</span> <span class="n">W</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">H</span> <span class="n">H</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">radius</span> <span class="n">RADIUS</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">fovy</span> <span class="n">FOVY</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">wogui</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">force_cuda_rast</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">save</span> <span class="n">SAVE</span><span class="p">]</span>
-            <span class="p">[</span><span class="o">--</span><span class="n">elevation</span> <span class="n">ELEVATION</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">num_azimuth</span> <span class="n">NUM_AZIMUTH</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">save_video</span> <span class="n">SAVE_VIDEO</span><span class="p">]</span>
-            <span class="n">mesh</span>
-
-<span class="n">positional</span> <span class="n">arguments</span><span class="p">:</span>
-  <span class="n">mesh</span>                  <span class="n">path</span> <span class="n">to</span> <span class="n">mesh</span> <span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">ply</span><span class="p">,</span> <span class="n">glb</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
-
-<span class="n">optional</span> <span class="n">arguments</span><span class="p">:</span>
-  <span class="o">-</span><span class="n">h</span><span class="p">,</span> <span class="o">--</span><span class="n">help</span>            <span class="n">show</span> <span class="n">this</span> <span class="n">help</span> <span class="n">message</span> <span class="ow">and</span> <span class="n">exit</span>
-  <span class="o">--</span><span class="n">pbr</span>                 <span class="n">enable</span> <span class="n">PBR</span> <span class="n">material</span>
-  <span class="o">--</span><span class="n">envmap</span> <span class="n">ENVMAP</span>       <span class="n">hdr</span> <span class="n">env</span> <span class="nb">map</span> <span class="n">path</span> <span class="k">for</span> <span class="n">pbr</span>
-  <span class="o">--</span><span class="n">front_dir</span> <span class="n">FRONT_DIR</span>
-                        <span class="n">mesh</span> <span class="n">front</span><span class="o">-</span><span class="n">facing</span> <span class="nb">dir</span>
-  <span class="o">--</span><span class="n">mode</span> <span class="p">{</span><span class="n">lambertian</span><span class="p">,</span><span class="n">albedo</span><span class="p">,</span><span class="n">normal</span><span class="p">,</span><span class="n">depth</span><span class="p">,</span><span class="n">pbr</span><span class="p">}</span>
-                        <span class="n">rendering</span> <span class="n">mode</span>
-  <span class="o">--</span><span class="n">W</span> <span class="n">W</span>                 <span class="n">GUI</span> <span class="n">width</span>
-  <span class="o">--</span><span class="n">H</span> <span class="n">H</span>                 <span class="n">GUI</span> <span class="n">height</span>
-  <span class="o">--</span><span class="n">radius</span> <span class="n">RADIUS</span>       <span class="n">default</span> <span class="n">GUI</span> <span class="n">camera</span> <span class="n">radius</span> <span class="kn">from</span> <span class="nn">center</span>
-  <span class="o">--</span><span class="n">fovy</span> <span class="n">FOVY</span>           <span class="n">default</span> <span class="n">GUI</span> <span class="n">camera</span> <span class="n">fovy</span>
-  <span class="o">--</span><span class="n">wogui</span>               <span class="n">disable</span> <span class="nb">all</span> <span class="n">dpg</span> <span class="n">GUI</span>
-  <span class="o">--</span><span class="n">force_cuda_rast</span>     <span class="n">force</span> <span class="n">to</span> <span class="n">use</span> <span class="n">RasterizeCudaContext</span><span class="o">.</span>
-  <span class="o">--</span><span class="n">save</span> <span class="n">SAVE</span>           <span class="n">path</span> <span class="n">to</span> <span class="n">save</span> <span class="n">example</span> <span class="n">rendered</span> <span class="n">images</span>
-  <span class="o">--</span><span class="n">elevation</span> <span class="n">ELEVATION</span>
-                        <span class="n">rendering</span> <span class="n">elevation</span>
-  <span class="o">--</span><span class="n">num_azimuth</span> <span class="n">NUM_AZIMUTH</span>
-                        <span class="n">number</span> <span class="n">of</span> <span class="n">images</span> <span class="n">to</span> <span class="n">render</span> <span class="kn">from</span> <span class="nn">different</span> <span class="n">azimuths</span>
-  <span class="o">--</span><span class="n">save_video</span> <span class="n">SAVE_VIDEO</span>
-                        <span class="n">path</span> <span class="n">to</span> <span class="n">save</span> <span class="n">rendered</span> <span class="n">video</span>
-</pre></div>
-</div>
 </section>
 <section id="examples">
-<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">#</a></h2>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># open a GUI to render a mesh</span>
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1">## open a GUI to render a mesh</span>
 kire<span class="w"> </span>mesh.obj
 kire<span class="w"> </span>mesh.obj<span class="w"> </span>--force_cuda_rast<span class="w"> </span><span class="c1"># if you cannot use OpenGL backend (usually happens for headless servers), this will fallback to CUDA backend with some limitations (ref: https://nvlabs.github.io/nvdiffrast/#rasterizing-with-cuda-vs-opengl-new)</span>
+kire<span class="w"> </span>mesh.obj<span class="w"> </span>--H<span class="w"> </span><span class="m">800</span><span class="w"> </span>--W<span class="w"> </span><span class="m">800</span><span class="w"> </span>--ssaa<span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="c1"># set resolution and use super-sampling anti-aliasing</span>
 
 kire<span class="w"> </span>mesh.obj<span class="w"> </span>--front_dir<span class="w"> </span>+x<span class="w"> </span><span class="c1"># specify mesh front-facing dir, default is +z (OpenGL convention). You can use [+-][xyz] to specify axis, and [123] to specify clockwise rotation (per 90 degree).</span>
 
 kire<span class="w"> </span>mesh.glb<span class="w"> </span>--pbr<span class="w"> </span><span class="c1"># render with PBR (metallic + roughness)</span>
 kire<span class="w"> </span>mesh.glb<span class="w"> </span>--pbr<span class="w"> </span>--envmap<span class="w"> </span>env.hdr<span class="w"> </span><span class="c1"># specify hdr file</span>
 
+<span class="c1">## we can also run without GUI on headless servers</span>
 kire<span class="w"> </span>mesh.obj<span class="w"> </span>--save_video<span class="w"> </span>out.mp4<span class="w"> </span>--wogui<span class="w"> </span><span class="c1"># save 360 degree rotating video</span>
 kire<span class="w"> </span>mesh.obj<span class="w"> </span>--save<span class="w"> </span>out<span class="w"> </span>--wogui<span class="w"> </span><span class="c1"># save rendered images to the out folder (controlled by --elevation and --num_azimuth)</span>
 </pre></div>
@@ -286,7 +258,8 @@ kire<span class="w"> </span>mesh.obj<span class="w"> </span>--save<span class="w
 <li><p><code class="docutils literal notranslate"><span class="pre">Right</span> <span class="pre">Drag</span></code> to pan camera.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">Space</span></code> to toggle rendering mode.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">P</span></code> to toggle camera orbital rotation.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">L</span></code> to toggle light rotation.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">L</span></code> to toggle plane light rotation (only valid in <code class="docutils literal notranslate"><span class="pre">lambertian</span></code> rendering mode).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">W</span></code> to toggle wireframe rendering on top of current rendering mode.</p></li>
 </ul>
 </section>
 </section>
@@ -360,8 +333,8 @@ kire<span class="w"> </span>mesh.obj<span class="w"> </span>--save<span class="w
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=b497140d"></script>
-    <script src="../_static/doctools.js?v=888ff710"></script>
+</div><script src="../_static/documentation_options.js?v=5ef4409b"></script>
+    <script src="../_static/doctools.js?v=9a2dae69"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=32e29ea5"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
