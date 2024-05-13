@@ -121,19 +121,36 @@ def setup_rendering(args):
                 node_bsdf = mat_nodes['Principled BSDF'] # assert all these exist...
 
                 # albedo
-                link_albedo = node_bsdf.inputs['Base Color'].links[0]
                 node_aov_albedo = mat_nodes.new(type='ShaderNodeOutputAOV')
                 node_aov_albedo.name = 'albedo' # link to view layer
-                mat_links.new(link_albedo.from_node.outputs[link_albedo.from_socket.name], node_aov_albedo.inputs['Color'])
+                if len(node_bsdf.inputs['Base Color'].links) == 0:
+                    # handle pure value case (no texture image)
+                    node_singleton_albedo = mat_nodes.new(type='ShaderNodeRGB')
+                    node_singleton_albedo.outputs['Color'].default_value = node_bsdf.inputs['Base Color'].default_value
+                    mat_links.new(node_singleton_albedo.outputs['Color'], node_aov_albedo.inputs['Color'])
+                else:
+                    link_albedo = node_bsdf.inputs['Base Color'].links[0]
+                    mat_links.new(link_albedo.from_node.outputs[link_albedo.from_socket.name], node_aov_albedo.inputs['Color'])
 
                 # metallic-roughness
-                link_metallic = node_bsdf.inputs['Metallic'].links[0]
-                link_roughness = node_bsdf.inputs['Roughness'].links[0]
                 node_aov_metallicroughness = mat_nodes.new(type='ShaderNodeOutputAOV')
                 node_aov_metallicroughness.name = 'metallicroughness' # link to view layer
                 node_combine_color = mat_nodes.new(type='ShaderNodeCombineRGB')
-                mat_links.new(link_metallic.from_node.outputs[link_metallic.from_socket.name], node_combine_color.inputs["B"])
-                mat_links.new(link_roughness.from_node.outputs[link_roughness.from_socket.name], node_combine_color.inputs["G"])
+                if len(node_bsdf.inputs['Metallic'].links) == 0:
+                    node_singleton_metallic = mat_nodes.new(type='ShaderNodeValue')
+                    node_singleton_metallic.outputs['Value'].default_value = node_bsdf.inputs['Metallic'].default_value
+                    mat_links.new(node_singleton_metallic.outputs['Value'], node_combine_color.inputs["B"])
+                else:
+                    link_metallic = node_bsdf.inputs['Metallic'].links[0]
+                    mat_links.new(link_metallic.from_node.outputs[link_metallic.from_socket.name], node_combine_color.inputs["B"])
+                if len(node_bsdf.inputs['Roughness'].links) == 0:
+                    node_singleton_roughness = mat_nodes.new(type='ShaderNodeValue')
+                    node_singleton_roughness.outputs['Value'].default_value = node_bsdf.inputs['Roughness'].default_value
+                    mat_links.new(node_singleton_roughness.outputs['Value'], node_combine_color.inputs["G"])
+                else:
+                    link_roughness = node_bsdf.inputs['Roughness'].links[0]
+                    mat_links.new(link_roughness.from_node.outputs[link_roughness.from_socket.name], node_combine_color.inputs["G"])
+
                 mat_links.new(node_combine_color.outputs["Image"], node_aov_metallicroughness.inputs['Color'])
             except Exception as e:
                 print(f'[ERROR] failed to set up PBR AOV for material {mat}: {e}')
