@@ -12,7 +12,7 @@ from contextlib import contextmanager
 import bpy
 from mathutils import Vector, Matrix
 
-# print(bpy.app.version_string)
+# print('=== BPY VERSION ===', bpy.app.version_string)
 
 @contextmanager
 def stdout_redirected(to=os.devnull):
@@ -78,10 +78,8 @@ def setup_rendering(args):
     refs['cam'] = cam
     refs['cam_constraint'] = cam_constraint
 
-    ### use nodes system for rendering
-    bpy.context.scene.use_nodes = True
-
-    ### world nodes
+    ### shader world nodes
+    bpy.context.scene.world.use_nodes = True
     world_nodes = bpy.context.scene.world.node_tree.nodes
     world_links = bpy.context.scene.world.node_tree.links
     world_nodes.clear()
@@ -95,11 +93,68 @@ def setup_rendering(args):
 
     refs['node_hdri'] = node_hdri
 
-    ### render nodes 
+    ### compositor nodes 
+    bpy.context.scene.use_nodes = True
     nodes = bpy.context.scene.node_tree.nodes
     links = bpy.context.scene.node_tree.links
     nodes.clear()
-    render_layers = nodes.new("CompositorNodeRLayers")
+    render_layers = nodes.new("CompositorNodeRLayers") # render layers
+
+    ### setting up PBR using custom AOV pass
+    # ref: https://www.reddit.com/r/blender/comments/kbno51/custom_render_passes_from_the_shader_editor_with/
+    # ref: https://blender.stackexchange.com/questions/23436/control-cycles-eevee-material-nodes-and-material-properties-using-python
+    # NOTE: we have really NO error handling here, the input must be correct.
+    if args.pbr:
+        ### add custom AOV pass in view layer
+        bpy.context.view_layer.aovs.add()
+        bpy.context.view_layer.active_aov.name = 'albedo'
+        bpy.context.view_layer.aovs.add()
+        bpy.context.view_layer.active_aov.name = 'metallicroughness'
+        
+        ### add object shader AOV output node
+        mat = bpy.data.materials[0] # assert 
+        mat.use_nodes = True # assert
+        mat_nodes = mat.node_tree.nodes
+        mat_links = mat.node_tree.links
+        node_bsdf = mat_nodes['Principled BSDF'] # assert all these exist...
+
+        # albedo
+        link_albedo = node_bsdf.inputs['Base Color'].links[0]
+        node_aov_albedo = mat_nodes.new(type='ShaderNodeOutputAOV')
+        node_aov_albedo.name = 'albedo' # link to view layer
+        mat_links.new(link_albedo.from_node.outputs[link_albedo.from_socket.name], node_aov_albedo.inputs['Color'])
+
+        # metallic-roughness
+        link_metallic = node_bsdf.inputs['Metallic'].links[0]
+        link_roughness = node_bsdf.inputs['Roughness'].links[0]
+        node_aov_metallicroughness = mat_nodes.new(type='ShaderNodeOutputAOV')
+        node_aov_metallicroughness.name = 'metallicroughness' # link to view layer
+        node_combine_color = mat_nodes.new(type='ShaderNodeCombineRGB')
+        mat_links.new(link_metallic.from_node.outputs[link_metallic.from_socket.name], node_combine_color.inputs["B"])
+        mat_links.new(link_roughness.from_node.outputs[link_roughness.from_socket.name], node_combine_color.inputs["G"])
+        mat_links.new(node_combine_color.outputs["Image"], node_aov_metallicroughness.inputs['Color'])
+
+        ### add compositor output node
+        node_albedo_alpha = nodes.new(type="CompositorNodeSetAlpha")
+        links.new(render_layers.outputs["albedo"], node_albedo_alpha.inputs["Image"])
+        links.new(render_layers.outputs["Alpha"], node_albedo_alpha.inputs["Alpha"])
+        node_albedo = nodes.new(type="CompositorNodeOutputFile")
+        node_albedo.label = "Albedo Output"
+        node_albedo.base_path = "/"
+        node_albedo.file_slots[0].use_node_format = True
+        node_albedo.format.file_format = "PNG"
+        node_albedo.format.color_mode = "RGBA"
+        links.new(node_albedo_alpha.outputs["Image"], node_albedo.inputs[0])
+        refs['node_albedo'] = node_albedo
+
+        node_metallicroughness = nodes.new(type="CompositorNodeOutputFile")
+        node_metallicroughness.label = "MetallicRoughness Output"
+        node_metallicroughness.base_path = "/"
+        node_metallicroughness.file_slots[0].use_node_format = True
+        node_metallicroughness.format.file_format = "PNG"
+        node_metallicroughness.format.color_mode = "RGB"
+        links.new(render_layers.outputs["metallicroughness"], node_metallicroughness.inputs[0])
+        refs['node_metallicroughness'] = node_metallicroughness
 
     ## depth
     if args.depth:
@@ -135,22 +190,6 @@ def setup_rendering(args):
         links.new(node_normal_bias.outputs[0], node_normal.inputs[0])
 
         refs['node_normal'] = node_normal
-
-    ## albedo
-    if args.albedo:
-        bpy.context.view_layer.use_pass_diffuse_color = True
-        node_albedo_alpha = nodes.new(type="CompositorNodeSetAlpha")
-        links.new(render_layers.outputs["DiffCol"], node_albedo_alpha.inputs["Image"])
-        links.new(render_layers.outputs["Alpha"], node_albedo_alpha.inputs["Alpha"])
-        node_albedo = nodes.new(type="CompositorNodeOutputFile")
-        node_albedo.label = "Albedo Output"
-        node_albedo.base_path = "/"
-        node_albedo.file_slots[0].use_node_format = True
-        node_albedo.format.file_format = "PNG"
-        node_albedo.format.color_mode = "RGBA"
-        links.new(node_albedo_alpha.outputs["Image"], node_albedo.inputs[0])
-
-        refs['node_albedo'] = node_albedo
 
     # NOTE: blender cannot render metallic and roughness as image...
 
@@ -285,9 +324,6 @@ def normalize_scene(bound=0.9):
 
 def main(args):
 
-    refs = setup_rendering(args)
-    cam = refs['cam']
-
     # reset scene
     reset_scene()
 
@@ -295,6 +331,10 @@ def main(args):
     name = os.path.basename(args.mesh).split(".")[0]
     os.makedirs(os.path.join(args.outdir, name), exist_ok=True)
     load_object(args.mesh)
+    
+    # set up rendering
+    refs = setup_rendering(args)
+    cam = refs['cam']
 
     # clever clean scene
     # clean_scene_meshes()
@@ -356,8 +396,9 @@ def main(args):
             refs['node_depth'].file_slots[0].path = render_file_path + "_depth"
         if args.normal:
             refs['node_normal'].file_slots[0].path = render_file_path + "_normal"
-        if args.albedo:
+        if args.pbr:
             refs['node_albedo'].file_slots[0].path = render_file_path + "_albedo"
+            refs['node_metallicroughness'].file_slots[0].path = render_file_path + "_mr"
 
         if os.path.exists(render_file_path) and not args.overwrite: 
             continue
@@ -394,7 +435,7 @@ if __name__ == "__main__":
     parser.add_argument('--camera', action='store_true')
     parser.add_argument('--depth', action='store_true')
     parser.add_argument('--normal', action='store_true')
-    parser.add_argument('--albedo', action='store_true')
+    parser.add_argument('--pbr', action='store_true')
     parser.add_argument('--overwrite', action='store_true')
 
     # rendering parameters
