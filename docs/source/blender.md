@@ -20,5 +20,6 @@ python -m kiui.cli.blender_render --mesh chest.glb --gpu 0 --depth --normal --al
 Features include:
 * Set which GPU to use with `--gpu 0` for `CYCLES` rendering engine.
 * Render with random built-in HDRI environment texture shading (check `assets/blender_lights`).
-* Optionally render depth (`exr`), normal, and albedo.
 * Empirical cleaning of the scene (remove the annoying plane under the object).
+* Optionally render depth (`exr`), normal.
+* Optionally render PBR (albedo, metallic, roughness).

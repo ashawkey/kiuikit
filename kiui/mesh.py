@@ -546,6 +546,35 @@ class Mesh:
             vmapping = torch.from_numpy(vmapping.astype(np.int64)).long().to(self.device)
             self.align_v_to_vt(vmapping)
     
+    def remap_uv(self, v):
+        """ remap uv texture (vt) to other surface.
+
+        Args:
+            v (torch.Tensor): the target mesh vertices, float [N, 3].
+        """
+
+        assert self.vt is not None
+
+        if self.v.shape[0] != self.vt.shape[0]:
+            self.align_v_to_vt()
+
+        # find the closest face for each vertex
+        import cubvh 
+        BVH = cubvh.cuBVH(self.v, self.f)
+        dist, face_id, uvw = BVH.unsigned_distance(v, return_uvw=True)
+
+        # get original uv
+        faces = self.f[face_id].long()
+        vt0 = self.vt[faces[:, 0]]
+        vt1 = self.vt[faces[:, 1]]
+        vt2 = self.vt[faces[:, 2]]
+
+        # calc new uv
+        vt = vt0 * uvw[:, 0:1] + vt1 * uvw[:, 1:2] + vt2 * uvw[:, 2:3]
+
+        return vt
+
+    
     def align_v_to_vt(self, vmapping=None):
         """ remap v/f and vn/fn to vt/ft.
 
