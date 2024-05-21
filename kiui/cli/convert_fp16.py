@@ -1,5 +1,5 @@
 import torch
-from safetensors import load_file, save_file
+from safetensors.torch import load_file, save_file
 import argparse
 
 if __name__ == '__main__':
