@@ -49,6 +49,19 @@ def safe_normalize(x: Union[Tensor, ndarray], eps=1e-20) -> Union[Tensor, ndarra
 
     return x / length(x, eps)
 
+def normalize(x: Union[Tensor, ndarray], eps=1e-20) -> Union[Tensor, ndarray]:
+    """normalize an array (along the last dim). alias of safe_normalize.
+
+    Args:
+        x (Union[Tensor, ndarray]): x, [..., C]
+        eps (float, optional): eps. Defaults to 1e-20.
+
+    Returns:
+        Union[Tensor, ndarray]: normalized x, [..., C]
+    """
+
+    return x / length(x, eps)
+
 def make_divisible(x: int, m: int = 8):
     """make an int x divisible by m.
 

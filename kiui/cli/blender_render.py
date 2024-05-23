@@ -206,8 +206,8 @@ def setup_rendering(args):
         node_normal.label = "Normal Output"
         node_normal.base_path = "/"
         node_normal.file_slots[0].use_node_format = True
-        node_normal.format.file_format = "PNG"
-        node_normal.format.color_mode = "RGBA"
+        node_normal.format.file_format = "OPEN_EXR"
+        node_normal.format.color_depth = "16"
         links.new(node_normal_bias.outputs[0], node_normal.inputs[0])
 
         refs['node_normal'] = node_normal

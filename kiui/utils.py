@@ -196,7 +196,11 @@ def read_image(
     if mode == "pil":
         return Image.open(path).convert(order)
 
-    img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+    if path.endswith('.exr'):
+        os.environ['OPENCV_IO_ENABLE_OPENEXR'] = '1'
+        img = cv2.imread(path, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
+    else:
+        img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
 
     # cvtColor
     if len(img.shape) == 3: # ignore if gray scale
