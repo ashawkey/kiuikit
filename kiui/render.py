@@ -12,6 +12,7 @@ GUI_AVAILABLE = True
 try:
     import dearpygui.dearpygui as dpg
 except Exception as e:
+    print('[WARN] cannot import dearpygui, assume running with --wogui')
     GUI_AVAILABLE = False
 
 from kiui.mesh import Mesh
