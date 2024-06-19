@@ -30,7 +30,7 @@ elif PML_VER.startswith('2022.2'):
 
 
 def decimate_mesh(
-    verts, faces, target=5e4, backend="pymeshlab", remesh=False, optimalplacement=True
+    verts, faces, target=5e4, backend="pymeshlab", remesh=False, optimalplacement=True, verbose=True
 ):
     """ perform mesh decimation.
 
@@ -41,6 +41,7 @@ def decimate_mesh(
         backend (str, optional): algorithm backend, can be "pymeshlab" or "pyfqmr". Defaults to "pymeshlab".
         remesh (bool, optional): whether to remesh after decimation. Defaults to False.
         optimalplacement (bool, optional): For flat mesh, use False to prevent spikes. Defaults to True.
+        verbose (bool, optional): whether to print the decimation process. Defaults to True.
 
     Returns:
         Tuple[np.ndarray]: vertices and faces after decimation.
@@ -79,7 +80,8 @@ def decimate_mesh(
         verts = m.vertex_matrix()
         faces = m.face_matrix()
 
-    print(f"[INFO] mesh decimation: {_ori_vert_shape} --> {verts.shape}, {_ori_face_shape} --> {faces.shape}")
+    if verbose:
+        print(f"[INFO] mesh decimation: {_ori_vert_shape} --> {verts.shape}, {_ori_face_shape} --> {faces.shape}")
 
     return verts, faces
 
@@ -94,6 +96,7 @@ def clean_mesh(
     remesh=True,
     remesh_size=0.01,
     remesh_iters=3,
+    verbose=True,
 ):
     """ perform mesh cleaning, including floater removal, non manifold repair, and remeshing.
 
@@ -107,6 +110,7 @@ def clean_mesh(
         remesh (bool, optional): whether to perform a remeshing after all cleaning. Defaults to True.
         remesh_size (float, optional): the targeted edge length for remeshing. Defaults to 0.01.
         remesh_iters (int, optional): the iterations of remeshing. Defaults to 3.
+        verbose (bool, optional): whether to print the cleaning process. Defaults to True.
 
     Returns:
         Tuple[np.ndarray]: vertices and faces after decimation.
@@ -157,7 +161,8 @@ def clean_mesh(
     verts = m.vertex_matrix()
     faces = m.face_matrix()
 
-    print(f"[INFO] mesh cleaning: {_ori_vert_shape} --> {verts.shape}, {_ori_face_shape} --> {faces.shape}")
+    if verbose:
+        print(f"[INFO] mesh cleaning: {_ori_vert_shape} --> {verts.shape}, {_ori_face_shape} --> {faces.shape}")
 
     return verts, faces
 
