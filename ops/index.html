@@ -6,11 +6,11 @@
 <link rel="index" title="Index" href="../genindex/" /><link rel="search" title="Search" href="../search/" /><link rel="next" title="Visualization" href="../vis/" /><link rel="prev" title="Utils" href="../utils/" />
 
     <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 7.3.7 and Furo 2024.05.06 -->
-        <title>Operators - kiui 0.2.9 documentation</title>
+        <title>Operators - kiui 0.2.10 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=387cc868" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../_static/design-style.1e8bd061cd6da7fc9cf755528e8ffc24.min.css?v=0a3b3ea7" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=87e54e7c" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=36a5483c" />
     
     
@@ -181,7 +181,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../"><div class="brand">kiui 0.2.9 documentation</div></a>
+      <a href="../"><div class="brand">kiui 0.2.10 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -328,6 +328,26 @@
 <dt class="sig sig-object py" id="kiui.op.safe_normalize">
 <span class="sig-prename descclassname"><span class="pre">kiui.op.</span></span><span class="sig-name descname"><span class="pre">safe_normalize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-20</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span></span></span><a class="reference internal" href="../_modules/kiui/op/#safe_normalize"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.op.safe_normalize" title="Link to this definition">¶</a></dt>
 <dd><p>normalize an array (along the last dim).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<em>Union</em><em>[</em><em>Tensor</em><em>, </em><em>ndarray</em><em>]</em>) – x, […, C]</p></li>
+<li><p><strong>eps</strong> (<em>float</em><em>, </em><em>optional</em>) – eps. Defaults to 1e-20.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>normalized x, […, C]</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Union[Tensor, ndarray]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.op.normalize">
+<span class="sig-prename descclassname"><span class="pre">kiui.op.</span></span><span class="sig-name descname"><span class="pre">normalize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-20</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span></span></span><a class="reference internal" href="../_modules/kiui/op/#normalize"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.op.normalize" title="Link to this definition">¶</a></dt>
+<dd><p>normalize an array (along the last dim). alias of safe_normalize.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -598,6 +618,7 @@
 <li><a class="reference internal" href="#kiui.op.dot"><code class="docutils literal notranslate"><span class="pre">dot()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.op.length"><code class="docutils literal notranslate"><span class="pre">length()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.op.safe_normalize"><code class="docutils literal notranslate"><span class="pre">safe_normalize()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.op.normalize"><code class="docutils literal notranslate"><span class="pre">normalize()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.op.make_divisible"><code class="docutils literal notranslate"><span class="pre">make_divisible()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.op.inverse_sigmoid"><code class="docutils literal notranslate"><span class="pre">inverse_sigmoid()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.op.inverse_softplus"><code class="docutils literal notranslate"><span class="pre">inverse_softplus()</span></code></a></li>
@@ -620,12 +641,12 @@
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=4c327c81"></script>
+</div><script src="../_static/documentation_options.js?v=3ffd9a0a"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=4e2eecee"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>
-    <script src="../_static/design-tabs.js?v=36754332"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
     </body>
 </html>
