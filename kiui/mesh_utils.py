@@ -90,10 +90,10 @@ def clean_mesh(
     verts,
     faces,
     v_pct=1,
-    min_f=64,
-    min_d=20,
+    min_f=0,
+    min_d=0,
     repair=True,
-    remesh=True,
+    remesh=False,
     remesh_size=0.01,
     remesh_iters=3,
     verbose=True,
@@ -104,8 +104,8 @@ def clean_mesh(
         verts (np.ndarray): mesh vertices, float [N, 3]
         faces (np.ndarray): mesh faces, int [M, 3]
         v_pct (int, optional): percentage threshold to merge close vertices. Defaults to 1.
-        min_f (int, optional): maximal number of faces for isolated component to remove. Defaults to 64.
-        min_d (int, optional): maximal diameter percentage of isolated component to remove. Defaults to 20.
+        min_f (int, optional): maximal number of faces for isolated component to remove. Defaults to 0.
+        min_d (int, optional): maximal diameter percentage of isolated component to remove. Defaults to 0.
         repair (bool, optional): whether to repair non-manifold faces (cannot gurantee). Defaults to True.
         remesh (bool, optional): whether to perform a remeshing after all cleaning. Defaults to True.
         remesh_size (float, optional): the targeted edge length for remeshing. Defaults to 0.01.
