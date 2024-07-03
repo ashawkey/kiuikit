@@ -212,8 +212,6 @@ def setup_rendering(args):
 
         refs['node_normal'] = node_normal
 
-    # NOTE: blender cannot render metallic and roughness as image...
-
     ### render engine
     # EEVEE will use OpenGL, CYCLES will use GPU + CUDA/OPTIX
     if bpy.context.scene.render.engine == 'CYCLES':
@@ -252,10 +250,12 @@ def clean_scene_meshes():
             if len(obj.data.vertices) <= 6:
                 bpy.data.objects.remove(obj, do_unlink=True)
 
+
 # remove all animations, which will disturb normalization
 def clear_animation():
     for obj in bpy.data.objects:
         obj.animation_data_clear()
+
 
 def get_calibration_matrix_K_from_blender(camera):
     f_in_mm = camera.data.lens
