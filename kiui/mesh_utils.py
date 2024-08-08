@@ -167,6 +167,22 @@ def clean_mesh(
     return verts, faces
 
 
+def normalize_mesh(vertices, bound=0.95):
+    """ normalize the mesh vertices to a unit cube.
+
+    Args:
+        vertices (np.ndarray): mesh vertices, float [N, 3]
+        bound (float, optional): the bounding box size. Defaults to 0.95.
+    
+    Returns:
+        np.ndarray: normalized vertices.
+    """
+    vmin = vertices.min(0)
+    vmax = vertices.max(0)
+    ori_center = (vmax + vmin) / 2
+    ori_scale = 2 * bound / np.max(vmax - vmin)
+    vertices = (vertices - ori_center) * ori_scale
+    return vertices
 
 ### mesh related losses
 

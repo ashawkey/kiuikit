@@ -32,7 +32,7 @@ if __name__ == "__main__":
         ],
         extras_require={
             "full": [
-                "torch",
+                # "torch", # install separately!
                 "tqdm",
                 "rich",
                 "numpy",
@@ -52,6 +52,7 @@ if __name__ == "__main__":
                 'pymeshlab',
                 'huggingface_hub',
                 'PyMCubes',
+                "fbxloader",
             ],
         },
     )

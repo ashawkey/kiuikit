@@ -91,9 +91,12 @@ class Mesh:
         Returns:
             Mesh: the loaded Mesh object.
         """
-        # obj supports face uv
+        # obj supports face uv, use our own loader for better compatibility
         if path.endswith(".obj"):
             mesh = cls.load_obj(path, **kwargs)
+        # fbx only supports geometry
+        elif path.endswith(".fbx"):
+            mesh = cls.load_fbx(path, **kwargs)
         # trimesh only supports vertex uv, but can load more formats
         else:
             mesh = cls.load_trimesh(path, **kwargs)
@@ -150,6 +153,40 @@ class Mesh:
 
         return mesh
 
+    # load from fbx file
+    @classmethod
+    def load_fbx(cls, path, device=None):
+        """load an ``fbx`` mesh.
+
+        Args:
+            path (str): path to mesh.
+            device (torch.device, optional): torch device. Defaults to None.
+        
+        Note:
+            We only support loading geometry without texture. Please see [fbxloader](https://github.com/ashawkey/fbxloader) for more details and limitations.
+        
+        Returns:
+            Mesh: the loaded Mesh object.
+        """
+        assert os.path.splitext(path)[-1].lower() == ".fbx"
+        from fbxloader import FBXLoader
+
+        fbx = FBXLoader(path) # load from file or bytes
+        _mesh = fbx.export_trimesh()
+
+        mesh = cls()
+
+        # device
+        if device is None:
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        mesh.device = device
+        mesh.v = torch.tensor(_mesh.vertices, dtype=torch.float32, device=device)
+        mesh.f = torch.tensor(_mesh.faces, dtype=torch.int32, device=device)
+
+        return mesh
+        
+
     # load from obj file
     @classmethod
     def load_obj(cls, path, wotex=False, albedo_path=None, device=None):
@@ -168,7 +205,7 @@ class Mesh:
         Returns:
             Mesh: the loaded Mesh object.
         """
-        assert os.path.splitext(path)[-1] == ".obj"
+        assert os.path.splitext(path)[-1].lower() == ".obj"
 
         mesh = cls()
 
