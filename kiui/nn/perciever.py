@@ -11,7 +11,7 @@ from typing import Tuple, Literal
 from functools import partial
 from torch.utils.checkpoint import checkpoint
 
-from kiui.nn.attention import MemEffAttention, MemEffCrossAttention
+from kiui.nn.attention_xformers import MemEffAttention, MemEffCrossAttention
 
 class GEGLU(nn.Module):
     def __init__(self, in_channels, out_channels):

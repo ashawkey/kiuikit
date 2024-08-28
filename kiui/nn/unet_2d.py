@@ -6,7 +6,7 @@ import numpy as np
 from typing import Tuple, Literal
 from functools import partial
 
-from kiui.nn.attention import MemEffAttention
+from kiui.nn.attention_xformers import MemEffAttention
 
 class ImageAttention(nn.Module):
     def __init__(

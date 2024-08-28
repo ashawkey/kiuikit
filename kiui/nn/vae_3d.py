@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
 from kiui.typing import *
-from kiui.nn.attention import MemEffAttention
+from kiui.nn.attention_xformers import MemEffAttention
 
 class VolumeAttention(nn.Module):
     def __init__(

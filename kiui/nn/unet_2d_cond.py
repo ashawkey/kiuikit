@@ -8,7 +8,7 @@ from typing import Tuple, Literal
 from functools import partial
 from torch.utils.checkpoint import checkpoint
 
-from kiui.nn.attention import MemEffAttention, MemEffCrossAttention
+from kiui.nn.attention_xformers import MemEffAttention, MemEffCrossAttention
 
 class Timesteps(nn.Module):
     def __init__(self, num_channels: int = 320):
