@@ -70,7 +70,7 @@ class Mesh:
         return out
 
     @classmethod
-    def load(cls, path, resize=True, clean=False, renormal=True, retex=False, bound=0.9, front_dir='+z', **kwargs):
+    def load(cls, path, resize=True, clean=False, renormal=True, retex=False, vmap=True, bound=0.9, front_dir='+z', **kwargs):
         """load mesh from path.
 
         Args:
@@ -79,6 +79,7 @@ class Mesh:
             resize (bool, optional): auto resize the mesh using ``bound`` into [-bound, bound]^3. Defaults to True.
             renormal (bool, optional): re-calc the vertex normals. Defaults to True.
             retex (bool, optional): re-calc the uv coordinates, will overwrite the existing uv coordinates. Defaults to False.
+            vmap (bool, optional):  remap vertices based on uv coordinates, so each v correspond to a unique vt. Defaults to True. 
             wotex (bool, optional): do not try to load any texture. Defaults to False.
             bound (float, optional): bound to resize. Defaults to 0.9.
             front_dir (str, optional): front-view direction of the mesh, should be [+-][xyz][ 123]. Defaults to '+z'.
@@ -120,9 +121,10 @@ class Mesh:
             mesh.auto_normal()
         print(f"[INFO] load mesh, vn: {mesh.vn.shape}, fn: {mesh.fn.shape}")
 
-        # auto-fix texcoords
+        # auto-fix texcoords 
         if retex:
-            mesh.auto_uv(cache_path=path)
+            mesh.auto_uv(cache_path=path, vmap=vmap) 
+        
         if mesh.vt is not None:
             print(f"[INFO] load mesh, vt: {mesh.vt.shape}, ft: {mesh.ft.shape}")
 
@@ -364,7 +366,7 @@ class Mesh:
         return mesh
 
     @classmethod
-    def load_trimesh(cls, path, wotex=False, device=None):
+    def load_trimesh(cls, path, wotex=False, device=None, process=False):
         """load a mesh using ``trimesh.load()``.
 
         Can load various formats like ``glb`` and serves as a fallback.
@@ -390,7 +392,7 @@ class Mesh:
         mesh.device = device
 
         # use trimesh to load ply/glb
-        _data = trimesh.load(path)
+        _data = trimesh.load(path, process=process)
         # always convert scene to mesh, and apply all transforms...
         if isinstance(_data, trimesh.Scene):
             print(f"[INFO] load trimesh: concatenating {len(_data.geometry)} meshes.")
@@ -933,4 +935,3 @@ class Mesh:
             metallicRoughness = (metallicRoughness * 255).astype(np.uint8)
             cv2.imwrite(metallic_path, metallicRoughness[..., 2])
             cv2.imwrite(roughness_path, metallicRoughness[..., 1])
-
