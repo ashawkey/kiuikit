@@ -5,12 +5,12 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex/" /><link rel="search" title="Search" href="../search/" /><link rel="next" title="Operators" href="../ops/" /><link rel="prev" title="Camera" href="../camera/" />
 
-    <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 7.4.7 and Furo 2024.07.18 -->
-        <title>Utils - kiui 0.2.10 documentation</title>
+    <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 8.0.2 and Furo 2024.08.06 -->
+        <title>Utils - kiui 0.2.12 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
-    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=613ab9ff" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=87e54e7c" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
     
     
@@ -168,7 +168,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../"><div class="brand">kiui 0.2.10 documentation</div></a>
+      <a href="../"><div class="brand">kiui 0.2.12 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -279,208 +279,8 @@ All of the functions can be imported from <code class="docutils literal notransl
 </pre></div>
 </div>
 </section>
-<section id="module-kiui.utils">
-<span id="api"></span><h2>API<a class="headerlink" href="#module-kiui.utils" title="Link to this heading">¶</a></h2>
-<dl class="py function">
-<dt class="sig sig-object py" id="kiui.utils.lo">
-<span class="sig-prename descclassname"><span class="pre">kiui.utils.</span></span><span class="sig-name descname"><span class="pre">lo</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">xs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/utils/#lo"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.utils.lo" title="Link to this definition">¶</a></dt>
-<dd><p>inspect array like objects and report statistics.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>xs</strong> (<em>Any</em>) – array like objects to inspect.</p></li>
-<li><p><strong>verbose</strong> (<em>int</em><em>, </em><em>optional</em>) – level of verbosity, set to 1 to report mean and std, 2 to print the content. Defaults to 0.</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="kiui.utils.seed_everything">
-<span class="sig-prename descclassname"><span class="pre">kiui.utils.</span></span><span class="sig-name descname"><span class="pre">seed_everything</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">42</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">strict</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/utils/#seed_everything"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.utils.seed_everything" title="Link to this definition">¶</a></dt>
-<dd><p>auto set seed for random, numpy and torch.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>seed</strong> (<em>int</em><em>, </em><em>optional</em>) – random seed. Defaults to 42.</p></li>
-<li><p><strong>verbose</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether to report each seed setting. Defaults to False.</p></li>
-<li><p><strong>strict</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether to use strict deterministic mode for better torch reproduction. Defaults to False.</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="kiui.utils.read_json">
-<span class="sig-prename descclassname"><span class="pre">kiui.utils.</span></span><span class="sig-name descname"><span class="pre">read_json</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/utils/#read_json"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.utils.read_json" title="Link to this definition">¶</a></dt>
-<dd><p>load a json file.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>path</strong> (<em>str</em>) – path to json file.</p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>json content.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>dict</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="kiui.utils.write_json">
-<span class="sig-prename descclassname"><span class="pre">kiui.utils.</span></span><span class="sig-name descname"><span class="pre">write_json</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/utils/#write_json"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.utils.write_json" title="Link to this definition">¶</a></dt>
-<dd><p>write a json file.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>path</strong> (<em>str</em>) – path to write json file.</p></li>
-<li><p><strong>x</strong> (<em>dict</em>) – dict to write.</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="kiui.utils.read_pickle">
-<span class="sig-prename descclassname"><span class="pre">kiui.utils.</span></span><span class="sig-name descname"><span class="pre">read_pickle</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/utils/#read_pickle"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.utils.read_pickle" title="Link to this definition">¶</a></dt>
-<dd><p>read a pickle file.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>path</strong> (<em>str</em>) – path to pickle file.</p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>pickle content.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Any</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="kiui.utils.write_pickle">
-<span class="sig-prename descclassname"><span class="pre">kiui.utils.</span></span><span class="sig-name descname"><span class="pre">write_pickle</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/utils/#write_pickle"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.utils.write_pickle" title="Link to this definition">¶</a></dt>
-<dd><p>write a pickle file.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>path</strong> (<em>str</em>) – path to write pickle file.</p></li>
-<li><p><strong>x</strong> (<em>Any</em>) – content to write.</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="kiui.utils.read_image">
-<span class="sig-prename descclassname"><span class="pre">kiui.utils.</span></span><span class="sig-name descname"><span class="pre">read_image</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">‘float’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘uint8’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘pil’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘torch’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘tensor’</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'float'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">‘RGB’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘RGBA’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘BGR’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘BGRA’</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'RGB'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/utils/#read_image"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.utils.read_image" title="Link to this definition">¶</a></dt>
-<dd><p>read an image file into various formats and color mode.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>path</strong> (<em>str</em>) – path to the image file.</p></li>
-<li><p><strong>mode</strong> (<em>Literal</em><em>[</em><em>“float”</em><em>, </em><em>“uint8”</em><em>, </em><em>“pil”</em><em>, </em><em>“torch”</em><em>, </em><em>“tensor”</em><em>]</em><em>, </em><em>optional</em>) – returned image format. Defaults to “float”.
-float: float32 numpy array, range [0, 1];
-uint8: uint8 numpy array, range [0, 255];
-pil: PIL image;
-torch/tensor: float32 torch tensor, range [0, 1];</p></li>
-<li><p><strong>order</strong> (<em>Literal</em><em>[</em><em>“RGB”</em><em>, </em><em>“RGBA”</em><em>, </em><em>“BGR”</em><em>, </em><em>“BGRA”</em><em>]</em><em>, </em><em>optional</em>) – channel order. Defaults to “RGB”.</p></li>
-</ul>
-</dd>
-</dl>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>By default this function will convert RGBA image to white-background RGB image. Use <code class="docutils literal notranslate"><span class="pre">order=&quot;RGBA&quot;</span></code> to keep the alpha channel.</p>
-</div>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>the image array.</p>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>Union[np.ndarray, PIL.Image, torch.Tensor]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="kiui.utils.write_image">
-<span class="sig-prename descclassname"><span class="pre">kiui.utils.</span></span><span class="sig-name descname"><span class="pre">write_image</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">img</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">‘RGB’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘BGR’</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'RGB'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/utils/#write_image"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.utils.write_image" title="Link to this definition">¶</a></dt>
-<dd><p>write an image to various formats.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>path</strong> (<em>str</em>) – path to write the image file.</p></li>
-<li><p><strong>img</strong> (<em>Union</em><em>[</em><em>torch.Tensor</em><em>, </em><em>np.ndarray</em><em>, </em><em>PIL.Image.Image</em><em>]</em>) – image to write.</p></li>
-<li><p><strong>order</strong> (<em>str</em><em>, </em><em>optional</em>) – channel order. Defaults to “RGB”.</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="kiui.utils.load_file_from_url">
-<span class="sig-prename descclassname"><span class="pre">kiui.utils.</span></span><span class="sig-name descname"><span class="pre">load_file_from_url</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">url</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">progress</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/utils/#load_file_from_url"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.utils.load_file_from_url" title="Link to this definition">¶</a></dt>
-<dd><p>Load file form http url, will download models if necessary.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>url</strong> (<em>str</em>) – URL to be downloaded.</p></li>
-<li><p><strong>model_dir</strong> (<em>str</em>) – The path to save the downloaded model. Should be a full path. If None, use pytorch hub_dir.
-Default: None.</p></li>
-<li><p><strong>progress</strong> (<em>bool</em>) – Whether to show the download progress. Default: True.</p></li>
-<li><p><strong>file_name</strong> (<em>str</em>) – The downloaded file name. If None, use the file name in the url. Default: None.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The path to the downloaded file.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>str</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="kiui.utils.is_format">
-<span class="sig-prename descclassname"><span class="pre">kiui.utils.</span></span><span class="sig-name descname"><span class="pre">is_format</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">f</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/utils/#is_format"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.utils.is_format" title="Link to this definition">¶</a></dt>
-<dd><p>if a file’s extension is in a set of format</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>f</strong> (<em>str</em>) – file name.</p></li>
-<li><p><strong>format</strong> (<em>Sequence</em><em>[</em><em>str</em><em>]</em>) – set of extensions (both ‘.jpg’ or ‘jpg’ is ok).</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>if the file’s extension is in the set.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>bool</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="kiui.utils.batch_process_files">
-<span class="sig-prename descclassname"><span class="pre">kiui.utils.</span></span><span class="sig-name descname"><span class="pre">batch_process_files</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">process_fn</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">out_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">overwrite</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">in_format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">['.jpg',</span> <span class="pre">'.jpeg',</span> <span class="pre">'.png']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">out_format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">image_mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'uint8'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">image_color_order</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'RGB'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/utils/#batch_process_files"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.utils.batch_process_files" title="Link to this definition">¶</a></dt>
-<dd><p>simple function wrapper to batch processing files.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>process_fn</strong> (<em>Callable</em>) – process function.</p></li>
-<li><p><strong>path</strong> (<em>str</em>) – path to a file or a directory containing the files to process.</p></li>
-<li><p><strong>out_path</strong> (<em>str</em>) – output path of a file or a directory.</p></li>
-<li><p><strong>overwrite</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether to overwrite existing results. Defaults to False.</p></li>
-<li><p><strong>in_format</strong> (<em>list</em><em>, </em><em>optional</em>) – input file formats. Defaults to [“.jpg”, “.jpeg”, “.png”].</p></li>
-<li><p><strong>out_format</strong> (<em>str</em><em>, </em><em>optional</em>) – output file format. Defaults to None.</p></li>
-<li><p><strong>image_mode</strong> (<em>str</em><em>, </em><em>optional</em>) – for images, the mode to read. Defaults to ‘uint8’.</p></li>
-<li><p><strong>image_color_order</strong> (<em>str</em><em>, </em><em>optional</em>) – for images, the color order. Defaults to “RGB”.</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
+<section id="api">
+<h2>API<a class="headerlink" href="#api" title="Link to this heading">¶</a></h2>
 </section>
 </section>
 
@@ -541,20 +341,7 @@ Default: None.</p></li>
             <ul>
 <li><a class="reference internal" href="#">Utils</a><ul>
 <li><a class="reference internal" href="#examples">Examples</a></li>
-<li><a class="reference internal" href="#module-kiui.utils">API</a><ul>
-<li><a class="reference internal" href="#kiui.utils.lo"><code class="docutils literal notranslate"><span class="pre">lo()</span></code></a></li>
-<li><a class="reference internal" href="#kiui.utils.seed_everything"><code class="docutils literal notranslate"><span class="pre">seed_everything()</span></code></a></li>
-<li><a class="reference internal" href="#kiui.utils.read_json"><code class="docutils literal notranslate"><span class="pre">read_json()</span></code></a></li>
-<li><a class="reference internal" href="#kiui.utils.write_json"><code class="docutils literal notranslate"><span class="pre">write_json()</span></code></a></li>
-<li><a class="reference internal" href="#kiui.utils.read_pickle"><code class="docutils literal notranslate"><span class="pre">read_pickle()</span></code></a></li>
-<li><a class="reference internal" href="#kiui.utils.write_pickle"><code class="docutils literal notranslate"><span class="pre">write_pickle()</span></code></a></li>
-<li><a class="reference internal" href="#kiui.utils.read_image"><code class="docutils literal notranslate"><span class="pre">read_image()</span></code></a></li>
-<li><a class="reference internal" href="#kiui.utils.write_image"><code class="docutils literal notranslate"><span class="pre">write_image()</span></code></a></li>
-<li><a class="reference internal" href="#kiui.utils.load_file_from_url"><code class="docutils literal notranslate"><span class="pre">load_file_from_url()</span></code></a></li>
-<li><a class="reference internal" href="#kiui.utils.is_format"><code class="docutils literal notranslate"><span class="pre">is_format()</span></code></a></li>
-<li><a class="reference internal" href="#kiui.utils.batch_process_files"><code class="docutils literal notranslate"><span class="pre">batch_process_files()</span></code></a></li>
-</ul>
-</li>
+<li><a class="reference internal" href="#api">API</a></li>
 </ul>
 </li>
 </ul>
@@ -566,7 +353,7 @@ Default: None.</p></li>
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=3ffd9a0a"></script>
+</div><script src="../_static/documentation_options.js?v=1a71e23e"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=5fa4622c"></script>
