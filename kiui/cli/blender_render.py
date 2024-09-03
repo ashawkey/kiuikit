@@ -291,10 +291,14 @@ def get_calibration_matrix_K_from_blender(camera):
 
 
 def load_object(mesh):
-    if mesh.endswith(".glb"):
+    if mesh.lower().endswith(".glb"):
         bpy.ops.import_scene.gltf(filepath=mesh, merge_vertices=True)
-    elif mesh.endswith(".fbx"):
+    elif mesh.lower().endswith(".fbx"):
         bpy.ops.import_scene.fbx(filepath=mesh)
+    elif mesh.lower().endswith(".obj"):
+        bpy.ops.wm.obj_import(filepath=mesh)
+    elif mesh.lower().endswith(".ply"):
+        bpy.ops.wm.ply_import(filepath=mesh)
     else:
         raise ValueError(f"Unsupported file type: {mesh}")
 
@@ -342,6 +346,57 @@ def normalize_scene(bound=0.9):
         obj.matrix_world.translation += offset
     bpy.ops.object.select_all(action="DESELECT")
 
+MAT_ID = 0
+
+def create_simple_material(color, mat_name=None):
+    global MAT_ID
+
+    if mat_name is None:
+        mat_name = f"assigned_mat_{MAT_ID:06d}"
+        MAT_ID += 1
+
+    mat = bpy.data.materials.new(mat_name)
+    mat.use_nodes = True
+    tree = mat.node_tree
+
+    # set principled BSDF
+    tree.nodes["Principled BSDF"].inputs['Base Color'].default_value = color
+    tree.nodes["Principled BSDF"].inputs['Roughness'].default_value = 0.3
+    tree.nodes["Principled BSDF"].inputs['Sheen Tint'].default_value = [0, 0, 0, 1]
+    tree.nodes["Principled BSDF"].inputs['Specular IOR Level'].default_value = 0.5
+    tree.nodes["Principled BSDF"].inputs['IOR'].default_value = 1.45
+    tree.nodes["Principled BSDF"].inputs['Transmission Weight'].default_value = 0
+    tree.nodes["Principled BSDF"].inputs['Coat Roughness'].default_value = 0
+
+    return mat
+
+# enable wireframe rendering
+# parameters are hard-coded for now
+def enable_wireframe():
+    for obj in bpy.data.objects:
+        if obj.type == 'MESH':
+            bpy.context.view_layer.objects.active = obj
+            bpy.ops.object.modifier_add(type='WIREFRAME')
+            bpy.context.object.modifiers["Wireframe"].use_replace = False # do not replace the original mesh
+            bpy.context.object.modifiers["Wireframe"].thickness = 0.01 # thickness of wireframe
+            bpy.context.object.modifiers["Wireframe"].use_even_offset = True # even thickness
+            # use a different color for surface and wireframe
+            surface_mat = create_simple_material((0.20, 0.50, 1, 1), mat_name="surface_mat") # blue surface, color is a tuple of 4 float (in [0, 1])
+            obj.data.materials.append(surface_mat) # 0, default material for surface
+            wireframe_mat = create_simple_material((1, 1, 1, 1), mat_name="wireframe_mat") # white wireframe
+            obj.data.materials.append(wireframe_mat) # 1
+            bpy.context.object.modifiers["Wireframe"].material_offset = 1
+
+
+def disable_wireframe():
+    for obj in bpy.data.objects:
+        if obj.type == 'MESH':
+            bpy.context.view_layer.objects.active = obj
+            try:
+                bpy.ops.object.modifier_remove(modifier="Wireframe")
+            except:
+                pass
+
 
 def main(args):
 
@@ -364,11 +419,17 @@ def main(args):
     clear_animation()
     normalize_scene(bound=args.bound)
 
-    # load random hdri
-    hdri_paths = glob.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../assets/blender_lights/*.exr'))
-    random_hdri_path = random.choice(hdri_paths)
-    print(f'[INFO] using hdri: {random_hdri_path}')
-    refs['node_hdri'].image = bpy.data.images.load(random_hdri_path)
+    # load random hdri if not specified
+    if args.hdri_path is None:
+        hdri_paths = glob.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../assets/blender_lights/*.exr'))
+        args.hdri_path = random.choice(hdri_paths)
+    
+    print(f'[INFO] using hdri: {args.hdri_path}')
+    refs['node_hdri'].image = bpy.data.images.load(args.hdri_path)
+
+    # enable wireframe rendering
+    if args.wireframe:
+        enable_wireframe()
 
     # orbit camera
     cam.data.angle = np.deg2rad(args.fovy)
@@ -460,7 +521,9 @@ if __name__ == "__main__":
     parser.add_argument('--overwrite', action='store_true')
 
     # rendering parameters
-    parser.add_argument("--resolution", type=int, default=512)
+    parser.add_argument("--resolution", type=int, default=1024)
+    parser.add_argument("--hdri_path", type=str, default=None, help='path to hdri (exr), if not provided, random hdri will be used')
+    parser.add_argument("--wireframe", action='store_true', help='enable wireframe rendering')
     parser.add_argument("--bound", type=float, default=0.9)
     parser.add_argument("--radius", type=float, default=4.5)
     parser.add_argument("--fovy", type=float, default=30)
