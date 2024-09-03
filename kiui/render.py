@@ -57,6 +57,8 @@ class GUI:
 
         # display wireframe
         self.show_wire = False
+        self.wire_width = 0.01
+        self.wire_color = np.array([0, 0, 0], dtype=np.float32)
 
         # load pbr if enabled
         if self.opt.pbr:
@@ -191,8 +193,8 @@ class GUI:
             v = rast[..., 1] # [1, h, w]
             w = 1 - u - v
             mask = rast[..., 2]
-            near_edge = (((w < 0.01) | (u < 0.01) | (v < 0.01)) & (mask > 0))[0].detach().cpu().numpy() # [h, w]
-            buffer[near_edge] = np.array([0, 0, 0], dtype=np.float32) # black wire
+            near_edge = (((w < self.wire_width) | (u < self.wire_width) | (v < self.wire_width)) & (mask > 0))[0].detach().cpu().numpy() # [h, w]
+            buffer[near_edge] = self.wire_color
         
         # ssaa rescale
         if H != self.H or W != self.W:
@@ -269,12 +271,27 @@ class GUI:
 
                 dpg.add_checkbox(label="wireframe", tag="_checkbox_wire", default_value=self.show_wire, callback=callback_toggle_wireframe)
 
+                # wireframe width
+                def callback_set_wire_width(sender, app_data):
+                    self.wire_width = app_data
+                    self.need_update = True
+
+                dpg.add_slider_float(label="wireframe width", min_value=0, max_value=1.0, format="%.5f", default_value=self.wire_width, callback=callback_set_wire_width)
+
+                # wire_color picker
+                def callback_change_wire_color(sender, app_data):
+                    self.wire_color = np.array(app_data[:3], dtype=np.float32)
+                    self.need_update = True
+                
+                dpg.add_color_edit((0, 0, 0), label="Wireframe Color", width=200, no_alpha=True, callback=callback_change_wire_color)
+
+
                 # bg_color picker
                 def callback_change_bg(sender, app_data):
                     self.bg_color = torch.tensor(app_data[:3], dtype=torch.float32).cuda() # only need RGB in [0, 1]
                     self.need_update = True
                 
-                dpg.add_color_edit((255, 255, 255), label="Background Color", width=200, tag="_color_editor", no_alpha=True, callback=callback_change_bg)
+                dpg.add_color_edit((255, 255, 255), label="Background Color", width=200, no_alpha=True, callback=callback_change_bg)
 
                 # fov slider
                 def callback_set_fovy(sender, app_data):
@@ -426,10 +443,27 @@ def main():
     parser.add_argument('--elevation', type=int, default=0, help="rendering elevation")
     parser.add_argument('--num_azimuth', type=int, default=8, help="number of images to render from different azimuths")
     parser.add_argument('--save_video', type=str, default=None, help="path to save rendered video")
+    parser.add_argument('--preset_wire', action='store_true', help="use preset for emphasizing white wireframe on blue material")
 
     opt = parser.parse_args()
 
     gui = GUI(opt)
+
+    if opt.preset_wire:
+        assert opt.pbr, "preset wireframe only works with PBR material"
+        gui.show_wire = True
+        gui.wire_width = 0.05
+        gui.wire_color = np.array([1, 1, 1], dtype=np.float32)
+        gui.mode = 'pbr'
+        gui.metallic_factor = 1
+        gui.roughness_factor = 0.5
+        if gui.mesh.albedo is not None:
+            gui.mesh.albedo = torch.ones_like(gui.mesh.albedo) * torch.tensor([0.36, 0.63, 1.00], dtype=torch.float32, device=gui.mesh.albedo.device)
+        else:
+            gui.mesh.vc = torch.ones_like(gui.mesh.v) * torch.tensor([0.36, 0.63, 1.00], dtype=torch.float32, device=gui.mesh.v.device)
+        gui.need_update = True
+        gui.step()
+
 
     if opt.save is not None:
         os.makedirs(opt.save, exist_ok=True)

@@ -53,6 +53,7 @@ if __name__ == "__main__":
                 'huggingface_hub',
                 'PyMCubes',
                 "fbxloader",
+                "envlight",
             ],
         },
     )
