@@ -935,3 +935,17 @@ class Mesh:
             metallicRoughness = (metallicRoughness * 255).astype(np.uint8)
             cv2.imwrite(metallic_path, metallicRoughness[..., 2])
             cv2.imwrite(roughness_path, metallicRoughness[..., 1])
+
+    def clone(self):
+        """clone the mesh.
+
+        Returns:
+            Mesh: the cloned Mesh object.
+        """
+        mesh = Mesh()
+        mesh.device = self.device
+        for name in ["v", "f", "vn", "fn", "vt", "ft", "vc", "albedo", "metallicRoughness"]:
+            tensor = getattr(self, name)
+            if tensor is not None:
+                setattr(mesh, name, tensor.clone())
+        return mesh
