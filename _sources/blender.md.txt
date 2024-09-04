@@ -15,7 +15,12 @@ python -m kiui.cli.blender_render --help
 
 # example
 python -m kiui.cli.blender_render --mesh chest.glb --gpu 0 --depth --normal --albedo --camera --blend
+
+# example with wireframe
+python -m kiui.cli.blender_render --mesh chest.glb --wireframe
 ```
+
+The code has many things hard-coded to avoid complex configs (e.g., camera position, wire frame color and width). Since there is no other dependency, you could copy and modify this single file to your own project.
 
 Features include:
 * Set which GPU to use with `--gpu 0` for `CYCLES` rendering engine.
@@ -23,3 +28,4 @@ Features include:
 * Empirical cleaning of the scene (remove the annoying plane under the object).
 * Optionally render depth (`exr`), normal.
 * Optionally render PBR (albedo, metallic, roughness).
+* Render wireframe.

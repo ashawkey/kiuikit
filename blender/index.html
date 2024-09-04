@@ -6,7 +6,7 @@
 <link rel="index" title="Index" href="../genindex/" /><link rel="search" title="Search" href="../search/" /><link rel="next" title="Remesh" href="../remesh/" /><link rel="prev" title="Mesh Renderer" href="../render/" />
 
     <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 8.0.2 and Furo 2024.08.06 -->
-        <title>Blender Scripts - kiui 0.2.12 documentation</title>
+        <title>Blender Scripts - kiui 0.2.13 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -168,7 +168,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../"><div class="brand">kiui 0.2.12 documentation</div></a>
+      <a href="../"><div class="brand">kiui 0.2.13 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -279,8 +279,12 @@ python<span class="w"> </span>-m<span class="w"> </span>kiui.cli.blender_render<
 
 <span class="c1"># example</span>
 python<span class="w"> </span>-m<span class="w"> </span>kiui.cli.blender_render<span class="w"> </span>--mesh<span class="w"> </span>chest.glb<span class="w"> </span>--gpu<span class="w"> </span><span class="m">0</span><span class="w"> </span>--depth<span class="w"> </span>--normal<span class="w"> </span>--albedo<span class="w"> </span>--camera<span class="w"> </span>--blend
+
+<span class="c1"># example with wireframe</span>
+python<span class="w"> </span>-m<span class="w"> </span>kiui.cli.blender_render<span class="w"> </span>--mesh<span class="w"> </span>chest.glb<span class="w"> </span>--wireframe
 </pre></div>
 </div>
+<p>The code has many things hard-coded to avoid complex configs (e.g., camera position, wire frame color and width). Since there is no other dependency, you could copy and modify this single file to your own project.</p>
 <p>Features include:</p>
 <ul class="simple">
 <li><p>Set which GPU to use with <code class="docutils literal notranslate"><span class="pre">--gpu</span> <span class="pre">0</span></code> for <code class="docutils literal notranslate"><span class="pre">CYCLES</span></code> rendering engine.</p></li>
@@ -288,6 +292,7 @@ python<span class="w"> </span>-m<span class="w"> </span>kiui.cli.blender_render<
 <li><p>Empirical cleaning of the scene (remove the annoying plane under the object).</p></li>
 <li><p>Optionally render depth (<code class="docutils literal notranslate"><span class="pre">exr</span></code>), normal.</p></li>
 <li><p>Optionally render PBR (albedo, metallic, roughness).</p></li>
+<li><p>Render wireframe.</p></li>
 </ul>
 </section>
 
@@ -340,7 +345,7 @@ python<span class="w"> </span>-m<span class="w"> </span>kiui.cli.blender_render<
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=1a71e23e"></script>
+</div><script src="../_static/documentation_options.js?v=08b7de24"></script>
     <script src="../_static/doctools.js?v=9a2dae69"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=5fa4622c"></script>

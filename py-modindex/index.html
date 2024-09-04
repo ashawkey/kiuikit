@@ -2,12 +2,10 @@
 <html class="no-js" lang="en" data-content_root="../">
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex/" /><link rel="search" title="Search" href="../search/" /><link rel="prev" title="Remesh" href="../remesh/" />
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../genindex/" /><link rel="search" title="Search" href="../search/" />
 
-    <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 8.0.2 and Furo 2024.08.06 -->
-        <title>Misc CLI - kiui 0.2.13 documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+    <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 8.0.2 and Furo 2024.08.06 --><title>Python Module Index - kiui 0.2.13 documentation</title>
+<link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -180,7 +178,7 @@
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
         <div class="visually-hidden">Toggle table of contents sidebar</div>
         <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
       </label>
@@ -221,11 +219,11 @@
 <li class="toctree-l1"><a class="reference internal" href="../misc_api/">Misc API</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tool</span></p>
-<ul class="current">
+<ul>
 <li class="toctree-l1"><a class="reference internal" href="../render/">Mesh Renderer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../blender/">Blender Scripts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../remesh/">Remesh</a></li>
-<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Misc CLI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../misc_cli/">Misc CLI</a></li>
 </ul>
 
 </div>
@@ -245,13 +243,7 @@
           <span>Back to top</span>
         </a>
         <div class="content-icon-container">
-          <div class="view-this-page">
-  <a class="muted-link" href="../_sources/misc_cli.md.txt" title="View this page">
-    <svg><use href="#svg-eye"></use></svg>
-    <span class="visually-hidden">View this page</span>
-  </a>
-</div>
-<div class="theme-toggle-container theme-toggle-content">
+          <div class="theme-toggle-container theme-toggle-content">
             <button class="theme-toggle">
               <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
               <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
@@ -260,63 +252,68 @@
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
             <div class="visually-hidden">Toggle table of contents sidebar</div>
             <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="misc-cli">
-<h1>Misc CLI<a class="headerlink" href="#misc-cli" title="Link to this heading">¶</a></h1>
-<p><a class="reference external" href="https://github.com/ashawkey/kiuikit/blob/main/kiui/cli/">[source]</a></p>
-<p>Misceallaneous command line interfaces.</p>
-<section id="usage">
-<h2>Usage<a class="headerlink" href="#usage" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># background removal utils</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">bg</span> <span class="o">--</span><span class="n">help</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">bg</span> <span class="nb">input</span><span class="o">.</span><span class="n">png</span> <span class="n">output</span><span class="o">.</span><span class="n">png</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">bg</span> <span class="n">input_folder</span> <span class="n">output_folder</span>
-
-<span class="c1"># openpose detector</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">pose</span> <span class="o">--</span><span class="n">help</span>
-
-<span class="c1"># blip2 image captioning</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">blip</span> <span class="o">--</span><span class="n">help</span>
-
-<span class="c1"># hed edge detector</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">hed</span> <span class="o">--</span><span class="n">help</span>
-
-<span class="c1"># zoe depth estimation (extra dep: pip install timm==0.6.11)</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">depth_zoe</span> <span class="o">--</span><span class="n">help</span>
-
-<span class="c1"># midas depth estimation (dpt-large)</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">depth_midas</span> <span class="o">--</span><span class="n">help</span>
-
-<span class="c1"># sr (Real-ESRGAN from https://github.com/ai-forever/Real-ESRGAN/tree/main)</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">sr</span> <span class="o">--</span><span class="n">help</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">sr</span> <span class="n">image</span><span class="o">.</span><span class="n">jpg</span> <span class="o">--</span><span class="n">scale</span> <span class="mi">2</span> <span class="c1"># save to image_2x.jpg</span>
-<span class="n">kisr</span> <span class="n">image</span><span class="o">.</span><span class="n">jpg</span> <span class="o">--</span><span class="n">scale</span> <span class="mi">2</span> <span class="c1"># short cut cmd</span>
-
-<span class="c1"># made-in-heaven timer (https://github.com/ashawkey/made-in-heaven-timer)</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">timer</span> <span class="o">--</span><span class="n">help</span>
-
-<span class="c1"># mesh format conversion (only for a single textured mesh in obj/glb)</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">convert</span> <span class="nb">input</span><span class="o">.</span><span class="n">obj</span> <span class="n">output</span><span class="o">.</span><span class="n">glb</span>
-<span class="n">kico</span> <span class="nb">input</span><span class="o">.</span><span class="n">obj</span> <span class="n">output</span><span class="o">.</span><span class="n">glb</span> <span class="c1"># short cut cmd</span>
-<span class="n">kico</span> <span class="n">mesh_folder</span><span class="o">/</span> <span class="n">video_folder</span> <span class="o">--</span><span class="n">fmt</span> <span class="o">.</span><span class="n">mp4</span> <span class="c1"># render all meshes into rotating videos</span>
-
-<span class="c1"># aesthetic predictor v2 (https://github.com/christophschuhmann/improved-aesthetic-predictor)</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">aes</span> <span class="o">--</span><span class="n">help</span>
-
-<span class="c1"># compare content of two directories</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">dircmp</span> <span class="o">&lt;</span><span class="n">dir1</span><span class="o">&gt;</span> <span class="o">&lt;</span><span class="n">dir2</span><span class="o">&gt;</span>
-
-<span class="c1"># lock requirements.txt package versions based on current environment</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">lock_version</span> <span class="o">&lt;</span><span class="n">requirements</span><span class="o">.</span><span class="n">txt</span><span class="o">&gt;</span>
-</pre></div>
-</div>
+          
+<section class="domainindex-section">
+  <h1>Python Module Index</h1>
+  <div class="domainindex-jumpbox"><a href="#cap-k"><strong>k</strong></a></div>
 </section>
-</section>
+<table class="domainindex-table">
+  <tr class="pcap">
+    <td></td><td>&#160;</td><td></td>
+  </tr>
+  <tr class="cap" id="cap-k">
+    <td></td><td><strong>k</strong></td><td></td>
+  </tr>
+  <tr>
+    <td><img src="../_static/minus.png" class="toggler"
+              id="toggle-1" style="display: none" alt="-" /></td>
+    <td>
+        <code class="xref">kiui</code></td><td>
+    <em></em></td>
+  </tr>
+  <tr class="cg-1">
+    <td></td>
+    <td>&#160;&#160;&#160;
+        <a href="../camera/#module-kiui.cam"><code class="xref">kiui.cam</code></a></td><td>
+    <em></em></td>
+  </tr>
+  <tr class="cg-1">
+    <td></td>
+    <td>&#160;&#160;&#160;
+        <a href="../mesh/#module-kiui.mesh"><code class="xref">kiui.mesh</code></a></td><td>
+    <em></em></td>
+  </tr>
+  <tr class="cg-1">
+    <td></td>
+    <td>&#160;&#160;&#160;
+        <a href="../mesh/#module-kiui.mesh_utils"><code class="xref">kiui.mesh_utils</code></a></td><td>
+    <em></em></td>
+  </tr>
+  <tr class="cg-1">
+    <td></td>
+    <td>&#160;&#160;&#160;
+        <a href="../ops/#module-kiui.op"><code class="xref">kiui.op</code></a></td><td>
+    <em></em></td>
+  </tr>
+  <tr class="cg-1">
+    <td></td>
+    <td>&#160;&#160;&#160;
+        <a href="../utils/#module-kiui.utils"><code class="xref">kiui.utils</code></a></td><td>
+    <em></em></td>
+  </tr>
+  <tr class="cg-1">
+    <td></td>
+    <td>&#160;&#160;&#160;
+        <a href="../vis/#module-kiui.vis"><code class="xref">kiui.vis</code></a></td><td>
+    <em></em></td>
+  </tr>
+</table>
 
         </article>
       </div>
@@ -324,17 +321,7 @@
         
         <div class="related-pages">
           
-          <a class="prev-page" href="../remesh/">
-              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
-              <div class="page-info">
-                <div class="context">
-                  <span>Previous</span>
-                </div>
-                
-                <div class="title">Remesh</div>
-                
-              </div>
-            </a>
+          
         </div>
         <div class="bottom-of-page">
           <div class="left-details">
@@ -353,27 +340,8 @@
         
       </footer>
     </div>
-    <aside class="toc-drawer">
+    <aside class="toc-drawer no-toc">
       
-      
-      <div class="toc-sticky toc-scroll">
-        <div class="toc-title-container">
-          <span class="toc-title">
-            On this page
-          </span>
-        </div>
-        <div class="toc-tree-container">
-          <div class="toc-tree">
-            <ul>
-<li><a class="reference internal" href="#">Misc CLI</a><ul>
-<li><a class="reference internal" href="#usage">Usage</a></li>
-</ul>
-</li>
-</ul>
-
-          </div>
-        </div>
-      </div>
       
       
     </aside>
