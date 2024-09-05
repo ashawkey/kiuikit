@@ -296,9 +296,9 @@ def load_object(mesh):
     elif mesh.lower().endswith(".fbx"):
         bpy.ops.import_scene.fbx(filepath=mesh)
     elif mesh.lower().endswith(".obj"):
-        bpy.ops.wm.obj_import(filepath=mesh)
+        bpy.ops.wm.obj_import(filepath=mesh, forward_axis="Z", up_axis="Y")
     elif mesh.lower().endswith(".ply"):
-        bpy.ops.wm.ply_import(filepath=mesh)
+        bpy.ops.wm.ply_import(filepath=mesh, forward_axis="Z", up_axis="Y")
     else:
         raise ValueError(f"Unsupported file type: {mesh}")
 
@@ -348,7 +348,7 @@ def normalize_scene(bound=0.9):
 
 MAT_ID = 0
 
-def create_simple_material(color, mat_name=None):
+def create_simple_material(color, roughness=1, mat_name=None):
     global MAT_ID
 
     if mat_name is None:
@@ -361,14 +361,22 @@ def create_simple_material(color, mat_name=None):
 
     # set principled BSDF
     tree.nodes["Principled BSDF"].inputs['Base Color'].default_value = color
-    tree.nodes["Principled BSDF"].inputs['Roughness'].default_value = 0.3
+    tree.nodes["Principled BSDF"].inputs['Roughness'].default_value = roughness
     tree.nodes["Principled BSDF"].inputs['Sheen Tint'].default_value = [0, 0, 0, 1]
-    tree.nodes["Principled BSDF"].inputs['Specular IOR Level'].default_value = 0.5
-    tree.nodes["Principled BSDF"].inputs['IOR'].default_value = 1.45
-    tree.nodes["Principled BSDF"].inputs['Transmission Weight'].default_value = 0
-    tree.nodes["Principled BSDF"].inputs['Coat Roughness'].default_value = 0
+    # tree.nodes["Principled BSDF"].inputs['Specular IOR Level'].default_value = 0.5
+    # tree.nodes["Principled BSDF"].inputs['IOR'].default_value = 1.45
+    # tree.nodes["Principled BSDF"].inputs['Transmission Weight'].default_value = 0
+    # tree.nodes["Principled BSDF"].inputs['Coat Roughness'].default_value = 0
 
     return mat
+
+def create_default_materials():
+    for obj in bpy.data.objects:
+        if obj.type == 'MESH':
+            bpy.context.view_layer.objects.active = obj
+            surface_mat = create_simple_material((0.10, 0.20, 0.80, 1), roughness=0.5, mat_name="surface_mat") # blue surface, color is a tuple of 4 float (in [0, 1])
+            obj.data.materials.append(surface_mat) # 0, default material for surface
+            
 
 # enable wireframe rendering
 # parameters are hard-coded for now
@@ -379,11 +387,11 @@ def enable_wireframe():
             bpy.ops.object.modifier_add(type='WIREFRAME')
             bpy.context.object.modifiers["Wireframe"].use_replace = False # do not replace the original mesh
             bpy.context.object.modifiers["Wireframe"].thickness = 0.01 # thickness of wireframe
-            bpy.context.object.modifiers["Wireframe"].use_even_offset = True # even thickness
+            bpy.context.object.modifiers["Wireframe"].use_even_offset = False # otherwise lead to spikes...
             # use a different color for surface and wireframe
-            surface_mat = create_simple_material((0.20, 0.50, 1, 1), mat_name="surface_mat") # blue surface, color is a tuple of 4 float (in [0, 1])
+            surface_mat = create_simple_material((0.10, 0.20, 0.80, 1), roughness=0.5, mat_name="surface_mat") # blue surface, color is a tuple of 4 float (in [0, 1])
             obj.data.materials.append(surface_mat) # 0, default material for surface
-            wireframe_mat = create_simple_material((1, 1, 1, 1), mat_name="wireframe_mat") # white wireframe
+            wireframe_mat = create_simple_material((1, 1, 1, 1), roughness=1, mat_name="wireframe_mat") # white wireframe
             obj.data.materials.append(wireframe_mat) # 1
             bpy.context.object.modifiers["Wireframe"].material_offset = 1
 
@@ -430,6 +438,8 @@ def main(args):
     # enable wireframe rendering
     if args.wireframe:
         enable_wireframe()
+    else:
+        create_default_materials()
 
     # orbit camera
     cam.data.angle = np.deg2rad(args.fovy)
@@ -440,8 +450,12 @@ def main(args):
     # place cameras (following zero123++ v1.2, front view + 6 side views)
     # azimuth in [0, 2pi], elevation in [-pi/2, pi/2]
     # for objaverse, most objects' front view is 270 azimuth!
-    azimuths = np.deg2rad(np.array([270, 300, 0, 60, 120, 180, 240]))
-    elevations = np.deg2rad(np.array([0, -20, 10, -20, 10, -20, 10]))
+    # azimuths = np.deg2rad(np.array([270, 300, 0, 60, 120, 180, 240]))
+    # elevations = np.deg2rad(np.array([0, -20, 10, -20, 10, -20, 10]))
+
+    # standard 6 views with 2 additional views
+    azimuths = np.deg2rad(np.array([270, 0, 90, 180, 270, 270, 315, 135]))
+    elevations = np.deg2rad(np.array([0, 0, 0, 0, -89.99, 89.99, -45, 45]))
     
     # get camera positions in blender coordinate system
     x = args.radius * np.cos(azimuths) * np.cos(elevations)
