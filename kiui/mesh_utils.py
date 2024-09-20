@@ -92,7 +92,7 @@ def clean_mesh(
     v_pct=1,
     min_f=0,
     min_d=0,
-    repair=True,
+    repair=False,
     remesh=False,
     remesh_size=0.01,
     remesh_iters=3,
@@ -144,6 +144,7 @@ def clean_mesh(
     if min_f > 0:
         ms.meshing_remove_connected_component_by_face_number(mincomponentsize=min_f)
 
+    # be careful: may lead to strangely missing triangles...
     if repair:
         # ms.meshing_remove_t_vertices(method=0, threshold=40, repeat=True)
         ms.meshing_repair_non_manifold_edges(method=0)
