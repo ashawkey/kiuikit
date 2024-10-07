@@ -6,7 +6,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
-from transformers.activations import ACT2FN
 from kiui.nn.attention_flash import attention
 
 @dataclass
@@ -15,12 +14,11 @@ class Options:
     hidden_size: int = 1024
     intermediate_size: int = 4096
     num_layers: int = 32
-    max_position_embeddings: int = 2048 # context length
+    max_position_embeddings: int = 2048 # context length, also rope cache length
     num_attention_heads: int = 16
     attn_dropout: float = 0.0
     attn_bias: bool = False
     mlp_bias: bool = False
-    mlp_act: str = "silu"
     rms_norm_eps: float = 1e-5
     rope_theta: float = 500000
     initializer_range: float = 0.02
@@ -28,6 +26,7 @@ class Options:
     pad_token_id: int = 0
     bos_token_id: int = 1
     eos_token_id: int = 2
+
 
 class RotaryEmbedding(nn.Module):
     def __init__(
@@ -42,23 +41,22 @@ class RotaryEmbedding(nn.Module):
         self.register_buffer("inv_freq", inv_freq, persistent=False)
 
     @torch.no_grad()
-    def forward(self, x, position_ids):
-        # x: just used to provide dtype and device
+    def forward(self, position_ids):
         # position_ids: [B, N]
 
         inv_freq_expanded = self.inv_freq[None, :, None].float().expand(position_ids.shape[0], -1, 1) # [B, C/2, 1]
         position_ids_expanded = position_ids[:, None, :].float() # [B, 1, N]
 
         # Force float32 (see https://github.com/huggingface/transformers/pull/29285)
-        device_type = x.device.type
+        device_type = position_ids.device.type
         device_type = device_type if isinstance(device_type, str) and device_type != "mps" else "cpu"
         with torch.autocast(device_type=device_type, enabled=False):
             freqs = (inv_freq_expanded.float() @ position_ids_expanded.float()).transpose(1, 2) # [B, N, C/2]
             emb = torch.cat((freqs, freqs), dim=-1)
             cos = emb.cos()
             sin = emb.sin()
-
-        return cos.to(dtype=x.dtype), sin.to(dtype=x.dtype) # [B, N, C], [B, N, C]
+        
+        return cos, sin # [B, N, C], [B, N, C]
 
 
 def rotate_half(x):
@@ -70,8 +68,8 @@ def rotate_half(x):
 def apply_rotary_pos_emb(q, k, cos, sin):
     # q, k: [B, N, H, C]
     # sin, cos: [B, N, C]
-    cos = cos.unsqueeze(2)
-    sin = sin.unsqueeze(2)
+    cos = cos.unsqueeze(2).to(q.dtype)
+    sin = sin.unsqueeze(2).to(q.dtype)
     q_embed = (q * cos) + (rotate_half(q) * sin)
     k_embed = (k * cos) + (rotate_half(k) * sin)
     return q_embed, k_embed
@@ -102,7 +100,7 @@ class MLP(nn.Module):
         self.gate_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=opt.mlp_bias)
         self.up_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=opt.mlp_bias)
         self.down_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=opt.mlp_bias)
-        self.act_fn = ACT2FN[opt.mlp_act]
+        self.act_fn = nn.SiLU()
 
     def forward(self, x):        
         return self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
@@ -133,7 +131,7 @@ class Attention(nn.Module):
         hidden_states: torch.Tensor, # [B, N, C]
         pos_embeds: Tuple[torch.Tensor], # [B, N, C] x 2
         cache_kv: Optional[Tuple[torch.Tensor]] = None, # (key, value), [B, N', h, c]
-        attention_mask: Optional[torch.Tensor] = None, # [B, N], note this is different from OPTAttention (which is processed 4D mask [B, 1, N, N])
+        attention_mask: Optional[torch.Tensor] = None, # [B, N]
     ):
 
         B, N, C = hidden_states.shape
@@ -263,9 +261,7 @@ class Model(nn.Module):
         # get current length
         past_length = all_cache_kv[0][0].shape[1] if all_cache_kv is not None else 0
         mask_seq_length = past_length + N
-        position_ids = torch.arange(past_length, mask_seq_length, dtype=torch.long, device=inputs_embeds.device)
-
-        # kiui.lo(position_ids)
+        position_ids = torch.arange(past_length, mask_seq_length, dtype=torch.long, device=inputs_embeds.device).unsqueeze(0)
 
         # attention mask
         attention_mask = torch.ones(B, mask_seq_length, device=inputs_embeds.device) if attention_mask is None else attention_mask
@@ -276,7 +272,7 @@ class Model(nn.Module):
         hidden_states = inputs_embeds
 
         # position embeddings
-        pos_embeds = self.rope(hidden_states, position_ids)
+        pos_embeds = self.rope(position_ids)
 
         # decoder layers
         new_all_cache_kv = [] if use_cache else None
@@ -434,7 +430,7 @@ if __name__ == '__main__':
         with torch.no_grad():
             with torch.autocast(device_type='cuda', dtype=torch.float16):
                 t0 = time.time()
-                seqs = model.generate(sample=False, max_length=2048, use_cache=True) # must be sufficient long to show the acceleration of use_cache
+                seqs = model.generate(sample=False, max_length=256, use_cache=True) # must be sufficient long to show the acceleration of use_cache
                 torch.cuda.synchronize()
                 t1 = time.time()
                 print(f'[INFO] generate time: {t1-t0:.2f}s')
