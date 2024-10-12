@@ -90,7 +90,7 @@ def orbit_camera(elevation, azimuth, radius=1, is_degree=True, target=None, open
     Args:
         elevation (float): elevation in (-90, 90), from +y to -y is (-90, 90)
         azimuth (float): azimuth in (-180, 180), from +z to +x is (0, 90)
-        radius (int, optional): camera radius. Defaults to 1.
+        radius (float, optional): camera radius. Defaults to 1.
         is_degree (bool, optional): if the angles are in degree. Defaults to True.
         target (np.ndarray, optional): look at target position. Defaults to None.
         opengl (bool, optional): whether to use OpenGL camera convention. Defaults to True.
@@ -220,10 +220,10 @@ class OrbitCamera:
         Args:
             W (int): image width
             H (int): image height
-            r (int, optional): camera radius. Defaults to 2.
-            fovy (int, optional): camera field of view in degree along y-axis. Defaults to 60.
+            r (float, optional): camera radius. Defaults to 2.
+            fovy (float, optional): camera field of view in degree along y-axis. Defaults to 60.
             near (float, optional): near clip plane. Defaults to 0.01.
-            far (int, optional): far clip plane. Defaults to 100.
+            far (float, optional): far clip plane. Defaults to 100.
         """
         self.W = W
         self.H = H
