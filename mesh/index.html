@@ -5,8 +5,8 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex/" /><link rel="search" title="Search" href="../search/" /><link rel="next" title="Camera" href="../camera/" /><link rel="prev" title="Kiuikit" href="../" />
 
-    <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 8.0.2 and Furo 2024.08.06 -->
-        <title>Mesh - kiui 0.2.13 documentation</title>
+    <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
+        <title>Mesh - kiui 0.2.14 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -168,7 +168,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../"><div class="brand">kiui 0.2.13 documentation</div></a>
+      <a href="../"><div class="brand">kiui 0.2.14 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -585,6 +585,20 @@ Usually this will duplicate the vertices on the edge of uv atlas. Defaults to Tr
 </dl>
 </dd></dl>
 
+<dl class="py method">
+<dt class="sig sig-object py" id="kiui.mesh.Mesh.clone">
+<span class="sig-name descname"><span class="pre">clone</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/mesh/#Mesh.clone"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.mesh.Mesh.clone" title="Link to this definition">¶</a></dt>
+<dd><p>clone the mesh.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the cloned Mesh object.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#kiui.mesh.Mesh" title="kiui.mesh.Mesh">Mesh</a></p>
+</dd>
+</dl>
+</dd></dl>
+
 </dd></dl>
 
 <dl class="py function" id="module-kiui.mesh_utils">
@@ -614,7 +628,7 @@ Usually this will duplicate the vertices on the edge of uv atlas. Defaults to Tr
 
 <dl class="py function">
 <dt class="sig sig-object py" id="kiui.mesh_utils.clean_mesh">
-<span class="sig-prename descclassname"><span class="pre">kiui.mesh_utils.</span></span><span class="sig-name descname"><span class="pre">clean_mesh</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">verts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">faces</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">v_pct</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_f</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_d</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">repair</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remesh</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remesh_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.01</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remesh_iters</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/mesh_utils/#clean_mesh"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.mesh_utils.clean_mesh" title="Link to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">kiui.mesh_utils.</span></span><span class="sig-name descname"><span class="pre">clean_mesh</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">verts</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">faces</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">v_pct</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_f</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_d</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">repair</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remesh</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remesh_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.01</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remesh_iters</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/mesh_utils/#clean_mesh"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.mesh_utils.clean_mesh" title="Link to this definition">¶</a></dt>
 <dd><p>perform mesh cleaning, including floater removal, non manifold repair, and remeshing.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -817,6 +831,7 @@ Usually this will duplicate the vertices on the edge of uv atlas. Defaults to Tr
 <li><a class="reference internal" href="#kiui.mesh.Mesh.write_ply"><code class="docutils literal notranslate"><span class="pre">Mesh.write_ply()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.mesh.Mesh.write_glb"><code class="docutils literal notranslate"><span class="pre">Mesh.write_glb()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.mesh.Mesh.write_obj"><code class="docutils literal notranslate"><span class="pre">Mesh.write_obj()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.mesh.Mesh.clone"><code class="docutils literal notranslate"><span class="pre">Mesh.clone()</span></code></a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#kiui.mesh_utils.decimate_mesh"><code class="docutils literal notranslate"><span class="pre">decimate_mesh()</span></code></a></li>
@@ -839,8 +854,8 @@ Usually this will duplicate the vertices on the edge of uv atlas. Defaults to Tr
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=08b7de24"></script>
-    <script src="../_static/doctools.js?v=9a2dae69"></script>
+</div><script src="../_static/documentation_options.js?v=74e56a62"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=5fa4622c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
