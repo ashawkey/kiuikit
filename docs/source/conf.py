@@ -17,11 +17,11 @@
 # -- Project information -----------------------------------------------------
 
 project = 'kiui'
-copyright = '2024, kiui'
+copyright = '2025, kiui'
 author = 'kiui'
 
 # The full version, including alpha/beta/rc tags
-release = '0.2.14'
+release = '0.2.15'
 
 
 # -- General configuration ---------------------------------------------------
