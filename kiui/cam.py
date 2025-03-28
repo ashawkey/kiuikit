@@ -7,15 +7,15 @@ from kiui.typing import *
 # convert between different world coordinate systems
 def convert(
     pose, 
-    target: Literal['unity', 'blender', 'opencv', 'colmap', 'opengl'] = 'unity', 
-    original: Literal['unity', 'blender', 'opencv', 'colmap', 'opengl'] = 'opengl',
+    target: Literal['unity', 'blender', 'opencv', 'colmap', 'opengl', 'unreal'] = 'unity', 
+    original: Literal['unity', 'blender', 'opencv', 'colmap', 'opengl', 'unreal'] = 'opengl',
 ):
     """A method to convert between different world coordinate systems.
 
     Args:
         pose (np.ndarray): camera pose, float [4, 4].
-        target (Literal[&#39;unity&#39;, &#39;blender&#39;, &#39;opencv&#39;, &#39;colmap&#39;, &#39;opengl&#39;], optional): from convention. Defaults to 'unity'.
-        original (Literal[&#39;unity&#39;, &#39;blender&#39;, &#39;opencv&#39;, &#39;colmap&#39;, &#39;opengl&#39;], optional): to convention. Defaults to 'opengl'.
+        target (Literal[&#39;unity&#39;, &#39;blender&#39;, &#39;opencv&#39;, &#39;colmap&#39;, &#39;opengl&#39;, &#39;unreal&#39;], optional): from convention. Defaults to 'unity'.
+        original (Literal[&#39;unity&#39;, &#39;blender&#39;, &#39;opencv&#39;, &#39;colmap&#39;, &#39;opengl&#39;, &#39;unreal&#39;], optional): to convention. Defaults to 'opengl'.
 
     Returns:
         np.ndarray: converted camera pose, float [4, 4].
@@ -29,12 +29,17 @@ def convert(
             pose[[1, 2]] = pose[[2, 1]]
         elif target in ['opencv', 'colmap']:
             pose[1:3] *= -1
+        elif target == 'unreal':
+            pose[[1, 2]] = pose[[2, 1]]
     elif original == 'unity':
         if target == 'opengl':
             pose[2] *= -1
         elif target == 'blender':
             pose[[1, 2]] = pose[[2, 1]]
         elif target in ['opencv', 'colmap']:
+            pose[1] *= -1
+        elif target == 'unreal':
+            pose[[1, 2]] = pose[[2, 1]]
             pose[1] *= -1
     elif original == 'blender':
         if target == 'opengl':
@@ -45,6 +50,8 @@ def convert(
         elif target in ['opencv', 'colmap']:
             pose[2] *= -1
             pose[[1, 2]] = pose[[2, 1]]
+        elif target == 'unreal':
+            pose[1] *= -1
     elif original in ['opencv', 'colmap']:
         if target == 'opengl':
             pose[1:3] *= -1
@@ -53,6 +60,20 @@ def convert(
         elif target == 'blender':
             pose[1] *= -1
             pose[[1, 2]] = pose[[2, 1]]
+        elif target == 'unreal':
+            pose[[1, 2]] = pose[[2, 1]]
+            pose[:2] *= -1
+    elif original == 'unreal':
+        if target == 'opengl':
+            pose[[1, 2]] = pose[[2, 1]]
+        elif target == 'unity':
+            pose[[1, 2]] = pose[[2, 1]]
+            pose[2] *= -1
+        elif target == 'blender':
+            pose[1] *= -1
+        elif target in ['opencv', 'colmap']:
+            pose[[1, 2]] = pose[[2, 1]]
+            pose[:2] *= -1
     return pose
 
 
