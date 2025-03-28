@@ -5,8 +5,8 @@
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex/" /><link rel="search" title="Search" href="../../../search/" />
 
     <link rel="shortcut icon" href="../../../_static/icon.png"/><!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>kiui.op - kiui 0.2.14 documentation</title>
-      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=a746c00c" />
+        <title>kiui.op - kiui 0.2.15 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -167,7 +167,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../"><div class="brand">kiui 0.2.14 documentation</div></a>
+      <a href="../../../"><div class="brand">kiui 0.2.15 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -260,17 +260,17 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for kiui.op</h1><div class="highlight"><pre>
-<span></span><span class="kn">import</span> <span class="nn">cv2</span>
-<span class="kn">import</span> <span class="nn">torch</span>
-<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">cv2</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 
-<span class="kn">from</span> <span class="nn">kiui.typing</span> <span class="kn">import</span> <span class="o">*</span>
-<span class="kn">from</span> <span class="nn">kiui.grid_put</span> <span class="kn">import</span> <span class="n">grid_put</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kiui.typing</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kiui.grid_put</span><span class="w"> </span><span class="kn">import</span> <span class="n">grid_put</span>
 
 <span class="c1"># torch / numpy math utils</span>
 <div class="viewcode-block" id="dot">
 <a class="viewcode-back" href="../../../ops/#kiui.op.dot">[docs]</a>
-<span class="k">def</span> <span class="nf">dot</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">],</span> <span class="n">y</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">]:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">dot</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">],</span> <span class="n">y</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;dot product (along the last dim).</span>
 
 <span class="sd">    Args:</span>
@@ -288,7 +288,7 @@
 
 <div class="viewcode-block" id="length">
 <a class="viewcode-back" href="../../../ops/#kiui.op.length">[docs]</a>
-<span class="k">def</span> <span class="nf">length</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">],</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-20</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">]:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">length</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">],</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-20</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;length of an array (along the last dim).</span>
 
 <span class="sd">    Args:</span>
@@ -306,7 +306,7 @@
 
 <div class="viewcode-block" id="safe_normalize">
 <a class="viewcode-back" href="../../../ops/#kiui.op.safe_normalize">[docs]</a>
-<span class="k">def</span> <span class="nf">safe_normalize</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">],</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-20</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">]:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">safe_normalize</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">],</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-20</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;normalize an array (along the last dim).</span>
 
 <span class="sd">    Args:</span>
@@ -322,7 +322,7 @@
 
 <div class="viewcode-block" id="normalize">
 <a class="viewcode-back" href="../../../ops/#kiui.op.normalize">[docs]</a>
-<span class="k">def</span> <span class="nf">normalize</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">],</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-20</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">]:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">normalize</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">],</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-20</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;normalize an array (along the last dim). alias of safe_normalize.</span>
 
 <span class="sd">    Args:</span>
@@ -338,7 +338,7 @@
 
 <div class="viewcode-block" id="make_divisible">
 <a class="viewcode-back" href="../../../ops/#kiui.op.make_divisible">[docs]</a>
-<span class="k">def</span> <span class="nf">make_divisible</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">m</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">make_divisible</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">m</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;make an int x divisible by m.</span>
 
 <span class="sd">    Args:</span>
@@ -353,7 +353,7 @@
 
 <div class="viewcode-block" id="inverse_sigmoid">
 <a class="viewcode-back" href="../../../ops/#kiui.op.inverse_sigmoid">[docs]</a>
-<span class="k">def</span> <span class="nf">inverse_sigmoid</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">inverse_sigmoid</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;inversion of sigmoid function.</span>
 
 <span class="sd">    Args:</span>
@@ -369,7 +369,7 @@
 
 <div class="viewcode-block" id="inverse_softplus">
 <a class="viewcode-back" href="../../../ops/#kiui.op.inverse_softplus">[docs]</a>
-<span class="k">def</span> <span class="nf">inverse_softplus</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">inverse_softplus</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;inversion of softplus function.</span>
 <span class="sd">    </span>
 <span class="sd">    Args:</span>
@@ -385,7 +385,7 @@
 <span class="c1"># torch image scaling</span>
 <div class="viewcode-block" id="scale_img_nhwc">
 <a class="viewcode-back" href="../../../ops/#kiui.op.scale_img_nhwc">[docs]</a>
-<span class="k">def</span> <span class="nf">scale_img_nhwc</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">size</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">mag</span><span class="o">=</span><span class="s1">&#39;bilinear&#39;</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="s1">&#39;bilinear&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">scale_img_nhwc</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">size</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">mag</span><span class="o">=</span><span class="s1">&#39;bilinear&#39;</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="s1">&#39;bilinear&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;image scaling helper.</span>
 
 <span class="sd">    Args:</span>
@@ -411,7 +411,7 @@
 
 <div class="viewcode-block" id="scale_img_hwc">
 <a class="viewcode-back" href="../../../ops/#kiui.op.scale_img_hwc">[docs]</a>
-<span class="k">def</span> <span class="nf">scale_img_hwc</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">size</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">mag</span><span class="o">=</span><span class="s1">&#39;bilinear&#39;</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="s1">&#39;bilinear&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">scale_img_hwc</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">size</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">mag</span><span class="o">=</span><span class="s1">&#39;bilinear&#39;</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="s1">&#39;bilinear&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;image scaling helper.</span>
 
 <span class="sd">    Args:</span>
@@ -428,7 +428,7 @@
 
 <div class="viewcode-block" id="scale_img_nhw">
 <a class="viewcode-back" href="../../../ops/#kiui.op.scale_img_nhw">[docs]</a>
-<span class="k">def</span> <span class="nf">scale_img_nhw</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">size</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">mag</span><span class="o">=</span><span class="s1">&#39;bilinear&#39;</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="s1">&#39;bilinear&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">scale_img_nhw</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">size</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">mag</span><span class="o">=</span><span class="s1">&#39;bilinear&#39;</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="s1">&#39;bilinear&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;image scaling helper.</span>
 
 <span class="sd">    Args:</span>
@@ -445,7 +445,7 @@
 
 <div class="viewcode-block" id="scale_img_hw">
 <a class="viewcode-back" href="../../../ops/#kiui.op.scale_img_hw">[docs]</a>
-<span class="k">def</span> <span class="nf">scale_img_hw</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">size</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">mag</span><span class="o">=</span><span class="s1">&#39;bilinear&#39;</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="s1">&#39;bilinear&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">scale_img_hw</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">size</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">mag</span><span class="o">=</span><span class="s1">&#39;bilinear&#39;</span><span class="p">,</span> <span class="nb">min</span><span class="o">=</span><span class="s1">&#39;bilinear&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tensor</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;image scaling helper.</span>
 
 <span class="sd">    Args:</span>
@@ -463,7 +463,7 @@
 
 <div class="viewcode-block" id="uv_padding">
 <a class="viewcode-back" href="../../../ops/#kiui.op.uv_padding">[docs]</a>
-<span class="k">def</span> <span class="nf">uv_padding</span><span class="p">(</span><span class="n">image</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">],</span> <span class="n">mask</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">],</span> <span class="n">padding</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">backend</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s1">&#39;knn&#39;</span><span class="p">,</span> <span class="s1">&#39;cv2&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;knn&#39;</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">uv_padding</span><span class="p">(</span><span class="n">image</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">],</span> <span class="n">mask</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">],</span> <span class="n">padding</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">backend</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s1">&#39;knn&#39;</span><span class="p">,</span> <span class="s1">&#39;cv2&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;knn&#39;</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;padding the uv-space texture image to avoid seam artifacts in mipmaps.</span>
 
 <span class="sd">    Args:</span>
@@ -493,8 +493,8 @@
     <span class="c1"># padding backend</span>
     <span class="k">if</span> <span class="n">backend</span> <span class="o">==</span> <span class="s1">&#39;knn&#39;</span><span class="p">:</span>
 
-        <span class="kn">from</span> <span class="nn">sklearn.neighbors</span> <span class="kn">import</span> <span class="n">NearestNeighbors</span>
-        <span class="kn">from</span> <span class="nn">scipy.ndimage</span> <span class="kn">import</span> <span class="n">binary_dilation</span><span class="p">,</span> <span class="n">binary_erosion</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.neighbors</span><span class="w"> </span><span class="kn">import</span> <span class="n">NearestNeighbors</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">scipy.ndimage</span><span class="w"> </span><span class="kn">import</span> <span class="n">binary_dilation</span><span class="p">,</span> <span class="n">binary_erosion</span>
 
         <span class="n">inpaint_region</span> <span class="o">=</span> <span class="n">binary_dilation</span><span class="p">(</span><span class="n">mask_input</span><span class="p">,</span> <span class="n">iterations</span><span class="o">=</span><span class="n">padding</span><span class="p">)</span>
         <span class="n">inpaint_region</span><span class="p">[</span><span class="n">mask_input</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
@@ -530,7 +530,7 @@
 
 <div class="viewcode-block" id="recenter">
 <a class="viewcode-back" href="../../../ops/#kiui.op.recenter">[docs]</a>
-<span class="k">def</span> <span class="nf">recenter</span><span class="p">(</span><span class="n">image</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">mask</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">border_ratio</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.2</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ndarray</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">recenter</span><span class="p">(</span><span class="n">image</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">mask</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">border_ratio</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.2</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot; recenter an image to leave some empty space at the image border.</span>
 
 <span class="sd">    Args:</span>
@@ -588,7 +588,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2024, kiui
+                Copyright &#169; 2025, kiui
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -608,7 +608,7 @@
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=74e56a62"></script>
+</div><script src="../../../_static/documentation_options.js?v=66235678"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=5fa4622c"></script>

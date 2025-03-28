@@ -5,8 +5,8 @@
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex/" /><link rel="search" title="Search" href="../../../search/" />
 
     <link rel="shortcut icon" href="../../../_static/icon.png"/><!-- Generated with Sphinx 8.1.3 and Furo 2024.08.06 -->
-        <title>kiui.utils - kiui 0.2.14 documentation</title>
-      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=a746c00c" />
+        <title>kiui.utils - kiui 0.2.15 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
@@ -167,7 +167,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../"><div class="brand">kiui 0.2.14 documentation</div></a>
+      <a href="../../../"><div class="brand">kiui 0.2.15 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -260,28 +260,28 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for kiui.utils</h1><div class="highlight"><pre>
-<span></span><span class="kn">import</span> <span class="nn">os</span>
-<span class="kn">import</span> <span class="nn">sys</span>
-<span class="kn">import</span> <span class="nn">glob</span>
-<span class="kn">import</span> <span class="nn">tqdm</span>
-<span class="kn">import</span> <span class="nn">json</span>
-<span class="kn">import</span> <span class="nn">pickle</span>
-<span class="kn">import</span> <span class="nn">varname</span>
-<span class="kn">from</span> <span class="nn">objprint</span> <span class="kn">import</span> <span class="n">objstr</span>
-<span class="kn">from</span> <span class="nn">rich.console</span> <span class="kn">import</span> <span class="n">Console</span>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">glob</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tqdm</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pickle</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">varname</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">objprint</span><span class="w"> </span><span class="kn">import</span> <span class="n">objstr</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">rich.console</span><span class="w"> </span><span class="kn">import</span> <span class="n">Console</span>
 
-<span class="kn">import</span> <span class="nn">cv2</span>
-<span class="kn">from</span> <span class="nn">PIL</span> <span class="kn">import</span> <span class="n">Image</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">cv2</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">PIL</span><span class="w"> </span><span class="kn">import</span> <span class="n">Image</span>
 
-<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
-<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
 
-<span class="kn">from</span> <span class="nn">kiui.typing</span> <span class="kn">import</span> <span class="o">*</span>
-<span class="kn">from</span> <span class="nn">kiui.env</span> <span class="kn">import</span> <span class="n">is_imported</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kiui.typing</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kiui.env</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_imported</span>
 
 <div class="viewcode-block" id="lo">
 <a class="viewcode-back" href="../../../utils/#kiui.utils.lo">[docs]</a>
-<span class="k">def</span> <span class="nf">lo</span><span class="p">(</span><span class="o">*</span><span class="n">xs</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">lo</span><span class="p">(</span><span class="o">*</span><span class="n">xs</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;inspect array like objects and report statistics.</span>
 
 <span class="sd">    Args:</span>
@@ -291,7 +291,7 @@
 
     <span class="n">console</span> <span class="o">=</span> <span class="n">Console</span><span class="p">()</span>
 
-    <span class="k">def</span> <span class="nf">_lo</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_lo</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
 
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">):</span>
             <span class="c1"># general stats</span>
@@ -348,7 +348,7 @@
 
 <div class="viewcode-block" id="seed_everything">
 <a class="viewcode-back" href="../../../utils/#kiui.utils.seed_everything">[docs]</a>
-<span class="k">def</span> <span class="nf">seed_everything</span><span class="p">(</span><span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">seed_everything</span><span class="p">(</span><span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;auto set seed for random, numpy and torch.</span>
 
 <span class="sd">    Args:</span>
@@ -360,7 +360,7 @@
     <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;PYTHONHASHSEED&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">is_imported</span><span class="p">(</span><span class="s1">&#39;random&#39;</span><span class="p">):</span>
-        <span class="kn">import</span> <span class="nn">random</span> <span class="c1"># still need to import it here</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">random</span> <span class="c1"># still need to import it here</span>
         <span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;[INFO] set random.seed = </span><span class="si">{</span><span class="n">seed</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
@@ -368,14 +368,14 @@
 
     <span class="c1"># assume numpy is imported as np</span>
     <span class="k">if</span> <span class="n">is_imported</span><span class="p">(</span><span class="s1">&#39;np&#39;</span><span class="p">):</span>
-        <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
         <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;[INFO] set np.random.seed = </span><span class="si">{</span><span class="n">seed</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;[INFO] numpy not imported, skip setting seed&#39;</span><span class="p">)</span>
         
     <span class="k">if</span> <span class="n">is_imported</span><span class="p">(</span><span class="s1">&#39;torch&#39;</span><span class="p">):</span>
-        <span class="kn">import</span> <span class="nn">torch</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
         <span class="n">torch</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
         <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;[INFO] set torch.manual_seed = </span><span class="si">{</span><span class="n">seed</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
@@ -392,7 +392,7 @@
 
 <div class="viewcode-block" id="read_json">
 <a class="viewcode-back" href="../../../utils/#kiui.utils.read_json">[docs]</a>
-<span class="k">def</span> <span class="nf">read_json</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">read_json</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;load a json file.</span>
 
 <span class="sd">    Args:</span>
@@ -408,7 +408,7 @@
 
 <div class="viewcode-block" id="write_json">
 <a class="viewcode-back" href="../../../utils/#kiui.utils.write_json">[docs]</a>
-<span class="k">def</span> <span class="nf">write_json</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">write_json</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;write a json file.</span>
 
 <span class="sd">    Args:</span>
@@ -422,7 +422,7 @@
 
 <div class="viewcode-block" id="read_pickle">
 <a class="viewcode-back" href="../../../utils/#kiui.utils.read_pickle">[docs]</a>
-<span class="k">def</span> <span class="nf">read_pickle</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">read_pickle</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;read a pickle file.</span>
 
 <span class="sd">    Args:</span>
@@ -438,7 +438,7 @@
 
 <div class="viewcode-block" id="write_pickle">
 <a class="viewcode-back" href="../../../utils/#kiui.utils.write_pickle">[docs]</a>
-<span class="k">def</span> <span class="nf">write_pickle</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">write_pickle</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;write a pickle file.</span>
 
 <span class="sd">    Args:</span>
@@ -452,7 +452,7 @@
 
 <div class="viewcode-block" id="read_image">
 <a class="viewcode-back" href="../../../utils/#kiui.utils.read_image">[docs]</a>
-<span class="k">def</span> <span class="nf">read_image</span><span class="p">(</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">read_image</span><span class="p">(</span>
     <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> 
     <span class="n">mode</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;float&quot;</span><span class="p">,</span> <span class="s2">&quot;uint8&quot;</span><span class="p">,</span> <span class="s2">&quot;pil&quot;</span><span class="p">,</span> <span class="s2">&quot;torch&quot;</span><span class="p">,</span> <span class="s2">&quot;tensor&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;float&quot;</span><span class="p">,</span> 
     <span class="n">order</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;RGB&quot;</span><span class="p">,</span> <span class="s2">&quot;RGBA&quot;</span><span class="p">,</span> <span class="s2">&quot;BGR&quot;</span><span class="p">,</span> <span class="s2">&quot;BGRA&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;RGB&quot;</span><span class="p">,</span>
@@ -517,7 +517,7 @@
 
 <div class="viewcode-block" id="write_image">
 <a class="viewcode-back" href="../../../utils/#kiui.utils.write_image">[docs]</a>
-<span class="k">def</span> <span class="nf">write_image</span><span class="p">(</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">write_image</span><span class="p">(</span>
         <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> 
         <span class="n">img</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">Image</span><span class="o">.</span><span class="n">Image</span><span class="p">],</span> 
         <span class="n">order</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;RGB&quot;</span><span class="p">,</span> <span class="s2">&quot;BGR&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;RGB&quot;</span><span class="p">,</span>
@@ -562,7 +562,7 @@
 
 <div class="viewcode-block" id="load_file_from_url">
 <a class="viewcode-back" href="../../../utils/#kiui.utils.load_file_from_url">[docs]</a>
-<span class="k">def</span> <span class="nf">load_file_from_url</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">model_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">progress</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">file_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">load_file_from_url</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">model_dir</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">progress</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">file_name</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Load file form http url, will download models if necessary.</span>
 
 <span class="sd">    Args:</span>
@@ -576,8 +576,8 @@
 <span class="sd">        str: The path to the downloaded file.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="kn">from</span> <span class="nn">torch.hub</span> <span class="kn">import</span> <span class="n">download_url_to_file</span><span class="p">,</span> <span class="n">get_dir</span>
-    <span class="kn">from</span> <span class="nn">urllib.parse</span> <span class="kn">import</span> <span class="n">urlparse</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">torch.hub</span><span class="w"> </span><span class="kn">import</span> <span class="n">download_url_to_file</span><span class="p">,</span> <span class="n">get_dir</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">urllib.parse</span><span class="w"> </span><span class="kn">import</span> <span class="n">urlparse</span>
 
     <span class="k">if</span> <span class="n">model_dir</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># use the pytorch hub_dir</span>
         <span class="n">hub_dir</span> <span class="o">=</span> <span class="n">get_dir</span><span class="p">()</span>
@@ -599,7 +599,7 @@
 
 <div class="viewcode-block" id="is_format">
 <a class="viewcode-back" href="../../../utils/#kiui.utils.is_format">[docs]</a>
-<span class="k">def</span> <span class="nf">is_format</span><span class="p">(</span><span class="n">f</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">format</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">is_format</span><span class="p">(</span><span class="n">f</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">format</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;if a file&#39;s extension is in a set of format</span>
 
 <span class="sd">    Args:</span>
@@ -615,7 +615,7 @@
 
 <div class="viewcode-block" id="batch_process_files">
 <a class="viewcode-back" href="../../../utils/#kiui.utils.batch_process_files">[docs]</a>
-<span class="k">def</span> <span class="nf">batch_process_files</span><span class="p">(</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">batch_process_files</span><span class="p">(</span>
     <span class="n">process_fn</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">out_path</span><span class="p">,</span> 
     <span class="n">overwrite</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="n">in_format</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;.jpg&quot;</span><span class="p">,</span> <span class="s2">&quot;.jpeg&quot;</span><span class="p">,</span> <span class="s2">&quot;.png&quot;</span><span class="p">],</span>
@@ -665,7 +665,7 @@
             <span class="k">if</span> <span class="n">is_format</span><span class="p">(</span><span class="n">file_path</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;.jpg&#39;</span><span class="p">,</span> <span class="s1">&#39;.jpeg&#39;</span><span class="p">,</span> <span class="s1">&#39;.png&#39;</span><span class="p">]):</span>
                 <span class="nb">input</span> <span class="o">=</span> <span class="n">read_image</span><span class="p">(</span><span class="n">file_path</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="n">image_mode</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="n">image_color_order</span><span class="p">)</span>
             <span class="k">elif</span> <span class="n">is_format</span><span class="p">(</span><span class="n">file_path</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;.ply&#39;</span><span class="p">,</span> <span class="s1">&#39;.obj&#39;</span><span class="p">,</span> <span class="s1">&#39;.glb&#39;</span><span class="p">,</span> <span class="s1">&#39;.gltf&#39;</span><span class="p">]):</span>
-                <span class="kn">from</span> <span class="nn">kiui.mesh</span> <span class="kn">import</span> <span class="n">Mesh</span>
+                <span class="kn">from</span><span class="w"> </span><span class="nn">kiui.mesh</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mesh</span>
                 <span class="nb">input</span> <span class="o">=</span> <span class="n">Mesh</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">file_path</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">file_path</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
@@ -701,7 +701,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2024, kiui
+                Copyright &#169; 2025, kiui
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -721,7 +721,7 @@
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=74e56a62"></script>
+</div><script src="../../../_static/documentation_options.js?v=66235678"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=5fa4622c"></script>
