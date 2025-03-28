@@ -2,6 +2,10 @@
 
 Miscellaneous API.
 
+### Sync timer
+
+.. autoclass:: kiui.timer.sync_timer
+
 ### Super-resolution
 
 .. autofunction:: kiui.sr.sr
