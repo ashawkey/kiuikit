@@ -21,10 +21,6 @@ if __name__ == "__main__":
                 'kisr = kiui.sr:main',
             ],
         },
-        classifiers=[
-            "Programming Language :: Python :: 3 ",
-        ],
-        keywords="utility",
         install_requires=[
             "lazy_loader",
             "varname",
