@@ -6,7 +6,13 @@ import numpy as np
 
 import torch
 import torch.nn.functional as F
-import nvdiffrast.torch as dr
+
+try:
+    import nvdiffrast.torch as dr
+except Exception as e:
+    print('[WARN] try to install nvdiffrast with `pip install git+https://github.com/NVlabs/nvdiffrast`')
+    os.system('pip install git+https://github.com/NVlabs/nvdiffrast')
+    import nvdiffrast.torch as dr
 
 GUI_AVAILABLE = True
 try:

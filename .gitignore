@@ -8,5 +8,5 @@ __pycache__/
 .coverage
 build/
 dist/
-
+data/
 tmp*

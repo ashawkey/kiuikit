@@ -14,7 +14,7 @@ pip install bpy mathutils
 python -m kiui.cli.blender_render --help
 
 # example
-python -m kiui.cli.blender_render --mesh chest.glb --gpu 0 --depth --normal --albedo --camera --blend
+python -m kiui.cli.blender_render --mesh chest.glb --gpu 0 --depth --normal --pbr --camera --blend
 
 # example with wireframe
 python -m kiui.cli.blender_render --mesh chest.glb --wireframe

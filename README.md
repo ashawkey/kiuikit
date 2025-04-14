@@ -13,13 +13,8 @@
 A toolkit for computer vision (especially 3D vision) tasks.
 
 **Features**:
-* Collection of *maintained, reusable and trustworthy* code snippets.
+* Collection of useful & reusable code snippets.
 * Always using lazy import so the code is not slowed down by `import kiui`.
-* Useful CLI tools, such as a GUI mesh renderer.
-
-https://github.com/ashawkey/kiuikit/assets/25863658/d8cbcf0f-a6d8-4fa7-aee9-afbbf25ed167
-
-> ["Seahourse3"](https://skfb.ly/6TwFv) by seanhepburn is licensed under [Creative Commons Attribution](http://creativecommons.org/licenses/by/4.0/).
 
 ### Install
 
@@ -45,12 +40,6 @@ kiui.lo(x)
 kiui.lo(x, y) # support multiple objects
 kiui.lo(kiui) # or any other object (just print with name)
 
-### io utils
-# read image as-is in RGB order
-img = kiui.read_image('image.png', mode='float') # mode: float (default), pil, uint8, tensor
-# write image
-kiui.write_image('image.png', img)
-
 ### visualization tools
 img_tensor = torch.rand(3, 256, 256) 
 # tensor of [3, H, W], [1, H, W], [H, W] / array of [H, W ,3], [H, W, 1], [H, W] in [0, 1]
@@ -60,14 +49,8 @@ kiui.vis.plot_image(img_tensor)
 ### mesh utils
 from kiui.mesh import Mesh
 mesh = Mesh.load('model.obj')
-kiui.lo(mesh.v, mesh.f) # CUDA torch.Tensor suitable for nvdiffrast
-mesh.write('new.obj')
+kiui.lo(mesh.v, mesh.f) # CUDA torch.Tensor
 mesh.write('new.glb') # support exporting to GLB/GLTF too (texture embedded).
-
-# perceptual loss (from https://github.com/richzhang/PerceptualSimilarity)
-from kiui.lpips import LPIPS
-lpips = LPIPS(net='vgg').cuda()
-loss = lpips(input, target) # [B, 3, H, W] image in [-1, 1]
 ```
 
 CLI tools:
@@ -90,6 +73,10 @@ python -m kiui.cli.dircmp <dir1> <dir2>
 
 # lock requirements.txt package versions based on current environment
 python -m kiui.cli.lock_version <requirements.txt>
+
+# render mesh with blender
+python -m kiui.cli.blender_render --mesh input.glb --gpu 0 --depth --normal --pbr --camera --blend
+python -m kiui.cli.blender_render --mesh input.glb --wireframe
 ```
 
 GUI tools:
@@ -105,3 +92,7 @@ kire --help # short cut cmd
 python -m kiui.poser --help
 python -m kiui.poser --load 3head # load preset 3 headed skeleton
 ```
+
+https://github.com/ashawkey/kiuikit/assets/25863658/d8cbcf0f-a6d8-4fa7-aee9-afbbf25ed167
+
+> ["Seahourse3"](https://skfb.ly/6TwFv) by seanhepburn is licensed under [Creative Commons Attribution](http://creativecommons.org/licenses/by/4.0/).

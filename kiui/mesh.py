@@ -396,15 +396,17 @@ class Mesh:
         # always convert scene to mesh, and apply all transforms...
         if isinstance(_data, trimesh.Scene):
             print(f"[INFO] load trimesh: concatenating {len(_data.geometry)} meshes.")
-            _concat = []
-            # loop the scene graph and apply transform to each mesh
-            scene_graph = _data.graph.to_flattened() # dict {name: {transform: 4x4 mat, geometry: str}}
-            for k, v in scene_graph.items():
-                name = v['geometry']
-                if name in _data.geometry and isinstance(_data.geometry[name], trimesh.Trimesh):
-                    transform = v['transform']
-                    _concat.append(_data.geometry[name].apply_transform(transform))
-            _mesh = trimesh.util.concatenate(_concat)
+            # trimesh has built-in function for this
+            _mesh = _data.to_mesh()
+            # # loop the scene graph and apply transform to each mesh
+            # _concat = []
+            # scene_graph = _data.graph.to_flattened() # dict {name: {transform: 4x4 mat, geometry: str}}
+            # for k, v in scene_graph.items():
+            #     name = v['geometry']
+            #     if name in _data.geometry and isinstance(_data.geometry[name], trimesh.Trimesh):
+            #         transform = v['transform']
+            #         _concat.append(_data.geometry[name].apply_transform(transform))
+            # _mesh = trimesh.util.concatenate(_concat)
         else:
             _mesh = _data
         
@@ -510,15 +512,20 @@ class Mesh:
 
     # unit size
     @torch.no_grad()
-    def auto_size(self, bound=0.9):
+    def auto_size(self, bound=0.9, mode: Literal['box', 'sphere'] = 'box'):
         """auto resize the mesh.
 
         Args:
             bound (float, optional): resizing into ``[-bound, bound]^3``. Defaults to 0.9.
+            mode (Literal['box', 'sphere'], optional): the mode to auto resize the mesh. Defaults to 'box'.
         """
         vmin, vmax = self.aabb()
         self.ori_center = (vmax + vmin) / 2
-        self.ori_scale = 2 * bound / torch.max(vmax - vmin).item()
+        if mode == 'box':
+            self.ori_scale = 2 * bound / torch.max(vmax - vmin).item()
+        elif mode == 'sphere':
+            radius = torch.max(torch.norm(self.v - self.ori_center, dim=-1)).item()
+            self.ori_scale = bound / radius
         self.v = (self.v - self.ori_center) * self.ori_scale
 
     def auto_normal(self):

@@ -6,7 +6,7 @@ import math
 import random
 import argparse
 import numpy as np
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 
 ### blender env 
 import bpy
@@ -484,8 +484,9 @@ def main(args):
         cam_poses.append(c2w_opengl)
 
         # render image
-        render_file_path = os.path.join(args.outdir, name, f"{i:03d}")
+        render_file_path = os.path.join(args.outdir, name, f"{i:03d}" if not args.wireframe else f"{i:03d}_wireframe")
         render_file_path = os.path.abspath(render_file_path) # relative path leads to problems for depth/normal/albedo nodes...
+        
         bpy.context.scene.render.filepath = render_file_path
 
         if args.depth:
@@ -499,11 +500,10 @@ def main(args):
         if os.path.exists(render_file_path) and not args.overwrite: 
             continue
         
-        if args.verbose:
+        with nullcontext() if args.verbose else stdout_redirected():
             bpy.ops.render.render(write_still=True)
-        else:
-            with stdout_redirected(): # suppress tons of rendering logs
-                bpy.ops.render.render(write_still=True)
+
+    print(f'[INFO] finished rendering {len(azimuths)} images')
 
     # write camera
     if args.camera:
