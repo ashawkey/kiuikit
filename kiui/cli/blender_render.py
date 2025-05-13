@@ -161,7 +161,7 @@ def setup_rendering(args):
         links.new(render_layers.outputs["Alpha"], node_albedo_alpha.inputs["Alpha"])
         node_albedo = nodes.new(type="CompositorNodeOutputFile")
         node_albedo.label = "Albedo Output"
-        node_albedo.base_path = "/"
+        node_albedo.base_path = ""
         node_albedo.file_slots[0].use_node_format = True
         node_albedo.format.file_format = "PNG"
         node_albedo.format.color_mode = "RGBA"
@@ -170,7 +170,7 @@ def setup_rendering(args):
 
         node_metallicroughness = nodes.new(type="CompositorNodeOutputFile")
         node_metallicroughness.label = "MetallicRoughness Output"
-        node_metallicroughness.base_path = "/"
+        node_metallicroughness.base_path = ""
         node_metallicroughness.file_slots[0].use_node_format = True
         node_metallicroughness.format.file_format = "PNG"
         node_metallicroughness.format.color_mode = "RGB"
@@ -182,7 +182,7 @@ def setup_rendering(args):
         bpy.context.view_layer.use_pass_z = True
         node_depth = nodes.new(type="CompositorNodeOutputFile")
         node_depth.label = "Depth Output"
-        node_depth.base_path = "/" # use absolute save path
+        node_depth.base_path = ""
         node_depth.file_slots[0].use_node_format = True
         node_depth.format.file_format = "OPEN_EXR"
         node_depth.format.color_depth = "16"
@@ -204,7 +204,7 @@ def setup_rendering(args):
         links.new(node_normal_scale.outputs[0], node_normal_bias.inputs[1])
         node_normal = nodes.new(type="CompositorNodeOutputFile")
         node_normal.label = "Normal Output"
-        node_normal.base_path = "/"
+        node_normal.base_path = ""
         node_normal.file_slots[0].use_node_format = True
         node_normal.format.file_format = "OPEN_EXR"
         node_normal.format.color_depth = "16"
