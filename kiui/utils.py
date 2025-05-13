@@ -202,6 +202,9 @@ def batch_process_files(
             # only support image and text file
             if is_format(file_path, ['.jpg', '.jpeg', '.png']):
                 input = read_image(file_path, mode=image_mode, order=image_color_order)
+            elif is_format(file_path, ['.obj', '.glb', 'gltf', '.ply']):
+                from kiui.mesh import Mesh
+                input = Mesh.load(file_path, **kwargs)
             else:
                 with open(file_path, "r") as f:
                     input = f.read()
@@ -213,6 +216,8 @@ def batch_process_files(
                 write_image(file_out_path, output, order=image_color_order)
             elif is_format(file_out_path, ['.npy']):
                 np.save(file_out_path, output)
+            elif is_format(file_out_path, ['.obj', '.glb', 'gltf', '.ply']):
+                output.write(file_out_path)
             else:
                 with open(file_out_path, "w") as f:
                     f.write(output)
