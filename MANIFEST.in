@@ -1,0 +1,2 @@
+recursive-include kiui/assets *
+recursive-include kiui/gridencoder/src *

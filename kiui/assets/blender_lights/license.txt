@@ -1,0 +1,6 @@
+All HDRIs are licenses as CC0.
+
+These were created by Greg Zaal (HDRI Haven https://hdrihaven.com).
+
+NOTE: extracted from blender 2.93
+ref: https://blender.stackexchange.com/questions/128499/how-to-use-built-in-default-hdris-in-renders

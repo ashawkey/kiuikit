@@ -1,0 +1,5 @@
+sphinx
+sphinx_design
+sphinx-copybutton
+furo
+m2r2

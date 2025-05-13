@@ -3,22 +3,45 @@ import cv2
 import torch
 import trimesh
 import numpy as np
+from packaging import version
 
 from kiui.op import safe_normalize, dot
+from kiui.typing import *
 
 class Mesh:
+    """
+    A torch-native trimesh class, with support for ``ply/obj/glb`` formats.
+
+    Note:
+        This class only supports one mesh with a single texture image (an albedo texture and a metallic-roughness texture).
+    """
     def __init__(
         self,
-        v=None,
-        f=None,
-        vn=None,
-        fn=None,
-        vt=None,
-        ft=None,
-        albedo=None,
-        vc=None, # vertex color
-        device=None,
+        v: Optional[Tensor] = None,
+        f: Optional[Tensor] = None,
+        vn: Optional[Tensor] = None,
+        fn: Optional[Tensor] = None,
+        vt: Optional[Tensor] = None,
+        ft: Optional[Tensor] = None,
+        vc: Optional[Tensor] = None, # vertex color
+        albedo: Optional[Tensor] = None,
+        metallicRoughness: Optional[Tensor] = None,
+        device: Optional[torch.device] = None,
     ):
+        """Init a mesh directly using all attributes.
+
+        Args:
+            v (Optional[Tensor]): vertices, float [N, 3]. Defaults to None.
+            f (Optional[Tensor]): faces, int [M, 3]. Defaults to None.
+            vn (Optional[Tensor]): vertex normals, float [N, 3]. Defaults to None.
+            fn (Optional[Tensor]): faces for normals, int [M, 3]. Defaults to None.
+            vt (Optional[Tensor]): vertex uv coordinates, float [N, 2]. Defaults to None.
+            ft (Optional[Tensor]): faces for uvs, int [M, 3]. Defaults to None.
+            vc (Optional[Tensor]): vertex colors, float [N, 3]. Defaults to None.
+            albedo (Optional[Tensor]): albedo texture, float [H, W, 3], RGB format. Defaults to None.
+            metallicRoughness (Optional[Tensor]): metallic-roughness texture, float [H, W, 3], metallic(Blue) = metallicRoughness[..., 2], roughness(Green) = metallicRoughness[..., 1]. Defaults to None.
+            device (Optional[torch.device]): torch device. Defaults to None.
+        """
         self.device = device
         self.v = v
         self.vn = vn
@@ -26,38 +49,84 @@ class Mesh:
         self.f = f
         self.fn = fn
         self.ft = ft
-        # only support a single albedo
-        self.albedo = albedo
-        # support vertex color is no albedo
+        # will first see if there is vertex color to use
         self.vc = vc
+        # only support a single albedo image
+        self.albedo = albedo
+        # pbr extension, metallic(Blue) = metallicRoughness[..., 2], roughness(Green) = metallicRoughness[..., 1]
+        # ref: https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html
+        self.metallicRoughness = metallicRoughness
 
         self.ori_center = 0
         self.ori_scale = 1
+    
+    def __repr__(self):
+        out = f'<kiui.mesh.Mesh>'
+        if self.v is not None: out += f' v={self.v.shape}'
+        if self.f is not None: out += f' f={self.f.shape}'
+        if self.vc is not None: out += f' vc={self.vc.shape}'
+        if self.albedo is not None: out += f' albedo={self.albedo.shape}'
+        if self.metallicRoughness is not None: out += f' metallicRoughness={self.metallicRoughness.shape}'
+        return out
 
     @classmethod
-    def load(cls, path=None, resize=True, renormal=True, retex=False, front_dir='+z', **kwargs):
-        # assume init with kwargs
-        if path is None:
-            mesh = cls(**kwargs)
-        # obj supports face uv
-        elif path.endswith(".obj"):
+    def load(cls, path, resize=True, clean=False, renormal=True, retex=False, vmap=True, bound=0.9, front_dir='+z', **kwargs):
+        """load mesh from path.
+
+        Args:
+            path (str): path to mesh file, supports ply, obj, glb.
+            clean (bool, optional): perform mesh cleaning at load (e.g., merge close vertices). Defaults to False.
+            resize (bool, optional): auto resize the mesh using ``bound`` into [-bound, bound]^3. Defaults to True.
+            renormal (bool, optional): re-calc the vertex normals. Defaults to True.
+            retex (bool, optional): re-calc the uv coordinates, will overwrite the existing uv coordinates. Defaults to False.
+            vmap (bool, optional):  remap vertices based on uv coordinates, so each v correspond to a unique vt. Defaults to True. 
+            wotex (bool, optional): do not try to load any texture. Defaults to False.
+            bound (float, optional): bound to resize. Defaults to 0.9.
+            front_dir (str, optional): front-view direction of the mesh, should be [+-][xyz][ 123]. Defaults to '+z'.
+            device (torch.device, optional): torch device. Defaults to None.
+        
+        Note:
+            a ``device`` keyword argument can be provided to specify the torch device. 
+            If it's not provided, we will try to use ``'cuda'`` as the device if it's available.
+
+        Returns:
+            Mesh: the loaded Mesh object.
+        """
+        # obj supports face uv, use our own loader for better compatibility
+        if path.endswith(".obj"):
             mesh = cls.load_obj(path, **kwargs)
+        # fbx only supports geometry
+        elif path.endswith(".fbx"):
+            mesh = cls.load_fbx(path, **kwargs)
         # trimesh only supports vertex uv, but can load more formats
         else:
             mesh = cls.load_trimesh(path, **kwargs)
+        
+        # clean
+        if clean:
+            from kiui.mesh_utils import clean_mesh
+            vertices = mesh.v.detach().cpu().numpy()
+            triangles = mesh.f.detach().cpu().numpy()
+            vertices, triangles = clean_mesh(vertices, triangles, remesh=False)
+            mesh.v = torch.from_numpy(vertices).contiguous().float().to(mesh.device)
+            mesh.f = torch.from_numpy(triangles).contiguous().int().to(mesh.device)
 
-        print(f"[Mesh loading] v: {mesh.v.shape}, f: {mesh.f.shape}")
         # auto-normalize
         if resize:
-            mesh.auto_size()
+            mesh.auto_size(bound=bound)
+        print(f"[INFO] load mesh, v: {mesh.v.shape}, f: {mesh.f.shape}")
+        
         # auto-fix normal
         if renormal or mesh.vn is None:
             mesh.auto_normal()
-            print(f"[Mesh loading] vn: {mesh.vn.shape}, fn: {mesh.fn.shape}")
-        # auto-fix texcoords
-        if retex or (mesh.albedo is not None and mesh.vt is None):
-            mesh.auto_uv(cache_path=path)
-            print(f"[Mesh loading] vt: {mesh.vt.shape}, ft: {mesh.ft.shape}")
+        print(f"[INFO] load mesh, vn: {mesh.vn.shape}, fn: {mesh.fn.shape}")
+
+        # auto-fix texcoords 
+        if retex:
+            mesh.auto_uv(cache_path=path, vmap=vmap) 
+        
+        if mesh.vt is not None:
+            print(f"[INFO] load mesh, vt: {mesh.vt.shape}, ft: {mesh.ft.shape}")
 
         # rotate front dir to +z
         if front_dir != "+z":
@@ -86,10 +155,59 @@ class Mesh:
 
         return mesh
 
+    # load from fbx file
+    @classmethod
+    def load_fbx(cls, path, device=None):
+        """load an ``fbx`` mesh.
+
+        Args:
+            path (str): path to mesh.
+            device (torch.device, optional): torch device. Defaults to None.
+        
+        Note:
+            We only support loading geometry without texture. Please see [fbxloader](https://github.com/ashawkey/fbxloader) for more details and limitations.
+        
+        Returns:
+            Mesh: the loaded Mesh object.
+        """
+        assert os.path.splitext(path)[-1].lower() == ".fbx"
+        from fbxloader import FBXLoader
+
+        fbx = FBXLoader(path) # load from file or bytes
+        _mesh = fbx.export_trimesh()
+
+        mesh = cls()
+
+        # device
+        if device is None:
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        mesh.device = device
+        mesh.v = torch.tensor(_mesh.vertices, dtype=torch.float32, device=device)
+        mesh.f = torch.tensor(_mesh.faces, dtype=torch.int32, device=device)
+
+        return mesh
+        
+
     # load from obj file
     @classmethod
-    def load_obj(cls, path, albedo_path=None, device=None):
-        assert os.path.splitext(path)[-1] == ".obj"
+    def load_obj(cls, path, wotex=False, albedo_path=None, device=None):
+        """load an ``obj`` mesh.
+
+        Args:
+            path (str): path to mesh.
+            wotex (bool, optional): do not try to load any texture. Defaults to False.
+            albedo_path (str, optional): path to the albedo texture image, will overwrite the existing texture path if specified in mtl. Defaults to None.
+            device (torch.device, optional): torch device. Defaults to None.
+        
+        Note: 
+            We will try to read `mtl` path from `obj`, else we assume the file name is the same as `obj` but with `mtl` extension.
+            The `usemtl` statement is ignored, and we only use the last material path in `mtl` file.
+
+        Returns:
+            Mesh: the loaded Mesh object.
+        """
+        assert os.path.splitext(path)[-1].lower() == ".obj"
 
         mesh = cls()
 
@@ -114,7 +232,6 @@ class Mesh:
             xs.extend([-1] * (3 - len(xs)))
             return xs[0], xs[1], xs[2]
 
-        # NOTE: we ignore usemtl, and assume the mesh ONLY uses one material (first in mtl)
         vertices, texcoords, normals = [], [], []
         faces, tfaces, nfaces = [], [], []
         mtl_path = None
@@ -174,13 +291,17 @@ class Mesh:
             else None
         )
 
+        # if not loading texture
+        if wotex:
+            return mesh
+
         # see if there is vertex color
         use_vertex_color = False
         if mesh.v.shape[1] == 6:
             use_vertex_color = True
             mesh.vc = mesh.v[:, 3:]
             mesh.v = mesh.v[:, :3]
-            print(f"[load_obj] use vertex color: {mesh.vc.shape}")
+            print(f"[INFO] load obj mesh: use vertex color: {mesh.vc.shape}")
 
         # try to load texture image
         if not use_vertex_color:
@@ -198,43 +319,70 @@ class Mesh:
                     break
             
             # if albedo_path is not provided, try retrieve it from mtl
+            metallic_path = None
+            roughness_path = None
             if mtl_path is not None and albedo_path is None:
                 with open(mtl_path, "r") as f:
                     lines = f.readlines()
+
                 for line in lines:
                     split_line = line.split()
                     # empty line
                     if len(split_line) == 0:
                         continue
                     prefix = split_line[0]
-                    # NOTE: simply use the first map_Kd as albedo!
+                    
                     if "map_Kd" in prefix:
+                        # assume relative path!
                         albedo_path = os.path.join(os.path.dirname(path), split_line[1])
-                        print(f"[load_obj] use texture from: {albedo_path}")
-                        break
-            
+                        print(f"[INFO] load obj mesh: use texture from: {albedo_path}")
+                    elif "map_Pm" in prefix:
+                        metallic_path = os.path.join(os.path.dirname(path), split_line[1])
+                    elif "map_Pr" in prefix:
+                        roughness_path = os.path.join(os.path.dirname(path), split_line[1])
+                    
             # still not found albedo_path, or the path doesn't exist
             if albedo_path is None or not os.path.exists(albedo_path):
-                # init an empty texture
-                print(f"[load_obj] init empty albedo!")
-                # albedo = np.random.rand(1024, 1024, 3).astype(np.float32)
-                albedo = np.ones((1024, 1024, 3), dtype=np.float32) * np.array([0.5, 0.5, 0.5])  # default color
+                print(f"[INFO] load obj mesh: failed to load texture!")
+                mesh.albedo = None
             else:
                 albedo = cv2.imread(albedo_path, cv2.IMREAD_UNCHANGED)
                 albedo = cv2.cvtColor(albedo, cv2.COLOR_BGR2RGB)
                 albedo = albedo.astype(np.float32) / 255
-                print(f"[load_obj] load texture: {albedo.shape}")
+                print(f"[INFO] load obj mesh: load texture: {albedo.shape}")
+                mesh.albedo = torch.tensor(albedo, dtype=torch.float32, device=device)
+            
+            # try to load metallic and roughness
+            if metallic_path is not None and roughness_path is not None:
+                print(f"[INFO] load obj mesh: load metallicRoughness from: {metallic_path}, {roughness_path}")
+                metallic = cv2.imread(metallic_path, cv2.IMREAD_UNCHANGED)
+                metallic = metallic.astype(np.float32) / 255
+                roughness = cv2.imread(roughness_path, cv2.IMREAD_UNCHANGED)
+                roughness = roughness.astype(np.float32) / 255
+                metallicRoughness = np.stack([np.zeros_like(metallic), roughness, metallic], axis=-1)
 
-                # import matplotlib.pyplot as plt
-                # plt.imshow(albedo)
-                # plt.show()
-
-            mesh.albedo = torch.tensor(albedo, dtype=torch.float32, device=device)
+                mesh.metallicRoughness = torch.tensor(metallicRoughness, dtype=torch.float32, device=device).contiguous()
 
         return mesh
 
     @classmethod
-    def load_trimesh(cls, path, device=None):
+    def load_trimesh(cls, path, wotex=False, device=None, process=False):
+        """load a mesh using ``trimesh.load()``.
+
+        Can load various formats like ``glb`` and serves as a fallback.
+
+        Note:
+            We will try to merge all meshes if the glb contains more than one, 
+            but **this may cause the texture to lose**, since we only support one texture image!
+
+        Args:
+            path (str): path to the mesh file.
+            wotex (bool, optional): do not try to load any texture. Defaults to False.
+            device (torch.device, optional): torch device. Defaults to None.
+
+        Returns:
+            Mesh: the loaded Mesh object.
+        """
         mesh = cls()
 
         # device
@@ -243,40 +391,58 @@ class Mesh:
 
         mesh.device = device
 
-        # use trimesh to load ply/glb, assume only has one single RootMesh...
-        _data = trimesh.load(path)
+        # use trimesh to load ply/glb
+        _data = trimesh.load(path, process=process)
+        # always convert scene to mesh, and apply all transforms...
         if isinstance(_data, trimesh.Scene):
-            if len(_data.geometry) == 1:
-                _mesh = list(_data.geometry.values())[0]
-            else:
-                # manual concat, will lose texture
-                _concat = []
-                for g in _data.geometry.values():
-                    if isinstance(g, trimesh.Trimesh):
-                        _concat.append(g)
-                _mesh = trimesh.util.concatenate(_concat)
+            print(f"[INFO] load trimesh: concatenating {len(_data.geometry)} meshes.")
+            # trimesh has built-in function for this
+            _mesh = _data.to_mesh()
+            # # loop the scene graph and apply transform to each mesh
+            # _concat = []
+            # scene_graph = _data.graph.to_flattened() # dict {name: {transform: 4x4 mat, geometry: str}}
+            # for k, v in scene_graph.items():
+            #     name = v['geometry']
+            #     if name in _data.geometry and isinstance(_data.geometry[name], trimesh.Trimesh):
+            #         transform = v['transform']
+            #         _concat.append(_data.geometry[name].apply_transform(transform))
+            # _mesh = trimesh.util.concatenate(_concat)
         else:
             _mesh = _data
         
-        if _mesh.visual.kind == 'vertex':
-            vertex_colors = _mesh.visual.vertex_colors
-            vertex_colors = np.array(vertex_colors[..., :3]).astype(np.float32) / 255
-            mesh.vc = torch.tensor(vertex_colors, dtype=torch.float32, device=device)
-            print(f"[load_trimesh] use vertex color: {mesh.vc.shape}")
-        elif _mesh.visual.kind == 'texture':
-            _material = _mesh.visual.material
-            if isinstance(_material, trimesh.visual.material.PBRMaterial):
-                texture = np.array(_material.baseColorTexture).astype(np.float32) / 255
-            elif isinstance(_material, trimesh.visual.material.SimpleMaterial):
-                texture = np.array(_material.to_pbr().baseColorTexture).astype(np.float32) / 255
+        if not wotex:
+            if _mesh.visual.kind == 'vertex':
+                vertex_colors = _mesh.visual.vertex_colors
+                vertex_colors = np.array(vertex_colors[..., :3]).astype(np.float32) / 255
+                mesh.vc = torch.tensor(vertex_colors, dtype=torch.float32, device=device)
+                print(f"[INFO] load trimesh: use vertex color: {mesh.vc.shape}")
+            elif _mesh.visual.kind == 'texture':
+                try:
+                    _material = _mesh.visual.material
+                    if isinstance(_material, trimesh.visual.material.PBRMaterial):
+                        texture = np.array(_material.baseColorTexture).astype(np.float32) / 255
+                        # load metallicRoughness if present
+                        if _material.metallicRoughnessTexture is not None:
+                            metallicRoughness = np.array(_material.metallicRoughnessTexture).astype(np.float32) / 255
+                            # NOTE: fix a bug in trimesh that loads metallicRoughness in wrong channels: https://github.com/mikedh/trimesh/issues/2195
+                            if version.parse(trimesh.__version__) < version.parse('4.2.2'):
+                                metallicRoughness = metallicRoughness[..., [2, 1, 0]]
+                            mesh.metallicRoughness = torch.tensor(metallicRoughness, dtype=torch.float32, device=device).contiguous()
+                    elif isinstance(_material, trimesh.visual.material.SimpleMaterial):
+                        texture = np.array(_material.to_pbr().baseColorTexture).astype(np.float32) / 255
+                    else:
+                        raise NotImplementedError(f"material type {type(_material)} not supported!")
+                    if len(texture.shape) == 2:
+                        texture = texture[..., None].repeat(3, axis=-1)
+                    mesh.albedo = torch.tensor(texture[..., :3], dtype=torch.float32, device=device).contiguous()
+                    print(f"[INFO] load trimesh: load texture: {texture.shape}")
+                # there really can be lots of mysterious errors...
+                except Exception as e:
+                    mesh.albedo = None
+                    print(f"[INFO] load trimesh: failed to load texture.")
             else:
-                raise NotImplementedError(f"material type {type(_material)} not supported!")
-            mesh.albedo = torch.tensor(texture, dtype=torch.float32, device=device)
-            print(f"[load_trimesh] load texture: {texture.shape}")
-        else:
-            texture = np.ones((1024, 1024, 3), dtype=np.float32) * np.array([0.5, 0.5, 0.5])
-            mesh.albedo = torch.tensor(texture, dtype=torch.float32, device=device)
-            print(f"[load_trimesh] failed to load texture.")
+                mesh.albedo = None
+                print(f"[INFO] load trimesh: failed to load texture.")
 
         vertices = _mesh.vertices
 
@@ -320,23 +486,55 @@ class Mesh:
 
         return mesh
 
+    # sample surface (using trimesh)
+    def sample_surface(self, count: int):
+        """sample points on the surface of the mesh.
+
+        Args:
+            count (int): number of points to sample.
+
+        Returns:
+            torch.Tensor: the sampled points, float [count, 3].
+        """
+        _mesh = trimesh.Trimesh(vertices=self.v.detach().cpu().numpy(), faces=self.f.detach().cpu().numpy())
+        points, face_idx = trimesh.sample.sample_surface(_mesh, count)
+        points = torch.from_numpy(points).float().to(self.device)
+        return points
+
     # aabb
     def aabb(self):
+        """get the axis-aligned bounding box of the mesh.
+
+        Returns:
+            Tuple[torch.Tensor]: the min xyz and max xyz of the mesh.
+        """
         return torch.min(self.v, dim=0).values, torch.max(self.v, dim=0).values
 
     # unit size
     @torch.no_grad()
-    def auto_size(self):
+    def auto_size(self, bound=0.9, mode: Literal['box', 'sphere'] = 'box'):
+        """auto resize the mesh.
+
+        Args:
+            bound (float, optional): resizing into ``[-bound, bound]^3``. Defaults to 0.9.
+            mode (Literal['box', 'sphere'], optional): the mode to auto resize the mesh. Defaults to 'box'.
+        """
         vmin, vmax = self.aabb()
         self.ori_center = (vmax + vmin) / 2
-        self.ori_scale = 1.8 / torch.max(vmax - vmin).item()
+        if mode == 'box':
+            self.ori_scale = 2 * bound / torch.max(vmax - vmin).item()
+        elif mode == 'sphere':
+            radius = torch.max(torch.norm(self.v - self.ori_center, dim=-1)).item()
+            self.ori_scale = bound / radius
         self.v = (self.v - self.ori_center) * self.ori_scale
 
     def auto_normal(self):
+        """auto calculate the vertex normals.
+        """
         i0, i1, i2 = self.f[:, 0].long(), self.f[:, 1].long(), self.f[:, 2].long()
         v0, v1, v2 = self.v[i0, :], self.v[i1, :], self.v[i2, :]
 
-        face_normals = torch.cross(v1 - v0, v2 - v0)
+        face_normals = torch.cross(v1 - v0, v2 - v0, dim=-1)
 
         # Splat face normals to vertices
         vn = torch.zeros_like(self.v)
@@ -356,6 +554,13 @@ class Mesh:
         self.fn = self.f
 
     def auto_uv(self, cache_path=None, vmap=True):
+        """auto calculate the uv coordinates.
+
+        Args:
+            cache_path (str, optional): path to save/load the uv cache as a npz file, this can avoid calculating uv every time when loading the same mesh, which is time-consuming. Defaults to None.
+            vmap (bool, optional): remap vertices based on uv coordinates, so each v correspond to a unique vt (necessary for formats like gltf). 
+                Usually this will duplicate the vertices on the edge of uv atlas. Defaults to True.
+        """
         # try to load cache
         if cache_path is not None:
             cache_path = os.path.splitext(cache_path)[0] + "_uv.npz"
@@ -384,34 +589,79 @@ class Mesh:
         self.ft = ft
 
         if vmap:
-            # remap v/f to vt/ft, so each v correspond to a unique vt. (necessary for gltf)
             vmapping = torch.from_numpy(vmapping.astype(np.int64)).long().to(self.device)
             self.align_v_to_vt(vmapping)
     
+    def remap_uv(self, v):
+        """ remap uv texture (vt) to other surface.
+
+        Args:
+            v (torch.Tensor): the target mesh vertices, float [N, 3].
+        """
+
+        assert self.vt is not None
+
+        if self.v.shape[0] != self.vt.shape[0]:
+            self.align_v_to_vt()
+
+        # find the closest face for each vertex
+        import cubvh 
+        BVH = cubvh.cuBVH(self.v, self.f)
+        dist, face_id, uvw = BVH.unsigned_distance(v, return_uvw=True)
+
+        # get original uv
+        faces = self.f[face_id].long()
+        vt0 = self.vt[faces[:, 0]]
+        vt1 = self.vt[faces[:, 1]]
+        vt2 = self.vt[faces[:, 2]]
+
+        # calc new uv
+        vt = vt0 * uvw[:, 0:1] + vt1 * uvw[:, 1:2] + vt2 * uvw[:, 2:3]
+
+        return vt
+
+    
     def align_v_to_vt(self, vmapping=None):
-        # remap v/f and vn/vn to vt/ft.
+        """ remap v/f and vn/fn to vt/ft.
+
+        Args:
+            vmapping (np.ndarray, optional): the mapping relationship from f to ft. Defaults to None.
+        """
         if vmapping is None:
             ft = self.ft.view(-1).long()
             f = self.f.view(-1).long()
             vmapping = torch.zeros(self.vt.shape[0], dtype=torch.long, device=self.device)
-            vmapping[ft] = f # scatter, choose one if not index is not unique
+            vmapping[ft] = f # scatter, randomly choose one if index is not unique
 
         self.v = self.v[vmapping]
         self.f = self.ft
-        # assume fn == f
+        
         if self.vn is not None:
             self.vn = self.vn[vmapping]
             self.fn = self.ft
 
     def to(self, device):
+        """move all tensor attributes to device.
+
+        Args:
+            device (torch.device): target device.
+
+        Returns:
+            Mesh: self.
+        """
         self.device = device
-        for name in ["v", "f", "vn", "fn", "vt", "ft", "albedo"]:
+        for name in ["v", "f", "vn", "fn", "vt", "ft", "albedo", "vc", "metallicRoughness"]:
             tensor = getattr(self, name)
             if tensor is not None:
                 setattr(self, name, tensor.to(device))
         return self
     
     def write(self, path):
+        """write the mesh to a path.
+
+        Args:
+            path (str): path to write, supports ply, obj and glb.
+        """
         if path.endswith(".ply"):
             self.write_ply(path)
         elif path.endswith(".obj"):
@@ -421,8 +671,15 @@ class Mesh:
         else:
             raise NotImplementedError(f"format {path} not supported!")
     
-    # write to ply file (only geom)
     def write_ply(self, path):
+        """write the mesh in ply format. Only for geometry!
+
+        Args:
+            path (str): path to write.
+        """
+
+        if self.albedo is not None:
+            print(f'[WARN] ply format does not support exporting texture, will ignore!')
 
         v_np = self.v.detach().cpu().numpy()
         f_np = self.f.detach().cpu().numpy()
@@ -430,70 +687,44 @@ class Mesh:
         _mesh = trimesh.Trimesh(vertices=v_np, faces=f_np)
         _mesh.export(path)
 
-    # write to gltf/glb file (geom + texture)
-    def write_glb(self, path):
 
-        assert self.vn is not None and self.vt is not None # should be improved to support export without texture...
+    def write_glb(self, path):
+        """write the mesh in glb/gltf format.
+          This will create a scene with a single mesh.
+
+        Args:
+            path (str): path to write.
+        """
 
         # assert self.v.shape[0] == self.vn.shape[0] and self.v.shape[0] == self.vt.shape[0]
-        if self.v.shape[0] != self.vt.shape[0]:
+        if self.vt is not None and self.v.shape[0] != self.vt.shape[0]:
             self.align_v_to_vt()
-
-        # assume f == fn == ft
 
         import pygltflib
 
         f_np = self.f.detach().cpu().numpy().astype(np.uint32)
-        v_np = self.v.detach().cpu().numpy().astype(np.float32)
-        # vn_np = self.vn.detach().cpu().numpy().astype(np.float32)
-        vt_np = self.vt.detach().cpu().numpy().astype(np.float32)
-
-        albedo = self.albedo.detach().cpu().numpy()
-        albedo = (albedo * 255).astype(np.uint8)
-        albedo = cv2.cvtColor(albedo, cv2.COLOR_RGB2BGR)
-
         f_np_blob = f_np.flatten().tobytes()
-        v_np_blob = v_np.tobytes()
-        # vn_np_blob = vn_np.tobytes()
-        vt_np_blob = vt_np.tobytes()
-        albedo_blob = cv2.imencode('.png', albedo)[1].tobytes()
 
+        v_np = self.v.detach().cpu().numpy().astype(np.float32)
+        v_np_blob = v_np.tobytes()
+
+        blob = f_np_blob + v_np_blob
+        byteOffset = len(blob)
+
+        # base mesh
         gltf = pygltflib.GLTF2(
             scene=0,
             scenes=[pygltflib.Scene(nodes=[0])],
             nodes=[pygltflib.Node(mesh=0)],
-            meshes=[pygltflib.Mesh(primitives=[
-                pygltflib.Primitive(
-                    # indices to accessors (0 is triangles)
-                    attributes=pygltflib.Attributes(
-                        POSITION=1, TEXCOORD_0=2, 
-                    ),
-                    indices=0, material=0,
-                )
-            ])],
-            materials=[
-                pygltflib.Material(
-                    pbrMetallicRoughness=pygltflib.PbrMetallicRoughness(
-                        baseColorTexture=pygltflib.TextureInfo(index=0, texCoord=0),
-                        metallicFactor=0.0,
-                        roughnessFactor=1.0,
-                    ),
-                    alphaCutoff=0,
-                    doubleSided=True,
-                )
-            ],
-            textures=[
-                pygltflib.Texture(sampler=0, source=0),
-            ],
-            samplers=[
-                pygltflib.Sampler(magFilter=pygltflib.LINEAR, minFilter=pygltflib.LINEAR_MIPMAP_LINEAR, wrapS=pygltflib.REPEAT, wrapT=pygltflib.REPEAT),
-            ],
-            images=[
-                # use embedded (buffer) image
-                pygltflib.Image(bufferView=3, mimeType="image/png"),
-            ],
+            meshes=[pygltflib.Mesh(primitives=[pygltflib.Primitive(
+                # indices to accessors (0 is triangles)
+                attributes=pygltflib.Attributes(
+                    POSITION=1,
+                ),
+                indices=0,
+            )])],
             buffers=[
-                pygltflib.Buffer(byteLength=len(f_np_blob) + len(v_np_blob) + len(vt_np_blob) + len(albedo_blob))
+                pygltflib.Buffer(byteLength=len(f_np_blob) + len(v_np_blob))
             ],
             # buffer view (based on dtype)
             bufferViews=[
@@ -510,20 +741,6 @@ class Mesh:
                     byteLength=len(v_np_blob),
                     byteStride=12, # vec3
                     target=pygltflib.ARRAY_BUFFER, # GL_ARRAY_BUFFER (34962)
-                ),
-                # texcoords; as vec2 array
-                pygltflib.BufferView(
-                    buffer=0,
-                    byteOffset=len(f_np_blob) + len(v_np_blob),
-                    byteLength=len(vt_np_blob),
-                    byteStride=8, # vec2
-                    target=pygltflib.ARRAY_BUFFER,
-                ),
-                # texture; as none target
-                pygltflib.BufferView(
-                    buffer=0,
-                    byteOffset=len(f_np_blob) + len(v_np_blob) + len(vt_np_blob),
-                    byteLength=len(albedo_blob),
                 ),
             ],
             accessors=[
@@ -545,6 +762,53 @@ class Mesh:
                     max=v_np.max(axis=0).tolist(),
                     min=v_np.min(axis=0).tolist(),
                 ),
+            ],
+        )
+
+        # append texture info
+        if self.vt is not None:
+
+            vt_np = self.vt.detach().cpu().numpy().astype(np.float32)
+            vt_np_blob = vt_np.tobytes()
+
+            albedo = self.albedo.detach().cpu().numpy()
+            albedo = (albedo * 255).astype(np.uint8)
+            albedo = cv2.cvtColor(albedo, cv2.COLOR_RGB2BGR)
+            albedo_blob = cv2.imencode('.png', albedo)[1].tobytes()
+
+            # update primitive
+            gltf.meshes[0].primitives[0].attributes.TEXCOORD_0 = 2
+            gltf.meshes[0].primitives[0].material = 0
+
+            # update materials
+            gltf.materials.append(pygltflib.Material(
+                pbrMetallicRoughness=pygltflib.PbrMetallicRoughness(
+                    baseColorTexture=pygltflib.TextureInfo(index=0, texCoord=0),
+                    metallicFactor=0.0,
+                    roughnessFactor=1.0,
+                ),
+                alphaMode=pygltflib.OPAQUE,
+                alphaCutoff=None,
+                doubleSided=True,
+            ))
+
+            gltf.textures.append(pygltflib.Texture(sampler=0, source=0))
+            gltf.samplers.append(pygltflib.Sampler(magFilter=pygltflib.LINEAR, minFilter=pygltflib.LINEAR_MIPMAP_LINEAR, wrapS=pygltflib.REPEAT, wrapT=pygltflib.REPEAT))
+            gltf.images.append(pygltflib.Image(bufferView=3, mimeType="image/png"))
+
+            # update buffers
+            gltf.bufferViews.append(
+                # index = 2, texcoords; as vec2 array
+                pygltflib.BufferView(
+                    buffer=0,
+                    byteOffset=byteOffset,
+                    byteLength=len(vt_np_blob),
+                    byteStride=8, # vec2
+                    target=pygltflib.ARRAY_BUFFER,
+                )
+            )
+
+            gltf.accessors.append(
                 # 2 = texcoords
                 pygltflib.Accessor(
                     bufferView=2,
@@ -553,21 +817,76 @@ class Mesh:
                     type=pygltflib.VEC2,
                     max=vt_np.max(axis=0).tolist(),
                     min=vt_np.min(axis=0).tolist(),
-                ),
-            ],
-        )
+                )
+            )
 
+            blob += vt_np_blob 
+            byteOffset += len(vt_np_blob)
+
+            gltf.bufferViews.append(
+                # index = 3, albedo texture; as none target
+                pygltflib.BufferView(
+                    buffer=0,
+                    byteOffset=byteOffset,
+                    byteLength=len(albedo_blob),
+                )
+            )
+
+            blob += albedo_blob
+            byteOffset += len(albedo_blob)
+
+            gltf.buffers[0].byteLength = byteOffset
+
+            # append metllic roughness
+            if self.metallicRoughness is not None:
+                metallicRoughness = self.metallicRoughness.detach().cpu().numpy()
+                metallicRoughness = (metallicRoughness * 255).astype(np.uint8)
+                metallicRoughness = cv2.cvtColor(metallicRoughness, cv2.COLOR_RGB2BGR)
+                metallicRoughness_blob = cv2.imencode('.png', metallicRoughness)[1].tobytes()
+
+                # update texture definition
+                gltf.materials[0].pbrMetallicRoughness.metallicFactor = 1.0
+                gltf.materials[0].pbrMetallicRoughness.roughnessFactor = 1.0
+                gltf.materials[0].pbrMetallicRoughness.metallicRoughnessTexture = pygltflib.TextureInfo(index=1, texCoord=0)
+
+                gltf.textures.append(pygltflib.Texture(sampler=1, source=1))
+                gltf.samplers.append(pygltflib.Sampler(magFilter=pygltflib.LINEAR, minFilter=pygltflib.LINEAR_MIPMAP_LINEAR, wrapS=pygltflib.REPEAT, wrapT=pygltflib.REPEAT))
+                gltf.images.append(pygltflib.Image(bufferView=4, mimeType="image/png"))
+
+                # update buffers
+                gltf.bufferViews.append(
+                    # index = 4, metallicRoughness texture; as none target
+                    pygltflib.BufferView(
+                        buffer=0,
+                        byteOffset=byteOffset,
+                        byteLength=len(metallicRoughness_blob),
+                    )
+                )
+
+                blob += metallicRoughness_blob
+                byteOffset += len(metallicRoughness_blob)
+
+                gltf.buffers[0].byteLength = byteOffset
+
+            
         # set actual data
-        gltf.set_binary_blob(f_np_blob + v_np_blob + vt_np_blob + albedo_blob)
+        gltf.set_binary_blob(blob)
 
         # glb = b"".join(gltf.save_to_bytes())
         gltf.save(path)
 
-    # write to obj file (geom + texture)
+
     def write_obj(self, path):
+        """write the mesh in obj format. Will also write the texture and mtl files.
+
+        Args:
+            path (str): path to write.
+        """
 
         mtl_path = path.replace(".obj", ".mtl")
         albedo_path = path.replace(".obj", "_albedo.png")
+        metallic_path = path.replace(".obj", "_metallic.png")
+        roughness_path = path.replace(".obj", "_roughness.png")
 
         v_np = self.v.detach().cpu().numpy()
         vt_np = self.vt.detach().cpu().numpy() if self.vt is not None else None
@@ -606,8 +925,34 @@ class Mesh:
             fp.write(f"Tr 1 \n")
             fp.write(f"illum 1 \n")
             fp.write(f"Ns 0 \n")
-            fp.write(f"map_Kd {os.path.basename(albedo_path)} \n")
+            if self.albedo is not None:
+                fp.write(f"map_Kd {os.path.basename(albedo_path)} \n")
+            if self.metallicRoughness is not None:
+                # ref: https://en.wikipedia.org/wiki/Wavefront_.obj_file#Physically-based_Rendering
+                fp.write(f"map_Pm {os.path.basename(metallic_path)} \n")
+                fp.write(f"map_Pr {os.path.basename(roughness_path)} \n")
 
-        albedo = self.albedo.detach().cpu().numpy()
-        albedo = (albedo * 255).astype(np.uint8)
-        cv2.imwrite(albedo_path, cv2.cvtColor(albedo, cv2.COLOR_RGB2BGR))
+        if self.albedo is not None:
+            albedo = self.albedo.detach().cpu().numpy()
+            albedo = (albedo * 255).astype(np.uint8)
+            cv2.imwrite(albedo_path, cv2.cvtColor(albedo, cv2.COLOR_RGB2BGR))
+        
+        if self.metallicRoughness is not None:
+            metallicRoughness = self.metallicRoughness.detach().cpu().numpy()
+            metallicRoughness = (metallicRoughness * 255).astype(np.uint8)
+            cv2.imwrite(metallic_path, metallicRoughness[..., 2])
+            cv2.imwrite(roughness_path, metallicRoughness[..., 1])
+
+    def clone(self):
+        """clone the mesh.
+
+        Returns:
+            Mesh: the cloned Mesh object.
+        """
+        mesh = Mesh()
+        mesh.device = self.device
+        for name in ["v", "f", "vn", "fn", "vt", "ft", "vc", "albedo", "metallicRoughness"]:
+            tensor = getattr(self, name)
+            if tensor is not None:
+                setattr(mesh, name, tensor.clone())
+        return mesh

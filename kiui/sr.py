@@ -13,6 +13,8 @@ from PIL import Image
 
 from huggingface_hub import hf_hub_download
 
+from kiui.typing import *
+
 HF_MODELS = {
     2: dict(
         repo_id='ai-forever/Real-ESRGAN',
@@ -527,17 +529,37 @@ class RealESRGAN:
         return sr_img
 
 
-# a lazy load functional API for convenience
 MODELS = {}
-def sr(image, scale=2):
+def sr(image: ndarray, scale: Literal[2, 4, 8] = 2, device=None):
+    """ lazy load functional super-resolution API for convenience.
+
+    Args:
+        image (ndarray): input image, uint8/float32 [H, W, 3]
+        scale (Literal[2, 4, 8], optional): upscale factor. Defaults to 2.
+        device (torch.device, optional): device to put SR models, if not provided, will try to use 'cuda'. Defaults to None.
+
+    Returns:
+        ndarray: super-resolutioned image, uint8/float32 [H * scale, W * scale, 3]
+    """
     global MODELS
     if scale not in MODELS:
-        MODELS[scale] = RealESRGAN('cuda', scale=scale)
+        if device is None:
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        MODELS[scale] = RealESRGAN(device, scale=scale)
+    
+    return_float = False
+    if image.dtype == np.float32:
+        return_float = True
+        image = (image * 255).astype(np.uint8)
+
     sr_image = MODELS[scale].predict(image)
+
+    if return_float:
+        sr_image = sr_image.astype(np.float32) / 255.0
+
     return sr_image
 
-
-if __name__ == '__main__':
+def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('input', type=str)
@@ -556,3 +578,7 @@ if __name__ == '__main__':
     sr_image = cv2.cvtColor(sr_image, cv2.COLOR_RGB2BGR)
 
     cv2.imwrite(args.output, sr_image)
+
+
+if __name__ == '__main__':
+    main()
