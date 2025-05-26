@@ -1,16 +1,16 @@
-import os
-import sys
-import tqdm
+import argparse
 import glob
 import math
+import os
 import random
-import argparse
-import numpy as np
+import sys
 from contextlib import contextmanager, nullcontext
 
 ### blender env 
 import bpy
-from mathutils import Vector, Matrix
+import numpy as np
+import tqdm
+from mathutils import Matrix, Vector
 
 # print('=== BPY VERSION ===', bpy.app.version_string)
 
@@ -497,7 +497,7 @@ def main(args):
             refs['node_albedo'].file_slots[0].path = render_file_path + "_albedo"
             refs['node_metallicroughness'].file_slots[0].path = render_file_path + "_mr"
 
-        if os.path.exists(render_file_path) and not args.overwrite: 
+        if os.path.exists(render_file_path+".png") and not args.overwrite: 
             continue
         
         with nullcontext() if args.verbose else stdout_redirected():
