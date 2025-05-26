@@ -1,16 +1,16 @@
-import argparse
+import os
+import sys
+import tqdm
 import glob
 import math
-import os
 import random
-import sys
+import argparse
+import numpy as np
 from contextlib import contextmanager, nullcontext
 
 ### blender env 
 import bpy
-import numpy as np
-import tqdm
-from mathutils import Matrix, Vector
+from mathutils import Vector, Matrix
 
 # print('=== BPY VERSION ===', bpy.app.version_string)
 
