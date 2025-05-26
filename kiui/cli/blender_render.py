@@ -497,7 +497,7 @@ def main(args):
             refs['node_albedo'].file_slots[0].path = render_file_path + "_albedo"
             refs['node_metallicroughness'].file_slots[0].path = render_file_path + "_mr"
 
-        if os.path.exists(render_file_path) and not args.overwrite: 
+        if os.path.exists(render_file_path+".png") and not args.overwrite: 
             continue
         
         with nullcontext() if args.verbose else stdout_redirected():
