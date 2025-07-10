@@ -49,6 +49,7 @@ def decimate_mesh(
 
     _ori_vert_shape = verts.shape
     _ori_face_shape = faces.shape
+    target = int(target)
 
     if backend == "pyfqmr":
         import pyfqmr
@@ -57,7 +58,7 @@ def decimate_mesh(
         solver.setMesh(verts, faces)
         solver.simplify_mesh(target_count=target, preserve_border=False, verbose=False)
         verts, faces, normals = solver.getMesh()
-    else:
+    elif backend == "pymeshlab":
         m = pml.Mesh(verts, faces)
         ms = pml.MeshSet()
         ms.add_mesh(m, "mesh")  # will copy!
@@ -65,7 +66,7 @@ def decimate_mesh(
         # filters
         # ms.meshing_decimation_clustering(threshold=pml.PercentageValue(1))
         ms.meshing_decimation_quadric_edge_collapse(
-            targetfacenum=int(target), optimalplacement=optimalplacement
+            targetfacenum=target, optimalplacement=optimalplacement
         )
 
         if remesh:
@@ -79,6 +80,27 @@ def decimate_mesh(
         m.compact()
         verts = m.vertex_matrix()
         faces = m.face_matrix()
+    elif backend == "omo":
+        import omo
+        sizes = np.array([3] * faces.shape[0]).astype(np.int32) # assume trimesh. [faces.shape[1] for _ in range(faces.shape[0])]
+        omo_mesh = omo.HostMesh(
+            sizes,
+            faces.flatten(),
+            verts,
+            merge_collocated_vertices=True,
+            remove_degenerate_faces=True,
+            remove_isolated_vertices=True,
+        )
+        if faces.shape[0] <= 1000000: #  CPU is faster for meshes < 1M faces
+            dec_mesh = omo.decimate(omo_mesh, target_vertex_count=target // 2)
+        else:
+            omo_mesh = omo.DeviceMesh(omo_mesh) # turn on GPU for high-res
+            dec_mesh = omo.decimate(omo_mesh, target_vertex_count=target // 2)
+            dec_mesh = omo.HostMesh(dec_mesh)
+        new_sizes, new_indices, verts = dec_mesh.data()
+        faces = new_indices.reshape(-1, 3)
+    else:
+        raise ValueError(f"Invalid backend: {backend}")
 
     if verbose:
         print(f"[INFO] mesh decimation: {_ori_vert_shape} --> {verts.shape}, {_ori_face_shape} --> {faces.shape}")
