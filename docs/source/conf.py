@@ -21,7 +21,7 @@ copyright = '2025, kiui'
 author = 'kiui'
 
 # The full version, including alpha/beta/rc tags
-release = '0.2.16'
+release = '0.2.17'
 
 
 # -- General configuration ---------------------------------------------------
