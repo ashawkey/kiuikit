@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from typing import Literal
 
 from kiui.op import safe_normalize
 
@@ -30,7 +31,12 @@ elif PML_VER.startswith('2022.2'):
 
 
 def decimate_mesh(
-    verts, faces, target=5e4, backend="pymeshlab", remesh=False, optimalplacement=True, verbose=True
+    verts, faces, 
+    target: int = 100000, 
+    backend: Literal["pymeshlab", "pyfqmr", "omo", "omo_cpu"] = "pymeshlab", 
+    remesh: bool = False, 
+    optimalplacement: bool = False, 
+    verbose: bool = True
 ):
     """ perform mesh decimation.
 
@@ -38,7 +44,7 @@ def decimate_mesh(
         verts (np.ndarray): mesh vertices, float [N, 3]
         faces (np.ndarray): mesh faces, int [M, 3]
         target (int): targeted number of faces
-        backend (str, optional): algorithm backend, can be "pymeshlab" or "pyfqmr". Defaults to "pymeshlab".
+        backend (str, optional): algorithm backend, can be "pymeshlab", "pyfqmr", "omo" or "omo_cpu". Defaults to "pymeshlab".
         remesh (bool, optional): whether to remesh after decimation. Defaults to False.
         optimalplacement (bool, optional): For flat mesh, use False to prevent spikes. Defaults to True.
         verbose (bool, optional): whether to print the decimation process. Defaults to True.
@@ -50,6 +56,9 @@ def decimate_mesh(
     _ori_vert_shape = verts.shape
     _ori_face_shape = faces.shape
     target = int(target)
+
+    if verbose:
+        print(f"[INFO] decimating mesh with {backend} backend")
 
     if backend == "pyfqmr":
         import pyfqmr
@@ -80,7 +89,7 @@ def decimate_mesh(
         m.compact()
         verts = m.vertex_matrix()
         faces = m.face_matrix()
-    elif backend == "omo":
+    elif backend == "omo" or backend == "omo_cpu":
         import omo
         sizes = np.array([3] * faces.shape[0]).astype(np.int32) # assume trimesh. [faces.shape[1] for _ in range(faces.shape[0])]
         omo_mesh = omo.HostMesh(
@@ -91,7 +100,7 @@ def decimate_mesh(
             remove_degenerate_faces=True,
             remove_isolated_vertices=True,
         )
-        if faces.shape[0] <= 1000000: #  CPU is faster for meshes < 1M faces
+        if backend == "omo_cpu" or faces.shape[0] <= 1000000: #  CPU is faster for meshes < 1M faces
             dec_mesh = omo.decimate(omo_mesh, target_vertex_count=target // 2)
         else:
             omo_mesh = omo.DeviceMesh(omo_mesh) # turn on GPU for high-res

@@ -81,6 +81,10 @@ def lo(*xs, verbose=0):
         _lo(x, name)
 
 
+def log(*args, **kwargs):
+    """alias of kiui.utils.lo"""
+    lo(*args, **kwargs)
+
 def seed_everything(seed=42, verbose=False, strict=False):
     """auto set seed for random, numpy and torch.
 
