@@ -1,15 +1,15 @@
 <!doctype html>
 <html class="no-js" lang="en" data-content_root="../">
-  <head><meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex/" /><link rel="search" title="Search" href="../search/" /><link rel="next" title="Utils" href="../utils/" /><link rel="prev" title="Mesh" href="../mesh/" />
-        <link rel="prefetch" href="../_static/logo.png" as="image" />
+<link rel="index" title="Index" href="../genindex/"><link rel="search" title="Search" href="../search/"><link rel="next" title="Utils" href="../utils/"><link rel="prev" title="Mesh" href="../mesh/">
+        <link rel="prefetch" href="../_static/logo.png" as="image">
 
-    <link rel="shortcut icon" href="../_static/icon.png"/><!-- Generated with Sphinx 8.1.3 and Furo 2025.07.19 -->
-        <title>Camera - kiui 0.2.18 documentation</title>
+    <link rel="shortcut icon" href="../_static/icon.png"><!-- Generated with Sphinx 8.1.3 and Furo 2025.09.25 -->
+        <title>Camera - kiui 0.2.19 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=25af2a20" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=580074bf" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -25,14 +25,14 @@
   }
   @media not print {
     body[data-theme="dark"] {
-      --color-code-background: #2b2b2b;
-  --color-code-foreground: #f8f8f2;
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
   
     }
     @media (prefers-color-scheme: dark) {
       body:not([data-theme="light"]) {
-        --color-code-background: #2b2b2b;
-  --color-code-foreground: #f8f8f2;
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
   
       }
     }
@@ -147,14 +147,10 @@
   </symbol>
 </svg>
 
-<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation">
-<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc">
-<label class="overlay sidebar-overlay" for="__navigation">
-  <div class="visually-hidden">Hide navigation sidebar</div>
-</label>
-<label class="overlay toc-overlay" for="__toc">
-  <div class="visually-hidden">Hide table of contents sidebar</div>
-</label>
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
 
 <a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
 
@@ -164,17 +160,15 @@
   <header class="mobile-header">
     <div class="header-left">
       <label class="nav-overlay-icon" for="__navigation">
-        <div class="visually-hidden">Toggle site navigation sidebar</div>
-        <i class="icon"><svg><use href="#svg-menu"></use></svg></i>
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
       </label>
     </div>
     <div class="header-center">
-      <a href="../"><div class="brand">kiui 0.2.18 documentation</div></a>
+      <a href="../"><div class="brand">kiui 0.2.19 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
-        <button class="theme-toggle">
-          <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
           <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
           <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
           <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
@@ -182,8 +176,7 @@
         </button>
       </div>
       <label class="toc-overlay-icon toc-header-icon" for="__toc">
-        <div class="visually-hidden">Toggle table of contents sidebar</div>
-        <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
       </label>
     </div>
   </header>
@@ -253,8 +246,7 @@
   </a>
 </div>
 <div class="theme-toggle-container theme-toggle-content">
-            <button class="theme-toggle">
-              <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
               <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
               <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
               <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
@@ -262,8 +254,7 @@
             </button>
           </div>
           <label class="toc-overlay-icon toc-content-icon" for="__toc">
-            <div class="visually-hidden">Toggle table of contents sidebar</div>
-            <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
           </label>
         </div>
         <article role="main" id="furo-main-content">
@@ -288,9 +279,19 @@
 <blockquote>
 <div><p><strong>Left/right-handed notation</strong>: roll your left/right palm from x to y, and your thumb should point to z.</p>
 </div></blockquote>
+<p>A common color code: right = <span class="raw-html-m2r"><span style="color:red">red</span></span>., up = <span class="raw-html-m2r"><span style="color:green">green</span></span>, forward = <span class="raw-html-m2r"><span style="color:blue">blue</span></span> (XYZ=RUF=RGB).</p>
 </section>
-<section id="camera-pose-coordinate-systems">
-<h2>Camera pose coordinate systems<a class="headerlink" href="#camera-pose-coordinate-systems" title="Link to this heading">¶</a></h2>
+<section id="our-camera-convention">
+<h2>Our camera convention<a class="headerlink" href="#our-camera-convention" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>world coordinate is OpenGL/right-handed, <code class="docutils literal notranslate"><span class="pre">+x</span> <span class="pre">=</span> <span class="pre">right,</span> <span class="pre">+y</span> <span class="pre">=</span> <span class="pre">up,</span> <span class="pre">+z</span> <span class="pre">=</span> <span class="pre">forward</span></code></p></li>
+<li><p>camera coordinate is OpenGL (forward is <code class="docutils literal notranslate"><span class="pre">target</span> <span class="pre">--&gt;</span> <span class="pre">campos</span></code>).</p></li>
+<li><p>elevation in (-90, 90), from <code class="docutils literal notranslate"><span class="pre">+y</span> <span class="pre">(-90)</span> <span class="pre">--&gt;</span> <span class="pre">-y</span> <span class="pre">(+90)</span></code></p></li>
+<li><p>azimuth in (-180, 180), from <code class="docutils literal notranslate"><span class="pre">+z</span> <span class="pre">(0/-360)</span> <span class="pre">--&gt;</span> <span class="pre">+x</span> <span class="pre">(90/-270)</span> <span class="pre">--&gt;</span> <span class="pre">-z</span> <span class="pre">(180/-180)</span> <span class="pre">--&gt;</span> <span class="pre">-x</span> <span class="pre">(270/-90)</span> <span class="pre">--&gt;</span> <span class="pre">+z</span> <span class="pre">(360/0)</span></code></p></li>
+</ul>
+</section>
+<section id="camera-pose-conventions">
+<h2>Camera pose conventions<a class="headerlink" href="#camera-pose-conventions" title="Link to this heading">¶</a></h2>
 <p>A Camera pose matrix (camera to world transformation) is in the form of:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[[</span><span class="n">Right_x</span><span class="p">,</span> <span class="n">Up_x</span><span class="p">,</span> <span class="n">Forward_x</span><span class="p">,</span> <span class="n">Position_x</span><span class="p">],</span>
  <span class="p">[</span><span class="n">Right_y</span><span class="p">,</span> <span class="n">Up_y</span><span class="p">,</span> <span class="n">Forward_y</span><span class="p">,</span> <span class="n">Position_y</span><span class="p">],</span>
@@ -319,16 +320,241 @@ However, the three directions (right, up, forward) can be defined differently:</
 <span class="n">forward</span>                <span class="n">up</span>
 </pre></div>
 </div>
-<p>A common color code: right = <span class="raw-html-m2r"><span style="color:red">red</span></span>., up = <span class="raw-html-m2r"><span style="color:green">green</span></span>, forward = <span class="raw-html-m2r"><span style="color:blue">blue</span></span> (XYZ=RUF=RGB).</p>
+<p>These two conventions can be converted by negating the forward and up directions:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">pose</span> <span class="c1"># camera2world, [4, 4]</span>
+<span class="c1"># convert between opengl and colmap convention</span>
+<span class="n">pose</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">*=</span> <span class="o">-</span><span class="mi">1</span> <span class="c1"># up</span>
+<span class="n">pose</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">*=</span> <span class="o">-</span><span class="mi">1</span> <span class="c1"># forward</span>
+</pre></div>
+</div>
+<p>Note that camera convention is NOT dependent on the world coordinate system!</p>
+<section id="why-there-are-different-camera-conventions">
+<h3>Why there are different camera conventions?<a class="headerlink" href="#why-there-are-different-camera-conventions" title="Link to this heading">¶</a></h3>
+<p><em>It’s an unfortunate outcome of different 3D world coordinate systems and 2D image coordinate systems.</em>
+For a 2D image / array / matrix, the convention is usually:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>       <span class="mi">0</span>      <span class="mi">1</span>      <span class="mi">2</span>
+  <span class="o">+---------------------&gt;</span> <span class="o">+</span><span class="n">x</span><span class="o">/</span><span class="n">j</span>
+<span class="mi">0</span> <span class="o">|</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="mi">1</span> <span class="o">|</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="mi">2</span> <span class="o">|</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+  <span class="n">v</span>
+ <span class="o">+</span><span class="n">y</span><span class="o">/</span><span class="n">i</span>
+</pre></div>
+</div>
+<p>Now assume we are using OpenGL world coordinate system and also OpenGL camera convention:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>    <span class="o">+</span><span class="n">y</span> <span class="o">&amp;</span> <span class="n">up</span>
+    <span class="o">|</span>  <span class="n">target</span>
+    <span class="o">|</span> <span class="o">/</span>
+    <span class="o">|/</span><span class="n">______</span><span class="o">+</span><span class="n">x</span> <span class="o">&amp;</span> <span class="n">right</span>
+   <span class="o">/</span>
+  <span class="o">/</span>
+ <span class="o">/</span>
+<span class="o">+</span><span class="n">z</span> <span class="o">&amp;</span> <span class="n">forward</span>
+</pre></div>
+</div>
+<p>The unit camera (Identity rotation matrix) is perfectly aligned with the 3D world coordinate system.
+However, if we want to construct the camera rays from camera center to the target, the rays should point to <code class="docutils literal notranslate"><span class="pre">-z</span></code>, and the <code class="docutils literal notranslate"><span class="pre">+y</span></code> axis is also misaligned with image coordinate system (where <code class="docutils literal notranslate"><span class="pre">+y</span></code> points down).
+So we need to negate both y and z axes during the ray construction (check <code class="docutils literal notranslate"><span class="pre">kiui.cam.get_rays</span></code>):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">rays_d</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span>
+    <span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">cx</span> <span class="o">+</span> <span class="mf">0.5</span><span class="p">)</span> <span class="o">/</span> <span class="n">focal</span><span class="p">,</span>
+    <span class="p">(</span><span class="n">y</span> <span class="o">-</span> <span class="n">cy</span> <span class="o">+</span> <span class="mf">0.5</span><span class="p">)</span> <span class="o">/</span> <span class="n">focal</span> <span class="o">*</span> <span class="p">(</span><span class="o">-</span><span class="mf">1.0</span><span class="p">),</span>
+    <span class="n">np</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="o">-</span><span class="mf">1.0</span><span class="p">),</span>
+<span class="p">],</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span> <span class="c1"># [hw, 3]</span>
+</pre></div>
+</div>
+<p>On the other hand, if we use OpenGL world coordinate system and also OpenCV camera convention:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>    <span class="o">+</span><span class="n">y</span> <span class="o">&amp;</span> <span class="n">up</span>                            <span class="o">+</span><span class="n">z</span> <span class="o">&amp;</span> <span class="n">forward</span> <span class="o">&amp;</span> <span class="n">target</span>
+    <span class="o">|</span>                                  <span class="o">/</span>
+    <span class="o">|</span>                    <span class="n">equals</span>       <span class="o">/</span>
+    <span class="o">|</span><span class="n">______</span><span class="o">+</span><span class="n">x</span> <span class="o">&amp;</span> <span class="n">right</span>    <span class="o">-----&gt;</span>      <span class="o">/</span><span class="n">_______</span><span class="o">+</span><span class="n">x</span> <span class="o">&amp;</span> <span class="n">right</span>
+   <span class="o">/</span>                                 <span class="o">|</span>
+  <span class="o">/</span>                                  <span class="o">|</span>
+ <span class="o">/</span>                                   <span class="o">|</span>
+<span class="o">+</span><span class="n">z</span> <span class="o">&amp;</span> <span class="n">forward</span> <span class="o">&amp;</span> <span class="n">target</span>               <span class="o">+</span><span class="n">y</span> <span class="o">&amp;</span> <span class="n">up</span>
+</pre></div>
+</div>
+<p>While the unit camera points to a different direction, you can see that it’s actually aligned with the 2D image convention.
+And we don’t need to negate any axes during the ray construction:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">rays_d</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span>
+    <span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">cx</span> <span class="o">+</span> <span class="mf">0.5</span><span class="p">)</span> <span class="o">/</span> <span class="n">focal</span><span class="p">,</span>
+    <span class="p">(</span><span class="n">y</span> <span class="o">-</span> <span class="n">cy</span> <span class="o">+</span> <span class="mf">0.5</span><span class="p">)</span> <span class="o">/</span> <span class="n">focal</span><span class="p">,</span>
+    <span class="n">np</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="n">x</span><span class="p">),</span>
+<span class="p">],</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span> <span class="c1"># [hw, 3]</span>
+</pre></div>
+</div>
 </section>
-<section id="our-camera-convention">
-<h2>Our camera convention<a class="headerlink" href="#our-camera-convention" title="Link to this heading">¶</a></h2>
-<ul class="simple">
-<li><p>world coordinate is OpenGL/right-handed, <code class="docutils literal notranslate"><span class="pre">+x</span> <span class="pre">=</span> <span class="pre">right,</span> <span class="pre">+y</span> <span class="pre">=</span> <span class="pre">up,</span> <span class="pre">+z</span> <span class="pre">=</span> <span class="pre">forward</span></code></p></li>
-<li><p>camera coordinate is OpenGL (forward is <code class="docutils literal notranslate"><span class="pre">target</span> <span class="pre">--&gt;</span> <span class="pre">campos</span></code>).</p></li>
-<li><p>elevation in (-90, 90), from <code class="docutils literal notranslate"><span class="pre">+y</span> <span class="pre">(-90)</span> <span class="pre">--&gt;</span> <span class="pre">-y</span> <span class="pre">(+90)</span></code></p></li>
-<li><p>azimuth in (-180, 180), from <code class="docutils literal notranslate"><span class="pre">+z</span> <span class="pre">(0/-360)</span> <span class="pre">--&gt;</span> <span class="pre">+x</span> <span class="pre">(90/-270)</span> <span class="pre">--&gt;</span> <span class="pre">-z</span> <span class="pre">(180/-180)</span> <span class="pre">--&gt;</span> <span class="pre">-x</span> <span class="pre">(270/-90)</span> <span class="pre">--&gt;</span> <span class="pre">+z</span> <span class="pre">(360/0)</span></code></p></li>
-</ul>
+<section id="given-a-poorly-documented-dataset-of-cameras-and-depth-maps-how-to-make-sure-its-conventions">
+<h3>Given a poorly-documented dataset of cameras (and depth maps), how to make sure its conventions?<a class="headerlink" href="#given-a-poorly-documented-dataset-of-cameras-and-depth-maps-how-to-make-sure-its-conventions" title="Link to this heading">¶</a></h3>
+<ol class="arabic simple">
+<li><p>check if the camera “pose” is pose (camera2world) or extrinsics (world2camera), many datasets are misusing the term “pose” to mean extrinsics.</p></li>
+<li><p>check if the depth map is the distance to camera center or to the camera plane. If it’s to the camera center, we need to normalize the <code class="docutils literal notranslate"><span class="pre">rays_d</span></code> to unit length. Otherwise, just use the above raw rays (<code class="docutils literal notranslate"><span class="pre">|z|</span></code> is always 1).</p></li>
+<li><p>simply assume a camera convention (e.g., OpenGL) and use it to construct the rays, and project depth to world-space point cloud for visualization.</p></li>
+<li><p>Check if point cloud of static objects are drifting (they shouldn’t if everything is correct). If they are, you are using the wrong camera convention. Change to the other convention and it should be correct!</p></li>
+</ol>
+<p>This is a complete script:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">cv2</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">kiui</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">glob</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">tqdm</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">plyfile</span><span class="w"> </span><span class="kn">import</span> <span class="n">PlyData</span><span class="p">,</span> <span class="n">PlyElement</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">glob_sorted</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+    <span class="n">paths</span> <span class="o">=</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_natural_key</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">part</span><span class="p">)</span> <span class="k">if</span> <span class="n">part</span><span class="o">.</span><span class="n">isdigit</span><span class="p">()</span> <span class="k">else</span> <span class="n">part</span> <span class="k">for</span> <span class="n">part</span> <span class="ow">in</span> <span class="n">re</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;(\d+)&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">)]</span>
+    <span class="k">return</span> <span class="nb">sorted</span><span class="p">(</span>
+        <span class="n">paths</span><span class="p">,</span>
+        <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">p</span><span class="p">:</span> <span class="n">_natural_key</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">p</span><span class="p">))[</span><span class="mi">0</span><span class="p">]),</span>
+    <span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">export_ply_with_color</span><span class="p">(</span><span class="n">point_cloud</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">colors</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">file_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">assert</span> <span class="n">point_cloud</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">colors</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">vertices</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
+        <span class="n">point_cloud</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+        <span class="n">dtype</span><span class="o">=</span><span class="p">[(</span><span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="s2">&quot;f4&quot;</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;y&quot;</span><span class="p">,</span> <span class="s2">&quot;f4&quot;</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;z&quot;</span><span class="p">,</span> <span class="s2">&quot;f4&quot;</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;red&quot;</span><span class="p">,</span> <span class="s2">&quot;u1&quot;</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;green&quot;</span><span class="p">,</span> <span class="s2">&quot;u1&quot;</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;blue&quot;</span><span class="p">,</span> <span class="s2">&quot;u1&quot;</span><span class="p">)],</span>
+    <span class="p">)</span>
+    <span class="n">vertices</span><span class="p">[</span><span class="s2">&quot;x&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">point_cloud</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="n">vertices</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">point_cloud</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="n">vertices</span><span class="p">[</span><span class="s2">&quot;z&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">point_cloud</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="n">vertices</span><span class="p">[</span><span class="s2">&quot;red&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">colors</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
+    <span class="n">vertices</span><span class="p">[</span><span class="s2">&quot;green&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">colors</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
+    <span class="n">vertices</span><span class="p">[</span><span class="s2">&quot;blue&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">colors</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
+    <span class="n">el</span> <span class="o">=</span> <span class="n">PlyElement</span><span class="o">.</span><span class="n">describe</span><span class="p">(</span><span class="n">vertices</span><span class="p">,</span> <span class="s2">&quot;vertex&quot;</span><span class="p">)</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">file_path</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;.&quot;</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">PlyData</span><span class="p">([</span><span class="n">el</span><span class="p">])</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">file_path</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">load_data</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">target_size</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">320</span><span class="p">,</span> <span class="mi">180</span><span class="p">)):</span>
+
+    <span class="c1"># load camera</span>
+    <span class="n">cam_params</span> <span class="o">=</span> <span class="n">kiui</span><span class="o">.</span><span class="n">read_json</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+    <span class="n">width</span><span class="p">,</span> <span class="n">height</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">cam_params</span><span class="p">[</span><span class="s1">&#39;renderProductResolution&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">cam_params</span><span class="p">[</span><span class="s1">&#39;renderProductResolution&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">proj</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">cam_params</span><span class="p">[</span><span class="s2">&quot;cameraProjection&quot;</span><span class="p">])</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span><span class="o">.</span><span class="n">T</span> <span class="c1"># [4, 4], perspective projection (T is for col-major to row-major)</span>
+    <span class="n">w2c</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">cam_params</span><span class="p">[</span><span class="s2">&quot;cameraViewTransform&quot;</span><span class="p">])</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span><span class="o">.</span><span class="n">T</span> <span class="c1"># [4, 4], world2cam</span>
+
+    <span class="c1"># get intrinsics from projection matrix</span>
+    <span class="n">fx</span> <span class="o">=</span> <span class="n">proj</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">width</span> <span class="o">/</span> <span class="mf">2.0</span><span class="p">)</span>
+    <span class="n">fy</span> <span class="o">=</span> <span class="n">proj</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">height</span> <span class="o">/</span> <span class="mf">2.0</span><span class="p">)</span>
+    <span class="n">cx</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">proj</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">])</span> <span class="o">*</span> <span class="p">(</span><span class="n">width</span> <span class="o">/</span> <span class="mf">2.0</span><span class="p">)</span>
+    <span class="n">cy</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">-</span> <span class="n">proj</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">])</span> <span class="o">*</span> <span class="p">(</span><span class="n">height</span> <span class="o">/</span> <span class="mf">2.0</span><span class="p">)</span>
+
+    <span class="n">c2w</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">inv</span><span class="p">(</span><span class="n">w2c</span><span class="p">)</span>
+
+    <span class="c1"># load depth</span>
+    <span class="n">path_depth</span> <span class="o">=</span> <span class="n">path</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;camera_params&quot;</span><span class="p">,</span> <span class="s2">&quot;distance_to_camera&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;.json&quot;</span><span class="p">,</span> <span class="s2">&quot;.exr&quot;</span><span class="p">)</span>
+    <span class="n">depth</span> <span class="o">=</span> <span class="n">kiui</span><span class="o">.</span><span class="n">read_image</span><span class="p">(</span><span class="n">path_depth</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;float&quot;</span><span class="p">)</span>
+    <span class="n">depth</span> <span class="o">=</span> <span class="n">depth</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="c1"># [H, W]</span>
+
+    <span class="c1"># downsample depth and intrinsics for visualization</span>
+    <span class="n">d_width</span><span class="p">,</span> <span class="n">d_height</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">target_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">target_size</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">d_depth</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="n">depth</span><span class="p">,</span> <span class="p">(</span><span class="n">d_width</span><span class="p">,</span> <span class="n">d_height</span><span class="p">),</span> <span class="n">interpolation</span><span class="o">=</span><span class="n">cv2</span><span class="o">.</span><span class="n">INTER_NEAREST</span><span class="p">)</span>
+    <span class="n">scale_x</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">d_width</span><span class="p">)</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="n">width</span><span class="p">)</span>
+    <span class="n">scale_y</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">d_height</span><span class="p">)</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="n">height</span><span class="p">)</span>
+    <span class="n">d_fx</span> <span class="o">=</span> <span class="n">fx</span> <span class="o">*</span> <span class="n">scale_x</span>
+    <span class="n">d_fy</span> <span class="o">=</span> <span class="n">fy</span> <span class="o">*</span> <span class="n">scale_y</span>
+    <span class="n">d_cx</span> <span class="o">=</span> <span class="n">cx</span> <span class="o">*</span> <span class="n">scale_x</span>
+    <span class="n">d_cy</span> <span class="o">=</span> <span class="n">cy</span> <span class="o">*</span> <span class="n">scale_y</span>
+
+    <span class="c1"># create world space point cloud</span>
+
+    <span class="c1">### IMPORTANT: toggle camera convention</span>
+    <span class="c1"># here the camera is OpenGL convention actually</span>
+
+    <span class="c1"># either toggle the c2w convention</span>
+    <span class="c1"># c2w[:, 1] *= -1</span>
+    <span class="c1"># c2w[:, 2] *= -1</span>
+
+    <span class="c1"># or toggle the rays construction (but don&#39;t do both!).</span>
+    <span class="n">OPENGL_RAYS</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">d_width</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">d_height</span><span class="p">),</span> <span class="n">indexing</span><span class="o">=</span><span class="s2">&quot;xy&quot;</span><span class="p">)</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">y</span> <span class="o">=</span> <span class="n">y</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">rays_d</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span>
+        <span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">d_cx</span> <span class="o">+</span> <span class="mf">0.5</span><span class="p">)</span> <span class="o">/</span> <span class="n">d_fx</span><span class="p">,</span>
+        <span class="p">(</span><span class="n">y</span> <span class="o">-</span> <span class="n">d_cy</span> <span class="o">+</span> <span class="mf">0.5</span><span class="p">)</span> <span class="o">/</span> <span class="n">d_fy</span> <span class="o">*</span> <span class="p">(</span><span class="o">-</span><span class="mf">1.0</span> <span class="k">if</span> <span class="n">OPENGL_RAYS</span> <span class="k">else</span> <span class="mf">1.0</span><span class="p">),</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="o">-</span><span class="mf">1.0</span> <span class="k">if</span> <span class="n">OPENGL_RAYS</span> <span class="k">else</span> <span class="mf">1.0</span><span class="p">),</span>
+    <span class="p">],</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span> <span class="c1"># [hw, 3]</span>
+
+    <span class="n">rays_d</span> <span class="o">=</span> <span class="n">rays_d</span> <span class="o">@</span> <span class="n">c2w</span><span class="p">[:</span><span class="mi">3</span><span class="p">,</span> <span class="p">:</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">T</span>  <span class="c1"># [hw, 3]</span>
+    <span class="n">rays_o</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">c2w</span><span class="p">[:</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="n">rays_d</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">0</span><span class="p">)</span>  <span class="c1"># [hw, 3]</span>
+
+    <span class="c1"># since depth is to camera center, we need to normalize the rays_d</span>
+    <span class="n">rays_d</span> <span class="o">=</span> <span class="n">rays_d</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">rays_d</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">rays_o</span> <span class="o">=</span> <span class="n">rays_o</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">d_height</span><span class="p">,</span> <span class="n">d_width</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="n">rays_d</span> <span class="o">=</span> <span class="n">rays_d</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">d_height</span><span class="p">,</span> <span class="n">d_width</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+
+    <span class="n">valid_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">d_depth</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">d_depth</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">points</span> <span class="o">=</span> <span class="n">rays_d</span><span class="p">[</span><span class="n">valid_mask</span><span class="p">]</span> <span class="o">*</span> <span class="n">d_depth</span><span class="p">[</span><span class="n">valid_mask</span><span class="p">][:,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">+</span> <span class="n">rays_o</span><span class="p">[</span><span class="n">valid_mask</span><span class="p">]</span> <span class="c1"># [N, 3] in world space</span>
+
+    <span class="c1"># load rgb for color visualization</span>
+    <span class="n">path_rgb</span> <span class="o">=</span> <span class="n">path</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;camera_params&quot;</span><span class="p">,</span> <span class="s2">&quot;ldr_color&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;.json&quot;</span><span class="p">,</span> <span class="s2">&quot;.png&quot;</span><span class="p">)</span>
+    <span class="n">rgb</span> <span class="o">=</span> <span class="n">kiui</span><span class="o">.</span><span class="n">read_image</span><span class="p">(</span><span class="n">path_rgb</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;float&quot;</span><span class="p">)</span> <span class="c1"># [H, W, 3]</span>
+    <span class="n">d_rgb</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">resize</span><span class="p">(</span><span class="n">rgb</span><span class="p">,</span> <span class="p">(</span><span class="n">d_width</span><span class="p">,</span> <span class="n">d_height</span><span class="p">),</span> <span class="n">interpolation</span><span class="o">=</span><span class="n">cv2</span><span class="o">.</span><span class="n">INTER_AREA</span><span class="p">)</span>
+    <span class="n">d_rgb</span> <span class="o">=</span> <span class="n">d_rgb</span><span class="p">[</span><span class="n">valid_mask</span><span class="p">]</span>  <span class="c1"># [N, 3]</span>
+
+    <span class="k">return</span> <span class="n">c2w</span><span class="p">,</span> <span class="n">points</span><span class="p">,</span> <span class="n">d_rgb</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">c2w_to_pointcloud</span><span class="p">(</span><span class="n">c2ws</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span> <span class="n">point_per_axis</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span> <span class="n">axis_length</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">):</span>
+    <span class="c1"># visualize the camera poses as point clouds, c2w is [4, 4]</span>
+
+    <span class="c1"># debug: add the identity pose to visualize</span>
+    <span class="n">c2ws</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span>
+        <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span>
+        <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span>
+        <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span>
+    <span class="p">]))</span>
+
+    <span class="n">axis_points</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">axis_colors</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="c1"># Right, Up, Forward unit directions are columns of rotation in c2w</span>
+    <span class="k">for</span> <span class="n">c2w</span> <span class="ow">in</span> <span class="n">c2ws</span><span class="p">:</span>
+        <span class="n">R</span> <span class="o">=</span> <span class="n">c2w</span><span class="p">[:</span><span class="mi">3</span><span class="p">,</span> <span class="p">:</span><span class="mi">3</span><span class="p">]</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="n">c2w</span><span class="p">[:</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span>
+        <span class="n">dirs</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="p">(</span><span class="n">R</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)),</span>   <span class="c1"># Right (X) - Red</span>
+            <span class="p">(</span><span class="n">R</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)),</span>   <span class="c1"># Up (Y) - Green</span>
+            <span class="p">(</span><span class="n">R</span><span class="p">[:,</span> <span class="mi">2</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)),</span>   <span class="c1"># Forward (Z) - Blue</span>
+        <span class="p">]</span>
+        <span class="k">for</span> <span class="n">d</span><span class="p">,</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">dirs</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">point_per_axis</span><span class="p">):</span>
+                <span class="n">p</span> <span class="o">=</span> <span class="n">t</span> <span class="o">+</span> <span class="n">d</span> <span class="o">*</span> <span class="p">(</span><span class="n">axis_length</span> <span class="o">*</span> <span class="p">(</span><span class="n">k</span> <span class="o">/</span> <span class="p">(</span><span class="n">point_per_axis</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)))</span>
+                <span class="n">axis_points</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+                <span class="n">axis_colors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">col</span><span class="p">)</span>
+
+    <span class="n">axis_points_np</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">axis_points</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="n">axis_colors_np</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">axis_colors</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">axis_points_np</span><span class="p">,</span> <span class="n">axis_colors_np</span>
+
+<span class="n">camera_paths</span> <span class="o">=</span> <span class="n">glob_sorted</span><span class="p">(</span><span class="s2">&quot;camera_params/*.json&quot;</span><span class="p">)</span>
+
+<span class="n">all_c2ws</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">all_points</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">all_colors</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">tqdm</span><span class="o">.</span><span class="n">tqdm</span><span class="p">(</span><span class="n">camera_paths</span><span class="p">):</span>
+    <span class="n">c2w</span><span class="p">,</span> <span class="n">points</span><span class="p">,</span> <span class="n">rgb</span> <span class="o">=</span> <span class="n">load_data</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">target_size</span><span class="o">=</span><span class="p">(</span><span class="mi">320</span><span class="p">,</span> <span class="mi">180</span><span class="p">))</span>
+    <span class="n">all_c2ws</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">c2w</span><span class="p">)</span>
+    <span class="n">all_points</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">points</span><span class="p">)</span>
+    <span class="n">all_colors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">rgb</span><span class="p">)</span>
+
+<span class="c1"># visualize the camera poses as point clouds</span>
+<span class="n">axis_points</span><span class="p">,</span> <span class="n">axis_colors</span> <span class="o">=</span> <span class="n">c2w_to_pointcloud</span><span class="p">(</span><span class="n">all_c2ws</span><span class="p">,</span> <span class="n">point_per_axis</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">axis_length</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+<span class="n">all_points</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">axis_points</span><span class="p">)</span>
+<span class="n">all_colors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">axis_colors</span><span class="p">)</span>
+
+<span class="c1"># concatenate all the points and colors</span>
+<span class="n">all_points</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">all_points</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">all_colors</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">all_colors</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">all_colors</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">all_colors</span> <span class="o">*</span> <span class="mf">255.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">255.0</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
+
+<span class="c1"># save colored point cloud (e.g., check with meshlab)</span>
+<span class="n">export_ply_with_color</span><span class="p">(</span><span class="n">all_points</span><span class="p">,</span> <span class="n">all_colors</span><span class="p">,</span> <span class="s2">&quot;world_pointcloud.ply&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
 </section>
 <section id="api">
 <h2>API<a class="headerlink" href="#api" title="Link to this heading">¶</a></h2>
@@ -705,8 +931,12 @@ However, the three directions (right, up, forward) can be defined differently:</
             <ul>
 <li><a class="reference internal" href="#">Camera</a><ul>
 <li><a class="reference internal" href="#world-coordinate-systems">World coordinate systems</a></li>
-<li><a class="reference internal" href="#camera-pose-coordinate-systems">Camera pose coordinate systems</a></li>
 <li><a class="reference internal" href="#our-camera-convention">Our camera convention</a></li>
+<li><a class="reference internal" href="#camera-pose-conventions">Camera pose conventions</a><ul>
+<li><a class="reference internal" href="#why-there-are-different-camera-conventions">Why there are different camera conventions?</a></li>
+<li><a class="reference internal" href="#given-a-poorly-documented-dataset-of-cameras-and-depth-maps-how-to-make-sure-its-conventions">Given a poorly-documented dataset of cameras (and depth maps), how to make sure its conventions?</a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#api">API</a><ul>
 <li><a class="reference internal" href="#kiui.cam.convert"><code class="docutils literal notranslate"><span class="pre">convert()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.cam.look_at"><code class="docutils literal notranslate"><span class="pre">look_at()</span></code></a></li>
@@ -742,7 +972,7 @@ However, the three directions (right, up, forward) can be defined differently:</
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=a9cc7ada"></script>
+</div><script src="../_static/documentation_options.js?v=bb0a46c0"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
