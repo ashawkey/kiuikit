@@ -19,6 +19,7 @@ if __name__ == "__main__":
                 'vire = kiui.render_viser:main',
                 'kico = kiui.cli.convert:main',
                 'kisr = kiui.sr:main',
+                'kivi = kiui.video:main',
             ],
         },
         install_requires=[
