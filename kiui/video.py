@@ -253,11 +253,106 @@ def print_video_info(path: str) -> None:
     console.print(table)
 
 
+def _infer_encoder(src_codec: str, codec: Optional[str]) -> str:
+    """Infer a reasonable encoder name from source codec if codec is None."""
+    if codec is not None:
+        return codec
+
+    if src_codec == "h264":
+        return "libx264"
+    if src_codec in ["hevc", "h265"]:
+        return "libx265"
+    if src_codec == "mpeg4":
+        return "mpeg4"
+    return "libx264"
+
+
+def _apply_codec_tag(cmd: list, encoder: str, src_tag: str) -> None:
+    """Preserve container codec tag (sample entry) when reasonable.
+
+    Examples:
+        - keep ``hvc1`` vs ``hev1`` for HEVC
+        - keep ``avc1`` vs ``avc3`` for H.264
+    """
+    lower_encoder = encoder.lower()
+    tag = (src_tag or "").lower()
+
+    if not tag:
+        return
+
+    if lower_encoder in ["libx265", "hevc", "h265"] and tag in ["hvc1", "hev1"]:
+        cmd += ["-tag:v", tag]
+    elif lower_encoder in ["libx264", "h264"] and tag in ["avc1", "avc3"]:
+        cmd += ["-tag:v", tag]
+
+
+def _apply_rate_control(
+    cmd: list,
+    *,
+    encoder: str,
+    crf: Optional[int],
+    preset: str,
+    src_bitrate: int,
+    src_w: int,
+    src_h: int,
+    dst_w: int,
+    dst_h: int,
+    src_fps: Optional[float],
+    dst_fps: Optional[float],
+) -> None:
+    """Append bitrate / CRF options to ffmpeg command.
+
+    If crf is None and bitrate is known, try to match source bitrate scaled by
+    resolution and fps. Otherwise, fall back to CRF-based mode.
+    """
+    lower_encoder = encoder.lower()
+
+    if crf is None and src_bitrate > 0:
+        # Match source bitrate scaled by resolution (and fps if changed)
+        scale_ratio = (dst_w * dst_h) / max(1, src_w * src_h)
+        if dst_fps is not None and src_fps is not None and src_fps > 0:
+            scale_ratio *= dst_fps / src_fps
+
+        target_bitrate = int(src_bitrate * scale_ratio)
+        # clamp to a reasonable range
+        target_bitrate = max(100_000, min(target_bitrate, src_bitrate * 2))
+
+        kbps = max(1, target_bitrate // 1000)
+        cmd += [
+            "-b:v",
+            f"{kbps}k",
+            "-maxrate",
+            f"{kbps}k",
+            "-bufsize",
+            f"{2 * kbps}k",
+        ]
+        return
+
+    # CRF-based mode (or bitrate unknown)
+    if crf is None:
+        crf = 18  # sensible default when we cannot infer bitrate
+
+    if lower_encoder == "mpeg4":
+        # mpeg4 does not use CRF; use qscale instead (1 best, 31 worst)
+        q = max(1, min(31, int(round(crf / 2))))  # map CRF 18 -> q≈9 as a heuristic
+        cmd += [
+            "-q:v",
+            str(q),
+        ]
+    else:
+        cmd += [
+            "-crf",
+            str(crf),
+            "-preset",
+            preset,
+        ]
+
+
 def resize_video(
     input_path: str,
     output_path: str,
-    width: int,
-    height: int,
+    width: Optional[int] = None,
+    height: Optional[int] = None,
     codec: Optional[str] = None,
     crf: Optional[int] = None,
     preset: str = "medium",
@@ -268,8 +363,10 @@ def resize_video(
     Args:
         input_path: Path to the input video.
         output_path: Path to the output video.
-        width: Target width.
-        height: Target height.
+        width: Target width. If None, it will be inferred from ``height`` while
+            keeping the aspect ratio.
+        height: Target height. If None, it will be inferred from ``width`` while
+            keeping the aspect ratio.
         codec: Video codec / encoder name for ffmpeg, e.g. ``"h264"``, ``"hevc"``,
             ``"libx264"``, ``"libx265"``, ``"mpeg4"``, ``"h264_nvenc"``, ``"hevc_nvenc"``.
             If None, try to pick a reasonable encoder based on the input codec.
@@ -292,16 +389,20 @@ def resize_video(
     src_codec = (info["codec"] or "").lower()
     src_tag = (info.get("codec_tag") or "").lower()
 
+    # infer missing spatial dimension to keep aspect ratio
+    if width is None and height is None:
+        raise ValueError("resize_video: at least one of width/height must be provided.")
+    if src_w <= 0 or src_h <= 0:
+        raise ValueError(f"resize_video: invalid source resolution {src_w}x{src_h}.")
+    if width is None:
+        # infer width from height
+        width = int(round(src_w * (height / src_h)))
+    if height is None:
+        # infer height from width
+        height = int(round(src_h * (width / src_w)))
+
     # choose codec if not specified
-    if codec is None:
-        if src_codec == "h264":
-            codec = "libx264"
-        elif src_codec in ["hevc", "h265"]:
-            codec = "libx265"
-        elif src_codec == "mpeg4":
-            codec = "mpeg4"
-        else:
-            codec = "libx264"
+    codec = _infer_encoder(src_codec, codec)
     lower_codec = codec.lower()
 
     scale_filter = f"scale={width}:{height}:flags=lanczos"
@@ -317,59 +418,26 @@ def resize_video(
         codec,
     ]
 
-    # preserve container codec tag (sample entry) for better compatibility,
-    # e.g., keep ``hvc1`` vs ``hev1`` for HEVC, or ``avc1`` vs ``avc3`` for H.264.
-    if codec is None:
-        pass
-    else:
-        # only apply tag if user did not explicitly override codec tag via other means
-        if lower_codec in ["libx265", "hevc", "h265"] and src_tag in ["hvc1", "hev1"]:
-            cmd += ["-tag:v", src_tag]
-        elif lower_codec in ["libx264", "h264"] and src_tag in ["avc1", "avc3"]:
-            cmd += ["-tag:v", src_tag]
+    # preserve container codec tag (sample entry) for better compatibility
+    _apply_codec_tag(cmd, codec, src_tag)
 
     if fps is not None:
         cmd += ["-r", str(fps)]
 
-    # quality / rate control
-    if crf is None and src_bitrate > 0:
-        # Match source bitrate scaled by resolution (and fps if changed)
-        scale_ratio = (width * height) / max(1, src_w * src_h)
-        if fps is not None and src_fps is not None and src_fps > 0:
-            scale_ratio *= fps / src_fps
-
-        target_bitrate = int(src_bitrate * scale_ratio)
-        # clamp to a reasonable range
-        target_bitrate = max(100_000, min(target_bitrate, src_bitrate * 2))
-
-        kbps = max(1, target_bitrate // 1000)
-        cmd += [
-            "-b:v",
-            f"{kbps}k",
-            "-maxrate",
-            f"{kbps}k",
-            "-bufsize",
-            f"{2 * kbps}k",
-        ]
-    else:
-        # CRF-based mode (or bitrate unknown)
-        if crf is None:
-            crf = 18  # sensible default when we cannot infer bitrate
-
-        if lower_codec == "mpeg4":
-            # mpeg4 does not use CRF; use qscale instead (1 best, 31 worst)
-            q = max(1, min(31, int(round(crf / 2))))  # map CRF 18 -> q≈9 as a heuristic
-            cmd += [
-                "-q:v",
-                str(q),
-            ]
-        else:
-            cmd += [
-                "-crf",
-                str(crf),
-                "-preset",
-                preset,
-            ]
+    # quality / rate control (bitrate match or CRF)
+    _apply_rate_control(
+        cmd,
+        encoder=codec,
+        crf=crf,
+        preset=preset,
+        src_bitrate=src_bitrate,
+        src_w=src_w,
+        src_h=src_h,
+        dst_w=width,
+        dst_h=height,
+        src_fps=src_fps,
+        dst_fps=fps,
+    )
 
     cmd += [
         "-c:a",
@@ -384,8 +452,8 @@ def split_video(
     input_path: str,
     output_dir: str,
     timestamps: Sequence[float],
-    codec: str = "libx264",
-    crf: int = 18,
+    codec: Optional[str] = None,
+    crf: Optional[int] = None,
     preset: str = "medium",
     uniform: float = None,
     drop_last: bool = False,
@@ -404,8 +472,11 @@ def split_video(
               [timestamps[0], timestamps[0] + timestamps[1]], etc. Any remaining
               tail of the video is dropped.
             Ignored if ``uniform`` is not None.
-        codec: Video codec / encoder name for ffmpeg, e.g. ``"h264"``, ``"hevc"``, ``"libx264"``, ``"libx265"``, ``"mpeg4"``, ``"h264_nvenc"``, ``"hevc_nvenc"``.
-        crf: Constant Rate Factor (quality, lower is better).
+        codec: Video codec / encoder name for ffmpeg, e.g. ``"h264"``, ``"hevc"``,
+            ``"libx264"``, ``"libx265"``, ``"mpeg4"``, ``"h264_nvenc"``, ``"hevc_nvenc"``.
+            If None, try to pick a reasonable encoder based on the input codec.
+        crf: Constant Rate Factor (quality, lower is better). If None, the
+            function will try to roughly match the source video's bitrate.
         preset: ffmpeg preset, e.g. ``"slow"``, ``"medium"``, ``"fast"``.
         uniform: If not None, split the video into uniform segments of this many
             seconds. If ``drop_last=True``, any remaining tail shorter than this
@@ -419,6 +490,14 @@ def split_video(
 
     info = get_video_info(input_path)
     duration = info["duration"]
+    src_w, src_h = info["width"], info["height"]
+    src_fps = info["fps"] if info["fps"] > 0 else None
+    src_bitrate = info["bitrate"]
+    src_codec = (info["codec"] or "").lower()
+    src_tag = (info.get("codec_tag") or "").lower()
+
+    # choose codec if not specified
+    codec = _infer_encoder(src_codec, codec)
 
     if uniform is not None and timestamps:
         raise ValueError("split_video: specify either timestamps or uniform, not both.")
@@ -476,10 +555,27 @@ def split_video(
             f"{end:.3f}",
             "-c:v",
             codec,
-            "-crf",
-            str(crf),
-            "-preset",
-            preset,
+        ]
+
+        # preserve container codec tag (sample entry) for better compatibility
+        _apply_codec_tag(cmd, codec, src_tag)
+
+        # quality / rate control (bitrate match or CRF, resolution unchanged)
+        _apply_rate_control(
+            cmd,
+            encoder=codec,
+            crf=crf,
+            preset=preset,
+            src_bitrate=src_bitrate,
+            src_w=src_w,
+            src_h=src_h,
+            dst_w=src_w,
+            dst_h=src_h,
+            src_fps=src_fps,
+            dst_fps=src_fps,
+        )
+
+        cmd += [
             "-c:a",
             "copy",
             out_path,
@@ -501,8 +597,18 @@ def main():
     parser_resize = subparsers.add_parser("resize", help="Resize a video and save to output.")
     parser_resize.add_argument("input", type=str, help="Path to input video.")
     parser_resize.add_argument("output", type=str, help="Path to output video.")
-    parser_resize.add_argument("--width", type=int, required=True, help="Target width.")
-    parser_resize.add_argument("--height", type=int, required=True, help="Target height.")
+    parser_resize.add_argument(
+        "--width",
+        type=int,
+        default=None,
+        help="Target width. If omitted, inferred from height to keep aspect ratio.",
+    )
+    parser_resize.add_argument(
+        "--height",
+        type=int,
+        default=None,
+        help="Target height. If omitted, inferred from width to keep aspect ratio.",
+    )
     parser_resize.add_argument(
         "--codec",
         type=str,
@@ -543,11 +649,16 @@ def main():
     parser_split.add_argument(
         "--codec",
         type=str,
-        default="libx264",
+        default=None,
         choices=["h264", "hevc", "libx264", "libx265", "mpeg4", "h264_nvenc", "hevc_nvenc"],
-        help="ffmpeg video codec / encoder name.",
+        help="ffmpeg video codec / encoder name. If omitted, try to infer from the input.",
     )
-    parser_split.add_argument("--crf", type=int, default=18, help="ffmpeg CRF (quality).")
+    parser_split.add_argument(
+        "--crf",
+        type=int,
+        default=None,
+        help="ffmpeg CRF (quality). If omitted, try to roughly match the input bitrate.",
+    )
     parser_split.add_argument("--preset", type=str, default="medium", help="ffmpeg preset.")
 
     args = parser.parse_args()
@@ -555,6 +666,8 @@ def main():
     if args.cmd == "info":
         print_video_info(args.path)
     elif args.cmd == "resize":
+        if args.width is None and args.height is None:
+            raise ValueError("resize: please provide at least one of --width or --height.")
         resize_video(
             input_path=args.input,
             output_path=args.output,

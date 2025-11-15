@@ -33,6 +33,7 @@ pip install -U git+https://github.com/ashawkey/kiuikit.git
    ./utils.md
    ./ops.md
    ./vis.md
+   ./video.md
    ./misc_api.md
 
 .. toctree::
