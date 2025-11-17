@@ -198,9 +198,14 @@ def get_video_info(path: str) -> Dict[str, Any]:
 
 
 def print_video_info(path: str) -> None:
-    """Pretty-print video information."""
+    """Pretty-print video (or image) information."""
 
-    info = get_video_info(path)
+    # simple extension-based image detection to support images as well
+    _, ext = os.path.splitext(path)
+    ext = ext.lower()
+    image_exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff", ".gif"}
+
+    is_image = ext in image_exts
 
     def _fmt_duration(seconds: float) -> str:
         if seconds <= 0:
@@ -221,34 +226,65 @@ def print_video_info(path: str) -> None:
         return f"{value:.2f} {units[idx]}"
 
     console = Console()
-    table = Table(title=f"Video Info: {info['path']}")
+    table = Table(title=f"{'Image' if is_image else 'Video'} Info: {path}")
     table.add_column("Field", style="cyan", no_wrap=True)
     table.add_column("Value", style="magenta")
 
-    codec = info["codec"]
-    codec_tag = info.get("codec_tag", None) or "unknown"
-    codec_hint = {
-        "h264": "libx264 / h264_nvenc",
-        "hevc": "libx265 / hevc_nvenc",
-        "mpeg4": "mpeg4",
-    }.get(codec, None)
+    if is_image:
+        # image info: resolution, format, file size, compression, channels
+        img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+        if img is None:
+            raise FileNotFoundError(f"cannot open image: {path}")
 
-    table.add_row("Resolution", f"{info['width']} x {info['height']}")
-    table.add_row("FPS", f"{info['fps']:.3f}")
-    table.add_row("Duration", _fmt_duration(info['duration']))
-    if codec_hint is not None:
-        table.add_row("Codec", f"{codec} (encoders: {codec_hint})")
-    else:
-        table.add_row("Codec", codec)
-    table.add_row("Codec tag", codec_tag)
-    table.add_row("Bitrate", f"{info['bitrate']} bps")
-    table.add_row("File size", _fmt_bytes(info.get("filesize", 0)))
+        if img.ndim == 2:
+            h, w = img.shape
+            c = 1
+        else:
+            h, w, c = img.shape
 
-    cr = info.get("compression_ratio", 0.0)
-    if cr > 0:
-        table.add_row("Compression", f"{cr:.2f}x (raw / encoded)")
+        filesize = os.path.getsize(path) if os.path.exists(path) else 0
+        raw_size = w * h * c  # bytes assuming 8-bit per channel
+        compression_ratio = (raw_size / filesize) if filesize > 0 else 0.0
+
+        fmt = ext.lstrip(".").upper() or "UNKNOWN"
+
+        table.add_row("Type", "Image")
+        table.add_row("Resolution", f"{w} x {h}")
+        table.add_row("Channels", str(c))
+        table.add_row("Format", fmt)
+        table.add_row("File size", _fmt_bytes(filesize))
+        if compression_ratio > 0:
+            table.add_row("Compression", f"{compression_ratio:.2f}x (raw / encoded)")
+        else:
+            table.add_row("Compression", "Unknown")
     else:
-        table.add_row("Compression", "Unknown")
+        info = get_video_info(path)
+
+        codec = info["codec"]
+        codec_tag = info.get("codec_tag", None) or "unknown"
+        codec_hint = {
+            "h264": "libx264 / h264_nvenc",
+            "hevc": "libx265 / hevc_nvenc",
+            "mpeg4": "mpeg4",
+        }.get(codec, None)
+
+        table.add_row("Type", "Video")
+        table.add_row("Resolution", f"{info['width']} x {info['height']}")
+        table.add_row("FPS", f"{info['fps']:.3f}")
+        table.add_row("Duration", _fmt_duration(info['duration']))
+        if codec_hint is not None:
+            table.add_row("Codec", f"{codec} (encoders: {codec_hint})")
+        else:
+            table.add_row("Codec", codec)
+        table.add_row("Codec tag", codec_tag)
+        table.add_row("Bitrate", f"{info['bitrate']} bps")
+        table.add_row("File size", _fmt_bytes(info.get("filesize", 0)))
+
+        cr = info.get("compression_ratio", 0.0)
+        if cr > 0:
+            table.add_row("Compression", f"{cr:.2f}x (raw / encoded)")
+        else:
+            table.add_row("Compression", "Unknown")
 
     console.print(table)
 
