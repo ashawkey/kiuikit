@@ -30,7 +30,10 @@ A common color code: right = <span style="color:red">red</span>., up = <span sty
 
 ### Camera pose conventions
 
-A Camera pose matrix (camera to world transformation) is in the form of:
+We call the camera to world (c2w) transformation matrix strictly as `pose`.
+The inversion of it is the world to camera (w2c) transformation matrix is called `extrinsics` (or the `view` transform in graphics).
+
+A camera pose matrix is in the form of:
 ```
 [[Right_x, Up_x, Forward_x, Position_x],
  [Right_y, Up_y, Forward_y, Position_y],

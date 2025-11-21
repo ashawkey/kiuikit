@@ -272,6 +272,7 @@ def print_video_info(path: str) -> None:
         table.add_row("Resolution", f"{info['width']} x {info['height']}")
         table.add_row("FPS", f"{info['fps']:.3f}")
         table.add_row("Duration", _fmt_duration(info['duration']))
+        table.add_row("Frames", str(info['num_frames']))
         if codec_hint is not None:
             table.add_row("Codec", f"{codec} (encoders: {codec_hint})")
         else:
@@ -427,9 +428,10 @@ def resize_video(
 
     # infer missing spatial dimension to keep aspect ratio
     if width is None and height is None:
-        raise ValueError("resize_video: at least one of width/height must be provided.")
-    if src_w <= 0 or src_h <= 0:
-        raise ValueError(f"resize_video: invalid source resolution {src_w}x{src_h}.")
+        # resolution unchanged, maybe we are changing fps/codec.
+        width = src_w
+        height = src_h
+    
     if width is None:
         # infer width from height
         width = int(round(src_w * (height / src_h)))
@@ -702,8 +704,6 @@ def main():
     if args.cmd == "info":
         print_video_info(args.path)
     elif args.cmd == "resize":
-        if args.width is None and args.height is None:
-            raise ValueError("resize: please provide at least one of --width or --height.")
         resize_video(
             input_path=args.input,
             output_path=args.output,

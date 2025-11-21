@@ -4,77 +4,264 @@ from scipy.spatial.transform import Rotation
 from kiui.op import safe_normalize
 from kiui.typing import *
 
-# convert between different world coordinate systems
-def convert(
-    pose, 
-    target: Literal['unity', 'blender', 'opencv', 'colmap', 'opengl', 'unreal'] = 'unity', 
-    original: Literal['unity', 'blender', 'opencv', 'colmap', 'opengl', 'unreal'] = 'opengl',
-):
-    """A method to convert between different world coordinate systems.
+
+def to_homo(mat: np.ndarray, eye: bool = True) -> np.ndarray:
+    """Append a homogeneous row to a matrix.
+
+    - If ``mat`` is [3, 4], append ``[0, 0, 0, 1]`` to get a [4, 4] matrix when ``eye=True``,
+      or ``[0, 0, 0, 0]`` when ``eye=False``.
+    - If ``mat`` is [2, 3], append ``[0, 0, 1]`` to get a [3, 3] matrix.
 
     Args:
-        pose (np.ndarray): camera pose, float [4, 4].
-        target (Literal[&#39;unity&#39;, &#39;blender&#39;, &#39;opencv&#39;, &#39;colmap&#39;, &#39;opengl&#39;, &#39;unreal&#39;], optional): from convention. Defaults to 'unity'.
-        original (Literal[&#39;unity&#39;, &#39;blender&#39;, &#39;opencv&#39;, &#39;colmap&#39;, &#39;opengl&#39;, &#39;unreal&#39;], optional): to convention. Defaults to 'opengl'.
+        mat (np.ndarray): Input matrix of shape [3, 4] or [2, 3].
+        eye (bool, optional): Whether to append a homogeneous "eye" row. Defaults to True.
 
     Returns:
-        np.ndarray: converted camera pose, float [4, 4].
+        np.ndarray: Homogeneous matrix of shape [4, 4] or [3, 3].
     """
-    
-    if original == 'opengl':
-        if target == 'unity':
-            pose[2] *= -1
-        elif target == 'blender':
-            pose[2] *= -1
-            pose[[1, 2]] = pose[[2, 1]]
-        elif target in ['opencv', 'colmap']:
-            pose[1:3] *= -1
-        elif target == 'unreal':
-            pose[[1, 2]] = pose[[2, 1]]
-    elif original == 'unity':
-        if target == 'opengl':
-            pose[2] *= -1
-        elif target == 'blender':
-            pose[[1, 2]] = pose[[2, 1]]
-        elif target in ['opencv', 'colmap']:
-            pose[1] *= -1
-        elif target == 'unreal':
-            pose[[1, 2]] = pose[[2, 1]]
-            pose[1] *= -1
-    elif original == 'blender':
-        if target == 'opengl':
-            pose[1] *= -1
-            pose[[1, 2]] = pose[[2, 1]]
-        elif target == 'unity':
-            pose[[1, 2]] = pose[[2, 1]]
-        elif target in ['opencv', 'colmap']:
-            pose[2] *= -1
-            pose[[1, 2]] = pose[[2, 1]]
-        elif target == 'unreal':
-            pose[1] *= -1
-    elif original in ['opencv', 'colmap']:
-        if target == 'opengl':
-            pose[1:3] *= -1
-        elif target == 'unity':
-            pose[1] *= -1
-        elif target == 'blender':
-            pose[1] *= -1
-            pose[[1, 2]] = pose[[2, 1]]
-        elif target == 'unreal':
-            pose[[1, 2]] = pose[[2, 1]]
-            pose[:2] *= -1
-    elif original == 'unreal':
-        if target == 'opengl':
-            pose[[1, 2]] = pose[[2, 1]]
-        elif target == 'unity':
-            pose[[1, 2]] = pose[[2, 1]]
-            pose[2] *= -1
-        elif target == 'blender':
-            pose[1] *= -1
-        elif target in ['opencv', 'colmap']:
-            pose[[1, 2]] = pose[[2, 1]]
-            pose[:2] *= -1
+    mat = np.asarray(mat, dtype=np.float32)
+    if mat.shape == (3, 4):
+        if eye:
+            bottom = np.array([[0.0, 0.0, 0.0, 1.0]], dtype=mat.dtype)
+        else:
+            bottom = np.array([[0.0, 0.0, 0.0, 0.0]], dtype=mat.dtype)
+    elif mat.shape == (2, 3):
+        if eye:
+            bottom = np.array([[0.0, 0.0, 1.0]], dtype=mat.dtype)
+        else:
+            bottom = np.array([[0.0, 0.0, 0.0]], dtype=mat.dtype)
+    else:
+        raise ValueError(f"to_homo expects shape (3, 4) or (2, 3), got {mat.shape}")
+    return np.concatenate([mat, bottom], axis=0)
+
+
+def intr_to_K(intr):
+    """convert intrinsics [fx, fy, cx, cy] to calibration matrix K [3, 3].
+
+    Args:
+        intr (np.ndarray): camera intrinsics, float [4] as [fx, fy, cx, cy]
+
+    Returns:
+        np.ndarray: calibration matrix K, float [3, 3]
+    """
+    intr = np.asarray(intr, dtype=np.float32)
+    fx, fy, cx, cy = intr
+    K = np.array(
+        [
+            [fx, 0.0, cx],
+            [0.0, fy, cy],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float32,
+    )
+    return K
+
+
+def K_to_intr(K):
+    """convert calibration matrix K [3, 3] to intrinsics [fx, fy, cx, cy].
+
+    Args:
+        K (np.ndarray): calibration matrix, float [3, 3]
+
+    Returns:
+        np.ndarray: intrinsics, float [4] as [fx, fy, cx, cy]
+    """
+    K = np.asarray(K, dtype=np.float32)
+    fx = K[0, 0]
+    fy = K[1, 1]
+    cx = K[0, 2]
+    cy = K[1, 2]
+    return np.array([fx, fy, cx, cy], dtype=np.float32)
+
+
+def fov_to_intr(fov, width, height, is_degree=True):
+    """convert field of view [fovx, fovy] to intrinsics [fx, fy, cx, cy].
+
+    Args:
+        fov (np.ndarray): field of view, float [2] as [fovx, fovy]
+        width (int): image width
+        height (int): image height
+        is_degree (bool, optional): whether fov is in degree. Defaults to True.
+
+    Returns:
+        np.ndarray: intrinsics, float [4] as [fx, fy, cx, cy]
+    """
+    fov = np.asarray(fov, dtype=np.float32)
+    fovx, fovy = fov
+    if is_degree:
+        fovx = np.deg2rad(fovx)
+        fovy = np.deg2rad(fovy)
+    fx = width / (2.0 * np.tan(fovx / 2.0))
+    fy = height / (2.0 * np.tan(fovy / 2.0))
+    cx = width * 0.5
+    cy = height * 0.5
+    return np.array([fx, fy, cx, cy], dtype=np.float32)
+
+
+def intr_to_fov(intr, width, height, is_degree=True):
+    """convert intrinsics [fx, fy, cx, cy] to field of view [fovx, fovy].
+
+    Args:
+        intr (np.ndarray): intrinsics, float [4] as [fx, fy, cx, cy]
+        width (int): image width
+        height (int): image height
+        is_degree (bool, optional): whether to return fov in degree. Defaults to True.
+
+    Returns:
+        np.ndarray: field of view, float [2] as [fovx, fovy]
+    """
+    intr = np.asarray(intr, dtype=np.float32)
+    fx, fy, _, _ = intr
+    fovx = 2.0 * np.arctan(width / (2.0 * fx))
+    fovy = 2.0 * np.arctan(height / (2.0 * fy))
+    if is_degree:
+        fovx = np.rad2deg(fovx)
+        fovy = np.rad2deg(fovy)
+    return np.array([fovx, fovy], dtype=np.float32)
+
+
+def fov_to_K(fov, width, height, is_degree=True):
+    """convert field of view [fovx, fovy] to calibration matrix K [3, 3]."""
+    intr = fov_to_intr(fov, width, height, is_degree=is_degree)
+    return intr_to_K(intr)
+
+
+def K_to_fov(K, width, height, is_degree=True):
+    """convert calibration matrix K [3, 3] to field of view [fovx, fovy]."""
+    intr = K_to_intr(K)
+    return intr_to_fov(intr, width, height, is_degree=is_degree)
+
+
+def perspective_to_intr(proj, width, height):
+    """convert a perspective projection matrix to intrinsics [fx, fy, cx, cy].
+
+    Args:
+        proj (np.ndarray): perspective projection matrix, float [4, 4]
+        width (int): image width
+        height (int): image height
+
+    Returns:
+        np.ndarray: intrinsics, float [4] as [fx, fy, cx, cy]
+    """
+    proj = np.asarray(proj, dtype=np.float32)
+    fx = proj[0, 0] * (width / 2.0)
+    fy = proj[1, 1] * (height / 2.0)
+    cx = (1.0 - proj[0, 2]) * (width / 2.0)
+    cy = (1.0 - proj[1, 2]) * (height / 2.0)
+    return np.array([fx, fy, cx, cy], dtype=np.float32)
+
+
+def get_rays(pose, h, w, fovy, opengl=True, normalize_dir=True):
+    """ construct rays origin and direction from a camera pose.
+
+    Args:
+        pose (np.ndarray): camera pose, float [4, 4]
+        h (int): image height
+        w (int): image width
+        fovy (float): field of view in degree along y-axis.
+        opengl (bool, optional): whether to use the OpenGL camera convention. Defaults to True.
+        normalize_dir (bool, optional): whether to normalize the ray directions. Defaults to True.
+
+    Returns:
+        Tuple[np.ndarray]: rays_o and rays_d, both are float [h, w, 3]
+    """
+    # pose: [4, 4]
+    # fov: in degree
+    # opengl: camera front view convention
+
+    x, y = np.meshgrid(np.arange(w), np.arange(h), indexing="xy")
+    x = x.reshape(-1)
+    y = y.reshape(-1)
+
+    cx = w * 0.5
+    cy = h * 0.5
+
+    # objaverse rendering has fixed focal of 560 at resolution 512 --> fov = 49.1 degree
+    focal = h * 0.5 / np.tan(0.5 * np.deg2rad(fovy))
+
+    camera_dirs = np.stack([
+        (x - cx + 0.5) / focal,
+        (y - cy + 0.5) / focal * (-1.0 if opengl else 1.0),
+        np.ones_like(x) * (-1.0 if opengl else 1.0),
+    ], axis=-1) # [hw, 3]
+
+    rays_d = camera_dirs @ pose[:3, :3].transpose(0, 1)  # [hw, 3]
+    rays_o = np.expand_dims(pose[:3, 3], 0).repeat(rays_d.shape[0], 0)  # [hw, 3]
+
+    if normalize_dir:
+        rays_d = safe_normalize(rays_d)
+
+    rays_o = rays_o.reshape(h, w, 3)
+    rays_d = rays_d.reshape(h, w, 3)
+
+    return rays_o, rays_d
+
+
+def pose_to_extr(pose):
+    """convert camera pose (cam2world) to extrinsics (world2cam).
+
+    Args:
+        pose (np.ndarray): camera pose matrix (cam2world), float [4, 4]
+
+    Returns:
+        np.ndarray: camera extrinsics matrix (world2cam), float [4, 4]
+    """
+    pose = np.asarray(pose, dtype=np.float32)
+    return np.linalg.inv(pose)
+
+
+def extr_to_pose(extr):
+    """convert camera extrinsics (world2cam) to pose (cam2world).
+
+    Args:
+        extr (np.ndarray): camera extrinsics matrix (world2cam), float [4, 4]
+
+    Returns:
+        np.ndarray: camera pose matrix (cam2world), float [4, 4]
+    """
+    extr = np.asarray(extr, dtype=np.float32)
+    return np.linalg.inv(extr)
+
+
+def se3_to_matrix(se3):
+    """convert [tx, ty, tz, qx, qy, qz, qw] to a [4, 4] R|t camera matrix (it can be c2w or w2c!).
+
+    Args:
+        se3 (np.ndarray): camera parameters, float [7] as [tx, ty, tz, qx, qy, qz, qw]
+
+    Returns:
+        np.ndarray: c2w/w2c matrix, float [4, 4]
+    """
+    se3 = np.asarray(se3, dtype=np.float32)
+    assert se3.shape[-1] == 7, "se3 must be of shape: [7] for [tx, ty, tz, qx, qy, qz, qw]"
+
+    t = se3[:3]
+    qx, qy, qz, qw = se3[3:]
+
+    # SciPy Rotation expects quaternion in (x, y, z, w) order.
+    r = Rotation.from_quat([qx, qy, qz, qw])
+    R = r.as_matrix().astype(np.float32)
+
+    pose = np.eye(4, dtype=np.float32)
+    pose[:3, :3] = R
+    pose[:3, 3] = t
     return pose
+
+def matrix_to_se3(matrix):
+    """convert a [4, 4] R|t camera matrix to [tx, ty, tz, qx, qy, qz, qw].
+
+    Args:
+        matrix (np.ndarray): c2w/w2c matrix, float [4, 4]
+
+    Returns:
+        np.ndarray: camera parameters, float [7] as [tx, ty, tz, qx, qy, qz, qw]
+    """
+    matrix = np.asarray(matrix, dtype=np.float32)
+    assert matrix.shape == (4, 4), "matrix must be of shape: [4, 4]"
+    t = matrix[:3, 3]
+    R = matrix[:3, :3]
+    q = Rotation.from_matrix(R).as_quat()
+    return np.concatenate([t, q], axis=-1)
 
 
 def look_at(campos, target, opengl=True):
@@ -186,51 +373,6 @@ def get_perspective(fovy, aspect=1, near=0.01, far=1000):
         dtype=np.float32,
     )
 
-
-def get_rays(pose, h, w, fovy, opengl=True, normalize_dir=True):
-    """ construct rays origin and direction from a camera pose.
-
-    Args:
-        pose (np.ndarray): camera pose, float [4, 4]
-        h (int): image height
-        w (int): image width
-        fovy (float): field of view in degree along y-axis.
-        opengl (bool, optional): whether to use the OpenGL camera convention. Defaults to True.
-        normalize_dir (bool, optional): whether to normalize the ray directions. Defaults to True.
-
-    Returns:
-        Tuple[np.ndarray]: rays_o and rays_d, both are float [h, w, 3]
-    """
-    # pose: [4, 4]
-    # fov: in degree
-    # opengl: camera front view convention
-
-    x, y = np.meshgrid(np.arange(w), np.arange(h), indexing="xy")
-    x = x.reshape(-1)
-    y = y.reshape(-1)
-
-    cx = w * 0.5
-    cy = h * 0.5
-
-    # objaverse rendering has fixed focal of 560 at resolution 512 --> fov = 49.1 degree
-    focal = h * 0.5 / np.tan(0.5 * np.deg2rad(fovy))
-
-    camera_dirs = np.stack([
-        (x - cx + 0.5) / focal,
-        (y - cy + 0.5) / focal * (-1.0 if opengl else 1.0),
-        np.ones_like(x) * (-1.0 if opengl else 1.0),
-    ], axis=-1) # [hw, 3]
-
-    rays_d = camera_dirs @ pose[:3, :3].transpose(0, 1)  # [hw, 3]
-    rays_o = np.expand_dims(pose[:3, 3], 0).repeat(rays_d.shape[0], 0)  # [hw, 3]
-
-    if normalize_dir:
-        rays_d = safe_normalize(rays_d)
-
-    rays_o = rays_o.reshape(h, w, 3)
-    rays_d = rays_d.reshape(h, w, 3)
-
-    return rays_o, rays_d
 
 class OrbitCamera:
     """ An orbital camera class.
