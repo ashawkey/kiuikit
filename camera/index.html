@@ -7,7 +7,7 @@
         <link rel="prefetch" href="../_static/logo.png" as="image">
 
     <link rel="shortcut icon" href="../_static/icon.png"><!-- Generated with Sphinx 8.1.3 and Furo 2025.09.25 -->
-        <title>Camera - kiui 0.2.19 documentation</title>
+        <title>Camera - kiui 0.2.20 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=580074bf" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -164,7 +164,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../"><div class="brand">kiui 0.2.19 documentation</div></a>
+      <a href="../"><div class="brand">kiui 0.2.20 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -212,6 +212,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../utils/">Utils</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../ops/">Operators</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../vis/">Visualization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../video/">Video tools</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../misc_api/">Misc API</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tool</span></p>
@@ -292,7 +293,9 @@
 </section>
 <section id="camera-pose-conventions">
 <h2>Camera pose conventions<a class="headerlink" href="#camera-pose-conventions" title="Link to this heading">¶</a></h2>
-<p>A Camera pose matrix (camera to world transformation) is in the form of:</p>
+<p>We call the camera to world (c2w) transformation matrix strictly as <code class="docutils literal notranslate"><span class="pre">pose</span></code>.
+The inversion of it is the world to camera (w2c) transformation matrix is called <code class="docutils literal notranslate"><span class="pre">extrinsics</span></code> (or the <code class="docutils literal notranslate"><span class="pre">view</span></code> transform in graphics).</p>
+<p>A camera pose matrix is in the form of:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[[</span><span class="n">Right_x</span><span class="p">,</span> <span class="n">Up_x</span><span class="p">,</span> <span class="n">Forward_x</span><span class="p">,</span> <span class="n">Position_x</span><span class="p">],</span>
  <span class="p">[</span><span class="n">Right_y</span><span class="p">,</span> <span class="n">Up_y</span><span class="p">,</span> <span class="n">Forward_y</span><span class="p">,</span> <span class="n">Position_y</span><span class="p">],</span>
  <span class="p">[</span><span class="n">Right_z</span><span class="p">,</span> <span class="n">Up_z</span><span class="p">,</span> <span class="n">Forward_z</span><span class="p">,</span> <span class="n">Position_z</span><span class="p">],</span>
@@ -563,19 +566,226 @@ And we don’t need to negate any axes during the ray construction:</p>
 <p>the camera API is designed to be <cite>numpy</cite> based and un-batched!</p>
 </div>
 <dl class="py function" id="module-kiui.cam">
-<dt class="sig sig-object py" id="kiui.cam.convert">
-<span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">convert</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pose</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">‘unity’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘blender’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘opencv’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘colmap’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘opengl’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘unreal’</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'unity'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">original</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">‘unity’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘blender’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘opencv’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘colmap’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘opengl’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘unreal’</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'opengl'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#convert"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.convert" title="Link to this definition">¶</a></dt>
-<dd><p>A method to convert between different world coordinate systems.</p>
+<dt class="sig sig-object py" id="kiui.cam.to_homo">
+<span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">to_homo</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mat</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">eye</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="reference internal" href="../_modules/kiui/cam/#to_homo"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.to_homo" title="Link to this definition">¶</a></dt>
+<dd><p>Append a homogeneous row to a matrix.</p>
+<ul class="simple">
+<li><p>If <code class="docutils literal notranslate"><span class="pre">mat</span></code> is [3, 4], append <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">0,</span> <span class="pre">0,</span> <span class="pre">1]</span></code> to get a [4, 4] matrix when <code class="docutils literal notranslate"><span class="pre">eye=True</span></code>,
+or <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">0,</span> <span class="pre">0,</span> <span class="pre">0]</span></code> when <code class="docutils literal notranslate"><span class="pre">eye=False</span></code>.</p></li>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">mat</span></code> is [2, 3], append <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">0,</span> <span class="pre">1]</span></code> to get a [3, 3] matrix.</p></li>
+</ul>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>pose</strong> (<em>np.ndarray</em>) – camera pose, float [4, 4].</p></li>
-<li><p><strong>target</strong> (<em>Literal</em><em>[</em><em>'unity'</em><em>, </em><em>'blender'</em><em>, </em><em>'opencv'</em><em>, </em><em>'colmap'</em><em>, </em><em>'opengl'</em><em>, </em><em>'unreal'</em><em>]</em><em>, </em><em>optional</em>) – from convention. Defaults to ‘unity’.</p></li>
-<li><p><strong>original</strong> (<em>Literal</em><em>[</em><em>'unity'</em><em>, </em><em>'blender'</em><em>, </em><em>'opencv'</em><em>, </em><em>'colmap'</em><em>, </em><em>'opengl'</em><em>, </em><em>'unreal'</em><em>]</em><em>, </em><em>optional</em>) – to convention. Defaults to ‘opengl’.</p></li>
+<li><p><strong>mat</strong> (<em>np.ndarray</em>) – Input matrix of shape [3, 4] or [2, 3].</p></li>
+<li><p><strong>eye</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to append a homogeneous “eye” row. Defaults to True.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>converted camera pose, float [4, 4].</p>
+<dd class="field-even"><p>Homogeneous matrix of shape [4, 4] or [3, 3].</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.cam.intr_to_K">
+<span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">intr_to_K</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">intr</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#intr_to_K"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.intr_to_K" title="Link to this definition">¶</a></dt>
+<dd><p>convert intrinsics [fx, fy, cx, cy] to calibration matrix K [3, 3].</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>intr</strong> (<em>np.ndarray</em>) – camera intrinsics, float [4] as [fx, fy, cx, cy]</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>calibration matrix K, float [3, 3]</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.cam.K_to_intr">
+<span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">K_to_intr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">K</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#K_to_intr"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.K_to_intr" title="Link to this definition">¶</a></dt>
+<dd><p>convert calibration matrix K [3, 3] to intrinsics [fx, fy, cx, cy].</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>K</strong> (<em>np.ndarray</em>) – calibration matrix, float [3, 3]</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>intrinsics, float [4] as [fx, fy, cx, cy]</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.cam.fov_to_intr">
+<span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">fov_to_intr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fov</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">width</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">height</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_degree</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#fov_to_intr"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.fov_to_intr" title="Link to this definition">¶</a></dt>
+<dd><p>convert field of view [fovx, fovy] to intrinsics [fx, fy, cx, cy].</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>fov</strong> (<em>np.ndarray</em>) – field of view, float [2] as [fovx, fovy]</p></li>
+<li><p><strong>width</strong> (<em>int</em>) – image width</p></li>
+<li><p><strong>height</strong> (<em>int</em>) – image height</p></li>
+<li><p><strong>is_degree</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether fov is in degree. Defaults to True.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>intrinsics, float [4] as [fx, fy, cx, cy]</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.cam.intr_to_fov">
+<span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">intr_to_fov</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">intr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">width</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">height</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_degree</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#intr_to_fov"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.intr_to_fov" title="Link to this definition">¶</a></dt>
+<dd><p>convert intrinsics [fx, fy, cx, cy] to field of view [fovx, fovy].</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>intr</strong> (<em>np.ndarray</em>) – intrinsics, float [4] as [fx, fy, cx, cy]</p></li>
+<li><p><strong>width</strong> (<em>int</em>) – image width</p></li>
+<li><p><strong>height</strong> (<em>int</em>) – image height</p></li>
+<li><p><strong>is_degree</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether to return fov in degree. Defaults to True.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>field of view, float [2] as [fovx, fovy]</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.cam.fov_to_K">
+<span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">fov_to_K</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fov</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">width</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">height</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_degree</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#fov_to_K"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.fov_to_K" title="Link to this definition">¶</a></dt>
+<dd><p>convert field of view [fovx, fovy] to calibration matrix K [3, 3].</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.cam.K_to_fov">
+<span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">K_to_fov</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">K</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">width</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">height</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_degree</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#K_to_fov"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.K_to_fov" title="Link to this definition">¶</a></dt>
+<dd><p>convert calibration matrix K [3, 3] to field of view [fovx, fovy].</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.cam.perspective_to_intr">
+<span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">perspective_to_intr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">proj</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">width</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">height</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#perspective_to_intr"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.perspective_to_intr" title="Link to this definition">¶</a></dt>
+<dd><p>convert a perspective projection matrix to intrinsics [fx, fy, cx, cy].</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>proj</strong> (<em>np.ndarray</em>) – perspective projection matrix, float [4, 4]</p></li>
+<li><p><strong>width</strong> (<em>int</em>) – image width</p></li>
+<li><p><strong>height</strong> (<em>int</em>) – image height</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>intrinsics, float [4] as [fx, fy, cx, cy]</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.cam.get_rays">
+<span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">get_rays</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pose</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">h</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">w</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fovy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">opengl</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">normalize_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#get_rays"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.get_rays" title="Link to this definition">¶</a></dt>
+<dd><p>construct rays origin and direction from a camera pose.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>pose</strong> (<em>np.ndarray</em>) – camera pose, float [4, 4]</p></li>
+<li><p><strong>h</strong> (<em>int</em>) – image height</p></li>
+<li><p><strong>w</strong> (<em>int</em>) – image width</p></li>
+<li><p><strong>fovy</strong> (<em>float</em>) – field of view in degree along y-axis.</p></li>
+<li><p><strong>opengl</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether to use the OpenGL camera convention. Defaults to True.</p></li>
+<li><p><strong>normalize_dir</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether to normalize the ray directions. Defaults to True.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>rays_o and rays_d, both are float [h, w, 3]</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tuple[np.ndarray]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.cam.pose_to_extr">
+<span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">pose_to_extr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pose</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#pose_to_extr"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.pose_to_extr" title="Link to this definition">¶</a></dt>
+<dd><p>convert camera pose (cam2world) to extrinsics (world2cam).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>pose</strong> (<em>np.ndarray</em>) – camera pose matrix (cam2world), float [4, 4]</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>camera extrinsics matrix (world2cam), float [4, 4]</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.cam.extr_to_pose">
+<span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">extr_to_pose</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">extr</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#extr_to_pose"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.extr_to_pose" title="Link to this definition">¶</a></dt>
+<dd><p>convert camera extrinsics (world2cam) to pose (cam2world).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>extr</strong> (<em>np.ndarray</em>) – camera extrinsics matrix (world2cam), float [4, 4]</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>camera pose matrix (cam2world), float [4, 4]</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.cam.se3_to_matrix">
+<span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">se3_to_matrix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">se3</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#se3_to_matrix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.se3_to_matrix" title="Link to this definition">¶</a></dt>
+<dd><p>convert [tx, ty, tz, qx, qy, qz, qw] to a [4, 4] R|t camera matrix (it can be c2w or w2c!).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>se3</strong> (<em>np.ndarray</em>) – camera parameters, float [7] as [tx, ty, tz, qx, qy, qz, qw]</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>c2w/w2c matrix, float [4, 4]</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.cam.matrix_to_se3">
+<span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">matrix_to_se3</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">matrix</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#matrix_to_se3"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.matrix_to_se3" title="Link to this definition">¶</a></dt>
+<dd><p>convert a [4, 4] R|t camera matrix to [tx, ty, tz, qx, qy, qz, qw].</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>matrix</strong> (<em>np.ndarray</em>) – c2w/w2c matrix, float [4, 4]</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>camera parameters, float [7] as [tx, ty, tz, qx, qy, qz, qw]</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>np.ndarray</p>
@@ -666,30 +876,6 @@ And we don’t need to negate any axes during the ray construction:</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>np.ndarray</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="kiui.cam.get_rays">
-<span class="sig-prename descclassname"><span class="pre">kiui.cam.</span></span><span class="sig-name descname"><span class="pre">get_rays</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pose</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">h</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">w</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fovy</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">opengl</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">normalize_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/kiui/cam/#get_rays"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.cam.get_rays" title="Link to this definition">¶</a></dt>
-<dd><p>construct rays origin and direction from a camera pose.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>pose</strong> (<em>np.ndarray</em>) – camera pose, float [4, 4]</p></li>
-<li><p><strong>h</strong> (<em>int</em>) – image height</p></li>
-<li><p><strong>w</strong> (<em>int</em>) – image width</p></li>
-<li><p><strong>fovy</strong> (<em>float</em>) – field of view in degree along y-axis.</p></li>
-<li><p><strong>opengl</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether to use the OpenGL camera convention. Defaults to True.</p></li>
-<li><p><strong>normalize_dir</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether to normalize the ray directions. Defaults to True.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>rays_o and rays_d, both are float [h, w, 3]</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Tuple[np.ndarray]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -938,12 +1124,23 @@ And we don’t need to negate any axes during the ray construction:</p>
 </ul>
 </li>
 <li><a class="reference internal" href="#api">API</a><ul>
-<li><a class="reference internal" href="#kiui.cam.convert"><code class="docutils literal notranslate"><span class="pre">convert()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.to_homo"><code class="docutils literal notranslate"><span class="pre">to_homo()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.intr_to_K"><code class="docutils literal notranslate"><span class="pre">intr_to_K()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.K_to_intr"><code class="docutils literal notranslate"><span class="pre">K_to_intr()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.fov_to_intr"><code class="docutils literal notranslate"><span class="pre">fov_to_intr()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.intr_to_fov"><code class="docutils literal notranslate"><span class="pre">intr_to_fov()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.fov_to_K"><code class="docutils literal notranslate"><span class="pre">fov_to_K()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.K_to_fov"><code class="docutils literal notranslate"><span class="pre">K_to_fov()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.perspective_to_intr"><code class="docutils literal notranslate"><span class="pre">perspective_to_intr()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.get_rays"><code class="docutils literal notranslate"><span class="pre">get_rays()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.pose_to_extr"><code class="docutils literal notranslate"><span class="pre">pose_to_extr()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.extr_to_pose"><code class="docutils literal notranslate"><span class="pre">extr_to_pose()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.se3_to_matrix"><code class="docutils literal notranslate"><span class="pre">se3_to_matrix()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.cam.matrix_to_se3"><code class="docutils literal notranslate"><span class="pre">matrix_to_se3()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.cam.look_at"><code class="docutils literal notranslate"><span class="pre">look_at()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.cam.orbit_camera"><code class="docutils literal notranslate"><span class="pre">orbit_camera()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.cam.undo_orbit_camera"><code class="docutils literal notranslate"><span class="pre">undo_orbit_camera()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.cam.get_perspective"><code class="docutils literal notranslate"><span class="pre">get_perspective()</span></code></a></li>
-<li><a class="reference internal" href="#kiui.cam.get_rays"><code class="docutils literal notranslate"><span class="pre">get_rays()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.cam.OrbitCamera"><code class="docutils literal notranslate"><span class="pre">OrbitCamera</span></code></a><ul>
 <li><a class="reference internal" href="#kiui.cam.OrbitCamera.__init__"><code class="docutils literal notranslate"><span class="pre">OrbitCamera.__init__()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.cam.OrbitCamera.fovx"><code class="docutils literal notranslate"><span class="pre">OrbitCamera.fovx</span></code></a></li>
@@ -972,7 +1169,7 @@ And we don’t need to negate any axes during the ray construction:</p>
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=bb0a46c0"></script>
+</div><script src="../_static/documentation_options.js?v=e31cdd81"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>

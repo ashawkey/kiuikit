@@ -1,0 +1,1050 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex/"><link rel="search" title="Search" href="../../../search/">
+        <link rel="prefetch" href="../../../_static/logo.png" as="image">
+
+    <link rel="shortcut icon" href="../../../_static/icon.png"><!-- Generated with Sphinx 8.1.3 and Furo 2025.09.25 -->
+        <title>kiui.video - kiui 0.2.20 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../"><div class="brand">kiui 0.2.20 documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../">
+    
+    <div class="sidebar-logo-container">
+        <img class="sidebar-logo" src="../../../_static/logo.png" alt="Logo" />
+    </div>
+</a>
+
+<div style="text-align: center">
+    <b>kiuikit</b>
+    </br>
+    <script async defer src="https://buttons.github.io/buttons.js"></script>
+    <a class="github-button" href="https://github.com/ashawkey/kiuikit"
+        data-color-scheme="no-preference: light; light: light; dark: light;" data-size="large" data-show-count="true"
+        aria-label="Download buttons/github-buttons on GitHub">
+        Github
+    </a>
+</div><form class="sidebar-search-container" method="get" action="../../../search/" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">API</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../mesh/">Mesh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../camera/">Camera</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../utils/">Utils</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../ops/">Operators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../vis/">Visualization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../video/">Video tools</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../misc_api/">Misc API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tool</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../render/">Mesh Renderer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../blender/">Blender Scripts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../remesh/">Remesh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../misc_cli/">Misc CLI</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for kiui.video</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">subprocess</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Sequence</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">cv2</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">rich.console</span><span class="w"> </span><span class="kn">import</span> <span class="n">Console</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">rich.table</span><span class="w"> </span><span class="kn">import</span> <span class="n">Table</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">kiui.typing</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
+
+
+<div class="viewcode-block" id="read_video">
+<a class="viewcode-back" href="../../../video/#kiui.video.read_video">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">read_video</span><span class="p">(</span>
+    <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">mode</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;float&quot;</span><span class="p">,</span> <span class="s2">&quot;uint8&quot;</span><span class="p">,</span> <span class="s2">&quot;torch&quot;</span><span class="p">,</span> <span class="s2">&quot;tensor&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;float&quot;</span><span class="p">,</span>
+    <span class="n">order</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;RGB&quot;</span><span class="p">,</span> <span class="s2">&quot;BGR&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;RGB&quot;</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">Tensor</span><span class="p">],</span> <span class="nb">float</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Read a video file into a tensor / numpy array.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        path: Path to the video file.</span>
+<span class="sd">        mode: Returned data type.</span>
+<span class="sd">            - ``&quot;uint8&quot;``: uint8 numpy array, [T, H, W, 3], range [0, 255]</span>
+<span class="sd">            - ``&quot;float&quot;``: float32 numpy array, [T, H, W, 3], range [0, 1]</span>
+<span class="sd">            - ``&quot;torch&quot;`` / ``&quot;tensor&quot;``: float32 torch tensor, [T, H, W, 3], range [0, 1]</span>
+<span class="sd">        order: Channel order, ``&quot;RGB&quot;`` or ``&quot;BGR&quot;``.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        video: Video frames in the requested format.</span>
+<span class="sd">        fps: Frames per second of the video.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">cap</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">VideoCapture</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">cap</span><span class="o">.</span><span class="n">isOpened</span><span class="p">():</span>
+        <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;cannot open video: </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">fps</span> <span class="o">=</span> <span class="n">cap</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">cv2</span><span class="o">.</span><span class="n">CAP_PROP_FPS</span><span class="p">)</span>
+    <span class="n">frames</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">ok</span><span class="p">,</span> <span class="n">frame</span> <span class="o">=</span> <span class="n">cap</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
+            <span class="k">break</span>
+        <span class="c1"># OpenCV reads in BGR</span>
+        <span class="k">if</span> <span class="n">order</span> <span class="o">==</span> <span class="s2">&quot;RGB&quot;</span><span class="p">:</span>
+            <span class="n">frame</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">cvtColor</span><span class="p">(</span><span class="n">frame</span><span class="p">,</span> <span class="n">cv2</span><span class="o">.</span><span class="n">COLOR_BGR2RGB</span><span class="p">)</span>
+        <span class="n">frames</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span>
+
+    <span class="n">cap</span><span class="o">.</span><span class="n">release</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">frames</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;no frames read from video: </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">video</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">frames</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># [T, H, W, 3], uint8</span>
+
+    <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s2">&quot;uint8&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">video</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">fps</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">mode</span> <span class="o">==</span> <span class="s2">&quot;float&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">video</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="o">/</span> <span class="mf">255.0</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">fps</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">mode</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;torch&quot;</span><span class="p">,</span> <span class="s2">&quot;tensor&quot;</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">video</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="o">/</span> <span class="mf">255.0</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">fps</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown read_video mode </span><span class="si">{</span><span class="n">mode</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="write_video">
+<a class="viewcode-back" href="../../../video/#kiui.video.write_video">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">write_video</span><span class="p">(</span>
+    <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">video</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ndarray</span><span class="p">],</span>
+    <span class="n">fps</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">order</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;RGB&quot;</span><span class="p">,</span> <span class="s2">&quot;BGR&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;RGB&quot;</span><span class="p">,</span>
+    <span class="n">codec</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;mp4v&quot;</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Write a video from frames.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        path: Path to write the video file.</span>
+<span class="sd">        video: Video frames, [T, H, W, C] where C is 3 or 4.</span>
+<span class="sd">            Can be numpy array (uint8 or float in [0, 1]) or torch tensor.</span>
+<span class="sd">        fps: Frames per second.</span>
+<span class="sd">        order: Channel order of the input frames, ``&quot;RGB&quot;`` or ``&quot;BGR&quot;``.</span>
+<span class="sd">        codec: FourCC codec string for OpenCV, e.g. ``&quot;mp4v&quot;``, ``&quot;XVID&quot;``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">(</span><span class="n">video</span><span class="p">):</span>
+        <span class="n">video</span> <span class="o">=</span> <span class="n">video</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">video</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+        <span class="n">video</span> <span class="o">=</span> <span class="n">video</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>  <span class="c1"># [H, W, C] -&gt; [1, H, W, C]</span>
+    <span class="k">if</span> <span class="n">video</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">4</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;write_video expects [T, H, W, C], got shape </span><span class="si">{</span><span class="n">video</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">video</span><span class="o">.</span><span class="n">dtype</span> <span class="o">==</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span> <span class="ow">or</span> <span class="n">video</span><span class="o">.</span><span class="n">dtype</span> <span class="o">==</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">:</span>
+        <span class="n">video</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">video</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+        <span class="n">video</span> <span class="o">=</span> <span class="p">(</span><span class="n">video</span> <span class="o">*</span> <span class="mf">255.0</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
+
+    <span class="n">T</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">W</span><span class="p">,</span> <span class="n">C</span> <span class="o">=</span> <span class="n">video</span><span class="o">.</span><span class="n">shape</span>
+    <span class="k">if</span> <span class="n">C</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;write_video expects 3 or 4 channels, got </span><span class="si">{</span><span class="n">C</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">fourcc</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">VideoWriter_fourcc</span><span class="p">(</span><span class="o">*</span><span class="n">codec</span><span class="p">)</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">path</span><span class="p">),</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="o">!=</span> <span class="s2">&quot;&quot;</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">writer</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">VideoWriter</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">fourcc</span><span class="p">,</span> <span class="n">fps</span><span class="p">,</span> <span class="p">(</span><span class="n">W</span><span class="p">,</span> <span class="n">H</span><span class="p">))</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">T</span><span class="p">):</span>
+        <span class="n">frame</span> <span class="o">=</span> <span class="n">video</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">C</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+            <span class="n">frame</span> <span class="o">=</span> <span class="n">frame</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="p">:</span><span class="mi">3</span><span class="p">]</span>  <span class="c1"># drop alpha</span>
+        <span class="k">if</span> <span class="n">order</span> <span class="o">==</span> <span class="s2">&quot;RGB&quot;</span><span class="p">:</span>
+            <span class="n">frame</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">cvtColor</span><span class="p">(</span><span class="n">frame</span><span class="p">,</span> <span class="n">cv2</span><span class="o">.</span><span class="n">COLOR_RGB2BGR</span><span class="p">)</span>
+        <span class="n">writer</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span>
+
+    <span class="n">writer</span><span class="o">.</span><span class="n">release</span><span class="p">()</span></div>
+
+
+
+<div class="viewcode-block" id="get_video_info">
+<a class="viewcode-back" href="../../../video/#kiui.video.get_video_info">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_video_info</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Inspect a video file using ffprobe and return metadata.</span>
+
+<span class="sd">    Requires ffmpeg / ffprobe to be installed in the system.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        path: Path to the video file.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        dict with keys:</span>
+<span class="sd">            - path</span>
+<span class="sd">            - width, height</span>
+<span class="sd">            - fps</span>
+<span class="sd">            - duration (seconds)</span>
+<span class="sd">            - codec</span>
+<span class="sd">            - codec_tag (fourcc / sample entry, e.g. ``&quot;hvc1&quot;`` or ``&quot;hev1&quot;``)</span>
+<span class="sd">            - bitrate (bits per second)</span>
+<span class="sd">            - filesize (bytes)</span>
+<span class="sd">            - num_frames</span>
+<span class="sd">            - raw_size (uncompressed RGB size in bytes)</span>
+<span class="sd">            - compression_ratio (raw_size / filesize)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">cmd</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s2">&quot;ffprobe&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-v&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;error&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-select_streams&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;v:0&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-show_entries&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;stream=width,height,codec_name,codec_tag_string,avg_frame_rate,nb_frames:format=duration,bit_rate&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-of&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;json&quot;</span><span class="p">,</span>
+        <span class="n">path</span><span class="p">,</span>
+    <span class="p">]</span>
+
+    <span class="n">result</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cmd</span><span class="p">,</span> <span class="n">check</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">capture_output</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">text</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">stdout</span><span class="p">)</span>
+
+    <span class="n">stream</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;streams&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">fmt</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">&quot;format&quot;</span><span class="p">]</span>
+
+    <span class="n">width</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">stream</span><span class="p">[</span><span class="s2">&quot;width&quot;</span><span class="p">])</span>
+    <span class="n">height</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">stream</span><span class="p">[</span><span class="s2">&quot;height&quot;</span><span class="p">])</span>
+    <span class="n">codec</span> <span class="o">=</span> <span class="n">stream</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;codec_name&quot;</span><span class="p">,</span> <span class="s2">&quot;unknown&quot;</span><span class="p">)</span>
+    <span class="n">codec_tag</span> <span class="o">=</span> <span class="n">stream</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;codec_tag_string&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+
+    <span class="n">fps_str</span> <span class="o">=</span> <span class="n">stream</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;avg_frame_rate&quot;</span><span class="p">,</span> <span class="s2">&quot;0/0&quot;</span><span class="p">)</span>
+    <span class="n">num</span><span class="p">,</span> <span class="n">den</span> <span class="o">=</span> <span class="n">fps_str</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span>
+    <span class="n">fps</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">num</span><span class="p">)</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="n">den</span><span class="p">)</span> <span class="k">if</span> <span class="nb">float</span><span class="p">(</span><span class="n">den</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span> <span class="k">else</span> <span class="mf">0.0</span>
+
+    <span class="n">duration</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">fmt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;duration&quot;</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">))</span>
+    <span class="n">bitrate</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">fmt</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;bit_rate&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+
+    <span class="n">nb_frames_str</span> <span class="o">=</span> <span class="n">stream</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;nb_frames&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">nb_frames_str</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">nb_frames_str</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;0&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
+        <span class="n">num_frames</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">nb_frames_str</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">fps</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">duration</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">num_frames</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">fps</span> <span class="o">*</span> <span class="n">duration</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">num_frames</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="n">filesize</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">getsize</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="k">else</span> <span class="mi">0</span>
+    <span class="n">raw_size</span> <span class="o">=</span> <span class="n">width</span> <span class="o">*</span> <span class="n">height</span> <span class="o">*</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">num_frames</span>  <span class="c1"># assume 8-bit RGB</span>
+    <span class="n">compression_ratio</span> <span class="o">=</span> <span class="p">(</span><span class="n">raw_size</span> <span class="o">/</span> <span class="n">filesize</span><span class="p">)</span> <span class="k">if</span> <span class="n">filesize</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mf">0.0</span>
+
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;path&quot;</span><span class="p">:</span> <span class="n">path</span><span class="p">,</span>
+        <span class="s2">&quot;width&quot;</span><span class="p">:</span> <span class="n">width</span><span class="p">,</span>
+        <span class="s2">&quot;height&quot;</span><span class="p">:</span> <span class="n">height</span><span class="p">,</span>
+        <span class="s2">&quot;fps&quot;</span><span class="p">:</span> <span class="n">fps</span><span class="p">,</span>
+        <span class="s2">&quot;duration&quot;</span><span class="p">:</span> <span class="n">duration</span><span class="p">,</span>
+        <span class="s2">&quot;codec&quot;</span><span class="p">:</span> <span class="n">codec</span><span class="p">,</span>
+        <span class="s2">&quot;codec_tag&quot;</span><span class="p">:</span> <span class="n">codec_tag</span><span class="p">,</span>
+        <span class="s2">&quot;bitrate&quot;</span><span class="p">:</span> <span class="n">bitrate</span><span class="p">,</span>
+        <span class="s2">&quot;filesize&quot;</span><span class="p">:</span> <span class="n">filesize</span><span class="p">,</span>
+        <span class="s2">&quot;num_frames&quot;</span><span class="p">:</span> <span class="n">num_frames</span><span class="p">,</span>
+        <span class="s2">&quot;raw_size&quot;</span><span class="p">:</span> <span class="n">raw_size</span><span class="p">,</span>
+        <span class="s2">&quot;compression_ratio&quot;</span><span class="p">:</span> <span class="n">compression_ratio</span><span class="p">,</span>
+    <span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="print_video_info">
+<a class="viewcode-back" href="../../../video/#kiui.video.print_video_info">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">print_video_info</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Pretty-print video (or image) information.&quot;&quot;&quot;</span>
+
+    <span class="c1"># simple extension-based image detection to support images as well</span>
+    <span class="n">_</span><span class="p">,</span> <span class="n">ext</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+    <span class="n">ext</span> <span class="o">=</span> <span class="n">ext</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="n">image_exts</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;.jpg&quot;</span><span class="p">,</span> <span class="s2">&quot;.jpeg&quot;</span><span class="p">,</span> <span class="s2">&quot;.png&quot;</span><span class="p">,</span> <span class="s2">&quot;.bmp&quot;</span><span class="p">,</span> <span class="s2">&quot;.webp&quot;</span><span class="p">,</span> <span class="s2">&quot;.tif&quot;</span><span class="p">,</span> <span class="s2">&quot;.tiff&quot;</span><span class="p">,</span> <span class="s2">&quot;.gif&quot;</span><span class="p">}</span>
+
+    <span class="n">is_image</span> <span class="o">=</span> <span class="n">ext</span> <span class="ow">in</span> <span class="n">image_exts</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_fmt_duration</span><span class="p">(</span><span class="n">seconds</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">seconds</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;Unknown&quot;</span>
+        <span class="n">m</span><span class="p">,</span> <span class="n">s</span> <span class="o">=</span> <span class="nb">divmod</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">seconds</span><span class="p">)),</span> <span class="mi">60</span><span class="p">)</span>
+        <span class="n">h</span><span class="p">,</span> <span class="n">m</span> <span class="o">=</span> <span class="nb">divmod</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="mi">60</span><span class="p">)</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">h</span><span class="si">:</span><span class="s2">02d</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">m</span><span class="si">:</span><span class="s2">02d</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">s</span><span class="si">:</span><span class="s2">02d</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">seconds</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> s)&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_fmt_bytes</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">n</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;0 B&quot;</span>
+        <span class="n">units</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;B&quot;</span><span class="p">,</span> <span class="s2">&quot;KB&quot;</span><span class="p">,</span> <span class="s2">&quot;MB&quot;</span><span class="p">,</span> <span class="s2">&quot;GB&quot;</span><span class="p">,</span> <span class="s2">&quot;TB&quot;</span><span class="p">]</span>
+        <span class="n">idx</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="mi">1024</span><span class="p">)))</span>
+        <span class="n">idx</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="n">idx</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">units</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">n</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1024</span> <span class="o">**</span> <span class="n">idx</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">idx</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">units</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">value</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">units</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+
+    <span class="n">console</span> <span class="o">=</span> <span class="n">Console</span><span class="p">()</span>
+    <span class="n">table</span> <span class="o">=</span> <span class="n">Table</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;Image&#39;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">is_image</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;Video&#39;</span><span class="si">}</span><span class="s2"> Info: </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">table</span><span class="o">.</span><span class="n">add_column</span><span class="p">(</span><span class="s2">&quot;Field&quot;</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;cyan&quot;</span><span class="p">,</span> <span class="n">no_wrap</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">table</span><span class="o">.</span><span class="n">add_column</span><span class="p">(</span><span class="s2">&quot;Value&quot;</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;magenta&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">is_image</span><span class="p">:</span>
+        <span class="c1"># image info: resolution, format, file size, compression, channels</span>
+        <span class="n">img</span> <span class="o">=</span> <span class="n">cv2</span><span class="o">.</span><span class="n">imread</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">cv2</span><span class="o">.</span><span class="n">IMREAD_UNCHANGED</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">img</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;cannot open image: </span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">img</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">h</span><span class="p">,</span> <span class="n">w</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span>
+            <span class="n">c</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">h</span><span class="p">,</span> <span class="n">w</span><span class="p">,</span> <span class="n">c</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span>
+
+        <span class="n">filesize</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">getsize</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="k">else</span> <span class="mi">0</span>
+        <span class="n">raw_size</span> <span class="o">=</span> <span class="n">w</span> <span class="o">*</span> <span class="n">h</span> <span class="o">*</span> <span class="n">c</span>  <span class="c1"># bytes assuming 8-bit per channel</span>
+        <span class="n">compression_ratio</span> <span class="o">=</span> <span class="p">(</span><span class="n">raw_size</span> <span class="o">/</span> <span class="n">filesize</span><span class="p">)</span> <span class="k">if</span> <span class="n">filesize</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mf">0.0</span>
+
+        <span class="n">fmt</span> <span class="o">=</span> <span class="n">ext</span><span class="o">.</span><span class="n">lstrip</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span> <span class="ow">or</span> <span class="s2">&quot;UNKNOWN&quot;</span>
+
+        <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Type&quot;</span><span class="p">,</span> <span class="s2">&quot;Image&quot;</span><span class="p">)</span>
+        <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Resolution&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">w</span><span class="si">}</span><span class="s2"> x </span><span class="si">{</span><span class="n">h</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Channels&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">c</span><span class="p">))</span>
+        <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Format&quot;</span><span class="p">,</span> <span class="n">fmt</span><span class="p">)</span>
+        <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;File size&quot;</span><span class="p">,</span> <span class="n">_fmt_bytes</span><span class="p">(</span><span class="n">filesize</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">compression_ratio</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Compression&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">compression_ratio</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">x (raw / encoded)&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Compression&quot;</span><span class="p">,</span> <span class="s2">&quot;Unknown&quot;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">info</span> <span class="o">=</span> <span class="n">get_video_info</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+
+        <span class="n">codec</span> <span class="o">=</span> <span class="n">info</span><span class="p">[</span><span class="s2">&quot;codec&quot;</span><span class="p">]</span>
+        <span class="n">codec_tag</span> <span class="o">=</span> <span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;codec_tag&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;unknown&quot;</span>
+        <span class="n">codec_hint</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;h264&quot;</span><span class="p">:</span> <span class="s2">&quot;libx264 / h264_nvenc&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;hevc&quot;</span><span class="p">:</span> <span class="s2">&quot;libx265 / hevc_nvenc&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;mpeg4&quot;</span><span class="p">:</span> <span class="s2">&quot;mpeg4&quot;</span><span class="p">,</span>
+        <span class="p">}</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">codec</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+
+        <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Type&quot;</span><span class="p">,</span> <span class="s2">&quot;Video&quot;</span><span class="p">)</span>
+        <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Resolution&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;width&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> x </span><span class="si">{</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;height&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;FPS&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;fps&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Duration&quot;</span><span class="p">,</span> <span class="n">_fmt_duration</span><span class="p">(</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;duration&#39;</span><span class="p">]))</span>
+        <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Frames&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;num_frames&#39;</span><span class="p">]))</span>
+        <span class="k">if</span> <span class="n">codec_hint</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Codec&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">codec</span><span class="si">}</span><span class="s2"> (encoders: </span><span class="si">{</span><span class="n">codec_hint</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Codec&quot;</span><span class="p">,</span> <span class="n">codec</span><span class="p">)</span>
+        <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Codec tag&quot;</span><span class="p">,</span> <span class="n">codec_tag</span><span class="p">)</span>
+        <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Bitrate&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;bitrate&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> bps&quot;</span><span class="p">)</span>
+        <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;File size&quot;</span><span class="p">,</span> <span class="n">_fmt_bytes</span><span class="p">(</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;filesize&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)))</span>
+
+        <span class="n">cr</span> <span class="o">=</span> <span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;compression_ratio&quot;</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cr</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Compression&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">cr</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">x (raw / encoded)&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Compression&quot;</span><span class="p">,</span> <span class="s2">&quot;Unknown&quot;</span><span class="p">)</span>
+
+    <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="n">table</span><span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_infer_encoder</span><span class="p">(</span><span class="n">src_codec</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">codec</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Infer a reasonable encoder name from source codec if codec is None.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">codec</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">codec</span>
+
+    <span class="k">if</span> <span class="n">src_codec</span> <span class="o">==</span> <span class="s2">&quot;h264&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;libx264&quot;</span>
+    <span class="k">if</span> <span class="n">src_codec</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;hevc&quot;</span><span class="p">,</span> <span class="s2">&quot;h265&quot;</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="s2">&quot;libx265&quot;</span>
+    <span class="k">if</span> <span class="n">src_codec</span> <span class="o">==</span> <span class="s2">&quot;mpeg4&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;mpeg4&quot;</span>
+    <span class="k">return</span> <span class="s2">&quot;libx264&quot;</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_apply_codec_tag</span><span class="p">(</span><span class="n">cmd</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">encoder</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">src_tag</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Preserve container codec tag (sample entry) when reasonable.</span>
+
+<span class="sd">    Examples:</span>
+<span class="sd">        - keep ``hvc1`` vs ``hev1`` for HEVC</span>
+<span class="sd">        - keep ``avc1`` vs ``avc3`` for H.264</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">lower_encoder</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="n">tag</span> <span class="o">=</span> <span class="p">(</span><span class="n">src_tag</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">tag</span><span class="p">:</span>
+        <span class="k">return</span>
+
+    <span class="k">if</span> <span class="n">lower_encoder</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;libx265&quot;</span><span class="p">,</span> <span class="s2">&quot;hevc&quot;</span><span class="p">,</span> <span class="s2">&quot;h265&quot;</span><span class="p">]</span> <span class="ow">and</span> <span class="n">tag</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;hvc1&quot;</span><span class="p">,</span> <span class="s2">&quot;hev1&quot;</span><span class="p">]:</span>
+        <span class="n">cmd</span> <span class="o">+=</span> <span class="p">[</span><span class="s2">&quot;-tag:v&quot;</span><span class="p">,</span> <span class="n">tag</span><span class="p">]</span>
+    <span class="k">elif</span> <span class="n">lower_encoder</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;libx264&quot;</span><span class="p">,</span> <span class="s2">&quot;h264&quot;</span><span class="p">]</span> <span class="ow">and</span> <span class="n">tag</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;avc1&quot;</span><span class="p">,</span> <span class="s2">&quot;avc3&quot;</span><span class="p">]:</span>
+        <span class="n">cmd</span> <span class="o">+=</span> <span class="p">[</span><span class="s2">&quot;-tag:v&quot;</span><span class="p">,</span> <span class="n">tag</span><span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_apply_rate_control</span><span class="p">(</span>
+    <span class="n">cmd</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">encoder</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">crf</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
+    <span class="n">preset</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">src_bitrate</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">src_w</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">src_h</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">dst_w</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">dst_h</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">src_fps</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span>
+    <span class="n">dst_fps</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Append bitrate / CRF options to ffmpeg command.</span>
+
+<span class="sd">    If crf is None and bitrate is known, try to match source bitrate scaled by</span>
+<span class="sd">    resolution and fps. Otherwise, fall back to CRF-based mode.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">lower_encoder</span> <span class="o">=</span> <span class="n">encoder</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">crf</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">src_bitrate</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="c1"># Match source bitrate scaled by resolution (and fps if changed)</span>
+        <span class="n">scale_ratio</span> <span class="o">=</span> <span class="p">(</span><span class="n">dst_w</span> <span class="o">*</span> <span class="n">dst_h</span><span class="p">)</span> <span class="o">/</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">src_w</span> <span class="o">*</span> <span class="n">src_h</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">dst_fps</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">src_fps</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">src_fps</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">scale_ratio</span> <span class="o">*=</span> <span class="n">dst_fps</span> <span class="o">/</span> <span class="n">src_fps</span>
+
+        <span class="n">target_bitrate</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">src_bitrate</span> <span class="o">*</span> <span class="n">scale_ratio</span><span class="p">)</span>
+        <span class="c1"># clamp to a reasonable range</span>
+        <span class="n">target_bitrate</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">100_000</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="n">target_bitrate</span><span class="p">,</span> <span class="n">src_bitrate</span> <span class="o">*</span> <span class="mi">2</span><span class="p">))</span>
+
+        <span class="n">kbps</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">target_bitrate</span> <span class="o">//</span> <span class="mi">1000</span><span class="p">)</span>
+        <span class="n">cmd</span> <span class="o">+=</span> <span class="p">[</span>
+            <span class="s2">&quot;-b:v&quot;</span><span class="p">,</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">kbps</span><span class="si">}</span><span class="s2">k&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;-maxrate&quot;</span><span class="p">,</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">kbps</span><span class="si">}</span><span class="s2">k&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;-bufsize&quot;</span><span class="p">,</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="mi">2</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">kbps</span><span class="si">}</span><span class="s2">k&quot;</span><span class="p">,</span>
+        <span class="p">]</span>
+        <span class="k">return</span>
+
+    <span class="c1"># CRF-based mode (or bitrate unknown)</span>
+    <span class="k">if</span> <span class="n">crf</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">crf</span> <span class="o">=</span> <span class="mi">18</span>  <span class="c1"># sensible default when we cannot infer bitrate</span>
+
+    <span class="k">if</span> <span class="n">lower_encoder</span> <span class="o">==</span> <span class="s2">&quot;mpeg4&quot;</span><span class="p">:</span>
+        <span class="c1"># mpeg4 does not use CRF; use qscale instead (1 best, 31 worst)</span>
+        <span class="n">q</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="mi">31</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">crf</span> <span class="o">/</span> <span class="mi">2</span><span class="p">))))</span>  <span class="c1"># map CRF 18 -&gt; q≈9 as a heuristic</span>
+        <span class="n">cmd</span> <span class="o">+=</span> <span class="p">[</span>
+            <span class="s2">&quot;-q:v&quot;</span><span class="p">,</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">q</span><span class="p">),</span>
+        <span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">cmd</span> <span class="o">+=</span> <span class="p">[</span>
+            <span class="s2">&quot;-crf&quot;</span><span class="p">,</span>
+            <span class="nb">str</span><span class="p">(</span><span class="n">crf</span><span class="p">),</span>
+            <span class="s2">&quot;-preset&quot;</span><span class="p">,</span>
+            <span class="n">preset</span><span class="p">,</span>
+        <span class="p">]</span>
+
+
+<div class="viewcode-block" id="resize_video">
+<a class="viewcode-back" href="../../../video/#kiui.video.resize_video">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">resize_video</span><span class="p">(</span>
+    <span class="n">input_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">output_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">width</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">height</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">codec</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">crf</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">preset</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;medium&quot;</span><span class="p">,</span>
+    <span class="n">fps</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Resize a video and save to a new file using ffmpeg.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        input_path: Path to the input video.</span>
+<span class="sd">        output_path: Path to the output video.</span>
+<span class="sd">        width: Target width. If None, it will be inferred from ``height`` while</span>
+<span class="sd">            keeping the aspect ratio.</span>
+<span class="sd">        height: Target height. If None, it will be inferred from ``width`` while</span>
+<span class="sd">            keeping the aspect ratio.</span>
+<span class="sd">        codec: Video codec / encoder name for ffmpeg, e.g. ``&quot;h264&quot;``, ``&quot;hevc&quot;``,</span>
+<span class="sd">            ``&quot;libx264&quot;``, ``&quot;libx265&quot;``, ``&quot;mpeg4&quot;``, ``&quot;h264_nvenc&quot;``, ``&quot;hevc_nvenc&quot;``.</span>
+<span class="sd">            If None, try to pick a reasonable encoder based on the input codec.</span>
+<span class="sd">        crf: Constant Rate Factor (quality, lower is better) for CRF-based codecs</span>
+<span class="sd">            (e.g. libx264 / libx265). If None, the function will try to roughly</span>
+<span class="sd">            match the source video&#39;s bitrate (scaled by resolution/fps) instead</span>
+<span class="sd">            of using CRF. For ``&quot;mpeg4&quot;``, this is mapped to a quantizer value</span>
+<span class="sd">            ``q:v`` internally when CRF is provided.</span>
+<span class="sd">        preset: ffmpeg preset, e.g. ``&quot;slow&quot;``, ``&quot;medium&quot;``, ``&quot;fast&quot;``.</span>
+<span class="sd">        fps: If not None, resample video to this FPS.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">output_path</span><span class="p">),</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">output_path</span><span class="p">)</span> <span class="o">!=</span> <span class="s2">&quot;&quot;</span> <span class="k">else</span> <span class="kc">None</span>
+
+    <span class="c1"># inspect source</span>
+    <span class="n">info</span> <span class="o">=</span> <span class="n">get_video_info</span><span class="p">(</span><span class="n">input_path</span><span class="p">)</span>
+    <span class="n">src_w</span><span class="p">,</span> <span class="n">src_h</span> <span class="o">=</span> <span class="n">info</span><span class="p">[</span><span class="s2">&quot;width&quot;</span><span class="p">],</span> <span class="n">info</span><span class="p">[</span><span class="s2">&quot;height&quot;</span><span class="p">]</span>
+    <span class="n">src_fps</span> <span class="o">=</span> <span class="n">info</span><span class="p">[</span><span class="s2">&quot;fps&quot;</span><span class="p">]</span> <span class="k">if</span> <span class="n">info</span><span class="p">[</span><span class="s2">&quot;fps&quot;</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">src_bitrate</span> <span class="o">=</span> <span class="n">info</span><span class="p">[</span><span class="s2">&quot;bitrate&quot;</span><span class="p">]</span>
+    <span class="n">src_codec</span> <span class="o">=</span> <span class="p">(</span><span class="n">info</span><span class="p">[</span><span class="s2">&quot;codec&quot;</span><span class="p">]</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="n">src_tag</span> <span class="o">=</span> <span class="p">(</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;codec_tag&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+
+    <span class="c1"># infer missing spatial dimension to keep aspect ratio</span>
+    <span class="k">if</span> <span class="n">width</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">height</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># resolution unchanged, maybe we are changing fps/codec.</span>
+        <span class="n">width</span> <span class="o">=</span> <span class="n">src_w</span>
+        <span class="n">height</span> <span class="o">=</span> <span class="n">src_h</span>
+    
+    <span class="k">if</span> <span class="n">width</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># infer width from height</span>
+        <span class="n">width</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">src_w</span> <span class="o">*</span> <span class="p">(</span><span class="n">height</span> <span class="o">/</span> <span class="n">src_h</span><span class="p">)))</span>
+    <span class="k">if</span> <span class="n">height</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># infer height from width</span>
+        <span class="n">height</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">src_h</span> <span class="o">*</span> <span class="p">(</span><span class="n">width</span> <span class="o">/</span> <span class="n">src_w</span><span class="p">)))</span>
+
+    <span class="c1"># choose codec if not specified</span>
+    <span class="n">codec</span> <span class="o">=</span> <span class="n">_infer_encoder</span><span class="p">(</span><span class="n">src_codec</span><span class="p">,</span> <span class="n">codec</span><span class="p">)</span>
+    <span class="n">lower_codec</span> <span class="o">=</span> <span class="n">codec</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+
+    <span class="n">scale_filter</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;scale=</span><span class="si">{</span><span class="n">width</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">height</span><span class="si">}</span><span class="s2">:flags=lanczos&quot;</span>
+
+    <span class="n">cmd</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s2">&quot;ffmpeg&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-y&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;-i&quot;</span><span class="p">,</span>
+        <span class="n">input_path</span><span class="p">,</span>
+        <span class="s2">&quot;-vf&quot;</span><span class="p">,</span>
+        <span class="n">scale_filter</span><span class="p">,</span>
+        <span class="s2">&quot;-c:v&quot;</span><span class="p">,</span>
+        <span class="n">codec</span><span class="p">,</span>
+    <span class="p">]</span>
+
+    <span class="c1"># preserve container codec tag (sample entry) for better compatibility</span>
+    <span class="n">_apply_codec_tag</span><span class="p">(</span><span class="n">cmd</span><span class="p">,</span> <span class="n">codec</span><span class="p">,</span> <span class="n">src_tag</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">fps</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">cmd</span> <span class="o">+=</span> <span class="p">[</span><span class="s2">&quot;-r&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">fps</span><span class="p">)]</span>
+
+    <span class="c1"># quality / rate control (bitrate match or CRF)</span>
+    <span class="n">_apply_rate_control</span><span class="p">(</span>
+        <span class="n">cmd</span><span class="p">,</span>
+        <span class="n">encoder</span><span class="o">=</span><span class="n">codec</span><span class="p">,</span>
+        <span class="n">crf</span><span class="o">=</span><span class="n">crf</span><span class="p">,</span>
+        <span class="n">preset</span><span class="o">=</span><span class="n">preset</span><span class="p">,</span>
+        <span class="n">src_bitrate</span><span class="o">=</span><span class="n">src_bitrate</span><span class="p">,</span>
+        <span class="n">src_w</span><span class="o">=</span><span class="n">src_w</span><span class="p">,</span>
+        <span class="n">src_h</span><span class="o">=</span><span class="n">src_h</span><span class="p">,</span>
+        <span class="n">dst_w</span><span class="o">=</span><span class="n">width</span><span class="p">,</span>
+        <span class="n">dst_h</span><span class="o">=</span><span class="n">height</span><span class="p">,</span>
+        <span class="n">src_fps</span><span class="o">=</span><span class="n">src_fps</span><span class="p">,</span>
+        <span class="n">dst_fps</span><span class="o">=</span><span class="n">fps</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="n">cmd</span> <span class="o">+=</span> <span class="p">[</span>
+        <span class="s2">&quot;-c:a&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;copy&quot;</span><span class="p">,</span>
+        <span class="n">output_path</span><span class="p">,</span>
+    <span class="p">]</span>
+
+    <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cmd</span><span class="p">,</span> <span class="n">check</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="split_video">
+<a class="viewcode-back" href="../../../video/#kiui.video.split_video">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">split_video</span><span class="p">(</span>
+    <span class="n">input_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">output_dir</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">timestamps</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span>
+    <span class="n">codec</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">crf</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">preset</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;medium&quot;</span><span class="p">,</span>
+    <span class="n">uniform</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">drop_last</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Split a long video into shorter clips given split timestamps.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        input_path: Path to the input video.</span>
+<span class="sd">        output_dir: Directory to save the clips.</span>
+<span class="sd">        timestamps: Sequence of timestamps in seconds.</span>
+<span class="sd">            - If ``drop_last=False`` and ``uniform=None``: treated as absolute</span>
+<span class="sd">              boundaries; the first segment always starts at 0 and the last</span>
+<span class="sd">              one ends at the video duration.</span>
+<span class="sd">            - If ``drop_last=True`` and ``uniform is None``: treated as segment</span>
+<span class="sd">              lengths; the first segment is [0, timestamps[0]], the second is</span>
+<span class="sd">              [timestamps[0], timestamps[0] + timestamps[1]], etc. Any remaining</span>
+<span class="sd">              tail of the video is dropped.</span>
+<span class="sd">            Ignored if ``uniform`` is not None.</span>
+<span class="sd">        codec: Video codec / encoder name for ffmpeg, e.g. ``&quot;h264&quot;``, ``&quot;hevc&quot;``,</span>
+<span class="sd">            ``&quot;libx264&quot;``, ``&quot;libx265&quot;``, ``&quot;mpeg4&quot;``, ``&quot;h264_nvenc&quot;``, ``&quot;hevc_nvenc&quot;``.</span>
+<span class="sd">            If None, try to pick a reasonable encoder based on the input codec.</span>
+<span class="sd">        crf: Constant Rate Factor (quality, lower is better). If None, the</span>
+<span class="sd">            function will try to roughly match the source video&#39;s bitrate.</span>
+<span class="sd">        preset: ffmpeg preset, e.g. ``&quot;slow&quot;``, ``&quot;medium&quot;``, ``&quot;fast&quot;``.</span>
+<span class="sd">        uniform: If not None, split the video into uniform segments of this many</span>
+<span class="sd">            seconds. If ``drop_last=True``, any remaining tail shorter than this</span>
+<span class="sd">            interval is dropped. If ``drop_last=False``, a final shorter segment</span>
+<span class="sd">            is kept. Cannot be used together with explicit ``timestamps``.</span>
+<span class="sd">        drop_last: Drop any remaining part of the video that is not explicitly</span>
+<span class="sd">            covered by timestamps or a full uniform interval.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">output_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="n">info</span> <span class="o">=</span> <span class="n">get_video_info</span><span class="p">(</span><span class="n">input_path</span><span class="p">)</span>
+    <span class="n">duration</span> <span class="o">=</span> <span class="n">info</span><span class="p">[</span><span class="s2">&quot;duration&quot;</span><span class="p">]</span>
+    <span class="n">src_w</span><span class="p">,</span> <span class="n">src_h</span> <span class="o">=</span> <span class="n">info</span><span class="p">[</span><span class="s2">&quot;width&quot;</span><span class="p">],</span> <span class="n">info</span><span class="p">[</span><span class="s2">&quot;height&quot;</span><span class="p">]</span>
+    <span class="n">src_fps</span> <span class="o">=</span> <span class="n">info</span><span class="p">[</span><span class="s2">&quot;fps&quot;</span><span class="p">]</span> <span class="k">if</span> <span class="n">info</span><span class="p">[</span><span class="s2">&quot;fps&quot;</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">src_bitrate</span> <span class="o">=</span> <span class="n">info</span><span class="p">[</span><span class="s2">&quot;bitrate&quot;</span><span class="p">]</span>
+    <span class="n">src_codec</span> <span class="o">=</span> <span class="p">(</span><span class="n">info</span><span class="p">[</span><span class="s2">&quot;codec&quot;</span><span class="p">]</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="n">src_tag</span> <span class="o">=</span> <span class="p">(</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;codec_tag&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+
+    <span class="c1"># choose codec if not specified</span>
+    <span class="n">codec</span> <span class="o">=</span> <span class="n">_infer_encoder</span><span class="p">(</span><span class="n">src_codec</span><span class="p">,</span> <span class="n">codec</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">uniform</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">timestamps</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;split_video: specify either timestamps or uniform, not both.&quot;</span><span class="p">)</span>
+
+    <span class="c1"># build boundaries</span>
+    <span class="k">if</span> <span class="n">uniform</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">uniform</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;split_video: uniform interval must be &gt; 0.&quot;</span><span class="p">)</span>
+        <span class="n">step</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">uniform</span><span class="p">)</span>
+        <span class="n">boundaries</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">]</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="n">step</span>
+        <span class="k">while</span> <span class="n">t</span> <span class="o">&lt;</span> <span class="n">duration</span><span class="p">:</span>
+            <span class="n">boundaries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+            <span class="n">t</span> <span class="o">+=</span> <span class="n">step</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">drop_last</span> <span class="ow">and</span> <span class="n">boundaries</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="n">duration</span><span class="p">:</span>
+            <span class="n">boundaries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">duration</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># timestamps-based splitting</span>
+        <span class="n">ts</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">timestamps</span> <span class="k">if</span> <span class="nb">float</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">drop_last</span><span class="p">:</span>
+            <span class="c1"># interpret timestamps as segment lengths</span>
+            <span class="n">boundaries</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">]</span>
+            <span class="n">acc</span> <span class="o">=</span> <span class="mf">0.0</span>
+            <span class="k">for</span> <span class="n">seg_len</span> <span class="ow">in</span> <span class="n">ts</span><span class="p">:</span>
+                <span class="n">acc</span> <span class="o">+=</span> <span class="n">seg_len</span>
+                <span class="k">if</span> <span class="n">acc</span> <span class="o">&gt;=</span> <span class="n">duration</span><span class="p">:</span>
+                    <span class="n">boundaries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">duration</span><span class="p">)</span>
+                    <span class="k">break</span>
+                <span class="n">boundaries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">acc</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># interpret timestamps as absolute boundaries within (0, duration)</span>
+            <span class="n">ts</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">t</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">ts</span> <span class="k">if</span> <span class="n">t</span> <span class="o">&lt;</span> <span class="n">duration</span><span class="p">)</span>
+            <span class="n">boundaries</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">]</span> <span class="o">+</span> <span class="n">ts</span>
+            <span class="k">if</span> <span class="n">boundaries</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="n">duration</span><span class="p">:</span>
+                <span class="n">boundaries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">duration</span><span class="p">)</span>
+
+    <span class="n">base</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">input_path</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">boundaries</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">boundaries</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="n">boundaries</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span>
+        <span class="n">seg_len</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">end</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span>
+        <span class="n">seg_seconds</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">seg_len</span><span class="p">))</span>
+
+        <span class="n">out_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">output_dir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">base</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">i</span><span class="si">:</span><span class="s2">03d</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">seg_seconds</span><span class="si">}</span><span class="s2">.mp4&quot;</span><span class="p">)</span>
+
+        <span class="n">cmd</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="s2">&quot;ffmpeg&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;-y&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;-i&quot;</span><span class="p">,</span>
+            <span class="n">input_path</span><span class="p">,</span>
+            <span class="s2">&quot;-ss&quot;</span><span class="p">,</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">start</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;-to&quot;</span><span class="p">,</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">end</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;-c:v&quot;</span><span class="p">,</span>
+            <span class="n">codec</span><span class="p">,</span>
+        <span class="p">]</span>
+
+        <span class="c1"># preserve container codec tag (sample entry) for better compatibility</span>
+        <span class="n">_apply_codec_tag</span><span class="p">(</span><span class="n">cmd</span><span class="p">,</span> <span class="n">codec</span><span class="p">,</span> <span class="n">src_tag</span><span class="p">)</span>
+
+        <span class="c1"># quality / rate control (bitrate match or CRF, resolution unchanged)</span>
+        <span class="n">_apply_rate_control</span><span class="p">(</span>
+            <span class="n">cmd</span><span class="p">,</span>
+            <span class="n">encoder</span><span class="o">=</span><span class="n">codec</span><span class="p">,</span>
+            <span class="n">crf</span><span class="o">=</span><span class="n">crf</span><span class="p">,</span>
+            <span class="n">preset</span><span class="o">=</span><span class="n">preset</span><span class="p">,</span>
+            <span class="n">src_bitrate</span><span class="o">=</span><span class="n">src_bitrate</span><span class="p">,</span>
+            <span class="n">src_w</span><span class="o">=</span><span class="n">src_w</span><span class="p">,</span>
+            <span class="n">src_h</span><span class="o">=</span><span class="n">src_h</span><span class="p">,</span>
+            <span class="n">dst_w</span><span class="o">=</span><span class="n">src_w</span><span class="p">,</span>
+            <span class="n">dst_h</span><span class="o">=</span><span class="n">src_h</span><span class="p">,</span>
+            <span class="n">src_fps</span><span class="o">=</span><span class="n">src_fps</span><span class="p">,</span>
+            <span class="n">dst_fps</span><span class="o">=</span><span class="n">src_fps</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">cmd</span> <span class="o">+=</span> <span class="p">[</span>
+            <span class="s2">&quot;-c:a&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;copy&quot;</span><span class="p">,</span>
+            <span class="n">out_path</span><span class="p">,</span>
+        <span class="p">]</span>
+
+        <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">cmd</span><span class="p">,</span> <span class="n">check</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">():</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">argparse</span>
+
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="s2">&quot;Simple video tools based on OpenCV + ffmpeg.&quot;</span><span class="p">)</span>
+    <span class="n">subparsers</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">add_subparsers</span><span class="p">(</span><span class="n">dest</span><span class="o">=</span><span class="s2">&quot;cmd&quot;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># info</span>
+    <span class="n">parser_info</span> <span class="o">=</span> <span class="n">subparsers</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span><span class="s2">&quot;info&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Inspect video information.&quot;</span><span class="p">)</span>
+    <span class="n">parser_info</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;path&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Path to input video.&quot;</span><span class="p">)</span>
+
+    <span class="c1"># resize</span>
+    <span class="n">parser_resize</span> <span class="o">=</span> <span class="n">subparsers</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span><span class="s2">&quot;resize&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Resize a video and save to output.&quot;</span><span class="p">)</span>
+    <span class="n">parser_resize</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;input&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Path to input video.&quot;</span><span class="p">)</span>
+    <span class="n">parser_resize</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;output&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Path to output video.&quot;</span><span class="p">)</span>
+    <span class="n">parser_resize</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--width&quot;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Target width. If omitted, inferred from height to keep aspect ratio.&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser_resize</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--height&quot;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Target height. If omitted, inferred from width to keep aspect ratio.&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser_resize</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--codec&quot;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">choices</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;h264&quot;</span><span class="p">,</span> <span class="s2">&quot;hevc&quot;</span><span class="p">,</span> <span class="s2">&quot;libx264&quot;</span><span class="p">,</span> <span class="s2">&quot;libx265&quot;</span><span class="p">,</span> <span class="s2">&quot;mpeg4&quot;</span><span class="p">,</span> <span class="s2">&quot;h264_nvenc&quot;</span><span class="p">,</span> <span class="s2">&quot;hevc_nvenc&quot;</span><span class="p">],</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;ffmpeg video codec / encoder name. If omitted, try to infer from the input.&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser_resize</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--crf&quot;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;ffmpeg CRF (quality). If omitted, try to roughly match the input bitrate.&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser_resize</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--preset&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;medium&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;ffmpeg preset.&quot;</span><span class="p">)</span>
+
+    <span class="c1"># split</span>
+    <span class="n">parser_split</span> <span class="o">=</span> <span class="n">subparsers</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span><span class="s2">&quot;split&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Split a video into clips.&quot;</span><span class="p">)</span>
+    <span class="n">parser_split</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;input&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Path to input video.&quot;</span><span class="p">)</span>
+    <span class="n">parser_split</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;output_dir&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Directory to save clips.&quot;</span><span class="p">)</span>
+    <span class="n">parser_split</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--timestamps&quot;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span>
+        <span class="n">nargs</span><span class="o">=</span><span class="s2">&quot;*&quot;</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Optional split timestamps in seconds, e.g. --timestamps 10 20 30.&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser_split</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--uniform&quot;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Uniform segment length in seconds, e.g. --uniform 10.&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser_split</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--drop_last&quot;</span><span class="p">,</span>
+        <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_true&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Drop any remaining tail not covered by timestamps or full uniform intervals.&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser_split</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--codec&quot;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">choices</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;h264&quot;</span><span class="p">,</span> <span class="s2">&quot;hevc&quot;</span><span class="p">,</span> <span class="s2">&quot;libx264&quot;</span><span class="p">,</span> <span class="s2">&quot;libx265&quot;</span><span class="p">,</span> <span class="s2">&quot;mpeg4&quot;</span><span class="p">,</span> <span class="s2">&quot;h264_nvenc&quot;</span><span class="p">,</span> <span class="s2">&quot;hevc_nvenc&quot;</span><span class="p">],</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;ffmpeg video codec / encoder name. If omitted, try to infer from the input.&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser_split</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--crf&quot;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;ffmpeg CRF (quality). If omitted, try to roughly match the input bitrate.&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser_split</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--preset&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;medium&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;ffmpeg preset.&quot;</span><span class="p">)</span>
+
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">cmd</span> <span class="o">==</span> <span class="s2">&quot;info&quot;</span><span class="p">:</span>
+        <span class="n">print_video_info</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">path</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">cmd</span> <span class="o">==</span> <span class="s2">&quot;resize&quot;</span><span class="p">:</span>
+        <span class="n">resize_video</span><span class="p">(</span>
+            <span class="n">input_path</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">input</span><span class="p">,</span>
+            <span class="n">output_path</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">output</span><span class="p">,</span>
+            <span class="n">width</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">width</span><span class="p">,</span>
+            <span class="n">height</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">height</span><span class="p">,</span>
+            <span class="n">codec</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">codec</span><span class="p">,</span>
+            <span class="n">crf</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">crf</span><span class="p">,</span>
+            <span class="n">preset</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">preset</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">cmd</span> <span class="o">==</span> <span class="s2">&quot;split&quot;</span><span class="p">:</span>
+        <span class="c1"># basic validation for CLI: require either timestamps or uniform</span>
+        <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">timestamps</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">timestamps</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">and</span> <span class="n">args</span><span class="o">.</span><span class="n">uniform</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;split: please provide either --timestamps or --uniform.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">uniform</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">args</span><span class="o">.</span><span class="n">timestamps</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">timestamps</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;split: please provide only one of --timestamps or --uniform, not both.&quot;</span><span class="p">)</span>
+
+        <span class="n">split_video</span><span class="p">(</span>
+            <span class="n">input_path</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">input</span><span class="p">,</span>
+            <span class="n">output_dir</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">output_dir</span><span class="p">,</span>
+            <span class="n">timestamps</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">timestamps</span> <span class="ow">or</span> <span class="p">[],</span>
+            <span class="n">codec</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">codec</span><span class="p">,</span>
+            <span class="n">crf</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">crf</span><span class="p">,</span>
+            <span class="n">preset</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">preset</span><span class="p">,</span>
+            <span class="n">uniform</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">uniform</span><span class="p">,</span>
+            <span class="n">drop_last</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">drop_last</span><span class="p">,</span>
+        <span class="p">)</span>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2025, kiui
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../_static/documentation_options.js?v=e31cdd81"></script>
+    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
+    </body>
+</html>
