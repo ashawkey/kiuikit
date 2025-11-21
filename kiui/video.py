@@ -2,7 +2,8 @@ import os
 import subprocess
 import json
 import math
-from typing import Tuple, Sequence
+import tempfile
+from typing import Tuple
 
 import cv2
 import numpy as np
@@ -16,7 +17,6 @@ from kiui.typing import *
 def read_video(
     path: str,
     mode: Literal["float", "uint8", "torch", "tensor"] = "float",
-    order: Literal["RGB", "BGR"] = "RGB",
 ) -> Tuple[Union[ndarray, Tensor], float]:
     """Read a video file into a tensor / numpy array.
 
@@ -26,7 +26,6 @@ def read_video(
             - ``"uint8"``: uint8 numpy array, [T, H, W, 3], range [0, 255]
             - ``"float"``: float32 numpy array, [T, H, W, 3], range [0, 1]
             - ``"torch"`` / ``"tensor"``: float32 torch tensor, [T, H, W, 3], range [0, 1]
-        order: Channel order, ``"RGB"`` or ``"BGR"``.
 
     Returns:
         video: Video frames in the requested format.
@@ -44,9 +43,8 @@ def read_video(
         ok, frame = cap.read()
         if not ok:
             break
-        # OpenCV reads in BGR
-        if order == "RGB":
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        # OpenCV reads in BGR; convert to RGB by default.
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frames.append(frame)
 
     cap.release()

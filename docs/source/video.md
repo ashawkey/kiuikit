@@ -1,4 +1,4 @@
-# Video tools
+# Video
 
 [[source]](https://github.com/ashawkey/kiuikit/blob/main/kiui/video.py)
 
@@ -9,7 +9,7 @@ Utilities for reading, writing, inspecting and processing videos.
 You can use the video tools either via the module:
 
 ```bash
-kivi --help
+python -m kiui.video --help
 ```
 
 or via the `kivi` shortcut:
