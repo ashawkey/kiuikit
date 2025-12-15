@@ -1348,20 +1348,21 @@ class GeoCalib(nn.Module):
         }
 
     @torch.no_grad()
-    def forward(self, rgb: torch.Tensor) -> Tuple[float, float, float, float, float, float]:
-        """RGB (H,W,3) float in [0,1] -> (fx, fy, cx, cy, hfov, vfov).
+    def forward(
+        self, rgb: torch.Tensor, *, simple: bool = False
+    ) -> Tuple[float, float, float, float, float, float]:
+        """Run GeoCalib on a single RGB image.
 
-        FoVs are returned in radians.
+        Args:
+          rgb: (H,W,3) float tensor in [0,1].
+          simple: If True, returns a simplified pinhole intrinsics tuple
+            `(fx, fy, cx, cy, hfov, vfov)` where `fx == fy` and `(cx, cy)` is centered.
+            If False, returns `(fx, fy, cx, cy, hfov, vfov)` extracted from the full
+            `calibrate()` output (i.e. using the optimized camera intrinsics directly;
+            no `fx=fy` or centered principal point assumptions).
 
-        Important: `forward()` is a convenience API that:
-          - it uses the predicted `vfov` from `calibrate()`
-          - derives a single focal length and forces `fx = fy` from that `vfov`
-          - assumes a centered principal point: `cx = w/2`, `cy = h/2`
-          - reports `hfov/vfov` consistent with the returned `(fx, fy)`
-
-        In contrast, `calibrate()` returns a full optimized `PinholeCamera` object (in
-        `out["camera"]`) and also returns `out["hfov"]` / `out["vfov"]` derived from that
-        camera tensor. Those values are not guaranteed to match the simplified intrinsics returned by `forward()`.
+        Returns:
+          (fx, fy, cx, cy, hfov, vfov) as Python floats (FoVs in radians).
         """
         if not isinstance(rgb, torch.Tensor):
             raise TypeError(f"Expected torch.Tensor (H,W,3) float in [0,1], got {type(rgb)}")
@@ -1378,13 +1379,23 @@ class GeoCalib(nn.Module):
         img_chw = rgb.permute(2, 0, 1).contiguous().to(self.device)
         res = self.calibrate(img_chw[None])
 
-        # derive intrinsics from predicted vertical FoV, so fx = fy
-        vfov = float(res["vfov"][0].item())
-        fx = fy = float(h / (2.0 * math.tan(vfov / 2.0)))
-        cx = float(w / 2.0)
-        cy = float(h / 2.0)
-        hfov = float(2.0 * math.atan(w / (2.0 * fx)))
-        return fx, fy, cx, cy, hfov, vfov
+        if not simple:
+            camera = res["camera"]
+            fx = float(camera.f[0, 0].item())
+            fy = float(camera.f[0, 1].item())
+            cx = float(camera.c[0, 0].item())
+            cy = float(camera.c[0, 1].item())
+            hfov = float(res["hfov"][0].item()) if "hfov" in res else float(2.0 * math.atan(w / (2.0 * fx)))
+            vfov = float(res["vfov"][0].item()) if "vfov" in res else float(2.0 * math.atan(h / (2.0 * fy)))
+            return fx, fy, cx, cy, hfov, vfov
+        else:
+            # derive intrinsics from predicted vertical FoV, so fx = fy
+            vfov = float(res["vfov"][0].item())
+            fx = fy = float(h / (2.0 * math.tan(vfov / 2.0)))
+            cx = float(w / 2.0)
+            cy = float(h / 2.0)
+            hfov = float(2.0 * math.atan(w / (2.0 * fx)))
+            return fx, fy, cx, cy, hfov, vfov
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -1417,7 +1428,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(json.dumps({"fx": fx, "fy": fy, "cx": cx, "cy": cy, "hfov": hfov, "vfov": vfov}))
     else:
         print(
-            f"fx=fy={fy:.6f} cx={cx:.6f} cy={cy:.6f} "
+            f"fx={fx:.6f} fy={fy:.6f} cx={cx:.6f} cy={cy:.6f} "
             f"hfov={math.degrees(hfov):.3f} vfov={math.degrees(vfov):.3f}"
         )
     return 0
