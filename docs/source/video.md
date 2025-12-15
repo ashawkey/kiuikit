@@ -22,6 +22,22 @@ kivi --help
 
 ```bash
 kivi info input.mp4
+
+      Video Info: input.mp4      
+┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Field       ┃ Value                                 ┃
+┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ Type        │ Video                                 │
+│ Resolution  │ 640 x 480                             │
+│ FPS         │ 30.000                                │
+│ Duration    │ 00:00:05 (5.00 s)                     │
+│ Frames      │ 150                                   │
+│ Codec       │ h264 (encoders: libx264 / h264_nvenc) │
+│ Codec tag   │ avc1                                  │
+│ Bitrate     │ 1569577 bps                           │
+│ File size   │ 957.99 KB                             │
+│ Compression │ 140.92x (raw / encoded)               │
+└─────────────┴───────────────────────────────────────┘
 ```
 
 This prints a rich table including:

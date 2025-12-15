@@ -26,8 +26,8 @@ jobs:
     - name: Install dependencies and Build
       run: |
         python -m pip install --upgrade pip
-        pip install setuptools wheel
-        python setup.py sdist bdist_wheel
+        pip install build
+        python -m build
     # publish by trusted publishers (need to first setup in pypi.org projects-manage-publishing!)
     # ref: https://github.com/marketplace/actions/pypi-publish
     - name: Publish package distributions to PyPI
