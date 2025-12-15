@@ -14,12 +14,10 @@ Right-handed      Right-handed    Right-handed    Left-handed    Left-handed
   /                 |                                            /      
  +z                 +y                                          +y
 ```
-A common color code: x = <span style="color:red">red</span>, y = <span style="color:green">green</span>, z = <span style="color:blue">blue</span> (XYZ=RGB)
-
-
-> **Left/right-handed notation**: roll your left/right palm from x to y, and your thumb should point to z.
 
 A common color code: right = <span style="color:red">red</span>., up = <span style="color:green">green</span>, forward = <span style="color:blue">blue</span> (XYZ=RUF=RGB).
+
+> **Left/right-handed notation**: roll your left/right palm from x to y, and your thumb should point to z.
 
 ### Our camera convention
 * world coordinate is OpenGL/right-handed, `+x = right, +y = up, +z = forward`
@@ -83,7 +81,7 @@ For a 2D image / array / matrix, the convention is usually:
   v
  +y/i
 ```
-Now assume we are using OpenGL world coordinate system and also OpenGL camera convention:
+Now assume we use OpenGL world coordinate system and OpenGL camera convention:
 ```
      +y & up        
      |  target       
@@ -95,7 +93,7 @@ Now assume we are using OpenGL world coordinate system and also OpenGL camera co
  +z & forward             
 ```
 The unit camera (Identity rotation matrix) is perfectly aligned with the 3D world coordinate system.
-However, if we want to construct the camera rays from camera center to the target, the rays should point to `-z`, and the `+y` axis is also misaligned with image coordinate system (where `+y` points down).
+However, if we want to construct the camera rays (camera center --> target), the rays should point to `-z`, and the `+y` axis is also misaligned with image coordinate system (where `+y` points down).
 So we need to negate both y and z axes during the ray construction (check `kiui.cam.get_rays`):
 ```python
 rays_d = np.stack([
@@ -105,18 +103,18 @@ rays_d = np.stack([
 ], axis=-1) # [hw, 3]
 ```
 
-On the other hand, if we use OpenGL world coordinate system and also OpenCV camera convention:
+On the other hand, if we use OpenCV world coordinate system and OpenCV camera convention:
 ```
-     +y & up                            +z & forward & target
-     |                                  /
-     |                    equals       /
-     |______+x & right    ----->      /_______+x & right
-    /                                 |
-   /                                  |
-  /                                   |
- +z & forward & target               +y & up           
+         +z & forward & target
+        /
+       /
+      /_______+x & right
+      |
+      |
+      |
+     +y & up           
 ```
-While the unit camera points to a different direction, you can see that it's actually aligned with the 2D image convention.
+You can see the unit camera is perfectly aligned with the 2D image convention.
 And we don't need to negate any axes during the ray construction:
 ```python
 rays_d = np.stack([
