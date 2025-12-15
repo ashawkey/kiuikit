@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 if __name__ == "__main__":
     setup(
         name="kiui",
-        version="0.2.20",
+        version="0.3.0",
         description="A toolkit for 3D vision",
         long_description=open("README.md", encoding="utf-8").read(),
         long_description_content_type="text/markdown",
@@ -20,18 +20,19 @@ if __name__ == "__main__":
                 'kico = kiui.cli.convert:main',
                 'kisr = kiui.sr:main',
                 'kivi = kiui.video:main',
+                'kiss = kiui.sys:main',
             ],
         },
         install_requires=[
             "lazy_loader",
             "varname",
             "objprint",
+            "rich",
         ],
         extras_require={
             "full": [
                 "torch", # keep this so the doc can be built successfully
                 "tqdm",
-                "rich",
                 "numpy",
                 "scipy",
                 "scikit-image",

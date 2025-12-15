@@ -42,6 +42,7 @@ pip install -U git+https://github.com/ashawkey/kiuikit.git
    :maxdepth: 1
    :titlesonly:
 
+   ./sys.md
    ./render.md
    ./blender.md
    ./remesh.md

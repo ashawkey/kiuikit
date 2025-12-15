@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kiui"
+version = "0.3.0"
+description = "A toolkit for 3D vision"
+readme = { file = "README.md", content-type = "text/markdown" }
+license = { file = "LICENSE" }
+authors = [
+  { name = "kiui", email = "ashawkey1999@gmail.com" },
+]
+urls = { Homepage = "https://github.com/ashawkey/kiuikit" }
+
+requires-python = ">=3.8"
+
+dependencies = [
+  "lazy_loader",
+  "varname",
+  "objprint",
+  "rich",
+]
+
+[project.optional-dependencies]
+full = [
+  "torch", # keep this so the doc can be built successfully
+  "tqdm",
+  "numpy",
+  "scipy",
+  "scikit-image",
+  "scikit-learn",
+  "pandas",
+  "trimesh",
+  "pygltflib",
+  "matplotlib",
+  "opencv-python",
+  "imageio",
+  "imageio-ffmpeg",
+  "dearpygui",
+  "tyro",
+  "viser",
+  "pymeshlab",
+  "huggingface_hub",
+  "PyMCubes",
+  "fbxloader",
+  "envlight",
+]
+
+[project.scripts]
+kire = "kiui.render:main"
+vire = "kiui.render_viser:main"
+kico = "kiui.cli.convert:main"
+kisr = "kiui.sr:main"
+kivi = "kiui.video:main"
+kiss = "kiui.sys:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["kiui*"]
