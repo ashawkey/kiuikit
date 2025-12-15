@@ -66,26 +66,26 @@ kiss os
 # print torch/CUDA/triton information
 kiss torch
 
-╭─────────────────────────────────────────────── Torch Info ───────────────────────────────────────────────╮
-│                                                                                                          │
-│   Python                                  3.11.7 (main, Dec 15 2023, 18:12:31) [GCC 11.2.0]              │
-│   Executable                              /home/kiui/anaconda3/bin/python                                │
-│   torch.__version__                       2.5.1+cu121                                                    │
-│   torch.cuda.is_available()               True                                                           │
-│   torch.backends.cudnn.version()          90100                                                          │
-│   CUDA_HOME                               /usr/local/cuda                                                │
-│   triton                                  installed (3.1.0)                                              │
-│   nvcc --version                          Built on Mon_Apr__3_17:16:06_PDT_2023                          │
-│                                           Cuda compilation tools, release 12.1, V12.1.105                │
-│                                           Build cuda_12.1.r12.1/compiler.32688072_0                      │
-│   nvidia driver                           580.95.05                                                      │
-│                                                                                                          │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭────────────────────────────────────────────── GPU Details ───────────────────────────────────────────────╮
-│                                                                                                          │
-│   #       Name                                     Capability                               Total VRAM   │
-│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-│   0       NVIDIA RTX A6000                         8.6                                       47.39 GiB   │
-│                                                                                                          │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭──────────────────────────────────────── Torch Info ───────────────────────────────────╮
+│                                                                                       │
+│   Python                           3.11.7 (main, Dec 15 2023, 18:12:31) [GCC 11.2.0]  │
+│   Executable                       /home/kiui/anaconda3/bin/python                    │
+│   torch.__version__                2.5.1+cu121                                        │
+│   torch.cuda.is_available()        True                                               │
+│   torch.backends.cudnn.version()   90100                                              │
+│   CUDA_HOME                        /usr/local/cuda                                    │
+│   triton                           installed (3.1.0)                                  │
+│   nvcc --version                   Built on Mon_Apr__3_17:16:06_PDT_2023              │
+│                                    Cuda compilation tools, release 12.1, V12.1.105    │
+│                                    Build cuda_12.1.r12.1/compiler.32688072_0          │
+│   nvidia driver                    580.95.05                                          │
+│                                                                                       │
+╰───────────────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────── GPU Details ─────────────────────────────────────╮
+│                                                                                       │
+│   #       Name                            Capability                     Total VRAM   │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
+│   0       NVIDIA RTX A6000                8.6                             47.39 GiB   │
+│                                                                                       │
+╰───────────────────────────────────────────────────────────────────────────────────────╯
 ```
