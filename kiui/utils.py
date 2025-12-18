@@ -176,18 +176,19 @@ def write_pickle(path, x):
 
 def read_image(
     path: str, 
-    mode: Literal["float", "uint8", "pil", "torch", "tensor"] = "float", 
+    mode: Literal["float", "uint8", "pil", "torch", "tensor", "unchanged"] = "float", 
     order: Literal["RGB", "RGBA", "BGR", "BGRA"] = "RGB",
 ):
     """read an image file into various formats and color mode.
 
     Args:
         path (str): path to the image file.
-        mode (Literal["float", "uint8", "pil", "torch", "tensor"], optional): returned image format. Defaults to "float".
+        mode (Literal["float", "uint8", "pil", "torch", "tensor", "unchanged"], optional): returned image format. Defaults to "float".
             float: float32 numpy array, range [0, 1];
             uint8: uint8 numpy array, range [0, 255];
             pil: PIL image;
             torch/tensor: float32 torch tensor, range [0, 1];
+            unchanged: numpy array with dtype preserved (after optional channel re-ordering).
         order (Literal["RGB", "RGBA", "BGR", "BGRA"], optional): channel order. Defaults to "RGB".
     
     Note:
@@ -220,6 +221,8 @@ def read_image(
             img = img[..., :3] * img[..., 3:] + (1 - img[..., 3:])
 
     # mode
+    if mode == "unchanged":
+        return img
     if mode == "uint8":
         if img.dtype != np.uint8:
             img = (img * 255).astype(np.uint8)

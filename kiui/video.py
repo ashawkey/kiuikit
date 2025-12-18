@@ -12,6 +12,7 @@ from rich.console import Console
 from rich.table import Table
 
 from kiui.typing import *
+from kiui.utils import read_image
 
 
 def read_video(
@@ -201,7 +202,7 @@ def print_video_info(path: str) -> None:
     # simple extension-based image detection to support images as well
     _, ext = os.path.splitext(path)
     ext = ext.lower()
-    image_exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff", ".gif"}
+    image_exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff", ".gif", ".exr"}
 
     is_image = ext in image_exts
 
@@ -230,7 +231,8 @@ def print_video_info(path: str) -> None:
 
     if is_image:
         # image info: resolution, format, file size, compression, channels
-        img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+        # Use kiui's image reader (handles EXR + preserves dtype for correct raw-size reporting)
+        img = read_image(path, mode="unchanged", order="RGBA")
         if img is None:
             raise FileNotFoundError(f"cannot open image: {path}")
 
@@ -241,7 +243,8 @@ def print_video_info(path: str) -> None:
             h, w, c = img.shape
 
         filesize = os.path.getsize(path) if os.path.exists(path) else 0
-        raw_size = w * h * c  # bytes assuming 8-bit per channel
+        # raw_size: uncompressed bytes, based on actual dtype (EXR is often float16/float32).
+        raw_size = int(w * h * c * int(getattr(img.dtype, "itemsize", 1)))
         compression_ratio = (raw_size / filesize) if filesize > 0 else 0.0
 
         fmt = ext.lstrip(".").upper() or "UNKNOWN"
@@ -249,6 +252,7 @@ def print_video_info(path: str) -> None:
         table.add_row("Type", "Image")
         table.add_row("Resolution", f"{w} x {h}")
         table.add_row("Channels", str(c))
+        table.add_row("DType", str(img.dtype))
         table.add_row("Format", fmt)
         table.add_row("File size", _fmt_bytes(filesize))
         if compression_ratio > 0:
