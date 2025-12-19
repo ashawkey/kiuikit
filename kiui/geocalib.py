@@ -1349,7 +1349,7 @@ class GeoCalib(nn.Module):
 
     @torch.no_grad()
     def forward(
-        self, rgb: torch.Tensor, *, simple: bool = False
+        self, rgb: torch.Tensor, simple: bool = False
     ) -> Tuple[float, float, float, float, float, float]:
         """Run GeoCalib on a single RGB image.
 

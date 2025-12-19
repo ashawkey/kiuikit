@@ -395,7 +395,7 @@ def resize_video(
     codec: Optional[str] = None,
     crf: Optional[int] = None,
     preset: str = "medium",
-    fps: float = None,
+    fps: Optional[float] = None,
 ) -> None:
     """Resize a video and save to a new file using ffmpeg.
 
@@ -445,7 +445,23 @@ def resize_video(
     codec = _infer_encoder(src_codec, codec)
     lower_codec = codec.lower()
 
-    scale_filter = f"scale={width}:{height}:flags=lanczos"
+    vf_filters = [f"scale={width}:{height}:flags=lanczos"]
+    if fps is not None:
+        if fps <= 0:
+            raise ValueError("resize_video: fps must be > 0.")
+        # FPS conversion:
+        # - Downsampling (target <= source): drop frames (fps filter).
+        # - Upsampling (target > source): optionally use minterpolate for smoother motion.
+        if src_fps is not None and fps > src_fps:
+            # Motion-compensated interpolation. This keeps duration stable and generally
+            # looks better than frame duplication for upsampling.
+            vf_filters.append(
+                f"minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1"
+            )
+        else:
+            # fps filter drops/duplicates frames to reach a CFR target.
+            vf_filters.append(f"fps=fps={fps}:round=near")
+    vf_filter = ",".join(vf_filters)
 
     cmd = [
         "ffmpeg",
@@ -453,7 +469,7 @@ def resize_video(
         "-i",
         input_path,
         "-vf",
-        scale_filter,
+        vf_filter,
         "-c:v",
         codec,
     ]
@@ -462,7 +478,8 @@ def resize_video(
     _apply_codec_tag(cmd, codec, src_tag)
 
     if fps is not None:
-        cmd += ["-r", str(fps)]
+        # Force CFR output behavior for widest compatibility across ffmpeg versions.
+        cmd += ["-vsync", "cfr"]
 
     # quality / rate control (bitrate match or CRF)
     _apply_rate_control(
@@ -495,7 +512,7 @@ def split_video(
     codec: Optional[str] = None,
     crf: Optional[int] = None,
     preset: str = "medium",
-    uniform: float = None,
+    uniform: Optional[float] = None,
     drop_last: bool = False,
 ) -> None:
     """Split a long video into shorter clips given split timestamps.
@@ -660,9 +677,15 @@ def main():
         "--crf",
         type=int,
         default=None,
-        help="ffmpeg CRF (quality). If omitted, try to roughly match the input bitrate.",
+        help="ffmpeg CRF (quality; lower is higher-quality). If omitted, try to roughly match the input bitrate.",
     )
     parser_resize.add_argument("--preset", type=str, default="medium", help="ffmpeg preset.")
+    parser_resize.add_argument(
+        "--fps",
+        type=float,
+        default=None,
+        help="Target FPS. If provided, ffmpeg will resample the frames to this FPS.",
+    )
 
     # split
     parser_split = subparsers.add_parser("split", help="Split a video into clips.")
@@ -697,7 +720,7 @@ def main():
         "--crf",
         type=int,
         default=None,
-        help="ffmpeg CRF (quality). If omitted, try to roughly match the input bitrate.",
+        help="ffmpeg CRF (quality; lower is higher-quality). If omitted, try to roughly match the input bitrate.",
     )
     parser_split.add_argument("--preset", type=str, default="medium", help="ffmpeg preset.")
 
@@ -714,6 +737,7 @@ def main():
             codec=args.codec,
             crf=args.crf,
             preset=args.preset,
+            fps=args.fps,
         )
     elif args.cmd == "split":
         # basic validation for CLI: require either timestamps or uniform
