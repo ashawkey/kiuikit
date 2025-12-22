@@ -16,8 +16,6 @@ if __name__ == "__main__":
             # CLI tools
             'console_scripts': [
                 'kire = kiui.render:main',
-                'vire = kiui.render_viser:main',
-                'kico = kiui.cli.convert:main',
                 'kisr = kiui.sr:main',
                 'kivi = kiui.video:main',
                 'kiss = kiui.sys:main',

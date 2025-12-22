@@ -11,3 +11,5 @@ dist/
 data/
 tmp*
 result/
+results/
+temp/
