@@ -34,7 +34,17 @@ def get_agent(args) -> LLMAgent | None:
     )
     
     if args.tools:
-        agent.load_tools(args.tools)
+        # check if the tools module exists
+        if not os.path.exists(args.tools):
+            # check if it's a built-in tools module
+            if args.tools in ["coder"]:
+                # get the correct path to the coder tools module
+                coder_tools_path = os.path.join(os.path.dirname(__file__), "tools", f"{args.tools}.py")
+                agent.load_tools(coder_tools_path)
+            else:
+                console.print(f"[bold red]Tools module '{args.tools}' not found, ignored.[/bold red]")
+        else:
+            agent.load_tools(args.tools)
     
     return agent
 

@@ -29,4 +29,45 @@ kia chat --model <name> --system_prompt <path/to/system_prompt.txt> --verbose
 
 # execute a single query
 kia exec --model <name> "Tell me a joke."
+
+# custom query for image/text files
+kia exec --model <name> "Please describe the following image @path/to/image.png."
+kia exec --model <name> "Please summarize the following file @path/to/file.txt."
 ```
+
+## Tools
+
+We support defining tools as python functions with strictly formatted docstrings:
+
+```python
+def function_name(param1: type1, param2: type2, ...):
+    """ <one-line description>
+    <more detailed description>
+    Args:
+       <param1>: <param1_description>
+       <param2>: <param2_description>
+       ...
+    """
+    # implementation
+    # it should return a simple string, or the openai content dict, e.g. {"type": "text", "text": "..."}
+    # after the string, optionally an image content dict, e.g. {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}}
+    return "..."
+
+# an example
+def read_file(file_path: str):
+    """Read a file from the local filesystem.
+    Args:
+       file_path: the path to the file to read.
+    """
+    with open(file_path, "r") as f:
+        return f.read()
+```
+
+You can implement your own toolset in a python file, and use `--tools <path/to/tools.py>` to load the tools into the agent.
+
+We also provide some built-in toolsets, such as a general purpose coder similar to codex:
+```bash
+kia exec --model gpt-5.2 --tools coder --verbose "Please review the project under the current directory and write a summary in summary.md"
+```
+
+**WARNING:** It will not ask for confirmation before executing shell command, use at your own risk!
