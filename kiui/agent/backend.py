@@ -4,7 +4,7 @@ import time
 import json
 import importlib
 import inspect
-from typing import Callable
+from typing import Callable, Literal
 from openai import OpenAI
 from rich.console import Console
 from rich.theme import Theme
@@ -70,6 +70,7 @@ class LLMAgent:
         system_prompt: str = "You are a helpful assistant.",
         verbose: bool = True,
         max_toolcall_iter: int = 20,
+        thinking_budget: Literal["low", "medium", "high"] = "low",
     ):
 
         self.model = model
@@ -79,6 +80,7 @@ class LLMAgent:
         )
         self.system_prompt = system_prompt
         self.verbose = verbose
+        self.thinking_budget = thinking_budget
 
         self.conversation_history: list = []
 
@@ -199,20 +201,21 @@ class LLMAgent:
             "model": self.model,
             "messages": messages,
             "stream": False,
-            # "reasoning_effort": "medium", # for gpt-5, unfortunately we cannot trace reasoning using chat completion api...
         }
 
         if use_tools and len(self.tools) > 0:
             kwargs["tools"] = self.tools
             kwargs["tool_choice"] = "auto"
         
-        # special handling for Gemini 3 Pro
-        if self.model in ["gcp/google/gemini-3-pro"]:
+        # thinking budget (model-specific, unfortunately hard-coded...)
+        if "gpt-5" in self.model.lower():
+            kwargs["reasoning_effort"] = self.thinking_budget
+        elif "gemini" in self.model.lower():
             kwargs["extra_body"] = {
                 "extra_body": {
                     "google": {
                         "thinking_config": {
-                            "thinking_budget": "low", # low / high
+                            "thinking_budget": "low" if self.thinking_budget == "low" else "high", # only low/high
                             "include_thoughts": True,
                         },
                     },
