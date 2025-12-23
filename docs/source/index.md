@@ -1,14 +1,8 @@
 # Kiuikit
 
-> NOTE: this doc is still under construction, and cannot cover all code. 
-> You are always encouraged to directly read the code!
+> We try to keep the code simple and readable, so you are always encouraged to directly read the code!
 
-A toolkit for computer vision (especially 3D vision) tasks.
-
-## Features
-* Collection of *maintained, reusable and trustworthy* code snippets.
-* Always using lazy import so the code is not slowed down by `import kiui`.
-* Useful CLI tools, such as a GUI mesh renderer.
+A niche toolkit for computer vision (especially 3D vision) tasks.
 
 ## Installation
 ```bash
