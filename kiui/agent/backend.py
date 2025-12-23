@@ -70,19 +70,19 @@ class ContextManager:
         }
         # round-based conversation history, each round can have multiple messages.
         self.rounds: dict = {}
-        self.last_round_id = -1
+        self.current_round_id = 0
     
     def add(self, content, round_id: int | None = None):
         # if round_id is not provided, use the last round id + 1
         if round_id is None:
-            round_id = self.last_round_id + 1 # start from 0
+            round_id = self.current_round_id
         if round_id not in self.rounds:
             self.rounds[round_id] = []
         
         self.rounds[round_id].append(content)
 
         # update the last round id
-        self.last_round_id = round_id
+        self.current_round_id = round_id + 1
     
     def get(self, num_rounds: int | None = None, include_system: bool = True) -> list:
         res = []
@@ -92,7 +92,7 @@ class ContextManager:
         if num_rounds is None:
             num_rounds = len(self.rounds) # all rounds
         
-        for round_id in range(self.last_round_id - num_rounds + 1, self.last_round_id + 1):
+        for round_id in range(self.current_round_id - num_rounds, self.current_round_id):
             res.extend(self.rounds[round_id])
         
         return res
