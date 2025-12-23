@@ -61,6 +61,44 @@ def parse_custom_query(query: str) -> list:
 
     return content
 
+class ContextManager:
+    """Context manager for flexible conversation history."""
+    def __init__(self, system_prompt: str):
+        self.system_prompt = {
+            "role": "system",
+            "content": [get_text_content_dict(system_prompt)],
+        }
+        # round-based conversation history, each round can have multiple messages.
+        self.rounds: dict = {}
+        self.last_round_id = -1
+    
+    def add(self, content, round_id: int | None = None):
+        # if round_id is not provided, use the last round id + 1
+        if round_id is None:
+            round_id = self.last_round_id + 1 # start from 0
+        if round_id not in self.rounds:
+            self.rounds[round_id] = []
+        
+        self.rounds[round_id].append(content)
+
+        # update the last round id
+        self.last_round_id = round_id
+    
+    def get(self, num_rounds: int | None = None, include_system: bool = True) -> list:
+        res = []
+        if include_system:
+            res.append(self.system_prompt)
+        
+        if num_rounds is None:
+            num_rounds = len(self.rounds) # all rounds
+        
+        for round_id in range(self.last_round_id - num_rounds + 1, self.last_round_id + 1):
+            res.extend(self.rounds[round_id])
+        
+        return res
+        
+        
+
 class LLMAgent:
     def __init__(
         self, 
@@ -69,7 +107,7 @@ class LLMAgent:
         base_url: str,
         system_prompt: str = "You are a helpful assistant.",
         verbose: bool = True,
-        max_toolcall_iter: int = 20,
+        max_tool_iter: int = 20,
         thinking_budget: Literal["low", "medium", "high"] = "low",
     ):
 
@@ -82,13 +120,15 @@ class LLMAgent:
         self.verbose = verbose
         self.thinking_budget = thinking_budget
 
-        self.conversation_history: list = []
+        self.context = ContextManager(system_prompt)
 
         self.available_functions: dict = {}
         self.tools: list = []
         
-        self.toolcall_iter = 0
-        self.max_toolcall_iter = max_toolcall_iter # to avoid infinite loops
+        self.tool_iter = 0
+        self.max_tool_iter = max_tool_iter # to avoid infinite loops
+
+        self.round_id = 0
 
         # running token usage totals across the entire conversation
         self.token_totals = {
@@ -189,13 +229,13 @@ class LLMAgent:
 
 
     def call_api(self, use_tools: bool = True):
-        """Call the API with current system_prompt and conversation_history."""
+        """Call the API using current context."""
 
         if self.verbose:
-            self.console.print(f"[DEBUG] Calling API... (tool iteration: {self.toolcall_iter})", style="debug", markup=False)
+            self.console.print(f"[DEBUG] Calling API (round: {self.round_id}, tool iter: {self.tool_iter})", style="debug", markup=False)
 
         # build the messages
-        messages = [{"role": "system", "content": [get_text_content_dict(self.system_prompt)]}] + self.conversation_history
+        messages = self.context.get()
 
         kwargs = {
             "model": self.model,
@@ -237,8 +277,8 @@ class LLMAgent:
         if usage.completion_tokens_details and usage.completion_tokens_details.reasoning_tokens:
             self.token_totals["reasoning"] += usage.completion_tokens_details.reasoning_tokens
 
-        # append the message to the conversation history
-        self.conversation_history.append(message)
+        # append the assistant message to the context
+        self.context.add(message, round_id=self.round_id)
 
         # log the usage
         if self.verbose:
@@ -272,14 +312,14 @@ class LLMAgent:
                 func = self.available_functions[function_name]["function"]
                 result = func(**function_args) # a string or a list of message dict
 
-                # Add tool output to conversation
+                # Append tool result to conversation history
                 if isinstance(result, str):
                     tool_message = {
                         "role": "tool",
                         "tool_call_id": tool_call.id,
                         "content": [get_text_content_dict(result)],
                     }
-                    self.conversation_history.append(tool_message)
+                    self.context.add(tool_message, round_id=self.round_id)
                 else:
                     # special case for tools that also return an image, we need an extra user message to upload the image.
                     tool_message = {
@@ -287,12 +327,12 @@ class LLMAgent:
                         "tool_call_id": tool_call.id,
                         "content": [get_text_content_dict(result[0])],
                     }
-                    self.conversation_history.append(tool_message)
+                    self.context.add(tool_message, round_id=self.round_id)
                     user_message = {
                         "role": "user",
                         "content": result[1], # the image content dict
                     }
-                    self.conversation_history.append(user_message)
+                    self.context.add(user_message, round_id=self.round_id)
                 # don't print tool message if it succeeds (as it may return long content or an image)
                 
             except Exception as e:
@@ -304,27 +344,28 @@ class LLMAgent:
                     "content": [get_text_content_dict(error_msg)],
                 }
 
-                self.conversation_history.append(error_result_message)
+                self.context.add(error_result_message, round_id=self.round_id)
                 self.console.print(f"[ERROR] Tool failed: {error_msg}", style="error", markup=False)
         
         
     def get_response(self):
-        """Process the conversation history and update the current response."""
+        """Process the context and update the current response."""
        
         # increment the current iteration
-        self.toolcall_iter += 1
-        if self.toolcall_iter > self.max_toolcall_iter:
-            self.console.print(f"[ERROR] Max tool call iterations reached ({self.max_toolcall_iter}).", style="error", markup=False)
-            return
+        use_tools = True
+        if self.tool_iter >= self.max_tool_iter:
+            self.console.print(f"[ERROR] tool call iterations reached ({self.max_tool_iter}), force not using tools in this iteration.", style="error", markup=False)
+            use_tools = False
 
         # call the API
-        message = self.call_api()
+        message = self.call_api(use_tools=use_tools)
 
         if message.content:
             self.console.print(f"{message.content}", style="response", markup=False)
         
         # if there are tool calls, we need to execute them and call the API recursively
-        if message.tool_calls: 
+        if message.tool_calls:
+            self.tool_iter += 1 
             self.execute_tool_calls(message.tool_calls)
             self.get_response()
         
@@ -347,10 +388,11 @@ class LLMAgent:
                 break
             # parse user query and append to conversation history
             user_message = {"role": "user", "content": parse_custom_query(query)}
-            self.conversation_history.append(user_message)
+            self.context.add(user_message, round_id=self.round_id)
             # call API for the response (may be multi-turn with tool calls)
-            self.toolcall_iter = 0
+            self.tool_iter = 0
             self.get_response()
+            self.round_id += 1
         # print total token usage upon exit
         self.console.print(
             f"[SYSTEM] Total tokens used: {self.token_totals['total']} (input: {self.token_totals['prompt']}, cached input: {self.token_totals['cached_prompt']}, output: {self.token_totals['completion']}, reasoning: {self.token_totals['reasoning']})",
@@ -364,7 +406,7 @@ class LLMAgent:
         t0 = time.time()
 
         user_message = {"role": "user", "content": parse_custom_query(query)}
-        self.conversation_history.append(user_message)
+        self.context.add(user_message, round_id=self.round_id)
         self.get_response()
         
         t1 = time.time()
