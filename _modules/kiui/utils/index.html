@@ -5,10 +5,10 @@
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex/"><link rel="search" title="Search" href="../../../search/">
         <link rel="prefetch" href="../../../_static/logo.png" as="image">
 
-    <link rel="shortcut icon" href="../../../_static/icon.png"><!-- Generated with Sphinx 8.1.3 and Furo 2025.09.25 -->
-        <title>kiui.utils - kiui 0.3.0 documentation</title>
+    <link rel="shortcut icon" href="../../../_static/icon.png"><!-- Generated with Sphinx 8.1.3 and Furo 2025.12.19 -->
+        <title>kiui.utils - kiui 0.3.1 documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -163,7 +163,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../../"><div class="brand">kiui 0.3.0 documentation</div></a>
+      <a href="../../../"><div class="brand">kiui 0.3.1 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -220,6 +220,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../render/">Mesh Renderer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../blender/">Blender Scripts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../remesh/">Remesh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../agent/">Agent</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../misc_cli/">Misc CLI</a></li>
 </ul>
 
@@ -455,18 +456,19 @@
 <a class="viewcode-back" href="../../../utils/#kiui.utils.read_image">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">read_image</span><span class="p">(</span>
     <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> 
-    <span class="n">mode</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;float&quot;</span><span class="p">,</span> <span class="s2">&quot;uint8&quot;</span><span class="p">,</span> <span class="s2">&quot;pil&quot;</span><span class="p">,</span> <span class="s2">&quot;torch&quot;</span><span class="p">,</span> <span class="s2">&quot;tensor&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;float&quot;</span><span class="p">,</span> 
+    <span class="n">mode</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;float&quot;</span><span class="p">,</span> <span class="s2">&quot;uint8&quot;</span><span class="p">,</span> <span class="s2">&quot;pil&quot;</span><span class="p">,</span> <span class="s2">&quot;torch&quot;</span><span class="p">,</span> <span class="s2">&quot;tensor&quot;</span><span class="p">,</span> <span class="s2">&quot;unchanged&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;float&quot;</span><span class="p">,</span> 
     <span class="n">order</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;RGB&quot;</span><span class="p">,</span> <span class="s2">&quot;RGBA&quot;</span><span class="p">,</span> <span class="s2">&quot;BGR&quot;</span><span class="p">,</span> <span class="s2">&quot;BGRA&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;RGB&quot;</span><span class="p">,</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;read an image file into various formats and color mode.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        path (str): path to the image file.</span>
-<span class="sd">        mode (Literal[&quot;float&quot;, &quot;uint8&quot;, &quot;pil&quot;, &quot;torch&quot;, &quot;tensor&quot;], optional): returned image format. Defaults to &quot;float&quot;.</span>
+<span class="sd">        mode (Literal[&quot;float&quot;, &quot;uint8&quot;, &quot;pil&quot;, &quot;torch&quot;, &quot;tensor&quot;, &quot;unchanged&quot;], optional): returned image format. Defaults to &quot;float&quot;.</span>
 <span class="sd">            float: float32 numpy array, range [0, 1];</span>
 <span class="sd">            uint8: uint8 numpy array, range [0, 255];</span>
 <span class="sd">            pil: PIL image;</span>
 <span class="sd">            torch/tensor: float32 torch tensor, range [0, 1];</span>
+<span class="sd">            unchanged: numpy array with dtype preserved (after optional channel re-ordering).</span>
 <span class="sd">        order (Literal[&quot;RGB&quot;, &quot;RGBA&quot;, &quot;BGR&quot;, &quot;BGRA&quot;], optional): channel order. Defaults to &quot;RGB&quot;.</span>
 <span class="sd">    </span>
 <span class="sd">    Note:</span>
@@ -499,6 +501,8 @@
             <span class="n">img</span> <span class="o">=</span> <span class="n">img</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="p">:</span><span class="mi">3</span><span class="p">]</span> <span class="o">*</span> <span class="n">img</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">3</span><span class="p">:]</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">img</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="mi">3</span><span class="p">:])</span>
 
     <span class="c1"># mode</span>
+    <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s2">&quot;unchanged&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">img</span>
     <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s2">&quot;uint8&quot;</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">img</span><span class="o">.</span><span class="n">dtype</span> <span class="o">!=</span> <span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">:</span>
             <span class="n">img</span> <span class="o">=</span> <span class="p">(</span><span class="n">img</span> <span class="o">*</span> <span class="mi">255</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
@@ -724,7 +728,7 @@
       
     </aside>
   </div>
-</div><script src="../../../_static/documentation_options.js?v=578734d1"></script>
+</div><script src="../../../_static/documentation_options.js?v=454108cb"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>

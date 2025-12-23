@@ -6,10 +6,10 @@
 <link rel="index" title="Index" href="../genindex/"><link rel="search" title="Search" href="../search/"><link rel="next" title="Mesh Renderer" href="../render/"><link rel="prev" title="Misc API" href="../misc_api/">
         <link rel="prefetch" href="../_static/logo.png" as="image">
 
-    <link rel="shortcut icon" href="../_static/icon.png"><!-- Generated with Sphinx 8.1.3 and Furo 2025.09.25 -->
-        <title>System Utilities - kiui 0.3.0 documentation</title>
+    <link rel="shortcut icon" href="../_static/icon.png"><!-- Generated with Sphinx 8.1.3 and Furo 2025.12.19 -->
+        <title>System Utilities - kiui 0.3.1 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -164,7 +164,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../"><div class="brand">kiui 0.3.0 documentation</div></a>
+      <a href="../"><div class="brand">kiui 0.3.1 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -221,6 +221,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../render/">Mesh Renderer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../blender/">Blender Scripts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../remesh/">Remesh</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../agent/">Agent</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../misc_cli/">Misc CLI</a></li>
 </ul>
 
@@ -326,28 +327,28 @@ kiss<span class="w"> </span>os
 <span class="c1"># print torch/CUDA/triton information</span>
 kiss<span class="w"> </span>torch
 
-╭───────────────────────────────────────────────<span class="w"> </span>Torch<span class="w"> </span>Info<span class="w"> </span>───────────────────────────────────────────────╮
-│<span class="w">                                                                                                          </span>│
-│<span class="w">   </span>Python<span class="w">                                  </span><span class="m">3</span>.11.7<span class="w"> </span><span class="o">(</span>main,<span class="w"> </span>Dec<span class="w"> </span><span class="m">15</span><span class="w"> </span><span class="m">2023</span>,<span class="w"> </span><span class="m">18</span>:12:31<span class="o">)</span><span class="w"> </span><span class="o">[</span>GCC<span class="w"> </span><span class="m">11</span>.2.0<span class="o">]</span><span class="w">              </span>│
-│<span class="w">   </span>Executable<span class="w">                              </span>/home/kiui/anaconda3/bin/python<span class="w">                                </span>│
-│<span class="w">   </span>torch.__version__<span class="w">                       </span><span class="m">2</span>.5.1+cu121<span class="w">                                                    </span>│
-│<span class="w">   </span>torch.cuda.is_available<span class="o">()</span><span class="w">               </span>True<span class="w">                                                           </span>│
-│<span class="w">   </span>torch.backends.cudnn.version<span class="o">()</span><span class="w">          </span><span class="m">90100</span><span class="w">                                                          </span>│
-│<span class="w">   </span>CUDA_HOME<span class="w">                               </span>/usr/local/cuda<span class="w">                                                </span>│
-│<span class="w">   </span>triton<span class="w">                                  </span>installed<span class="w"> </span><span class="o">(</span><span class="m">3</span>.1.0<span class="o">)</span><span class="w">                                              </span>│
-│<span class="w">   </span>nvcc<span class="w"> </span>--version<span class="w">                          </span>Built<span class="w"> </span>on<span class="w"> </span>Mon_Apr__3_17:16:06_PDT_2023<span class="w">                          </span>│
-│<span class="w">                                           </span>Cuda<span class="w"> </span>compilation<span class="w"> </span>tools,<span class="w"> </span>release<span class="w"> </span><span class="m">12</span>.1,<span class="w"> </span>V12.1.105<span class="w">                </span>│
-│<span class="w">                                           </span>Build<span class="w"> </span>cuda_12.1.r12.1/compiler.32688072_0<span class="w">                      </span>│
-│<span class="w">   </span>nvidia<span class="w"> </span>driver<span class="w">                           </span><span class="m">580</span>.95.05<span class="w">                                                      </span>│
-│<span class="w">                                                                                                          </span>│
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭──────────────────────────────────────────────<span class="w"> </span>GPU<span class="w"> </span>Details<span class="w"> </span>───────────────────────────────────────────────╮
-│<span class="w">                                                                                                          </span>│
-│<span class="w">   </span><span class="c1">#       Name                                     Capability                               Total VRAM   │</span>
-│<span class="w">  </span>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━<span class="w">  </span>│
-│<span class="w">   </span><span class="m">0</span><span class="w">       </span>NVIDIA<span class="w"> </span>RTX<span class="w"> </span>A6000<span class="w">                         </span><span class="m">8</span>.6<span class="w">                                       </span><span class="m">47</span>.39<span class="w"> </span>GiB<span class="w">   </span>│
-│<span class="w">                                                                                                          </span>│
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────────<span class="w"> </span>Torch<span class="w"> </span>Info<span class="w"> </span>───────────────────────────────────╮
+│<span class="w">                                                                                       </span>│
+│<span class="w">   </span>Python<span class="w">                           </span><span class="m">3</span>.11.7<span class="w"> </span><span class="o">(</span>main,<span class="w"> </span>Dec<span class="w"> </span><span class="m">15</span><span class="w"> </span><span class="m">2023</span>,<span class="w"> </span><span class="m">18</span>:12:31<span class="o">)</span><span class="w"> </span><span class="o">[</span>GCC<span class="w"> </span><span class="m">11</span>.2.0<span class="o">]</span><span class="w">  </span>│
+│<span class="w">   </span>Executable<span class="w">                       </span>/home/kiui/anaconda3/bin/python<span class="w">                    </span>│
+│<span class="w">   </span>torch.__version__<span class="w">                </span><span class="m">2</span>.5.1+cu121<span class="w">                                        </span>│
+│<span class="w">   </span>torch.cuda.is_available<span class="o">()</span><span class="w">        </span>True<span class="w">                                               </span>│
+│<span class="w">   </span>torch.backends.cudnn.version<span class="o">()</span><span class="w">   </span><span class="m">90100</span><span class="w">                                              </span>│
+│<span class="w">   </span>CUDA_HOME<span class="w">                        </span>/usr/local/cuda<span class="w">                                    </span>│
+│<span class="w">   </span>triton<span class="w">                           </span>installed<span class="w"> </span><span class="o">(</span><span class="m">3</span>.1.0<span class="o">)</span><span class="w">                                  </span>│
+│<span class="w">   </span>nvcc<span class="w"> </span>--version<span class="w">                   </span>Built<span class="w"> </span>on<span class="w"> </span>Mon_Apr__3_17:16:06_PDT_2023<span class="w">              </span>│
+│<span class="w">                                    </span>Cuda<span class="w"> </span>compilation<span class="w"> </span>tools,<span class="w"> </span>release<span class="w"> </span><span class="m">12</span>.1,<span class="w"> </span>V12.1.105<span class="w">    </span>│
+│<span class="w">                                    </span>Build<span class="w"> </span>cuda_12.1.r12.1/compiler.32688072_0<span class="w">          </span>│
+│<span class="w">   </span>nvidia<span class="w"> </span>driver<span class="w">                    </span><span class="m">580</span>.95.05<span class="w">                                          </span>│
+│<span class="w">                                                                                       </span>│
+╰───────────────────────────────────────────────────────────────────────────────────────╯
+╭─────────────────────────────────────<span class="w"> </span>GPU<span class="w"> </span>Details<span class="w"> </span>─────────────────────────────────────╮
+│<span class="w">                                                                                       </span>│
+│<span class="w">   </span><span class="c1">#       Name                            Capability                     Total VRAM   │</span>
+│<span class="w">  </span>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━<span class="w">  </span>│
+│<span class="w">   </span><span class="m">0</span><span class="w">       </span>NVIDIA<span class="w"> </span>RTX<span class="w"> </span>A6000<span class="w">                </span><span class="m">8</span>.6<span class="w">                             </span><span class="m">47</span>.39<span class="w"> </span>GiB<span class="w">   </span>│
+│<span class="w">                                                                                       </span>│
+╰───────────────────────────────────────────────────────────────────────────────────────╯
 </pre></div>
 </div>
 </section>
@@ -421,7 +422,7 @@ kiss<span class="w"> </span>torch
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=578734d1"></script>
+</div><script src="../_static/documentation_options.js?v=454108cb"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>

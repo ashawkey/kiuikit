@@ -2,11 +2,12 @@
 <html class="no-js" lang="en" data-content_root="../">
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../genindex/"><link rel="search" title="Search" href="../search/">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex/"><link rel="search" title="Search" href="../search/"><link rel="next" title="Misc CLI" href="../misc_cli/"><link rel="prev" title="Remesh" href="../remesh/">
         <link rel="prefetch" href="../_static/logo.png" as="image">
 
     <link rel="shortcut icon" href="../_static/icon.png"><!-- Generated with Sphinx 8.1.3 and Furo 2025.12.19 -->
-        <title>Overview: module code - kiui 0.3.1 documentation</title>
+        <title>Agent - kiui 0.3.1 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -174,7 +175,7 @@
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
         <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
       </label>
     </div>
@@ -215,12 +216,12 @@
 <li class="toctree-l1"><a class="reference internal" href="../misc_api/">Misc API</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tool</span></p>
-<ul>
+<ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../sys/">System Utilities</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../render/">Mesh Renderer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../blender/">Blender Scripts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../remesh/">Remesh</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../agent/">Agent</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Agent</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../misc_cli/">Misc CLI</a></li>
 </ul>
 
@@ -241,7 +242,13 @@
           <span>Back to top</span>
         </a>
         <div class="content-icon-container">
-          <div class="theme-toggle-container theme-toggle-content">
+          <div class="view-this-page">
+  <a class="muted-link" href="../_sources/agent.md.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
             <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
               <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
               <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
@@ -249,30 +256,108 @@
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
             <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <h1>All modules for which code is available</h1>
-<ul><li><a href="kiui/cam/">kiui.cam</a></li>
-<li><a href="kiui/grid_put/">kiui.grid_put</a></li>
-<li><a href="kiui/mesh/">kiui.mesh</a></li>
-<li><a href="kiui/mesh_utils/">kiui.mesh_utils</a></li>
-<li><a href="kiui/op/">kiui.op</a></li>
-<li><a href="kiui/sr/">kiui.sr</a></li>
-<li><a href="kiui/timer/">kiui.timer</a></li>
-<li><a href="kiui/utils/">kiui.utils</a></li>
-<li><a href="kiui/video/">kiui.video</a></li>
-<li><a href="kiui/vis/">kiui.vis</a></li>
-</ul>
+          <section id="agent">
+<h1>Agent<a class="headerlink" href="#agent" title="Link to this heading">¶</a></h1>
+<p>A simple-to-use LLM agent that supports multi-turn tool calling.</p>
+<section id="api-keys">
+<h2>API keys<a class="headerlink" href="#api-keys" title="Link to this heading">¶</a></h2>
+<p>The API keys are stored in the <code class="docutils literal notranslate"><span class="pre">~/.kiui.yaml</span></code> file, which will be automatically loaded as <code class="docutils literal notranslate"><span class="pre">kiui.conf</span></code>.</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">openai</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">&lt;name&gt;</span><span class="p">:</span><span class="w"> </span><span class="c1"># alias name for this model</span>
+<span class="w">    </span><span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;model_name&gt;</span><span class="w"> </span><span class="c1"># the name used in the API call</span>
+<span class="w">    </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;api_key&gt;</span>
+<span class="w">    </span><span class="nt">base_url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;base_url&gt;</span>
+</pre></div>
+</div>
+</section>
+<section id="cli">
+<h2>CLI<a class="headerlink" href="#cli" title="Link to this heading">¶</a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>kiui.agent.cli<span class="w"> </span>--help
+<span class="c1"># equals</span>
+kia<span class="w"> </span>--help
+
+<span class="c1"># list all available models defined above</span>
+kia<span class="w"> </span>list
+
+<span class="c1"># start interactive chat mode</span>
+kia<span class="w"> </span>chat<span class="w"> </span>--model<span class="w"> </span>&lt;name&gt;
+kia<span class="w"> </span>chat<span class="w"> </span>--model<span class="w"> </span>&lt;name&gt;<span class="w"> </span>--system_prompt<span class="w"> </span>&lt;path/to/system_prompt.txt&gt;<span class="w"> </span>--verbose
+
+<span class="c1"># execute a single query</span>
+kia<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>--model<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="s2">&quot;Tell me a joke.&quot;</span>
+
+<span class="c1"># custom query for image/text files</span>
+kia<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>--model<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="s2">&quot;Please describe the following image @path/to/image.png.&quot;</span>
+kia<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>--model<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="s2">&quot;Please summarize the following file @path/to/file.txt.&quot;</span>
+</pre></div>
+</div>
+</section>
+<section id="tools">
+<h2>Tools<a class="headerlink" href="#tools" title="Link to this heading">¶</a></h2>
+<p>We support defining tools as python functions with strictly formatted docstrings:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">function_name</span><span class="p">(</span><span class="n">param1</span><span class="p">:</span> <span class="n">type1</span><span class="p">,</span> <span class="n">param2</span><span class="p">:</span> <span class="n">type2</span><span class="p">,</span> <span class="o">...</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot; &lt;one-line description&gt;</span>
+<span class="sd">    &lt;more detailed description&gt;</span>
+<span class="sd">    Args:</span>
+<span class="sd">       &lt;param1&gt;: &lt;param1_description&gt;</span>
+<span class="sd">       &lt;param2&gt;: &lt;param2_description&gt;</span>
+<span class="sd">       ...</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># implementation</span>
+    <span class="c1"># it should return a simple string, or the openai content dict, e.g. {&quot;type&quot;: &quot;text&quot;, &quot;text&quot;: &quot;...&quot;}</span>
+    <span class="c1"># after the string, optionally an image content dict, e.g. {&quot;type&quot;: &quot;image_url&quot;, &quot;image_url&quot;: {&quot;url&quot;: &quot;data:image/jpeg;base64,...&quot;}}</span>
+    <span class="k">return</span> <span class="s2">&quot;...&quot;</span>
+
+<span class="c1"># an example</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">read_file</span><span class="p">(</span><span class="n">file_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Read a file from the local filesystem.</span>
+<span class="sd">    Args:</span>
+<span class="sd">       file_path: the path to the file to read.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">file_path</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>You can implement your own toolset in a python file, and use <code class="docutils literal notranslate"><span class="pre">--tools</span> <span class="pre">&lt;path/to/tools.py&gt;</span></code> to load the tools into the agent.</p>
+<p>We also provide some built-in toolsets and prompts (under <code class="docutils literal notranslate"><span class="pre">kiui/agent/prompts/</span></code> and <code class="docutils literal notranslate"><span class="pre">kiui/agent/tools/</span></code>), such as a general-purpose coder adapted from codex:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># use gpt-5 series models for the best performance as we use apply_patch tool.</span>
+kia<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>--model<span class="w"> </span>gpt-5.2<span class="w"> </span>--tools<span class="w"> </span>coder<span class="w"> </span>--system_prompt<span class="w"> </span>coder<span class="w"> </span>--verbose<span class="w"> </span><span class="s2">&quot;Please review the project under the current directory and write a summary in summary.md&quot;</span>
+</pre></div>
+</div>
+<p><strong>WARNING:</strong> It will not ask for confirmation before executing shell command or editing files, use at your own risk!</p>
+</section>
+</section>
+
         </article>
       </div>
       <footer>
         
         <div class="related-pages">
-          
-          
+          <a class="next-page" href="../misc_cli/">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Misc CLI</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="../remesh/">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Remesh</div>
+                
+              </div>
+            </a>
         </div>
         <div class="bottom-of-page">
           <div class="left-details">
@@ -291,8 +376,29 @@
         
       </footer>
     </div>
-    <aside class="toc-drawer no-toc">
+    <aside class="toc-drawer">
       
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Agent</a><ul>
+<li><a class="reference internal" href="#api-keys">API keys</a></li>
+<li><a class="reference internal" href="#cli">CLI</a></li>
+<li><a class="reference internal" href="#tools">Tools</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
       
       
     </aside>
