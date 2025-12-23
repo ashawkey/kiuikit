@@ -65,9 +65,10 @@ def read_file(file_path: str):
 
 You can implement your own toolset in a python file, and use `--tools <path/to/tools.py>` to load the tools into the agent.
 
-We also provide some built-in toolsets, such as a general purpose coder similar to codex:
+We also provide some built-in toolsets and prompts (under `kiui/agent/prompts/` and `kiui/agent/tools/`), such as a general-purpose coder adapted from codex:
 ```bash
-kia exec --model gpt-5.2 --tools coder --verbose "Please review the project under the current directory and write a summary in summary.md"
+# use gpt-5 series models for the best performance as we use apply_patch tool.
+kia exec --model gpt-5.2 --tools coder --system_prompt coder --verbose "Please review the project under the current directory and write a summary in summary.md"
 ```
 
-**WARNING:** It will not ask for confirmation before executing shell command, use at your own risk!
+**WARNING:** It will not ask for confirmation before executing shell command or editing files, use at your own risk!

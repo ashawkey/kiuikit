@@ -1,10 +1,21 @@
 import os
 import argparse
+import platform
+from datetime import datetime
 from rich.console import Console
 from rich.table import Table
 
 from kiui.config import conf
 from kiui.agent.backend import LLMAgent
+
+def inject_prompt_magicvar(prompt: str):
+    """Inject system dependent magic variables into the prompt."""
+    prompt = prompt.replace("$cwd$", os.getcwd())
+    prompt = prompt.replace("$OS$", platform.system())
+    prompt = prompt.replace("$OS_version$", platform.release())
+    prompt = prompt.replace("$date$", datetime.now().strftime("%Y-%m-%d"))
+    prompt = prompt.replace("$timestamp$", datetime.now().strftime("%Y%m%d_%H%M%S"))
+    return prompt
 
 
 def get_agent(args) -> LLMAgent | None:
@@ -20,10 +31,22 @@ def get_agent(args) -> LLMAgent | None:
     model_conf = openai_conf[args.model]
     
     # Load system prompt from file or use as string
-    system_prompt = args.system_prompt
-    if os.path.exists(args.system_prompt):
+    if not os.path.exists(args.system_prompt):
+        # check if it's a built-in system prompt
+        if args.system_prompt in ["coder"]:
+            # get the correct path to the coder system prompt
+            coder_system_prompt_path = os.path.join(os.path.dirname(__file__), "prompts", f"{args.system_prompt}.md")
+            with open(coder_system_prompt_path, "r") as f:
+                system_prompt = f.read()
+        else:
+            # assume it's a string
+            system_prompt = args.system_prompt
+    else:
+        # read from file
         with open(args.system_prompt, "r") as f:
             system_prompt = f.read()
+    
+    system_prompt = inject_prompt_magicvar(system_prompt)
     
     agent = LLMAgent(
         model=model_conf.get("model", args.model),
