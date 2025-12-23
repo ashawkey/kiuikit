@@ -1,6 +1,9 @@
 import os
 import lazy_loader
 
+# config (~/.kiui.yaml)
+from kiui.config import conf
+
 # lazy import that equals:
 # from . import op, vis, bg, mesh, ...
 # from .utils import *
