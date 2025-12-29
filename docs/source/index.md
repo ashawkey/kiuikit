@@ -28,6 +28,7 @@ pip install -U git+https://github.com/ashawkey/kiuikit.git
    ./ops.md
    ./vis.md
    ./video.md
+   ./equirect.md
    ./misc_api.md
 
 .. toctree::

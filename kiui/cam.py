@@ -7,11 +7,6 @@ from kiui.typing import *
 
 def to_homo(mat: np.ndarray, eye: bool = True) -> np.ndarray:
     """Append a homogeneous row to a matrix.
-
-    - If ``mat`` is [3, 4], append ``[0, 0, 0, 1]`` to get a [4, 4] matrix when ``eye=True``,
-      or ``[0, 0, 0, 0]`` when ``eye=False``.
-    - If ``mat`` is [2, 3], append ``[0, 0, 1]`` to get a [3, 3] matrix.
-
     Args:
         mat (np.ndarray): Input matrix of shape [3, 4] or [2, 3].
         eye (bool, optional): Whether to append a homogeneous "eye" row. Defaults to True.
@@ -87,12 +82,10 @@ def fov_to_intr(fov, width, height, is_degree=True):
         np.ndarray: intrinsics, float [4] as [fx, fy, cx, cy]
     """
     fov = np.asarray(fov, dtype=np.float32)
-    fovx, fovy = fov
     if is_degree:
-        fovx = np.deg2rad(fovx)
-        fovy = np.deg2rad(fovy)
-    fx = width / (2.0 * np.tan(fovx / 2.0))
-    fy = height / (2.0 * np.tan(fovy / 2.0))
+        fov = np.deg2rad(fov)
+    fx = width / (2.0 * np.tan(fov[0] / 2.0))
+    fy = height / (2.0 * np.tan(fov[1] / 2.0))
     cx = width * 0.5
     cy = height * 0.5
     return np.array([fx, fy, cx, cy], dtype=np.float32)
@@ -147,7 +140,7 @@ def perspective_to_intr(proj, width, height):
     fx = proj[0, 0] * (width / 2.0)
     fy = proj[1, 1] * (height / 2.0)
     cx = (1.0 - proj[0, 2]) * (width / 2.0)
-    cy = (1.0 - proj[1, 2]) * (height / 2.0)
+    cy = (1.0 + proj[1, 2]) * (height / 2.0)
     return np.array([fx, fy, cx, cy], dtype=np.float32)
 
 

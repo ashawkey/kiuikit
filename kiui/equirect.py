@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import torch.nn.functional as F
 
 def tonemap_hdr_to_ldr(
     image: np.ndarray,
@@ -47,6 +48,7 @@ def render_pinhole(
 ) -> torch.Tensor:
     """
     Render pinhole images from a panorama given the camera parameters.
+    We use CUDA and F.grid_sample for efficient rendering.
 
     Args:
         pano: [3, Hp, Wp], float tensor, panorama image.
@@ -142,7 +144,7 @@ def render_pinhole(
     
     # sample from panorama
     pano_expanded = pano.unsqueeze(0).expand(B, -1, -1, -1)  # [B, 3, Hp, Wp]
-    images = torch.nn.functional.grid_sample(
+    images = F.grid_sample(
         pano_expanded, grid, mode='bilinear', padding_mode='border', align_corners=True
     )  # [B, 3, H, W]
     
@@ -156,7 +158,7 @@ def main():
     import os
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('pano', type=str, help="path to panorama image (exr, hdr, png, jpg, ...)")
+    parser.add_argument('path', type=str, help="path to equirectangular image (exr, hdr, png, jpg, ...)")
     parser.add_argument('--height', type=int, default=512, help="image height")
     parser.add_argument('--width', type=int, default=512, help="image width")
     parser.add_argument('--vfov', type=float, default=60.0, help="vertical field of view in degrees")
@@ -166,16 +168,16 @@ def main():
     parser.add_argument('--output', type=str, default='./results', help="output directory")
     args = parser.parse_args()
 
-    pano = kiui.read_image(args.pano, mode="float", order="RGB")
-    kiui.lo(pano)
+    equirect = kiui.read_image(args.path, mode="float", order="RGB")
+    kiui.lo(equirect)
     
-    if args.pano.endswith('.exr'):
-        pano = tonemap_hdr_to_ldr(pano)
-        kiui.write_image(os.path.join(args.output, f'{os.path.basename(args.pano).split(".")[0]}_ldr.jpg'), pano)
+    if args.path.endswith('.exr'):
+        equirect = tonemap_hdr_to_ldr(equirect)
+        kiui.write_image(os.path.join(args.output, f'{os.path.basename(args.path).split(".")[0]}_ldr.jpg'), equirect)
         print(f"[INFO] tonemapped to LDR:")
-        kiui.lo(pano)
+        kiui.lo(equirect)
     
-    pano = torch.from_numpy(pano).permute(2, 0, 1)  # [3, Hp, Wp]
+    equirect = torch.from_numpy(equirect).permute(2, 0, 1)  # [3, Hp, Wp]
     height = args.height
     width = args.width
     vfov = torch.tensor([np.deg2rad(args.vfov)])
@@ -183,14 +185,14 @@ def main():
     pitch = torch.tensor([np.deg2rad(args.pitch)])
     yaw = torch.tensor([np.deg2rad(args.yaw)])
     
-    images = render_pinhole(pano, height, width, vfov, roll, pitch, yaw)
+    images = render_pinhole(equirect, height, width, vfov, roll, pitch, yaw)
     print(f"[INFO] rendered pinhole images:")
     kiui.lo(images)
 
     os.makedirs(args.output, exist_ok=True)
     # convert from CHW to HWC for write_image
     image_out = images[0].permute(1, 2, 0)  # [H, W, 3]
-    kiui.write_image(os.path.join(args.output, f'pano_vfov{args.vfov:.2f}_roll{args.roll:.2f}_pitch{args.pitch:.2f}_yaw{args.yaw:.2f}.jpg'), image_out)
+    kiui.write_image(os.path.join(args.output, f'vfov{args.vfov:.2f}_roll{args.roll:.2f}_pitch{args.pitch:.2f}_yaw{args.yaw:.2f}.jpg'), image_out)
 
 
 if __name__ == '__main__':
