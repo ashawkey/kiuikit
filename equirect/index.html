@@ -3,11 +3,11 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex/"><link rel="search" title="Search" href="../search/"><link rel="prev" title="Slurm Utilities" href="../slurm/">
+<link rel="index" title="Index" href="../genindex/"><link rel="search" title="Search" href="../search/"><link rel="next" title="Misc API" href="../misc_api/"><link rel="prev" title="Video" href="../video/">
         <link rel="prefetch" href="../_static/logo.png" as="image">
 
     <link rel="shortcut icon" href="../_static/icon.png"><!-- Generated with Sphinx 8.1.3 and Furo 2025.12.19 -->
-        <title>Misc CLI - kiui 0.3.2 documentation</title>
+        <title>Equirectangle Images - kiui 0.3.2 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -206,25 +206,25 @@
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <p class="caption" role="heading"><span class="caption-text">API</span></p>
-<ul>
+<ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../mesh/">Mesh</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../camera/">Camera</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../utils/">Utils</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../ops/">Operators</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../vis/">Visualization</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../video/">Video</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../equirect/">Equirectangle Images</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Equirectangle Images</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../misc_api/">Misc API</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Tool</span></p>
-<ul class="current">
+<ul>
 <li class="toctree-l1"><a class="reference internal" href="../sys/">System Utilities</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../render/">Mesh Renderer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../blender/">Blender Scripts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../remesh/">Remesh</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../agent/">Agent</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../slurm/">Slurm Utilities</a></li>
-<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Misc CLI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../misc_cli/">Misc CLI</a></li>
 </ul>
 
 </div>
@@ -245,7 +245,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../_sources/misc_cli.md.txt" title="View this page">
+  <a class="muted-link" href="../_sources/equirect.md.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -263,55 +263,69 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="misc-cli">
-<h1>Misc CLI<a class="headerlink" href="#misc-cli" title="Link to this heading">¶</a></h1>
-<p><a class="reference external" href="https://github.com/ashawkey/kiuikit/blob/main/kiui/cli/">[source]</a></p>
-<p>Misceallaneous command line interfaces.</p>
-<section id="usage">
-<h2>Usage<a class="headerlink" href="#usage" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># background removal utils</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">bg</span> <span class="o">--</span><span class="n">help</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">bg</span> <span class="nb">input</span><span class="o">.</span><span class="n">png</span> <span class="n">output</span><span class="o">.</span><span class="n">png</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">bg</span> <span class="n">input_folder</span> <span class="n">output_folder</span>
+          <section id="equirectangle-images">
+<h1>Equirectangle Images<a class="headerlink" href="#equirectangle-images" title="Link to this heading">¶</a></h1>
+<section id="panorama-v-s-equirectangular-image">
+<h2>Panorama v.s. Equirectangular Image<a class="headerlink" href="#panorama-v-s-equirectangular-image" title="Link to this heading">¶</a></h2>
+<p><strong>Equirectangular/Lat-Long Image</strong> is a specific projection commonly used to store a full spherical 360°×180° panorama, where longitude maps linearly to the x-axis and latitude maps linearly to the y-axis (<strong>typically yielding a 2:1 aspect ratio</strong>).</p>
+<p><strong>Panorama</strong> is a broad term for any image that captures a wider-than-normal field of view. Usually a 360° spherical panorama is stored as an equirectangular image, but not all panoramas are equirectangular! (e.g., your photo may be able to take partial cylindrical panorama, which is not an equirectangular image.)</p>
+<p><strong>Environment maps</strong> are also typically stored as equirectangular images for 360° lighting, but they can also be saved in other projections like a cubemap. They are usually HDR images, stored in <code class="docutils literal notranslate"><span class="pre">.hdr</span></code> or <code class="docutils literal notranslate"><span class="pre">.exr</span></code> format to preserve float32 precision.</p>
+</section>
+<section id="equirect-projection">
+<h2>Equirect Projection<a class="headerlink" href="#equirect-projection" title="Link to this heading">¶</a></h2>
+<p>We can project equirect images into normal images with <strong>arbitrary camera intrinsics</strong>, which is useful for curating camera datasets.</p>
+</section>
+<section id="module-kiui.equirect">
+<span id="api"></span><h2>API<a class="headerlink" href="#module-kiui.equirect" title="Link to this heading">¶</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.equirect.tonemap_hdr_to_ldr">
+<span class="sig-prename descclassname"><span class="pre">kiui.equirect.</span></span><span class="sig-name descname"><span class="pre">tonemap_hdr_to_ldr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">percentile</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">90.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_mapping</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gamma</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">2.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">clip</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="reference internal" href="../_modules/kiui/equirect/#tonemap_hdr_to_ldr"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.equirect.tonemap_hdr_to_ldr" title="Link to this definition">¶</a></dt>
+<dd><p>Tonemap an HDR image to an LDR image.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>image</strong> – HDR image, [0, inf], float32</p></li>
+<li><p><strong>percentile</strong> – use this percentile of brightness for exposure normalization,
+ignoring extreme highlights (e.g., sun, specular reflections).</p></li>
+<li><p><strong>max_mapping</strong> – target brightness after normalization, &lt;1.0 leaves headroom
+for soft clipping instead of harsh cutoff.</p></li>
+<li><p><strong>gamma</strong> – gamma correction exponent, compensates for human perception being
+logarithmic (boosts darks, compresses brights).</p></li>
+<li><p><strong>clip</strong> – clip the image to [0, 1]</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>LDR image, [0, 1], float32</p>
+</dd>
+</dl>
+</dd></dl>
 
-<span class="c1"># openpose detector</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">pose</span> <span class="o">--</span><span class="n">help</span>
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.equirect.render_pinhole">
+<span class="sig-prename descclassname"><span class="pre">kiui.equirect.</span></span><span class="sig-name descname"><span class="pre">render_pinhole</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pano</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">height</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">width</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vfov</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">roll</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pitch</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yaw</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tensor</span></span></span><a class="reference internal" href="../_modules/kiui/equirect/#render_pinhole"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.equirect.render_pinhole" title="Link to this definition">¶</a></dt>
+<dd><p>Render pinhole images from a panorama given the camera parameters.
+We use CUDA and F.grid_sample for efficient rendering.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>pano</strong> – [3, Hp, Wp], float tensor, panorama image.</p></li>
+<li><p><strong>height</strong> – int, image height</p></li>
+<li><p><strong>width</strong> – int, image width</p></li>
+<li><p><strong>vfov</strong> – [B,], float tensor, vertical field of view in radians</p></li>
+<li><p><strong>roll</strong> – [B,], float tensor, roll angle in radians</p></li>
+<li><p><strong>pitch</strong> – [B,], float tensor, pitch angle in radians</p></li>
+<li><p><strong>yaw</strong> – [B,], float tensor, yaw angle in radians</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>[B, 3, H, W], float tensor, pinhole images rendered from the panorama.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>images</p>
+</dd>
+</dl>
+</dd></dl>
 
-<span class="c1"># blip2 image captioning</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">blip</span> <span class="o">--</span><span class="n">help</span>
-
-<span class="c1"># hed edge detector</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">hed</span> <span class="o">--</span><span class="n">help</span>
-
-<span class="c1"># zoe depth estimation (extra dep: pip install timm==0.6.11)</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">depth_zoe</span> <span class="o">--</span><span class="n">help</span>
-
-<span class="c1"># midas depth estimation (dpt-large)</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">depth_midas</span> <span class="o">--</span><span class="n">help</span>
-
-<span class="c1"># sr (Real-ESRGAN from https://github.com/ai-forever/Real-ESRGAN/tree/main)</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">sr</span> <span class="o">--</span><span class="n">help</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">sr</span> <span class="n">image</span><span class="o">.</span><span class="n">jpg</span> <span class="o">--</span><span class="n">scale</span> <span class="mi">2</span> <span class="c1"># save to image_2x.jpg</span>
-<span class="n">kisr</span> <span class="n">image</span><span class="o">.</span><span class="n">jpg</span> <span class="o">--</span><span class="n">scale</span> <span class="mi">2</span> <span class="c1"># short cut cmd</span>
-
-<span class="c1"># made-in-heaven timer (https://github.com/ashawkey/made-in-heaven-timer)</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">timer</span> <span class="o">--</span><span class="n">help</span>
-
-<span class="c1"># mesh format conversion (only for a single textured mesh in obj/glb)</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">convert</span> <span class="nb">input</span><span class="o">.</span><span class="n">obj</span> <span class="n">output</span><span class="o">.</span><span class="n">glb</span>
-<span class="n">kico</span> <span class="nb">input</span><span class="o">.</span><span class="n">obj</span> <span class="n">output</span><span class="o">.</span><span class="n">glb</span> <span class="c1"># short cut cmd</span>
-<span class="n">kico</span> <span class="n">mesh_folder</span><span class="o">/</span> <span class="n">video_folder</span> <span class="o">--</span><span class="n">fmt</span> <span class="o">.</span><span class="n">mp4</span> <span class="c1"># render all meshes into rotating videos</span>
-
-<span class="c1"># aesthetic predictor v2 (https://github.com/christophschuhmann/improved-aesthetic-predictor)</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">aes</span> <span class="o">--</span><span class="n">help</span>
-
-<span class="c1"># compare content of two directories</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">dircmp</span> <span class="o">&lt;</span><span class="n">dir1</span><span class="o">&gt;</span> <span class="o">&lt;</span><span class="n">dir2</span><span class="o">&gt;</span>
-
-<span class="c1"># lock requirements.txt package versions based on current environment</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">lock_version</span> <span class="o">&lt;</span><span class="n">requirements</span><span class="o">.</span><span class="n">txt</span><span class="o">&gt;</span>
-</pre></div>
-</div>
 </section>
 </section>
 
@@ -320,15 +334,23 @@
       <footer>
         
         <div class="related-pages">
-          
-          <a class="prev-page" href="../slurm/">
+          <a class="next-page" href="../misc_api/">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Misc API</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="../video/">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">Slurm Utilities</div>
+                <div class="title">Video</div>
                 
               </div>
             </a>
@@ -362,8 +384,14 @@
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">Misc CLI</a><ul>
-<li><a class="reference internal" href="#usage">Usage</a></li>
+<li><a class="reference internal" href="#">Equirectangle Images</a><ul>
+<li><a class="reference internal" href="#panorama-v-s-equirectangular-image">Panorama v.s. Equirectangular Image</a></li>
+<li><a class="reference internal" href="#equirect-projection">Equirect Projection</a></li>
+<li><a class="reference internal" href="#module-kiui.equirect">API</a><ul>
+<li><a class="reference internal" href="#kiui.equirect.tonemap_hdr_to_ldr"><code class="docutils literal notranslate"><span class="pre">tonemap_hdr_to_ldr()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.equirect.render_pinhole"><code class="docutils literal notranslate"><span class="pre">render_pinhole()</span></code></a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>

@@ -3,11 +3,11 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex/"><link rel="search" title="Search" href="../search/"><link rel="prev" title="Slurm Utilities" href="../slurm/">
+<link rel="index" title="Index" href="../genindex/"><link rel="search" title="Search" href="../search/"><link rel="next" title="Misc CLI" href="../misc_cli/"><link rel="prev" title="Agent" href="../agent/">
         <link rel="prefetch" href="../_static/logo.png" as="image">
 
     <link rel="shortcut icon" href="../_static/icon.png"><!-- Generated with Sphinx 8.1.3 and Furo 2025.12.19 -->
-        <title>Misc CLI - kiui 0.3.2 documentation</title>
+        <title>Slurm Utilities - kiui 0.3.2 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -223,8 +223,8 @@
 <li class="toctree-l1"><a class="reference internal" href="../blender/">Blender Scripts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../remesh/">Remesh</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../agent/">Agent</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../slurm/">Slurm Utilities</a></li>
-<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Misc CLI</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Slurm Utilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../misc_cli/">Misc CLI</a></li>
 </ul>
 
 </div>
@@ -245,7 +245,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../_sources/misc_cli.md.txt" title="View this page">
+  <a class="muted-link" href="../_sources/slurm.md.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -263,53 +263,32 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="misc-cli">
-<h1>Misc CLI<a class="headerlink" href="#misc-cli" title="Link to this heading">¶</a></h1>
-<p><a class="reference external" href="https://github.com/ashawkey/kiuikit/blob/main/kiui/cli/">[source]</a></p>
-<p>Misceallaneous command line interfaces.</p>
-<section id="usage">
-<h2>Usage<a class="headerlink" href="#usage" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># background removal utils</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">bg</span> <span class="o">--</span><span class="n">help</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">bg</span> <span class="nb">input</span><span class="o">.</span><span class="n">png</span> <span class="n">output</span><span class="o">.</span><span class="n">png</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">bg</span> <span class="n">input_folder</span> <span class="n">output_folder</span>
+          <section id="slurm-utilities">
+<h1>Slurm Utilities<a class="headerlink" href="#slurm-utilities" title="Link to this heading">¶</a></h1>
+<p><a class="reference external" href="https://github.com/ashawkey/kiuikit/blob/main/kiui/slurm.py">[source]</a></p>
+<p>Wraps Slurm CLI with clean and beautiful output.</p>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>kiui.slurm<span class="w"> </span>--help
+<span class="c1"># short cut:</span>
+kis<span class="w"> </span>--help
 
-<span class="c1"># openpose detector</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">pose</span> <span class="o">--</span><span class="n">help</span>
+<span class="c1"># check cluster information (sinfo)</span>
+kis<span class="w"> </span>info
+kis<span class="w"> </span>i<span class="w"> </span><span class="c1"># short cut</span>
 
-<span class="c1"># blip2 image captioning</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">blip</span> <span class="o">--</span><span class="n">help</span>
+<span class="c1"># check job details (scontrol show job)</span>
+kis<span class="w"> </span>i<span class="w"> </span>&lt;jobid&gt;
 
-<span class="c1"># hed edge detector</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">hed</span> <span class="o">--</span><span class="n">help</span>
+<span class="c1"># show current user&#39;s jobs (squeue)</span>
+kis<span class="w"> </span>queue
+kis<span class="w"> </span>q<span class="w"> </span><span class="c1"># short cut</span>
 
-<span class="c1"># zoe depth estimation (extra dep: pip install timm==0.6.11)</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">depth_zoe</span> <span class="o">--</span><span class="n">help</span>
+<span class="c1"># show all users&#39; jobs</span>
+kis<span class="w"> </span>q<span class="w"> </span>-a
 
-<span class="c1"># midas depth estimation (dpt-large)</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">depth_midas</span> <span class="o">--</span><span class="n">help</span>
-
-<span class="c1"># sr (Real-ESRGAN from https://github.com/ai-forever/Real-ESRGAN/tree/main)</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">sr</span> <span class="o">--</span><span class="n">help</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">sr</span> <span class="n">image</span><span class="o">.</span><span class="n">jpg</span> <span class="o">--</span><span class="n">scale</span> <span class="mi">2</span> <span class="c1"># save to image_2x.jpg</span>
-<span class="n">kisr</span> <span class="n">image</span><span class="o">.</span><span class="n">jpg</span> <span class="o">--</span><span class="n">scale</span> <span class="mi">2</span> <span class="c1"># short cut cmd</span>
-
-<span class="c1"># made-in-heaven timer (https://github.com/ashawkey/made-in-heaven-timer)</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">timer</span> <span class="o">--</span><span class="n">help</span>
-
-<span class="c1"># mesh format conversion (only for a single textured mesh in obj/glb)</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">convert</span> <span class="nb">input</span><span class="o">.</span><span class="n">obj</span> <span class="n">output</span><span class="o">.</span><span class="n">glb</span>
-<span class="n">kico</span> <span class="nb">input</span><span class="o">.</span><span class="n">obj</span> <span class="n">output</span><span class="o">.</span><span class="n">glb</span> <span class="c1"># short cut cmd</span>
-<span class="n">kico</span> <span class="n">mesh_folder</span><span class="o">/</span> <span class="n">video_folder</span> <span class="o">--</span><span class="n">fmt</span> <span class="o">.</span><span class="n">mp4</span> <span class="c1"># render all meshes into rotating videos</span>
-
-<span class="c1"># aesthetic predictor v2 (https://github.com/christophschuhmann/improved-aesthetic-predictor)</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">aes</span> <span class="o">--</span><span class="n">help</span>
-
-<span class="c1"># compare content of two directories</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">dircmp</span> <span class="o">&lt;</span><span class="n">dir1</span><span class="o">&gt;</span> <span class="o">&lt;</span><span class="n">dir2</span><span class="o">&gt;</span>
-
-<span class="c1"># lock requirements.txt package versions based on current environment</span>
-<span class="n">python</span> <span class="o">-</span><span class="n">m</span> <span class="n">kiui</span><span class="o">.</span><span class="n">cli</span><span class="o">.</span><span class="n">lock_version</span> <span class="o">&lt;</span><span class="n">requirements</span><span class="o">.</span><span class="n">txt</span><span class="o">&gt;</span>
+<span class="c1"># show specific user&#39;s jobs</span>
+kis<span class="w"> </span>q<span class="w"> </span>-u<span class="w"> </span>&lt;username&gt;
 </pre></div>
 </div>
 </section>
@@ -320,15 +299,23 @@
       <footer>
         
         <div class="related-pages">
-          
-          <a class="prev-page" href="../slurm/">
+          <a class="next-page" href="../misc_cli/">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Misc CLI</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="../agent/">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">Slurm Utilities</div>
+                <div class="title">Agent</div>
                 
               </div>
             </a>
@@ -362,8 +349,8 @@
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">Misc CLI</a><ul>
-<li><a class="reference internal" href="#usage">Usage</a></li>
+<li><a class="reference internal" href="#">Slurm Utilities</a><ul>
+<li><a class="reference internal" href="#examples">Examples</a></li>
 </ul>
 </li>
 </ul>
