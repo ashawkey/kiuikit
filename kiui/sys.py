@@ -144,12 +144,24 @@ def _fmt_timedelta(seconds: Optional[float]) -> str:
 
 
 def _cpu_model() -> Optional[str]:
+    # Try reading from /proc/cpuinfo first (works on x86)
     txt = _read_text("/proc/cpuinfo")
-    if not txt:
-        return None
-    for line in txt.splitlines():
-        if line.lower().startswith("model name"):
-            return line.split(":", 1)[1].strip()
+    if txt:
+        for line in txt.splitlines():
+            if line.lower().startswith("model name"):
+                parts = line.split(":", 1)
+                if len(parts) > 1:
+                    return parts[1].strip()
+
+    # Fallback: try `lscpu` (works on some ARM / other architectures where /proc/cpuinfo is lacking)
+    code, out, _ = _run_cmd(["lscpu"], timeout=2.0)
+    if code == 0 and out:
+        for line in out.splitlines():
+            if line.lower().startswith("model name"):
+                parts = line.split(":", 1)
+                if len(parts) > 1:
+                    return parts[1].strip()
+
     return None
 
 

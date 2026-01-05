@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kiui"
-version = "0.3.1"
+version = "0.3.2"
 description = "A toolkit for 3D vision"
 readme = { file = "README.md", content-type = "text/markdown" }
 license = { file = "LICENSE" }
@@ -56,6 +56,7 @@ kire = "kiui.render:main"
 kisr = "kiui.sr:main"
 kivi = "kiui.video:main"
 kiss = "kiui.sys:main"
+kis = "kiui.slurm:main"
 kia = "kiui.agent.cli:main"
 
 [tool.setuptools]
