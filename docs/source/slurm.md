@@ -15,8 +15,12 @@ kis --help
 kis info
 kis i # short cut
 
+# check node details (scontrol show node)
+kis i <nodename>
+
 # check job details (scontrol show job)
-kis i <jobid>
+kis job <jobid>
+kis j <jobid> # short cut
 
 # show current user's jobs (squeue)
 kis queue

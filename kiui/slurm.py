@@ -80,6 +80,85 @@ def job_details(target: str):
         
         console.print(Panel(highlighted_text, title=f"Job Details: {jid}", border_style="blue"))
 
+def node_details(target: str):
+    """
+    Show detailed information for a node using `scontrol show node` and `squeue`.
+    """
+    if not shutil.which("scontrol") or not shutil.which("squeue"):
+        console.print("[bold red]Error:[/bold red] Slurm commands not found.")
+        return
+
+    # 1. Get Node Info
+    cmd = ["scontrol", "show", "node", target]
+    code, out, err = _run_cmd(cmd)
+    
+    if code != 0:
+        console.print(f"[bold red]Error getting info for node {target}:[/bold red] {err}")
+        return
+
+    # Extract key metrics
+    metrics = {}
+    for key in ["State", "CPUAlloc", "CPUTot", "RealMemory", "AllocMem", "Gres", "AllocTRES", "CfgTRES"]:
+        match = re.search(rf"\b{key}=([^\s]+)", out)
+        if match:
+            metrics[key] = match.group(1)
+        else:
+            metrics[key] = "N/A"
+
+    # Format Memory
+    def to_gb(mb_str):
+        try:
+            val = float(mb_str)
+            return f"{val / 1024:.1f} GB"
+        except:
+            return mb_str
+
+    mem_str = f"{to_gb(metrics['AllocMem'])} / {to_gb(metrics['RealMemory'])}"
+    cpu_str = f"{metrics['CPUAlloc']} / {metrics['CPUTot']}"
+    
+    # GPU parsing
+    gpu_str = metrics['Gres']
+    if gpu_str == "(null)" or gpu_str == "N/A":
+        # Try to find gpu in CfgTRES
+        if "gpu" in metrics['CfgTRES']:
+             gpu_str = metrics['CfgTRES']
+
+    # Create Summary Panel
+    grid = Table.grid(expand=True)
+    grid.add_column(style="bold cyan", max_width=20)
+    grid.add_column()
+    grid.add_row("State:", metrics['State'])
+    grid.add_row("CPU (Alloc/Total):", cpu_str)
+    grid.add_row("Memory (Alloc/Total):", mem_str)
+    grid.add_row("Gres:", gpu_str)
+    if metrics['AllocTRES'] != "N/A":
+        grid.add_row("Alloc TRES:", metrics['AllocTRES'])
+
+    console.print(Panel(grid, title=f"Node Details: [bold]{target}[/bold]", border_style="blue"))
+
+    # 2. Get Running Jobs
+    cmd_q = ["squeue", "-w", target, "--noheader", "-o", "%i|%u|%j|%t|%M"]
+    code_q, out_q, err_q = _run_cmd(cmd_q)
+    
+    if code_q == 0 and out_q.strip():
+        table = Table(box=box.SIMPLE, show_header=True, header_style="bold cyan", expand=True)
+        table.add_column("JobID")
+        table.add_column("User", style="yellow")
+        table.add_column("Name")
+        table.add_column("State")
+        table.add_column("Time")
+        
+        for line in out_q.splitlines():
+            parts = line.strip().split("|")
+            if len(parts) >= 5:
+                table.add_row(*parts)
+        
+        console.print(Panel(table, title=f"Jobs on {target}", border_style="green"))
+    elif code_q == 0:
+        console.print(Panel(f"No jobs running on {target}.", border_style="dim"))
+    else:
+        console.print(f"[red]Error fetching jobs: {err_q}[/red]")
+
 def info():
     """
     Wrapper for `sinfo` to show partition and node status.
@@ -281,8 +360,12 @@ def main():
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     # Info command
-    info_parser = sub.add_parser("info", aliases=["i"], help="Show cluster node and partition information (sinfo), or job details if ID/Name provided.")
-    info_parser.add_argument("target", nargs="?", help="Job ID or Name (optional). If provided, shows `scontrol show job` details.")
+    info_parser = sub.add_parser("info", aliases=["i"], help="Show cluster node and partition information (sinfo), or node details if name provided.")
+    info_parser.add_argument("target", nargs="?", help="Node Name (optional). If provided, shows details for that node.")
+
+    # Job command
+    job_parser = sub.add_parser("job", aliases=["j"], help="Show detailed information for a job ID or job name using `scontrol show job`.")
+    job_parser.add_argument("target", help="Job ID or Name.")
 
     # Queue command
     q_parser = sub.add_parser("queue", aliases=["q"], help="Show jobs (squeue)")
@@ -293,9 +376,11 @@ def main():
 
     if args.cmd in ["info", "i"]:
         if args.target:
-            job_details(args.target)
+            node_details(args.target)
         else:
             info()
+    elif args.cmd in ["job", "j"]:
+        job_details(args.target)
     elif args.cmd in ["queue", "q"]:
         user = args.user
         queue(user=user, all_users=args.all)
