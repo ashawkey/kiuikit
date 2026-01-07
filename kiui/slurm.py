@@ -3,6 +3,7 @@ import subprocess
 import sys
 import getpass
 import shutil
+from datetime import datetime, timedelta
 from typing import List, Optional, Sequence, Tuple
 from rich.console import Console
 from rich.table import Table
@@ -355,6 +356,99 @@ def queue(user: Optional[str] = None, all_users: bool = False):
     # Print the table directly
     console.print(Panel(table, title=title, border_style="green"))
 
+def history(user: Optional[str] = None, days: int = 3, all_users: bool = False):
+    """
+    Wrapper for `sacct` to show job history.
+    """
+    if not shutil.which("sacct"):
+        console.print("[bold red]Error:[/bold red] 'sacct' command not found. Are you on a Slurm cluster?")
+        return
+
+    # -X: no steps
+    # -o: output format
+    # -P: parsable output (pipe separated)
+    cmd = ["sacct", "-X", "-P", "-o", "JobID,JobName,Partition,User,State,ExitCode,Start,End,Elapsed"]
+    
+    # Calculate start time
+    start_date = datetime.now() - timedelta(days=days)
+    cmd.extend(["-S", start_date.strftime("%Y-%m-%d")])
+
+    title = f"Job History (Last {days} days)"
+    if not all_users:
+        if user is None:
+            user = getpass.getuser()
+        cmd.extend(["-u", user])
+        title = f"Job History for user: [bold gold1]{user}[/bold gold1] (Last {days} days)"
+    
+    code, out, err = _run_cmd(cmd)
+    
+    if code != 0:
+        console.print(f"[bold red]Error running sacct:[/bold red] {err}")
+        return
+
+    lines = out.splitlines()
+    
+    # Header check
+    if not lines or "JobID" not in lines[0]:
+        console.print(Panel(f"No job history found in the last {days} days.", title=title, border_style="blue"))
+        return
+
+    lines = lines[1:] # Skip header
+
+    if not lines:
+        console.print(Panel(f"No job history found in the last {days} days.", title=title, border_style="blue"))
+        return
+
+    table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="bold cyan", expand=True)
+    table.add_column("JobID", style="bold", no_wrap=True)
+    table.add_column("Name")
+    table.add_column("Partition")
+    table.add_column("User", style="yellow")
+    table.add_column("State")
+    table.add_column("ExitCode")
+    table.add_column("Start")
+    table.add_column("End")
+    table.add_column("Elapsed")
+
+    for line in lines:
+        parts = line.strip().split("|")
+        # Ensure we have enough parts. 
+        # JobID|JobName|Partition|User|State|ExitCode|Start|End|Elapsed
+        if len(parts) < 9:
+            continue
+            
+        jobid, name, partition, username, state, exitcode, start, end, elapsed = parts[:9]
+
+        # Colorize state
+        state_first = state.split()[0]
+        
+        if state_first == "COMPLETED":
+            state_style = "green"
+        elif state_first == "RUNNING":
+            state_style = "bold green"
+        elif state_first == "PENDING":
+            state_style = "bold yellow"
+        elif state_first in ["FAILED", "TIMEOUT", "OUT_OF_MEMORY", "NODE_FAIL"]:
+            state_style = "bold red"
+        elif state_first.startswith("CANCELLED"):
+            state_style = "red"
+        else:
+            state_style = "white"
+
+        table.add_row(
+            jobid,
+            name,
+            partition,
+            username,
+            Text(state, style=state_style),
+            exitcode,
+            start,
+            end,
+            elapsed
+        )
+
+    console.print(Panel(table, title=title, border_style="blue"))
+
 def main():
     parser = argparse.ArgumentParser(prog="kis", description="kiui slurm utilities")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -372,6 +466,12 @@ def main():
     q_parser.add_argument("--all", "-a", action="store_true", help="Show jobs from all users")
     q_parser.add_argument("--user", "-u", type=str, help="Show jobs from specific user")
 
+    # History command
+    h_parser = sub.add_parser("history", aliases=["h"], help="Show job history (sacct)")
+    h_parser.add_argument("--days", "-d", type=int, default=3, help="Number of days to look back (default: 3)")
+    h_parser.add_argument("--all", "-a", action="store_true", help="Show jobs from all users")
+    h_parser.add_argument("--user", "-u", type=str, help="Show jobs from specific user")
+
     args = parser.parse_args()
 
     if args.cmd in ["info", "i"]:
@@ -384,6 +484,9 @@ def main():
     elif args.cmd in ["queue", "q"]:
         user = args.user
         queue(user=user, all_users=args.all)
+    elif args.cmd in ["history", "h"]:
+        user = args.user
+        history(user=user, days=args.days, all_users=args.all)
     else:
         parser.print_help()
 

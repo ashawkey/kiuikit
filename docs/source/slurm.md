@@ -9,26 +9,33 @@ Wraps Slurm CLI with clean and beautiful output.
 ```bash
 python -m kiui.slurm --help
 # short cut:
-kis --help
+kism --help
 
 # check cluster information (sinfo)
-kis info
-kis i # short cut
+kism info
+kism i # short cut
 
 # check node details (scontrol show node)
-kis i <nodename>
+kism i <nodename>
 
 # check job details (scontrol show job)
-kis job <jobid>
-kis j <jobid> # short cut
+kism job <jobid>
+kism j <jobid> # short cut
 
 # show current user's jobs (squeue)
-kis queue
-kis q # short cut
+kism queue
+kism q # short cut
 
 # show all users' jobs
-kis q -a
+kism q -a
 
 # show specific user's jobs
-kis q -u <username>
+kism q -u <username>
+
+# check job history (sacct)
+kism history
+kism h # short cut
+
+# check job history for the last 7 days (default is 3)
+kism h -d 7
 ```
