@@ -3,6 +3,7 @@ import subprocess
 import sys
 import getpass
 import shutil
+import time
 from datetime import datetime, timedelta
 from typing import List, Optional, Sequence, Tuple
 from rich.console import Console
@@ -264,6 +265,160 @@ def info():
     console.print(Panel(table, title=title, border_style="blue"))
 
 
+def log_output(target: str, num_lines: Optional[int] = 100, show_all: bool = False, show_stderr: bool = False):
+    """
+    Show logs for a job.
+    """
+    if not shutil.which("scontrol"):
+        console.print("[bold red]Error:[/bold red] 'scontrol' command not found.")
+        return
+
+    # Resolve Job ID if name is provided
+    job_ids = []
+    if target.isdigit():
+        job_ids.append(target)
+    else:
+        cmd = ["squeue", "--name", target, "--noheader", "--format=%i"]
+        code, out, err = _run_cmd(cmd)
+        if code == 0 and out:
+            job_ids = [line.strip() for line in out.splitlines() if line.strip()]
+    
+    if not job_ids:
+        console.print(f"[bold red]Error:[/bold red] No job found matching '{target}'.")
+        return
+        
+    # Process the first job found
+    jid = job_ids[0]
+    if len(job_ids) > 1:
+        console.print(f"[yellow]Warning:[/yellow] Multiple jobs found for '{target}'. Showing logs for the first one: {jid}")
+
+    cmd = ["scontrol", "show", "job", jid]
+    code, out, err = _run_cmd(cmd)
+    
+    if code != 0:
+        console.print(f"[bold red]Error getting info for job {jid}:[/bold red] {err}")
+        return
+
+    # Parse StdOut and StdErr
+    stdout_match = re.search(r"StdOut=([^\s]+)", out)
+    stderr_match = re.search(r"StdErr=([^\s]+)", out)
+    
+    stdout_path = stdout_match.group(1) if stdout_match else None
+    stderr_path = stderr_match.group(1) if stderr_match else None
+    
+    if not stdout_path or stdout_path == "(null)":
+         console.print(f"[bold red]Error:[/bold red] StdOut path not found for job {jid}.")
+         return
+
+    files_to_read = [stdout_path]
+
+    if show_stderr:
+        if not stderr_path or stderr_path == "(null)":
+            console.print(f"[bold red]Error:[/bold red] StdErr path not found for job {jid}.")
+            return
+        if stderr_path == stdout_path:
+            # still show stdout
+            console.print(f"[bold yellow]Warning:[/bold yellow] StdOut and StdErr paths are the same for job {jid}.")
+        else:
+            # only show stderr
+            files_to_read = [stderr_path]
+        
+    console.print(Panel(f"Reading logs for Job {jid}\nFiles: {', '.join(files_to_read)}", border_style="blue"))
+
+    # Construct command
+    tail_cmd = ["tail"]
+    
+    if show_all:
+        tail_cmd.extend(["-n", "+1"])
+    elif num_lines is not None:
+        tail_cmd.extend(["-n", str(num_lines)])
+        
+    tail_cmd.extend(files_to_read)
+    
+    try:
+        # Use subprocess to stream output to stdout directly
+        subprocess.run(tail_cmd, check=False)
+    except KeyboardInterrupt:
+        pass
+
+
+def monitor(target: str):
+    """
+    Monitor GPU usage for a job using nvidia-smi via ssh.
+    """
+    if not shutil.which("scontrol") or not shutil.which("ssh"):
+        console.print("[bold red]Error:[/bold red] scontrol or ssh not found.")
+        return
+
+    # Resolve Job ID
+    job_ids = []
+    if target.isdigit():
+        job_ids.append(target)
+    else:
+        cmd = ["squeue", "--name", target, "--noheader", "--format=%i"]
+        code, out, err = _run_cmd(cmd)
+        if code == 0 and out:
+            job_ids = [line.strip() for line in out.splitlines() if line.strip()]
+    
+    if not job_ids:
+        console.print(f"[bold red]Error:[/bold red] No running job found matching '{target}'.")
+        return
+        
+    jid = job_ids[0]
+    if len(job_ids) > 1:
+        console.print(f"[yellow]Warning:[/yellow] Multiple jobs found. Monitoring the first one: {jid}")
+
+    # Get NodeList
+    # Try squeue first as it's reliable for running jobs
+    cmd = ["squeue", "-j", jid, "--noheader", "-o", "%N"]
+    code, out, err = _run_cmd(cmd)
+    
+    nodelist_raw = None
+    if code == 0 and out.strip():
+        val = out.strip()
+        if val != "N/A" and val != "(null)":
+             nodelist_raw = val
+
+    if not nodelist_raw:
+        # Fallback to scontrol
+        cmd = ["scontrol", "show", "job", jid]
+        code, out, err = _run_cmd(cmd)
+        if code != 0:
+            console.print(f"[bold red]Error:[/bold red] {err}")
+            return
+
+        # Parse NodeList
+        match = re.search(r"NodeList=([^\s]+)", out)
+        if match:
+             nodelist_raw = match.group(1)
+
+    if not nodelist_raw or nodelist_raw == "(null)":
+        console.print(f"[yellow]Job {jid} is not running on any nodes (Pending/Cancelled).[/yellow]")
+        return
+
+    # Expand NodeList
+    cmd = ["scontrol", "show", "hostnames", nodelist_raw]
+    code, out, err = _run_cmd(cmd)
+    if code != 0:
+        nodes = [nodelist_raw] # Fallback
+    else:
+        nodes = out.splitlines()
+
+    try:
+        console.print(f"[bold cyan]Monitoring Job {jid} on nodes: {', '.join(nodes)}[/bold cyan]")
+        
+        for node in nodes:
+            console.print(Panel(f"Node: [bold]{node}[/bold]", border_style="blue"))
+            # Run nvidia-smi
+            ssh_cmd = ["ssh", node, "nvidia-smi"]
+            subprocess.run(ssh_cmd) 
+
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        console.print(f"[bold red]Error reading logs:[/bold red] {e}")
+
+
 def queue(user: Optional[str] = None, all_users: bool = False):
     """
     Wrapper for `squeue` to show jobs.
@@ -472,6 +627,17 @@ def main():
     h_parser.add_argument("--all", "-a", action="store_true", help="Show jobs from all users")
     h_parser.add_argument("--user", "-u", type=str, help="Show jobs from specific user")
 
+    # Log command
+    l_parser = sub.add_parser("log", aliases=["l"], help="Show job logs (stdout only by default)")
+    l_parser.add_argument("target", help="Job ID or Name")
+    l_parser.add_argument("--lines", "-n", type=int, default=100, help="Output the last N lines (default: 100)")
+    l_parser.add_argument("--all", "-a", action="store_true", help="Output all lines")
+    l_parser.add_argument("--stderr", "-e", action="store_true", help="Include stderr output")
+
+    # Monitor command
+    m_parser = sub.add_parser("monitor", aliases=["m"], help="Monitor GPU usage for a job")
+    m_parser.add_argument("target", help="Job ID or Name")
+
     args = parser.parse_args()
 
     if args.cmd in ["info", "i"]:
@@ -487,6 +653,10 @@ def main():
     elif args.cmd in ["history", "h"]:
         user = args.user
         history(user=user, days=args.days, all_users=args.all)
+    elif args.cmd in ["log", "l"]:
+        log_output(args.target, num_lines=args.lines, show_all=args.all, show_stderr=args.stderr)
+    elif args.cmd in ["monitor", "m"]:
+        monitor(args.target)
     else:
         parser.print_help()
 

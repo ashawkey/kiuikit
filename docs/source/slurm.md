@@ -38,4 +38,21 @@ kism h # short cut
 
 # check job history for the last 7 days (default is 3)
 kism h -d 7
+
+# check job logs (stdout, last 100 lines)
+kism log <jobid>
+kism l <jobid> # short cut
+
+# check job stderr
+kism l <jobid> -e
+
+# check all job logs (no truncation)
+kism l <jobid> -a
+
+# check last N lines of job logs (default is 100)
+kism l <jobid> -n 500
+
+# monitor job GPU usage (snapshot)
+kism monitor <jobid>
+kism m <jobid> # short cut
 ```
