@@ -1,16 +1,16 @@
 import argparse
 import subprocess
-import sys
 import getpass
-import shutil
-import time
+import re
 from datetime import datetime, timedelta
-from typing import List, Optional, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple, Dict
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich import box
 from rich.text import Text
+import questionary
+
 
 console = Console()
 
@@ -30,66 +30,183 @@ def _run_cmd(cmd: Sequence[str], timeout: float = 30.0) -> Tuple[int, str, str]:
     except subprocess.TimeoutExpired:
         return 124, "", "timeout"
 
-import re
+class JobInfo:
+    def __init__(self, jid: str, data: Dict[str, str], source: str):
+        self.jid = jid
+        self.data = data
+        self.source = source # "scontrol" or "sacct"
 
-def job_details(target: str):
-    """
-    Show detailed information for a job ID or job name using `scontrol show job`.
-    """
-    if not shutil.which("scontrol") or not shutil.which("squeue"):
-        console.print("[bold red]Error:[/bold red] Slurm commands not found.")
-        return
+    @property
+    def stdout_path(self) -> Optional[str]:
+        path = self.data.get("StdOut")
+        if not path or path in ["(null)", "N/A", "None", "/dev/null"]:
+            return None
+        return self._resolve_path(path)
 
-    # Try to determine if target is a Job ID or Name
+    @property
+    def stderr_path(self) -> Optional[str]:
+        path = self.data.get("StdErr")
+        if not path or path in ["(null)", "N/A", "None", "/dev/null"]:
+            return None
+        return self._resolve_path(path)
+    
+    @property
+    def user(self) -> Optional[str]:
+        # scontrol: UserId=user(uid)
+        uid_str = self.data.get("UserId")
+        if uid_str:
+            match = re.search(r"([^\s\(]+)", uid_str)
+            if match:
+                return match.group(1)
+        # sacct: User
+        return self.data.get("User")
+    
+    @property
+    def job_name(self) -> Optional[str]:
+        return self.data.get("JobName")
+
+    @property
+    def node_list(self) -> Optional[str]:
+        val = self.data.get("NodeList")
+        if not val or val in ["(null)", "N/A", "None"]:
+            return None
+        return val
+
+    def _resolve_path(self, path: str) -> str:
+        if not path:
+            return path
+        
+        # Replace %j, %A with JobID
+        path = path.replace("%j", self.jid)
+        path = path.replace("%A", self.jid)
+        
+        # Replace %u with User
+        u = self.user
+        if u:
+            path = path.replace("%u", u)
+            
+        # Replace %x with JobName
+        x = self.job_name
+        if x:
+            path = path.replace("%x", x)
+            
+        return path
+
+def get_job_info(target: str) -> List[JobInfo]:
+    """
+    Get job information for a job ID or Name.
+    Returns a list of JobInfo objects (handles multiple jobs with same name).
+    Tries `scontrol` first (active jobs), then `sacct` (history).
+    """
+    # 1. Resolve Job IDs
     job_ids = []
     if target.isdigit():
         job_ids.append(target)
     else:
-        # Assume it's a name, use squeue to find ID(s)
-        # squeue --name <target> --noheader --format=%i
+        # Resolve name to IDs using squeue (active)
         cmd = ["squeue", "--name", target, "--noheader", "--format=%i"]
         code, out, err = _run_cmd(cmd)
         if code == 0 and out:
             job_ids = [line.strip() for line in out.splitlines() if line.strip()]
-    
+        
+        # If not found in squeue, try finding recent jobs with this name in sacct
+        if not job_ids:
+            # Look back 7 days by default for name resolution
+            start_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+            cmd = ["sacct", "-n", "-o", "JobID", "--name", target, "-S", start_date, "-X", "-P"]
+            code, out, err = _run_cmd(cmd)
+            if code == 0 and out:
+                job_ids = [line.strip() for line in out.splitlines() if line.strip()]
+
     if not job_ids:
         console.print(f"[bold red]Error:[/bold red] No job found matching '{target}'.")
-        return
+        return []
 
+    results = []
+    seen_ids = set()
+
+    # Process each Job ID
     for jid in job_ids:
+        if jid in seen_ids:
+            continue
+        seen_ids.add(jid)
+
+        # A. Try scontrol (Active Jobs)
         cmd = ["scontrol", "show", "job", jid]
         code, out, err = _run_cmd(cmd)
         
-        if code != 0:
-            console.print(f"[bold red]Error getting info for job {jid}:[/bold red] {err}")
+        if code == 0:
+            data = {}
+            # Robust parsing for scontrol
+            pattern = re.compile(r"\s+([A-Za-z0-9_]+)=")
+            # Prepend space to match first key
+            text_to_parse = " " + out.replace("\n", " ")
+            
+            matches = list(pattern.finditer(text_to_parse))
+            for i in range(len(matches)):
+                key = matches[i].group(1)
+                start_val = matches[i].end()
+                end_val = matches[i+1].start() if i + 1 < len(matches) else len(text_to_parse)
+                val = text_to_parse[start_val:end_val].strip()
+                data[key] = val
+            
+            results.append(JobInfo(jid, data, "scontrol"))
             continue
 
-        # Basic syntax highlighting for Key=Value
-        highlighted_text = Text()
-        pattern = re.compile(r"([A-Za-z0-9_]+)=")
+        # B. Try sacct (History)
+        # Request specific fields we care about
+        fields = "JobID,JobName%200,Partition,User,State,ExitCode,Start,End,Elapsed,NodeList,StdOut,StdErr"
+        cmd_s = ["sacct", "-j", jid, "-o", fields, "-P", "--units=M"] # -P for pipe, --units=M to force MB
+        code_s, out_s, err_s = _run_cmd(cmd_s)
         
-        last_pos = 0
-        for match in pattern.finditer(out):
-            start, end = match.span()
-            # Append text before match
-            highlighted_text.append(out[last_pos:start])
-            # Append styled key
-            highlighted_text.append(out[start:end], style="bold cyan")
-            last_pos = end
+        if code_s == 0 and out_s.strip():
+            lines = out_s.splitlines()
+            if len(lines) >= 2:
+                headers = lines[0].split("|")
+                # Use the first data row (allocation)
+                values = lines[1].split("|")
+                
+                data = {}
+                if len(values) == len(headers):
+                    for h, v in zip(headers, values):
+                        data[h] = v
+                    
+                    results.append(JobInfo(jid, data, "sacct"))
+                    continue
+    
+    if not results:
+         console.print(f"[bold red]Error:[/bold red] Could not retrieve info for job(s) {', '.join(job_ids)}")
+         
+    return results
+
+def job_details(target: str):
+    """
+    Show detailed information for a job ID or job name.
+    """
+    infos = get_job_info(target)
+    if not infos:
+        return
+
+    for info in infos:
+        grid = Table.grid(expand=True)
+        grid.add_column(style="bold cyan", max_width=25)
+        grid.add_column()
         
-        # Append remaining text
-        highlighted_text.append(out[last_pos:])
-        
-        console.print(Panel(highlighted_text, title=f"Job Details: {jid}", border_style="blue"))
+        if info.source == "scontrol":
+            keys = sorted(info.data.keys())
+            for k in keys:
+                grid.add_row(f"{k}:", info.data[k])
+        else: # sacct
+            for k, v in info.data.items():
+                grid.add_row(f"{k}:", v)
+            
+        console.print(Panel(grid, title=f"Job Details ({info.source}): {info.jid}", border_style="blue"))
+
 
 def node_details(target: str):
     """
     Show detailed information for a node using `scontrol show node` and `squeue`.
     """
-    if not shutil.which("scontrol") or not shutil.which("squeue"):
-        console.print("[bold red]Error:[/bold red] Slurm commands not found.")
-        return
-
     # 1. Get Node Info
     cmd = ["scontrol", "show", "node", target]
     code, out, err = _run_cmd(cmd)
@@ -139,21 +256,22 @@ def node_details(target: str):
     console.print(Panel(grid, title=f"Node Details: [bold]{target}[/bold]", border_style="blue"))
 
     # 2. Get Running Jobs
-    cmd_q = ["squeue", "-w", target, "--noheader", "-o", "%i|%u|%j|%t|%M"]
+    # Use %200j to prevent truncation
+    cmd_q = ["squeue", "-w", target, "--noheader", "-o", "%i|%u|%200j|%t|%M"]
     code_q, out_q, err_q = _run_cmd(cmd_q)
     
     if code_q == 0 and out_q.strip():
         table = Table(box=box.SIMPLE, show_header=True, header_style="bold cyan", expand=True)
         table.add_column("JobID")
         table.add_column("User", style="yellow")
-        table.add_column("Name")
+        table.add_column("Name", overflow="fold")
         table.add_column("State")
         table.add_column("Time")
         
         for line in out_q.splitlines():
             parts = line.strip().split("|")
             if len(parts) >= 5:
-                table.add_row(*parts)
+                table.add_row(*[p.strip() for p in parts])
         
         console.print(Panel(table, title=f"Jobs on {target}", border_style="green"))
     elif code_q == 0:
@@ -165,11 +283,6 @@ def info():
     """
     Wrapper for `sinfo` to show partition and node status.
     """
-    # Check if sinfo exists
-    if not shutil.which("sinfo"):
-        console.print("[bold red]Error:[/bold red] 'sinfo' command not found. Are you on a Slurm cluster?")
-        return
-
     # Use pipe delimiter for easier parsing
     # %P: Partition, %a: Avail, %l: TimeLimit, %D: Nodes, %T: State, %N: NodeList
     cmd = ["sinfo", "-o", "%P|%a|%l|%D|%T|%N"]
@@ -269,61 +382,37 @@ def log_output(target: str, num_lines: Optional[int] = 100, show_all: bool = Fal
     """
     Show logs for a job.
     """
-    if not shutil.which("scontrol"):
-        console.print("[bold red]Error:[/bold red] 'scontrol' command not found.")
-        return
-
-    # Resolve Job ID if name is provided
-    job_ids = []
-    if target.isdigit():
-        job_ids.append(target)
-    else:
-        cmd = ["squeue", "--name", target, "--noheader", "--format=%i"]
-        code, out, err = _run_cmd(cmd)
-        if code == 0 and out:
-            job_ids = [line.strip() for line in out.splitlines() if line.strip()]
-    
-    if not job_ids:
-        console.print(f"[bold red]Error:[/bold red] No job found matching '{target}'.")
+    infos = get_job_info(target)
+    if not infos:
         return
         
-    # Process the first job found
-    jid = job_ids[0]
-    if len(job_ids) > 1:
-        console.print(f"[yellow]Warning:[/yellow] Multiple jobs found for '{target}'. Showing logs for the first one: {jid}")
+    # Warn if multiple jobs found
+    if len(infos) > 1:
+        console.print(f"[yellow]Warning:[/yellow] Multiple jobs found for '{target}'. Showing logs for the first one: {infos[0].jid}")
 
-    cmd = ["scontrol", "show", "job", jid]
-    code, out, err = _run_cmd(cmd)
+    info = infos[0]
     
-    if code != 0:
-        console.print(f"[bold red]Error getting info for job {jid}:[/bold red] {err}")
+    stdout_path = info.stdout_path
+    stderr_path = info.stderr_path
+
+    if not stdout_path:
+        console.print(f"[bold red]Error:[/bold red] StdOut path not found for job {info.jid}.")
         return
-
-    # Parse StdOut and StdErr
-    stdout_match = re.search(r"StdOut=([^\s]+)", out)
-    stderr_match = re.search(r"StdErr=([^\s]+)", out)
-    
-    stdout_path = stdout_match.group(1) if stdout_match else None
-    stderr_path = stderr_match.group(1) if stderr_match else None
-    
-    if not stdout_path or stdout_path == "(null)":
-         console.print(f"[bold red]Error:[/bold red] StdOut path not found for job {jid}.")
-         return
 
     files_to_read = [stdout_path]
 
     if show_stderr:
-        if not stderr_path or stderr_path == "(null)":
-            console.print(f"[bold red]Error:[/bold red] StdErr path not found for job {jid}.")
+        if not stderr_path:
+            console.print(f"[bold red]Error:[/bold red] StdErr path not found for job {info.jid}.")
             return
         if stderr_path == stdout_path:
             # still show stdout
-            console.print(f"[bold yellow]Warning:[/bold yellow] StdOut and StdErr paths are the same for job {jid}.")
+            console.print(f"[bold yellow]Warning:[/bold yellow] StdOut and StdErr paths are the same for job {info.jid}.")
         else:
             # only show stderr
             files_to_read = [stderr_path]
         
-    console.print(Panel(f"Reading logs for Job {jid}\nFiles: {', '.join(files_to_read)}", border_style="blue"))
+    console.print(Panel(f"Reading logs for Job {info.jid}\nFiles: {', '.join(files_to_read)}", border_style="blue"))
 
     # Construct command
     tail_cmd = ["tail"]
@@ -346,54 +435,23 @@ def monitor(target: str):
     """
     Monitor GPU usage for a job using nvidia-smi via ssh.
     """
-    if not shutil.which("scontrol") or not shutil.which("ssh"):
-        console.print("[bold red]Error:[/bold red] scontrol or ssh not found.")
+    infos = get_job_info(target)
+    if not infos:
         return
-
-    # Resolve Job ID
-    job_ids = []
-    if target.isdigit():
-        job_ids.append(target)
-    else:
-        cmd = ["squeue", "--name", target, "--noheader", "--format=%i"]
-        code, out, err = _run_cmd(cmd)
-        if code == 0 and out:
-            job_ids = [line.strip() for line in out.splitlines() if line.strip()]
     
-    if not job_ids:
-        console.print(f"[bold red]Error:[/bold red] No running job found matching '{target}'.")
-        return
-        
-    jid = job_ids[0]
-    if len(job_ids) > 1:
-        console.print(f"[yellow]Warning:[/yellow] Multiple jobs found. Monitoring the first one: {jid}")
+    if len(infos) > 1:
+        console.print(f"[yellow]Warning:[/yellow] Multiple jobs found. Monitoring the first one: {infos[0].jid}")
 
-    # Get NodeList
-    # Try squeue first as it's reliable for running jobs
-    cmd = ["squeue", "-j", jid, "--noheader", "-o", "%N"]
-    code, out, err = _run_cmd(cmd)
+    info = infos[0]
     
-    nodelist_raw = None
-    if code == 0 and out.strip():
-        val = out.strip()
-        if val != "N/A" and val != "(null)":
-             nodelist_raw = val
+    # Check if job is running
+    state = info.data.get("JobState") or info.data.get("State")
+    if state and "RUNNING" not in state:
+         console.print(f"[yellow]Job {info.jid} is in state {state} (not RUNNING).[/yellow]")
 
+    nodelist_raw = info.node_list
     if not nodelist_raw:
-        # Fallback to scontrol
-        cmd = ["scontrol", "show", "job", jid]
-        code, out, err = _run_cmd(cmd)
-        if code != 0:
-            console.print(f"[bold red]Error:[/bold red] {err}")
-            return
-
-        # Parse NodeList
-        match = re.search(r"NodeList=([^\s]+)", out)
-        if match:
-             nodelist_raw = match.group(1)
-
-    if not nodelist_raw or nodelist_raw == "(null)":
-        console.print(f"[yellow]Job {jid} is not running on any nodes (Pending/Cancelled).[/yellow]")
+        console.print(f"[yellow]Job {info.jid} does not have assigned nodes yet.[/yellow]")
         return
 
     # Expand NodeList
@@ -405,7 +463,7 @@ def monitor(target: str):
         nodes = out.splitlines()
 
     try:
-        console.print(f"[bold cyan]Monitoring Job {jid} on nodes: {', '.join(nodes)}[/bold cyan]")
+        console.print(f"[bold cyan]Monitoring Job {info.jid} on nodes: {', '.join(nodes)}[/bold cyan]")
         
         for node in nodes:
             console.print(Panel(f"Node: [bold]{node}[/bold]", border_style="blue"))
@@ -416,19 +474,98 @@ def monitor(target: str):
     except KeyboardInterrupt:
         pass
     except Exception as e:
-        console.print(f"[bold red]Error reading logs:[/bold red] {e}")
+        console.print(f"[bold red]Error monitoring job:[/bold red] {e}")
+
+
+def cancel(user: Optional[str] = None):
+    """
+    Interactive cancel command.
+    """
+    if user is None:
+        user = getpass.getuser()
+
+    # Get running/pending jobs
+    # %i: JobID, %P: Partition, %j: Name, %u: User, %t: State, %M: Time, %D: Nodes
+    cmd = ["squeue", "-u", user, "-o", "%i|%P|%200j|%u|%t|%M|%D", "--noheader"]
+    code, out, err = _run_cmd(cmd)
+
+    if code != 0:
+        console.print(f"[bold red]Error fetching jobs:[/bold red] {err}")
+        return
+
+    if not out.strip():
+        console.print(f"[green]No active jobs found for user {user}.[/green]")
+        return
+
+    choices = []
+    job_map = {}
+
+    lines = out.splitlines()
+    for line in lines:
+        parts = line.split("|")
+        if len(parts) < 7:
+            continue
+        
+        jobid, partition, name, username, state, time_str, nodes = [p.strip() for p in parts]
+        
+        # Format for display
+        display_text = f"{jobid:<10} | {state:<10} | {partition:<10} | {name}"
+        choices.append(questionary.Choice(display_text, value=jobid))
+        job_map[jobid] = name
+
+    if not choices:
+        console.print(f"[green]No active jobs found for user {user}.[/green]")
+        return
+
+    # Prompt user
+    selected_job_ids = questionary.checkbox(
+        "Select jobs to cancel (Enter to confirm):",
+        choices=choices,
+        style=questionary.Style([
+            ('qmark', 'fg:#673ab7 bold'),       
+            ('question', 'bold'),               
+            ('answer', 'fg:#f44336 bold'),      
+            ('pointer', 'fg:#673ab7 bold'),     
+            ('highlighted', 'fg:#673ab7 bold'), 
+            ('selected', 'fg:#cc5454'),         
+            ('separator', 'fg:#cc5454'),        
+            ('instruction', ''),                
+            ('text', ''),                       
+            ('disabled', 'fg:#858585 italic')   
+        ])
+    ).ask()
+
+    if not selected_job_ids:
+        console.print("[yellow]No jobs selected.[/yellow]")
+        return
+
+    # Confirm cancellation
+    console.print(f"[bold red]You are about to cancel {len(selected_job_ids)} jobs:[/bold red]")
+    for jid in selected_job_ids:
+        console.print(f"  - {jid} ({job_map.get(jid, 'Unknown')})")
+    
+    confirm = questionary.confirm("Are you sure?").ask()
+    
+    if confirm:
+        # Execute scancel
+        cmd_cancel = ["scancel"] + selected_job_ids
+        code_c, out_c, err_c = _run_cmd(cmd_cancel)
+        
+        if code_c == 0:
+            console.print(f"[green]Successfully cancelled {len(selected_job_ids)} jobs.[/green]")
+        else:
+            console.print(f"[bold red]Error cancelling jobs:[/bold red] {err_c}")
+    else:
+        console.print("[yellow]Cancellation aborted.[/yellow]")
 
 
 def queue(user: Optional[str] = None, all_users: bool = False):
     """
     Wrapper for `squeue` to show jobs.
     """
-    if not shutil.which("squeue"):
-        console.print("[bold red]Error:[/bold red] 'squeue' command not found. Are you on a Slurm cluster?")
-        return
-
-    # %i: JobID, %P: Partition, %j: Name, %u: User, %t: State, %M: Time, %D: Nodes, %R: Reason/NodeList
-    cmd = ["squeue", "-o", "%i|%P|%j|%u|%t|%M|%D|%R"]
+    # %i: JobID, %P: Partition, %j: Name, %u: User, %t: State, %M: Time, %D: Nodes, %R: Reason/NodeList, %V: SubmitTime
+    # Use %200j to prevent truncation
+    cmd = ["squeue", "-o", "%i|%P|%200j|%u|%t|%M|%D|%R|%V"]
     
     title = "All Jobs"
     if not all_users:
@@ -454,7 +591,7 @@ def queue(user: Optional[str] = None, all_users: bool = False):
     table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="bold cyan", expand=True)
     table.add_column("JobID", style="bold", no_wrap=True)
     table.add_column("Partition")
-    table.add_column("Name")
+    table.add_column("Name", overflow="fold")
     table.add_column("User", style="yellow")
     table.add_column("State")
     table.add_column("Time")
@@ -463,10 +600,10 @@ def queue(user: Optional[str] = None, all_users: bool = False):
 
     for line in lines:
         parts = line.split("|")
-        if len(parts) < 8:
+        if len(parts) < 9:
             continue
         
-        jobid, partition, name, username, state, time_str, nodes, reason = [p.strip() for p in parts]
+        jobid, partition, name, username, state, time_str, nodes, reason, submit_time_str = [p.strip() for p in parts]
         
         # Colorize state
         if state == "R": # Running
@@ -494,6 +631,28 @@ def queue(user: Optional[str] = None, all_users: bool = False):
         # Highligh reason if pending
         if state == "PD":
             reason_style = "yellow"
+            
+            # Calculate waiting time
+            try:
+                # squeue output example: 2023-10-27T10:00:00
+                submit_time = datetime.fromisoformat(submit_time_str)
+                delta = datetime.now() - submit_time
+                
+                days = delta.days
+                seconds = delta.seconds
+                hours = seconds // 3600
+                minutes = (seconds % 3600) // 60
+                sec = seconds % 60
+                
+                # Format: D-HH:MM:SS or HH:MM:SS matching slurm format
+                if days > 0:
+                    time_fmt = f"{days}-{hours:02d}:{minutes:02d}:{sec:02d}"
+                else:
+                    time_fmt = f"{hours:02d}:{minutes:02d}:{sec:02d}"
+                    
+                time_str = Text(time_fmt, style="yellow")
+            except Exception:
+                pass
         else:
             reason_style = "dim"
 
@@ -515,14 +674,11 @@ def history(user: Optional[str] = None, days: int = 3, all_users: bool = False):
     """
     Wrapper for `sacct` to show job history.
     """
-    if not shutil.which("sacct"):
-        console.print("[bold red]Error:[/bold red] 'sacct' command not found. Are you on a Slurm cluster?")
-        return
-
     # -X: no steps
     # -o: output format
     # -P: parsable output (pipe separated)
-    cmd = ["sacct", "-X", "-P", "-o", "JobID,JobName,Partition,User,State,ExitCode,Start,End,Elapsed"]
+    # Use JobName%200 to ensure full name
+    cmd = ["sacct", "-X", "-P", "-o", "JobID,JobName%200,Partition,User,State,ExitCode,Start,End,Elapsed"]
     
     # Calculate start time
     start_date = datetime.now() - timedelta(days=days)
@@ -556,7 +712,7 @@ def history(user: Optional[str] = None, days: int = 3, all_users: bool = False):
 
     table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="bold cyan", expand=True)
     table.add_column("JobID", style="bold", no_wrap=True)
-    table.add_column("Name")
+    table.add_column("Name", overflow="fold")
     table.add_column("Partition")
     table.add_column("User", style="yellow")
     table.add_column("State")
@@ -638,6 +794,10 @@ def main():
     m_parser = sub.add_parser("monitor", aliases=["m"], help="Monitor GPU usage for a job")
     m_parser.add_argument("target", help="Job ID or Name")
 
+    # Cancel command
+    c_parser = sub.add_parser("cancel", aliases=["c"], help="Interactive cancel jobs")
+    c_parser.add_argument("--user", "-u", type=str, help="Show jobs from specific user (defaults to current user)")
+
     args = parser.parse_args()
 
     if args.cmd in ["info", "i"]:
@@ -657,9 +817,10 @@ def main():
         log_output(args.target, num_lines=args.lines, show_all=args.all, show_stderr=args.stderr)
     elif args.cmd in ["monitor", "m"]:
         monitor(args.target)
+    elif args.cmd in ["cancel", "c"]:
+        cancel(args.user)
     else:
         parser.print_help()
 
 if __name__ == "__main__":
     main()
-

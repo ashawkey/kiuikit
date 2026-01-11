@@ -55,4 +55,8 @@ kism l <jobid> -n 500
 # monitor job GPU usage (snapshot)
 kism monitor <jobid>
 kism m <jobid> # short cut
+
+# interactive cancel jobs (will prompt for confirmation)
+kism cancel
+kism c # shortcut
 ```
