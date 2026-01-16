@@ -378,10 +378,63 @@ def info():
     console.print(Panel(table, title=title, border_style="blue"))
 
 
-def log_output(target: str, num_lines: Optional[int] = 100, show_all: bool = False, show_stderr: bool = False):
+def log_output(target: Optional[str] = None, num_lines: Optional[int] = 100, show_all: bool = False, show_stderr: bool = False, user: Optional[str] = None):
     """
     Show logs for a job.
     """
+    if target is None:
+        if user is None:
+            user = getpass.getuser()
+        
+        # Get running jobs only
+        cmd = ["squeue", "-u", user, "-t", "RUNNING", "-o", "%i|%P|%200j|%u|%t|%M|%D", "--noheader"]
+        code, out, err = _run_cmd(cmd)
+
+        if code != 0:
+            console.print(f"[bold red]Error fetching jobs:[/bold red] {err}")
+            return
+
+        if not out.strip():
+            console.print(f"[green]No active jobs found for user {user}.[/green]")
+            return
+
+        choices = []
+        lines = out.splitlines()
+        for line in lines:
+            parts = line.split("|")
+            if len(parts) < 7:
+                continue
+            
+            jobid, partition, name, username, state, time_str, nodes = [p.strip() for p in parts]
+            
+            # Format for display
+            display_text = f"{jobid:<10} | {state:<10} | {partition:<10} | {name}"
+            choices.append(questionary.Choice(display_text, value=jobid))
+
+        if not choices:
+            console.print(f"[green]No active jobs found for user {user}.[/green]")
+            return
+
+        target = questionary.select(
+            "Select a job to view logs (Enter to confirm):",
+            choices=choices,
+            style=questionary.Style([
+                ('qmark', 'fg:#673ab7 bold'),       
+                ('question', 'bold'),               
+                ('answer', 'fg:#f44336 bold'),      
+                ('pointer', 'fg:#673ab7 bold'),     
+                ('highlighted', 'fg:#673ab7 bold'), 
+                ('selected', 'fg:#cc5454'),         
+                ('separator', 'fg:#cc5454'),        
+                ('instruction', ''),                
+                ('text', ''),                       
+                ('disabled', 'fg:#858585 italic')   
+            ])
+        ).ask()
+        
+        if not target:
+            return
+
     infos = get_job_info(target)
     if not infos:
         return
@@ -785,10 +838,11 @@ def main():
 
     # Log command
     l_parser = sub.add_parser("log", aliases=["l"], help="Show job logs (stdout only by default)")
-    l_parser.add_argument("target", help="Job ID or Name")
+    l_parser.add_argument("target", nargs="?", help="Job ID or Name")
     l_parser.add_argument("--lines", "-n", type=int, default=100, help="Output the last N lines (default: 100)")
     l_parser.add_argument("--all", "-a", action="store_true", help="Output all lines")
     l_parser.add_argument("--stderr", "-e", action="store_true", help="Include stderr output")
+    l_parser.add_argument("--user", "-u", type=str, help="Show jobs from specific user (interactive mode only)")
 
     # Monitor command
     m_parser = sub.add_parser("monitor", aliases=["m"], help="Monitor GPU usage for a job")
@@ -808,13 +862,11 @@ def main():
     elif args.cmd in ["job", "j"]:
         job_details(args.target)
     elif args.cmd in ["queue", "q"]:
-        user = args.user
-        queue(user=user, all_users=args.all)
+        queue(user=args.user, all_users=args.all)
     elif args.cmd in ["history", "h"]:
-        user = args.user
-        history(user=user, days=args.days, all_users=args.all)
+        history(user=args.user, days=args.days, all_users=args.all)
     elif args.cmd in ["log", "l"]:
-        log_output(args.target, num_lines=args.lines, show_all=args.all, show_stderr=args.stderr)
+        log_output(args.target, num_lines=args.lines, show_all=args.all, show_stderr=args.stderr, user=args.user)
     elif args.cmd in ["monitor", "m"]:
         monitor(args.target)
     elif args.cmd in ["cancel", "c"]:
