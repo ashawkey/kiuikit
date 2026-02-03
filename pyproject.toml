@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kiui"
-version = "0.3.2"
+version = "0.3.3"
 description = "A toolkit for 3D vision"
 readme = { file = "README.md", content-type = "text/markdown" }
 license = { file = "LICENSE" }
