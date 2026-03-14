@@ -1,16 +1,27 @@
 import os
 import re
+import sys
 import time
 import json
-import importlib
-import inspect
-from typing import Callable, Literal
+import atexit
+from typing import Literal
 from openai import OpenAI
-from rich.console import Console
-from rich.theme import Theme
-
+from kiui.agent.ui import AgentConsole
 from kiui.agent.terminal import TerminalInput
-from kiui.agent.utils import parse_tool_docstring, get_text_content_dict, get_image_content_dict
+from kiui.agent.utils import get_text_content_dict, get_image_content_dict, get_kia_dir
+from kiui.agent.prompts import build_system_prompt
+from kiui.agent.tools import get_tool_definitions, ToolExecutor, format_tool_result
+from kiui.agent.subagent import SubagentManager
+from kiui.agent.permissions import PermissionController, PermissionMode
+from kiui.agent.context import (
+    truncate_tool_result,
+    prune_context,
+    needs_compaction,
+    compact_context,
+    estimate_context_chars,
+    CHARS_PER_TOKEN,
+)
+from kiui.agent.interrupt import InterruptHandler
 
 def parse_custom_query(query: str) -> list:
     """Parse the user query into formatted content, optionally load images or text files (by using @filename).
@@ -26,15 +37,13 @@ def parse_custom_query(query: str) -> list:
     """
     content = []
 
-    # Match @filepath where filepath contains typical path characters
-    pattern = re.compile(r"@([\w./-]+)")
+    pattern = re.compile(r"@([\w.\/\\:-]+)")
     
     image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'}
     text_extensions = {'.txt', '.md', '.json', '.yaml', '.yml'}
     
     last_end = 0
     for match in pattern.finditer(query):
-        # text before this tag
         pre_text = query[last_end:match.start()].strip()
         if pre_text:
             content.append(get_text_content_dict(pre_text))
@@ -49,12 +58,10 @@ def parse_custom_query(query: str) -> list:
                 file_content = f.read()
             content.append(get_text_content_dict(file_content))
         else:
-            # Unknown extension, keep as literal text
             content.append(get_text_content_dict(f"@{file_path}"))
             
         last_end = match.end()
 
-    # trailing text after the last tag
     tail = query[last_end:].strip()
     if tail:
         content.append(get_text_content_dict(tail))
@@ -62,42 +69,36 @@ def parse_custom_query(query: str) -> list:
     return content
 
 class ContextManager:
-    """Context manager for flexible conversation history."""
+    """Flat conversation history with context-management hooks."""
     def __init__(self, system_prompt: str):
         self.system_prompt = {
             "role": "system",
             "content": [get_text_content_dict(system_prompt)],
         }
-        # round-based conversation history, each round can have multiple messages.
-        self.rounds: dict = {}
-        self.current_round_id = 0
-    
-    def add(self, content, round_id: int | None = None):
-        # if round_id is not provided, use the last round id + 1
-        if round_id is None:
-            round_id = self.current_round_id
-        if round_id not in self.rounds:
-            self.rounds[round_id] = []
-        
-        self.rounds[round_id].append(content)
+        self.messages: list = []
 
-        # update the last round id
-        self.current_round_id = round_id + 1
-    
-    def get(self, num_rounds: int | None = None, include_system: bool = True) -> list:
+    def add(self, content):
+        self.messages.append(content)
+
+    def get(self, include_system: bool = True) -> list:
         res = []
         if include_system:
             res.append(self.system_prompt)
-        
-        if num_rounds is None:
-            num_rounds = len(self.rounds) # all rounds
-        
-        for round_id in range(self.current_round_id - num_rounds, self.current_round_id):
-            res.extend(self.rounds[round_id])
-        
+        res.extend(self.messages)
         return res
-        
-        
+
+    def replace_messages(self, new_messages: list):
+        """Replace all messages (used after compaction)."""
+        self.messages = list(new_messages)
+
+    def checkpoint(self) -> list:
+        """Return a shallow copy of messages for rollback on interruption."""
+        return list(self.messages)
+
+    def rollback(self, snapshot: list):
+        """Restore messages to a previous checkpoint."""
+        self.messages = snapshot
+
 
 class LLMAgent:
     def __init__(
@@ -105,32 +106,49 @@ class LLMAgent:
         model: str,
         api_key: str,
         base_url: str,
-        system_prompt: str = "You are a helpful assistant.",
+        model_key: str = "",
         verbose: bool = True,
-        max_tool_iter: int = 20,
         thinking_budget: Literal["low", "medium", "high"] = "low",
+        pipe_mode: bool = False,
+        context_window: int = 128_000,
+        permission_mode: PermissionMode = PermissionMode.DEFAULT,
     ):
 
         self.model = model
+        self.model_key = model_key
+        self._api_key = api_key
+        self._base_url = base_url
         self.client = OpenAI(
             api_key=api_key,
             base_url=base_url,
         )
-        self.system_prompt = system_prompt
         self.verbose = verbose
         self.thinking_budget = thinking_budget
+        self.pipe_mode = pipe_mode
+        self.context_window = context_window
 
-        self.context = ContextManager(system_prompt)
+        self.console = AgentConsole(pipe_mode=pipe_mode)
 
-        self.available_functions: dict = {}
-        self.tools: list = []
-        
-        self.tool_iter = 0
-        self.max_tool_iter = max_tool_iter # to avoid infinite loops
+        # built-in system prompt and tools
+        self.system_prompt = build_system_prompt()
+        self.tools = get_tool_definitions()
+
+        # permission controller — auto in pipe mode regardless of explicit setting
+        effective_mode = PermissionMode.AUTO if pipe_mode else permission_mode
+        self.permissions = PermissionController(mode=effective_mode, console=self.console)
+
+        # subagent manager (only if we have a model_key for spawning children)
+        self.subagent_manager = SubagentManager(model_key=model_key) if model_key else None
+        self.tool_executor = ToolExecutor(console=self.console, subagent_manager=self.subagent_manager)
+
+        if self.subagent_manager:
+            atexit.register(self.subagent_manager.kill_all)
+
+        self.context = ContextManager(self.system_prompt)
+        self.interrupt = InterruptHandler()
 
         self.round_id = 0
 
-        # running token usage totals across the entire conversation
         self.token_totals = {
             "total": 0,
             "prompt": 0,
@@ -139,102 +157,63 @@ class LLMAgent:
             "reasoning": 0,
         }
 
-        # Rich console with color theme for different kinds of logs
-        self.console = Console(
-            theme=Theme(
-                {
-                    "debug": "dim cyan",
-                    "input": "bold yellow",
-                    "response": "bold green",
-                    "error": "bold red",
-                    "system": "bold blue",
-                }
-            )
-        )
-        self.console.print(f"[SYSTEM] Created Agent with model: {model}", style="system", markup=False)
-        self.console.print(f"[SYSTEM] System prompt: {system_prompt[:100]}...", style="system", markup=False)
-
-    # tool usage helpers
-    def add_tool(
-        self, name: str, func: Callable, description: str, parameters: dict
-    ):
+        self.console.system(f"Created Agent with model: {model}")
+        self.console.system(f"Permission mode: {effective_mode.value}")
         if self.verbose:
-            self.console.print(f"[DEBUG] Adding tool {name}: {description[:30]}...", style="debug", markup=False)
-
-        self.available_functions[name] = {
-            "function": func,
-            "schema": {
-                "type": "function",
-                "function": {"name": name, "description": description, "parameters": parameters},
-            },
-        }
-
-        self.tools.append(self.available_functions[name]["schema"])
+            self.console.system(f"System prompt: {self.system_prompt[:100]}...")
 
 
-    def load_tools(self, module_path: str):
+    def _recreate_client(self):
+        """Recreate the OpenAI client after an interrupt-driven close."""
+        self.client = OpenAI(api_key=self._api_key, base_url=self._base_url)
 
-        if self.verbose:
-            self.console.print(f"[DEBUG] Loading tools from {module_path}", style="debug", markup=False)
-    
-        spec = importlib.util.spec_from_file_location("tools_module", module_path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+    def _accumulate_usage(self, usage):
+        """Add token counts from an API response to session totals."""
+        self.token_totals["total"] += usage.total_tokens
+        self.token_totals["prompt"] += usage.prompt_tokens
+        self.token_totals["completion"] += usage.completion_tokens
+        if usage.prompt_tokens_details and usage.prompt_tokens_details.cached_tokens:
+            self.token_totals["cached_prompt"] += usage.prompt_tokens_details.cached_tokens
+        if usage.completion_tokens_details and usage.completion_tokens_details.reasoning_tokens:
+            self.token_totals["reasoning"] += usage.completion_tokens_details.reasoning_tokens
 
-        loaded_functions: list[str] = []
-
-        # load all functions from the module
-        for name in module.__all__:
-            func = getattr(module, name)
-            if callable(func):
-                # parse the function signature and docstring
-                sig = inspect.signature(func)
-                docstring = func.__doc__
-                description, param_description = parse_tool_docstring(docstring)
-
-                properties = {}
-                required_params = []
-
-                for param_name, param in sig.parameters.items():
-                    # param type
-                    param_type = "string"
-                    if param.annotation == int:
-                        param_type = "integer"
-                    elif param.annotation == float:
-                        param_type = "number"
-                    elif param.annotation == bool:
-                        param_type = "boolean"
-                    # param description
-                    properties[param_name] = {
-                        "type": param_type,
-                        "description": f"Parameter {param_name}: {param_description[param_name]}",
-                    }
-                    # required params
-                    if param.default == inspect.Parameter.empty:
-                        required_params.append(param_name)
-                
-                parameters = {
-                    "type": "object",
-                    "properties": properties,
-                    "required": required_params,
-                }   
-
-                self.add_tool(name, func, description, parameters)
-                loaded_functions.append(name)
-        
-        if len(self.available_functions) == 0:
-            self.console.print(f"[ERROR] No tools loaded from {module_path}!", style="error", markup=False)
-        else:
-            self.console.print(f"[SYSTEM] Loaded {len(loaded_functions)} tools from {module_path}", style="system", markup=False)
+    def _inject_pending_subagent_results(self):
+        """Inject any completed sub-agent results into the conversation."""
+        if not self.subagent_manager:
+            return
+        pending = self.subagent_manager.get_pending_results()
+        for msg in pending:
+            self.context.add(msg)
+            label = msg.get("content", "")[:80]
+            self.console.system(f"Sub-agent completed: {label}")
 
 
-    def call_api(self, use_tools: bool = True):
+    def call_api(self):
         """Call the API using current context."""
 
-        if self.verbose:
-            self.console.print(f"[DEBUG] Calling API (round: {self.round_id}, tool iter: {self.tool_iter})", style="debug", markup=False)
+        # inject any pending sub-agent results before calling API
+        self._inject_pending_subagent_results()
 
-        # build the messages
+        # context management: prune old tool results, then compact if needed
+        if self.context_window > 0:
+            self.context.replace_messages(
+                prune_context(self.context.messages, self.context_window)
+            )
+            if needs_compaction(self.context.messages, self.context_window):
+                self.console.system("Context window pressure — compacting via LLM summarization...")
+                self.context.replace_messages(
+                    compact_context(self.context.messages, self.client, self.model, console=self.console)
+                )
+                self.console.system("Compaction complete.")
+
+        if self.verbose:
+            ctx_chars = estimate_context_chars(self.context.messages)
+            ctx_pct = ctx_chars / (self.context_window * CHARS_PER_TOKEN) * 100 if self.context_window else 0
+            self.console.debug(
+                f"Calling API (round: {self.round_id}, "
+                f"context: ~{ctx_chars // CHARS_PER_TOKEN}tok / {self.context_window}tok [{ctx_pct:.0f}%])"
+            )
+
         messages = self.context.get()
 
         kwargs = {
@@ -243,177 +222,342 @@ class LLMAgent:
             "stream": False,
         }
 
-        if use_tools and len(self.tools) > 0:
+        if self.tools:
             kwargs["tools"] = self.tools
             kwargs["tool_choice"] = "auto"
         
-        # thinking budget (model-specific, unfortunately hard-coded...)
+        # thinking budget (model-specific)
         if "gpt-5" in self.model.lower():
             kwargs["reasoning_effort"] = self.thinking_budget
         elif "gemini" in self.model.lower():
             kwargs["extra_body"] = {
-                "extra_body": {
-                    "google": {
-                        "thinking_config": {
-                            "thinking_budget": "low" if self.thinking_budget == "low" else "high", # only low/high
-                            "include_thoughts": True,
-                        },
+                "google": {
+                    "thinking_config": {
+                        "thinking_budget": "low" if self.thinking_budget == "low" else "high",
+                        "include_thoughts": True,
                     },
                 },
             }
-            
 
-        # call the API
         response = self.client.chat.completions.create(**kwargs)
         message = response.choices[0].message
         usage = response.usage
 
-        # accumulate token usage totals
-        self.token_totals["total"] += usage.total_tokens
-        self.token_totals["prompt"] += usage.prompt_tokens
-        if usage.prompt_tokens_details and usage.prompt_tokens_details.cached_tokens:
-            self.token_totals["cached_prompt"] += usage.prompt_tokens_details.cached_tokens
-        self.token_totals["completion"] += usage.completion_tokens
-        if usage.completion_tokens_details and usage.completion_tokens_details.reasoning_tokens:
-            self.token_totals["reasoning"] += usage.completion_tokens_details.reasoning_tokens
+        self._accumulate_usage(usage)
+        self.context.add(message)
 
-        # append the assistant message to the context
-        self.context.add(message, round_id=self.round_id)
-
-        # log the usage
         if self.verbose:
-            self.console.print(
-                f"[DEBUG] API Response total_tokens: {usage.total_tokens} = "
-                f"output: {usage.completion_tokens} "
-                f"(reasoning: {usage.completion_tokens_details.reasoning_tokens if usage.completion_tokens_details and usage.completion_tokens_details.reasoning_tokens else 'N/A'}) "
-                f"input: {usage.prompt_tokens} "
-                f"(cached: {usage.prompt_tokens_details.cached_tokens if usage.prompt_tokens_details and usage.prompt_tokens_details.cached_tokens else 'N/A'})", 
-                style="debug",
-                markup=False,
+            cached = getattr(usage.prompt_tokens_details, "cached_tokens", None) if usage.prompt_tokens_details else None
+            reasoning = getattr(usage.completion_tokens_details, "reasoning_tokens", None) if usage.completion_tokens_details else None
+            self.console.debug(
+                f"API Response total_tokens: {usage.total_tokens} = "
+                f"output: {usage.completion_tokens} (reasoning: {reasoning or 'N/A'}) "
+                f"input: {usage.prompt_tokens} (cached: {cached or 'N/A'})"
             )
             if message.tool_calls:
-                self.console.print(f"[DEBUG] Requested tool calls: {len(message.tool_calls)}", style="debug", markup=False)
+                self.console.debug(f"Requested tool calls: {len(message.tool_calls)}")
 
         return message
 
 
     def execute_tool_calls(self, tool_calls: list):
-        """Execute the tool calls and update the conversation history."""
+        """Execute tool calls via the built-in ToolExecutor."""
 
         for i, tool_call in enumerate(tool_calls):
+            if self.interrupt.interrupted:
+                break
             function_name = tool_call.function.name
-            function_args = json.loads(tool_call.function.arguments)
+            try:
+                function_args = json.loads(tool_call.function.arguments)
+            except json.JSONDecodeError as e:
+                function_args = {}
+                self.console.error(f"Failed to parse tool args: {e}")
             
             if self.verbose:
-                self.console.print(f"[DEBUG] Tool call {i+1}/{len(tool_calls)}: {function_name}({function_args})", style="debug", markup=False)
+                self.console.debug(f"Tool call {i+1}/{len(tool_calls)}: {function_name}({function_args})")
 
-            # Execute the function
-            try:
-                func = self.available_functions[function_name]["function"]
-                result = func(**function_args) # a string or a list of message dict
+            if not self.permissions.check(function_name, function_args):
+                result = {"error": f"Tool call denied by user: {function_name}", "success": False}
+            else:
+                result = self.tool_executor.execute(function_name, function_args)
+            result_text = format_tool_result(result)
 
-                # Append tool result to conversation history
-                if isinstance(result, str):
-                    tool_message = {
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": [get_text_content_dict(result)],
-                    }
-                    self.context.add(tool_message, round_id=self.round_id)
-                else:
-                    # special case for tools that also return an image, we need an extra user message to upload the image.
-                    tool_message = {
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": [get_text_content_dict(result[0])],
-                    }
-                    self.context.add(tool_message, round_id=self.round_id)
-                    user_message = {
-                        "role": "user",
-                        "content": result[1], # the image content dict
-                    }
-                    self.context.add(user_message, round_id=self.round_id)
-                # don't print tool message if it succeeds (as it may return long content or an image)
-                
-            except Exception as e:
-                # if the function call fails (maybe due to wrong usage), we add an error message to the conversation history so the LLM can try again
-                error_msg = f"Error executing {function_name}: {str(e)}"
-                error_result_message = {
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": [get_text_content_dict(error_msg)],
-                }
+            # Layer 1: generic truncation relative to context window
+            if self.context_window > 0:
+                result_text = truncate_tool_result(result_text, self.context_window)
 
-                self.context.add(error_result_message, round_id=self.round_id)
-                self.console.print(f"[ERROR] Tool failed: {error_msg}", style="error", markup=False)
-        
-        
+            tool_message = {
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "content": [get_text_content_dict(result_text)],
+            }
+            self.context.add(tool_message)
+
     def get_response(self):
-        """Process the context and update the current response."""
-       
-        # increment the current iteration
-        use_tools = True
-        if self.tool_iter >= self.max_tool_iter:
-            self.console.print(f"[ERROR] tool call iterations reached ({self.max_tool_iter}), force not using tools in this iteration.", style="error", markup=False)
-            use_tools = False
+        """Process the context and update the current response.
 
-        # call the API
-        message = self.call_api(use_tools=use_tools)
-
-        if message.content:
-            self.console.print(f"{message.content}", style="response", markup=False)
-        
-        # if there are tool calls, we need to execute them and call the API recursively
-        if message.tool_calls:
-            self.tool_iter += 1 
-            self.execute_tool_calls(message.tool_calls)
-            self.get_response()
-        
-        return message.content if message.content else None
-
-    
-    def chat_loop(self):
-            
-        self.console.print("[SYSTEM] Type 'quit' or 'exit' to exit.", style="system", markup=False)
-        self.console.print("[SYSTEM] `Enter` to send. `Escape` then `Enter` for a newline.", style="system", markup=False)
-        self.console.print("[SYSTEM] Current working directory: " + os.getcwd(), style="system", markup=False)
-        
-        terminal = TerminalInput(history_path=os.path.expanduser("~/.agent_history"))
+        Supports flag-based cancellation: if interrupted, rolls back messages
+        from the current iteration and recreates the HTTP client.
+        """
 
         while True:
-            # use prompt_toolkit session for rich, multiline input
-            query = terminal.prompt().strip()
-            # exit logic
-            if query.lower() in ["quit", "exit"]:
-                break
-            # parse user query and append to conversation history
-            user_message = {"role": "user", "content": parse_custom_query(query)}
-            self.context.add(user_message, round_id=self.round_id)
-            # call API for the response (may be multi-turn with tool calls)
-            self.tool_iter = 0
-            self.get_response()
-            self.round_id += 1
-        # print total token usage upon exit
+            if self.interrupt.interrupted:
+                return None
+
+            snapshot = self.context.checkpoint()
+
+            try:
+                message = self.call_api()
+            except Exception:
+                if self.interrupt.interrupted:
+                    self.context.rollback(snapshot)
+                    self._recreate_client()
+                    self.console.system("Interrupted — partial response rolled back.")
+                    return None
+                raise
+
+            if message.content and not self.pipe_mode:
+                self.console.response(message.content)
+
+            if not message.tool_calls:
+                return message.content if message.content else None
+
+            self.execute_tool_calls(message.tool_calls)
+
+            if self.interrupt.interrupted:
+                self.context.rollback(snapshot)
+                self._recreate_client()
+                self.console.system("Interrupted — partial response rolled back.")
+                return None
+
+    # ----- slash commands ---------------------------------------------------
+
+    COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "perm"}
+
+    def _handle_command(self, raw: str) -> bool:
+        """Handle a /command.  Returns True if the agent loop should stop."""
+        cmd = raw.split()[0][1:].lower()
+
+        if cmd in ("exit", "quit"):
+            return True
+
+        if cmd == "help":
+            self._cmd_help()
+        elif cmd == "compact":
+            self._cmd_compact()
+        elif cmd == "usage":
+            self._cmd_usage()
+        elif cmd == "clear":
+            self._cmd_clear()
+        elif cmd == "perm":
+            self._cmd_perm(raw)
+
+        return False
+
+    def _cmd_help(self):
         self.console.print(
-            f"[SYSTEM] Total tokens used: {self.token_totals['total']} (input: {self.token_totals['prompt']}, cached input: {self.token_totals['cached_prompt']}, output: {self.token_totals['completion']}, reasoning: {self.token_totals['reasoning']})",
-            style="system",
-            markup=False,
+            "[bold blue]Available commands:[/bold blue]\n"
+            "\n"
+            "  [cyan]/help[/cyan]     — Show this help message\n"
+            "  [cyan]/compact[/cyan]  — Force context compaction via LLM summarization\n"
+            "  [cyan]/usage[/cyan]    — Show token usage for this session\n"
+            "  [cyan]/perm[/cyan]     — Show or change permission mode (/perm auto|default|strict)\n"
+            "  [cyan]/clear[/cyan]    — Clear conversation history (keep system prompt)\n"
+            "  [cyan]/exit[/cyan]     — Exit the agent (also: /quit)\n"
+            "\n"
+            "  Attach files with @filename (images & text files supported).\n"
+            "  Press [bold]Enter[/bold] to send, [bold]Escape → Enter[/bold] for a newline."
         )
+
+    def _cmd_compact(self):
+        if len(self.context.messages) <= 2:
+            self.console.system("Not enough messages to compact.")
+            return
+        self.console.system("Compacting conversation...")
+        self.context.replace_messages(
+            compact_context(self.context.messages, self.client, self.model, console=self.console)
+        )
+        self.console.system("Compaction complete.")
+
+    def _cmd_usage(self):
+        ctx_chars = estimate_context_chars(self.context.messages)
+        ctx_tokens = ctx_chars // CHARS_PER_TOKEN
+        ctx_pct = ctx_tokens / self.context_window * 100 if self.context_window else 0
+
+        self.console.print(
+            f"[bold blue]Session usage (round {self.round_id}):[/bold blue]\n"
+            f"  Total tokens   : {self.token_totals['total']}\n"
+            f"  Prompt tokens  : {self.token_totals['prompt']}  (cached: {self.token_totals['cached_prompt']})\n"
+            f"  Output tokens  : {self.token_totals['completion']}  (reasoning: {self.token_totals['reasoning']})\n"
+            f"  Context window : ~{ctx_tokens} / {self.context_window} tokens [{ctx_pct:.0f}%]\n"
+            f"  Messages       : {len(self.context.messages)}"
+        )
+
+    def _cmd_clear(self):
+        self.context.replace_messages([])
+        self.round_id = 0
+        self.console.system("Conversation cleared.")
+
+    def _cmd_perm(self, raw: str):
+        parts = raw.split()
+        if len(parts) < 2:
+            mode = self.permissions.mode.value
+            allowed = ", ".join(sorted(self.permissions._session_allowed)) or "(none)"
+            self.console.print(
+                f"[bold blue]Permission mode:[/bold blue] [cyan]{mode}[/cyan]\n"
+                f"  Session-allowed tools: {allowed}\n"
+                f"  Usage: [cyan]/perm auto|default|strict[/cyan]"
+            )
+            return
+
+        target = parts[1].lower()
+        valid = {m.value for m in PermissionMode}
+        if target not in valid:
+            self.console.error(f"Unknown mode '{target}'. Choose from: {', '.join(sorted(valid))}")
+            return
+
+        new_mode = PermissionMode(target)
+        self.permissions.mode = new_mode
+        self.permissions._session_allowed.clear()
+        self.console.system(f"Permission mode changed to: {new_mode.value}")
+
+    # ----- main loops -------------------------------------------------------
+
+    def chat_loop(self):
+
+        self.console.print("[system][SYSTEM] Type [bold]/help[/bold] for available commands.[/system]")
+        self.console.system("`Enter` to send. `Escape` then `Enter` for a newline.")
+        self.console.system("Ctrl+C to interrupt. Double Ctrl+C to force quit.")
+        self.console.system("Current working directory: " + os.getcwd())
+
+        terminal = TerminalInput(history_path=str(get_kia_dir() / "history"))
+        self.interrupt.install(self)
+
+        try:
+            while True:
+                try:
+                    query = terminal.prompt().strip()
+                except KeyboardInterrupt:
+                    self.console.print("")
+                    continue
+                except EOFError:
+                    break
+
+                if not query:
+                    continue
+
+                # slash commands
+                if query.startswith("/"):
+                    cmd_word = query.split()[0][1:].lower()
+                    if cmd_word in self.COMMANDS:
+                        if self._handle_command(query):
+                            break
+                        continue
+
+                user_message = {"role": "user", "content": parse_custom_query(query)}
+                self.context.add(user_message)
+
+                self.interrupt.reset()
+                self.interrupt.set_task_running(True)
+                try:
+                    self.get_response()
+                finally:
+                    self.interrupt.set_task_running(False)
+
+                self.round_id += 1
+        finally:
+            self.interrupt.uninstall()
+            self._print_token_summary()
         
     def execute(self, query: str):
-        # exec mode, no interactive terminal and just finish the task.
-        self.console.print(f"[SYSTEM] Executing query: {query}", style="system", markup=False)
+        self.console.system(f"Executing query: {query}")
         t0 = time.time()
+        self.interrupt.install(self)
 
         user_message = {"role": "user", "content": parse_custom_query(query)}
-        self.context.add(user_message, round_id=self.round_id)
-        self.get_response()
-        
+        self.context.add(user_message)
+
+        self.interrupt.reset()
+        self.interrupt.set_task_running(True)
+        try:
+            response = self.get_response()
+        finally:
+            self.interrupt.set_task_running(False)
+            self.interrupt.uninstall()
+
         t1 = time.time()
-        self.console.print(f"[SYSTEM] Execution time: {t1 - t0:.2f} seconds", style="system", markup=False)
-        # print total token usage upon exit
-        self.console.print(
-            f"[SYSTEM] Total tokens used: {self.token_totals['total']} (input: {self.token_totals['prompt']}, cached input: {self.token_totals['cached_prompt']}, output: {self.token_totals['completion']}, reasoning: {self.token_totals['reasoning']})",
-            style="system",
-            markup=False,
+        self.console.system(f"Execution time: {t1 - t0:.2f} seconds")
+        self._print_token_summary()
+        return response
+
+    def run_pipe_mode(self):
+        """Run in pipe mode: read JSON from stdin, write JSON to stdout.
+
+        Used by persistent sub-agent sessions. The parent process communicates
+        via newline-delimited JSON on stdin/stdout.
+
+        Input:  {"type": "message", "content": "do X"}
+        Output: {"type": "response", "content": "Done.", "usage": {...}}
+        Shutdown: {"type": "shutdown"} or EOF on stdin
+        """
+        for line in sys.stdin:
+            line = line.strip()
+            if not line:
+                continue
+
+            try:
+                msg = json.loads(line)
+            except json.JSONDecodeError:
+                self._pipe_write({"type": "error", "error": "Invalid JSON"})
+                continue
+
+            if msg.get("type") == "shutdown":
+                break
+
+            if msg.get("type") != "message":
+                self._pipe_write({"type": "error", "error": f"Unknown type: {msg.get('type')}"})
+                continue
+
+            user_content = msg.get("content", "")
+            if not user_content:
+                self._pipe_write({"type": "error", "error": "Empty message"})
+                continue
+
+            user_message = {"role": "user", "content": parse_custom_query(user_content)}
+            self.context.add(user_message)
+
+            try:
+                self.get_response()
+            except Exception as e:
+                self._pipe_write({"type": "error", "error": str(e)})
+                continue
+
+            response_text = self._last_assistant_text()
+            self._pipe_write({
+                "type": "response",
+                "content": response_text,
+                "usage": self.token_totals,
+            })
+            self.round_id += 1
+
+    def _last_assistant_text(self) -> str:
+        """Return the text content of the most recent assistant message."""
+        for m in reversed(self.context.messages):
+            if isinstance(m, dict):
+                if m.get("role") == "assistant" and m.get("content"):
+                    return m["content"]
+            elif getattr(m, "role", None) == "assistant" and getattr(m, "content", None):
+                return m.content
+        return ""
+
+    def _pipe_write(self, data: dict):
+        """Write a JSON line to stdout (pipe protocol)."""
+        sys.stdout.write(json.dumps(data) + "\n")
+        sys.stdout.flush()
+
+    def _print_token_summary(self):
+        self.console.system(
+            f"Total tokens used: {self.token_totals['total']} "
+            f"(input: {self.token_totals['prompt']}, cached input: {self.token_totals['cached_prompt']}, "
+            f"output: {self.token_totals['completion']}, reasoning: {self.token_totals['reasoning']})"
         )

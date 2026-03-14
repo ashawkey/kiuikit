@@ -1,5 +1,3 @@
-from typing import Optional
-
 from prompt_toolkit import PromptSession
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.history import FileHistory
@@ -17,7 +15,7 @@ class NonEmptyInputValidator(Validator):
 
 
 class TerminalInput:
-    def __init__(self, history_path: Optional[str] = None):
+    def __init__(self, history_path: str | None = None):
         self.style = Style.from_dict({
             "prompt": "bold ansiyellow",
         })

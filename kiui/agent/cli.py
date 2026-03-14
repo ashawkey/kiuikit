@@ -1,147 +1,161 @@
 import os
-import argparse
-import platform
-from datetime import datetime
-from rich.console import Console
+import json
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Annotated, Union
+
+import tyro
 from rich.table import Table
 
+from kiui.agent.ui import AgentConsole
 from kiui.config import conf
 from kiui.agent.backend import LLMAgent
-
-def inject_prompt_magicvar(prompt: str):
-    """Inject system dependent magic variables into the prompt."""
-    prompt = prompt.replace("$cwd$", os.getcwd())
-    prompt = prompt.replace("$OS$", platform.system())
-    prompt = prompt.replace("$OS_version$", platform.release())
-    prompt = prompt.replace("$date$", datetime.now().strftime("%Y-%m-%d"))
-    prompt = prompt.replace("$timestamp$", datetime.now().strftime("%Y%m%d_%H%M%S"))
-    return prompt
+from kiui.agent.permissions import PermissionMode
 
 
-def get_agent(args) -> LLMAgent | None:
-    """Create an LLMAgent from args and config. Returns None if model not found."""
-    console = Console()
+# ---------------------------------------------------------------------------
+# Subcommand configs
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ListCmd:
+    """List all available models from ~/.kiui.yaml."""
+    pass
+
+
+@dataclass
+class ChatCmd:
+    """Start interactive chat mode with the specified model."""
+    model: str
+    verbose: bool = False
+    context_window: int = 128_000
+    permission_mode: PermissionMode = PermissionMode.DEFAULT
+
+
+@dataclass
+class ExecCmd:
+    """Execute a single query and return the result."""
+    model: str
+    prompt: str
+    verbose: bool = False
+    context_window: int = 128_000
+    permission_mode: PermissionMode = PermissionMode.AUTO
+    result_file: str | None = None
+
+
+@dataclass
+class PipeCmd:
+    """Run in pipe mode for sub-agent communication."""
+    model: str
+    verbose: bool = False
+    context_window: int = 128_000
+    permission_mode: PermissionMode = PermissionMode.AUTO
+
+
+Command = Union[
+    Annotated[ListCmd, tyro.conf.subcommand("list")],
+    Annotated[ChatCmd, tyro.conf.subcommand("chat")],
+    Annotated[ExecCmd, tyro.conf.subcommand("exec")],
+    Annotated[PipeCmd, tyro.conf.subcommand("pipe")],
+]
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def get_agent(cfg: ChatCmd | ExecCmd | PipeCmd, pipe_mode: bool = False) -> LLMAgent | None:
+    """Create an LLMAgent from a config dataclass. Returns None if model not found."""
+    console = AgentConsole()
     openai_conf = conf.get("openai", {})
-    
-    if args.model not in openai_conf:
-        console.print(f"[bold red]Model '{args.model}' not found in ~/.kiui.yaml[/bold red]")
+
+    if cfg.model not in openai_conf:
+        console.error(f"Model '{cfg.model}' not found in ~/.kiui.yaml")
         console.print("Available models:", list(openai_conf.keys()))
         return None
-    
-    model_conf = openai_conf[args.model]
-    
-    # Load system prompt from file or use as string
-    if not os.path.exists(args.system_prompt):
-        # check if it's a built-in system prompt
-        if args.system_prompt in ["coder"]:
-            # get the correct path to the coder system prompt
-            coder_system_prompt_path = os.path.join(os.path.dirname(__file__), "prompts", f"{args.system_prompt}.md")
-            with open(coder_system_prompt_path, "r") as f:
-                system_prompt = f.read()
-        else:
-            # assume it's a string
-            system_prompt = args.system_prompt
-    else:
-        # read from file
-        with open(args.system_prompt, "r") as f:
-            system_prompt = f.read()
-    
-    system_prompt = inject_prompt_magicvar(system_prompt)
-    
+
+    model_conf = openai_conf[cfg.model]
+
     agent = LLMAgent(
-        model=model_conf.get("model", args.model),
+        model=model_conf.get("model", cfg.model),
         api_key=model_conf.get("api_key", ""),
         base_url=model_conf.get("base_url", ""),
-        system_prompt=system_prompt,
-        verbose=args.verbose,
+        model_key=cfg.model,
+        verbose=cfg.verbose,
+        pipe_mode=pipe_mode,
+        context_window=cfg.context_window,
+        permission_mode=cfg.permission_mode,
     )
-    
-    if args.tools:
-        # check if the tools module exists
-        if not os.path.exists(args.tools):
-            # check if it's a built-in tools module
-            if args.tools in ["coder"]:
-                # get the correct path to the coder tools module
-                coder_tools_path = os.path.join(os.path.dirname(__file__), "tools", f"{args.tools}.py")
-                agent.load_tools(coder_tools_path)
-            else:
-                console.print(f"[bold red]Tools module '{args.tools}' not found, ignored.[/bold red]")
-        else:
-            agent.load_tools(args.tools)
-    
+
     return agent
 
 
-def add_common_args(parser):
-    """Add common arguments for chat and exec commands."""
-    parser.add_argument("--model", type=str, required=True, help="Model name from ~/.kiui.yaml")
-    parser.add_argument("--tools", type=str, default=None, help="Path to tools module")
-    parser.add_argument("--system_prompt", type=str, default="You are a helpful assistant.", help="System prompt or path to file")
-    parser.add_argument("--verbose", action="store_true", help="Enable verbose debug logs")
+# ---------------------------------------------------------------------------
+# Subcommand handlers
+# ---------------------------------------------------------------------------
 
-
-def cmd_list(args):
-    """List all available models from kiui.conf['openai']."""
-    console = Console()
+def cmd_list(cfg: ListCmd):
+    console = AgentConsole()
     openai_conf = conf.get("openai", {})
-    
+
     if not openai_conf:
-        console.print("[bold red]No models found in ~/.kiui.yaml[/bold red]")
+        console.error("No models found in ~/.kiui.yaml")
         console.print("Please add model configurations under the 'openai' key.")
         return
-    
+
     table = Table(title="Available Models", show_header=True, header_style="bold magenta")
     table.add_column("Name", style="cyan", no_wrap=True)
     table.add_column("Model", style="green")
     table.add_column("Base URL", style="yellow")
-    
+
     for name, model_conf in openai_conf.items():
         table.add_row(
             name,
             model_conf.get("model", "N/A"),
             model_conf.get("base_url", "N/A"),
         )
-    
-    console.print(table)
+
+    console.table(table)
 
 
-def cmd_chat(args):
-    """Start interactive chat mode with the specified model."""
-    if agent := get_agent(args):
+def cmd_chat(cfg: ChatCmd):
+    if agent := get_agent(cfg):
         agent.chat_loop()
 
 
-def cmd_exec(args):
-    """Execute a single query and return the result."""
-    if agent := get_agent(args):
-        agent.execute(args.prompt)
+def cmd_exec(cfg: ExecCmd):
+    if agent := get_agent(cfg):
+        response = agent.execute(cfg.prompt)
 
+        if cfg.result_file and response:
+            result = {
+                "summary": response[:2000],
+                "response": response,
+            }
+            result_path = Path(cfg.result_file)
+            result_path.parent.mkdir(parents=True, exist_ok=True)
+            result_path.write_text(json.dumps(result, indent=2))
+
+
+def cmd_pipe(cfg: PipeCmd):
+    if agent := get_agent(cfg, pipe_mode=True):
+        agent.run_pipe_mode()
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="LLM Agent CLI")
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
-    
-    # list command
-    parser_list = subparsers.add_parser("list", help="List all available models")
-    parser_list.set_defaults(func=cmd_list)
-    
-    # chat command
-    parser_chat = subparsers.add_parser("chat", help="Start interactive chat mode")
-    add_common_args(parser_chat)
-    parser_chat.set_defaults(func=cmd_chat)
-    
-    # exec command
-    parser_exec = subparsers.add_parser("exec", help="Execute a single query")
-    parser_exec.add_argument("prompt", type=str, help="The query to execute")
-    add_common_args(parser_exec)
-    parser_exec.set_defaults(func=cmd_exec)
-    
-    args = parser.parse_args()
-    
-    if args.command is None:
-        parser.print_help()
-    else:
-        args.func(args)
+    cmd = tyro.cli(Command, description="LLM Agent CLI")
+    if isinstance(cmd, ListCmd):
+        cmd_list(cmd)
+    elif isinstance(cmd, ChatCmd):
+        cmd_chat(cmd)
+    elif isinstance(cmd, ExecCmd):
+        cmd_exec(cmd)
+    elif isinstance(cmd, PipeCmd):
+        cmd_pipe(cmd)
 
 
 if __name__ == "__main__":
