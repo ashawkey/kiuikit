@@ -1,9 +1,7 @@
 import os
 import re
-import sys
 import time
 import json
-import atexit
 from typing import Literal
 from openai import OpenAI
 from kiui.agent.ui import AgentConsole
@@ -110,9 +108,9 @@ class LLMAgent:
         model_key: str = "",
         verbose: bool = True,
         thinking_budget: Literal["low", "medium", "high"] = "low",
-        pipe_mode: bool = False,
         context_window: int | None = None,
         permission_mode: PermissionMode = PermissionMode.DEFAULT,
+        exec_mode: bool = False,
     ):
 
         self.model = model
@@ -126,25 +124,19 @@ class LLMAgent:
         )
         self.verbose = verbose
         self.thinking_budget = thinking_budget
-        self.pipe_mode = pipe_mode
         self.context_window = context_window if context_window is not None else self.profile.context_window
 
-        self.console = AgentConsole(pipe_mode=pipe_mode)
+        self.console = AgentConsole()
 
         # built-in system prompt and tools
-        self.system_prompt = build_system_prompt()
+        self.system_prompt = build_system_prompt(exec_mode=exec_mode)
         self.tools = get_tool_definitions()
 
-        # permission controller — auto in pipe mode regardless of explicit setting
-        effective_mode = PermissionMode.AUTO if pipe_mode else permission_mode
-        self.permissions = PermissionController(mode=effective_mode, console=self.console)
+        self.permissions = PermissionController(mode=permission_mode, console=self.console)
 
         # subagent manager (only if we have a model_key for spawning children)
-        self.subagent_manager = SubagentManager(model_key=model_key) if model_key else None
-        self.tool_executor = ToolExecutor(console=self.console, subagent_manager=self.subagent_manager)
-
-        if self.subagent_manager:
-            atexit.register(self.subagent_manager.kill_all)
+        self.subagent_manager = SubagentManager(model_key=model_key, console=self.console) if model_key else None
+        self.tool_executor = ToolExecutor(console=self.console, subagent_manager=self.subagent_manager, interrupt_handler=self.interrupt)
 
         self.context = ContextManager(self.system_prompt)
         self.interrupt = InterruptHandler()
@@ -160,7 +152,7 @@ class LLMAgent:
         }
 
         self.console.system(f"Created Agent with model: {model} (context: {self.context_window:,} tokens)")
-        self.console.system(f"Permission mode: {effective_mode.value}")
+        self.console.system(f"Permission mode: {permission_mode.value}")
         if self.verbose:
             self.console.system(f"System prompt: {self.system_prompt[:100]}...")
 
@@ -179,22 +171,8 @@ class LLMAgent:
         if usage.completion_tokens_details and usage.completion_tokens_details.reasoning_tokens:
             self.token_totals["reasoning"] += usage.completion_tokens_details.reasoning_tokens
 
-    def _inject_pending_subagent_results(self):
-        """Inject any completed sub-agent results into the conversation."""
-        if not self.subagent_manager:
-            return
-        pending = self.subagent_manager.get_pending_results()
-        for msg in pending:
-            self.context.add(msg)
-            label = msg.get("content", "")[:80]
-            self.console.system(f"Sub-agent completed: {label}")
-
-
     def call_api(self):
         """Call the API using current context."""
-
-        # inject any pending sub-agent results before calling API
-        self._inject_pending_subagent_results()
 
         # context management: prune old tool results, then compact if needed
         if self.context_window > 0:
@@ -325,7 +303,7 @@ class LLMAgent:
                     return None
                 raise
 
-            if message.content and not self.pipe_mode:
+            if message.content:
                 self.console.response(message.content)
 
             if not message.tool_calls:
@@ -502,71 +480,6 @@ class LLMAgent:
         self.console.system(f"Execution time: {t1 - t0:.2f} seconds")
         self._print_token_summary()
         return response
-
-    def run_pipe_mode(self):
-        """Run in pipe mode: read JSON from stdin, write JSON to stdout.
-
-        Used by persistent sub-agent sessions. The parent process communicates
-        via newline-delimited JSON on stdin/stdout.
-
-        Input:  {"type": "message", "content": "do X"}
-        Output: {"type": "response", "content": "Done.", "usage": {...}}
-        Shutdown: {"type": "shutdown"} or EOF on stdin
-        """
-        for line in sys.stdin:
-            line = line.strip()
-            if not line:
-                continue
-
-            try:
-                msg = json.loads(line)
-            except json.JSONDecodeError:
-                self._pipe_write({"type": "error", "error": "Invalid JSON"})
-                continue
-
-            if msg.get("type") == "shutdown":
-                break
-
-            if msg.get("type") != "message":
-                self._pipe_write({"type": "error", "error": f"Unknown type: {msg.get('type')}"})
-                continue
-
-            user_content = msg.get("content", "")
-            if not user_content:
-                self._pipe_write({"type": "error", "error": "Empty message"})
-                continue
-
-            user_message = {"role": "user", "content": parse_custom_query(user_content)}
-            self.context.add(user_message)
-
-            try:
-                self.get_response()
-            except Exception as e:
-                self._pipe_write({"type": "error", "error": str(e)})
-                continue
-
-            response_text = self._last_assistant_text()
-            self._pipe_write({
-                "type": "response",
-                "content": response_text,
-                "usage": self.token_totals,
-            })
-            self.round_id += 1
-
-    def _last_assistant_text(self) -> str:
-        """Return the text content of the most recent assistant message."""
-        for m in reversed(self.context.messages):
-            if isinstance(m, dict):
-                if m.get("role") == "assistant" and m.get("content"):
-                    return m["content"]
-            elif getattr(m, "role", None) == "assistant" and getattr(m, "content", None):
-                return m.content
-        return ""
-
-    def _pipe_write(self, data: dict):
-        """Write a JSON line to stdout (pipe protocol)."""
-        sys.stdout.write(json.dumps(data) + "\n")
-        sys.stdout.flush()
 
     def _print_token_summary(self):
         self.console.system(

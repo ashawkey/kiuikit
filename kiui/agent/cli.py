@@ -44,20 +44,10 @@ class ExecCmd:
     result_file: str | None = None
 
 
-@dataclass
-class PipeCmd:
-    """Run in pipe mode for sub-agent communication."""
-    model: str
-    verbose: bool = False
-    context_window: int | None = None
-    permission_mode: PermissionMode = PermissionMode.AUTO
-
-
 Command = Union[
     Annotated[ListCmd, tyro.conf.subcommand("list")],
     Annotated[ChatCmd, tyro.conf.subcommand("chat")],
     Annotated[ExecCmd, tyro.conf.subcommand("exec")],
-    Annotated[PipeCmd, tyro.conf.subcommand("pipe")],
 ]
 
 
@@ -65,7 +55,7 @@ Command = Union[
 # Helpers
 # ---------------------------------------------------------------------------
 
-def get_agent(cfg: ChatCmd | ExecCmd | PipeCmd, pipe_mode: bool = False) -> LLMAgent | None:
+def get_agent(cfg: ChatCmd | ExecCmd, exec_mode: bool = False) -> LLMAgent | None:
     """Create an LLMAgent from a config dataclass. Returns None if model not found."""
     console = AgentConsole()
     openai_conf = conf.get("openai", {})
@@ -83,9 +73,9 @@ def get_agent(cfg: ChatCmd | ExecCmd | PipeCmd, pipe_mode: bool = False) -> LLMA
         base_url=model_conf.get("base_url", ""),
         model_key=cfg.model,
         verbose=cfg.verbose,
-        pipe_mode=pipe_mode,
         context_window=cfg.context_window,
         permission_mode=cfg.permission_mode,
+        exec_mode=exec_mode,
     )
 
     return agent
@@ -144,7 +134,7 @@ def cmd_chat(cfg: ChatCmd):
 
 
 def cmd_exec(cfg: ExecCmd):
-    if agent := get_agent(cfg):
+    if agent := get_agent(cfg, exec_mode=True):
         response = agent.execute(cfg.prompt)
 
         if cfg.result_file and response:
@@ -155,11 +145,6 @@ def cmd_exec(cfg: ExecCmd):
             result_path = Path(cfg.result_file)
             result_path.parent.mkdir(parents=True, exist_ok=True)
             result_path.write_text(json.dumps(result, indent=2))
-
-
-def cmd_pipe(cfg: PipeCmd):
-    if agent := get_agent(cfg, pipe_mode=True):
-        agent.run_pipe_mode()
 
 
 # ---------------------------------------------------------------------------
@@ -174,8 +159,6 @@ def main():
         cmd_chat(cmd)
     elif isinstance(cmd, ExecCmd):
         cmd_exec(cmd)
-    elif isinstance(cmd, PipeCmd):
-        cmd_pipe(cmd)
 
 
 if __name__ == "__main__":

@@ -18,15 +18,16 @@ _TOOL_TIPS = {
     "web_fetch": "Content capped at 20K chars.",
     "web_search": "Search the web for real-time information.",
     "remove_file": "Remove a file or directory.",
-    "spawn_subagent": "mode='run' for background tasks, mode='session' for persistent sessions.",
-    "list_subagents": "Shows status of all active and completed sub-agents.",
-    "kill_subagent": "Terminate a running sub-agent by run ID.",
-    "send_to_subagent": "Send a message to a persistent session and get a response.",
+    "spawn_subagent": "Runs in the foreground; blocks until the sub-agent completes.",
 }
 
 
-def build_system_prompt() -> str:
-    """Build the complete system prompt from ordered sections."""
+def build_system_prompt(exec_mode: bool = False) -> str:
+    """Build the complete system prompt from ordered sections.
+
+    If *exec_mode* is True the prompt tells the agent it is running
+    autonomously with no user to interact with.
+    """
     sections = []
 
     # 1. Core identity
@@ -36,6 +37,15 @@ def build_system_prompt() -> str:
         "Prioritize correctness, then clarity, then brevity."
     )
 
+    # 1b. Exec / sub-agent mode
+    if exec_mode:
+        sections.append("""## Autonomous Mode
+You are running as an autonomous sub-agent. There is NO user to interact with.
+- Do NOT ask questions or request confirmation — no one will respond.
+- Make reasonable decisions on your own and proceed to completion.
+- If something is ambiguous, choose the most likely interpretation and move on.
+- Finish the task fully, then output a concise summary of what you did.""")
+
     # 2. Tool call style
     sections.append("""## Tool Call Style
 - Do not narrate routine, low-risk tool calls — just call the tool.
@@ -43,11 +53,16 @@ def build_system_prompt() -> str:
 - Keep narration brief and value-dense.""")
 
     # 3. Safety
-    sections.append("""## Safety
+    if not exec_mode:
+        sections.append("""## Safety
 - Prioritize safety and human oversight over task completion.
 - Do not run destructive commands without asking first.
 - Confirm before: deleting files, sending emails, anything irreversible.
 - When in doubt, ask.""")
+    else:
+        sections.append("""## Safety
+- Avoid destructive or irreversible actions unless the task explicitly requires them.
+- Prefer safe, reversible operations.""")
 
     # 4. Available tools
     sections.append(_build_tools_section())
@@ -63,12 +78,9 @@ def build_system_prompt() -> str:
 
     # 6. Sub-agents
     sections.append("""## Sub-Agents
-You can spawn sub-agents to handle tasks in parallel or delegate work:
-- **spawn_subagent** with mode='run': fires a one-shot background task. The result is delivered automatically when it completes.
-- **spawn_subagent** with mode='session': starts a persistent session. Use **send_to_subagent** to send follow-up messages and get responses.
-- **list_subagents**: check status of all sub-agents.
-- **kill_subagent**: terminate a running sub-agent.
-Use sub-agents for independent, parallelizable work (e.g., researching one topic while editing another).""")
+You can spawn a sub-agent to delegate work:
+- **spawn_subagent**: runs a task in a separate process and returns the result when done.
+Use sub-agents when you want to delegate a self-contained task (e.g., research, summarization).""")
 
     # 7. Project instructions (optional AGENTS.md)
     project = _build_project_section()

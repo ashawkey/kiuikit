@@ -80,11 +80,6 @@ class InterruptHandler:
         sys.stderr.write("\nForce quitting...\n")
         sys.stderr.flush()
         if self._agent:
-            if self._agent.subagent_manager:
-                try:
-                    self._agent.subagent_manager.kill_all()
-                except Exception:
-                    pass
             try:
                 self._agent._print_token_summary()
             except Exception:

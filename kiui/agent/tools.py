@@ -6,6 +6,9 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
+import time
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +17,7 @@ from kiui.agent.ui import AgentConsole
 MAX_READ_LINES = 2000
 MAX_READ_BYTES = 50_000
 MAX_EXEC_OUTPUT_BYTES = 50_000
+MAX_STREAMING_BUFFER = 1_000_000  # 1 MB rolling buffer during streaming execution
 MAX_WEB_FETCH_CHARS = 20_000
 MAX_GLOB_RESULTS = 500
 MAX_GREP_MATCHES = 200
@@ -78,13 +82,24 @@ def get_tool_definitions() -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "exec_command",
-                "description": "Execute a shell command and return stdout, stderr, and exit code. Output capped at 50KB.",
+                "description": (
+                    "Execute a shell command and return stdout, stderr, and exit code. "
+                    "By default there is no timeout and the command runs until completion. "
+                    "Output is streamed to the console in real-time and the last 50KB is returned. "
+                    "Set timeout > 0 to impose a time limit."
+                ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "command": {"type": "string", "description": "Shell command to execute"},
                         "cwd": {"type": "string", "description": "Working directory (optional)"},
-                        "timeout": {"type": "integer", "description": "Timeout in seconds (default: 120)"},
+                        "timeout": {
+                            "type": "integer",
+                            "description": (
+                                "Timeout in seconds. 0 = no timeout (default). "
+                                "Set > 0 to impose a time limit."
+                            ),
+                        },
                     },
                     "required": ["command"],
                 },
@@ -173,74 +188,21 @@ def get_tool_definitions() -> list[dict[str, Any]]:
             "function": {
                 "name": "spawn_subagent",
                 "description": (
-                    "Spawn a sub-agent. mode='run' (default) runs a one-shot task in the background. "
-                    "mode='session' starts a persistent session you can send follow-up messages to."
+                    "Spawn a sub-agent to run a task. Blocks until the sub-agent completes and returns the result."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "task": {
                             "type": "string",
-                            "description": "Natural language task for the sub-agent (required for mode=run, ignored for mode=session)",
-                        },
-                        "label": {
-                            "type": "string",
-                            "description": "Short label for display/addressing (required for mode=session)",
-                        },
-                        "mode": {
-                            "type": "string",
-                            "enum": ["run", "session"],
-                            "description": "run=one-shot background task, session=persistent (default: run)",
+                            "description": "Natural language task for the sub-agent",
                         },
                         "timeout_seconds": {
                             "type": "integer",
-                            "description": "Kill sub-agent after this many seconds, 0=no timeout (default: 0, only for mode=run)",
+                            "description": "Kill sub-agent after this many seconds, 0=no timeout (default: 0)",
                         },
                     },
                     "required": ["task"],
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "list_subagents",
-                "description": "List all active and completed sub-agents with their status.",
-                "parameters": {"type": "object", "properties": {}, "required": []},
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "kill_subagent",
-                "description": "Kill a running sub-agent by its run ID.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "run_id": {"type": "string", "description": "The run ID of the sub-agent to kill"},
-                    },
-                    "required": ["run_id"],
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "send_to_subagent",
-                "description": "Send a follow-up message to a persistent sub-agent session and get its response.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "target": {
-                            "type": "string",
-                            "description": "Label or run_id of the persistent session",
-                        },
-                        "message": {
-                            "type": "string",
-                            "description": "Message to send to the sub-agent",
-                        },
-                    },
-                    "required": ["target", "message"],
                 },
             },
         },
@@ -261,14 +223,12 @@ class ToolExecutor:
         "web_fetch": "_web_fetch",
         "remove_file": "_remove_file",
         "spawn_subagent": "_spawn_subagent",
-        "list_subagents": "_list_subagents",
-        "kill_subagent": "_kill_subagent",
-        "send_to_subagent": "_send_to_subagent",
     }
 
-    def __init__(self, console: AgentConsole | None = None, subagent_manager=None):
+    def __init__(self, console: AgentConsole | None = None, subagent_manager=None, interrupt_handler=None):
         self.console = console or AgentConsole()
         self.subagent_manager = subagent_manager
+        self._interrupt = interrupt_handler
 
     def execute(self, function_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Dispatch and execute a tool call. Returns dict with success key."""
@@ -373,27 +333,30 @@ class ToolExecutor:
         """Execute shell command."""
         self.console.tool(f"exec_command: {command}")
 
-        timeout = max(1, min(timeout or 120, 600))
-
-        run_kwargs: dict[str, Any] = dict(
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=timeout,
-            cwd=cwd or None,
-        )
+        if timeout is None:
+            timeout = 0
 
         if sys.platform == "win32":
-            # shell=True passes the string directly to cmd.exe /c,
-            # avoiding list2cmdline backslash-escaping that cmd.exe
-            # does not understand (breaks quoted arguments).
-            run_kwargs["shell"] = True
-            shell_cmd = command
+            shell_cmd: Any = command
+            use_shell = True
         else:
             shell_cmd = ["/bin/bash", "-lc", command]
+            use_shell = False
 
+        if timeout == 0:
+            return self._exec_command_streaming(shell_cmd, use_shell, cwd)
+
+        timeout = max(1, timeout)
         try:
-            result = subprocess.run(shell_cmd, **run_kwargs)
+            result = subprocess.run(
+                shell_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=timeout,
+                cwd=cwd or None,
+                shell=use_shell,
+            )
         except subprocess.TimeoutExpired as e:
             partial = (e.stdout or "")[:MAX_EXEC_OUTPUT_BYTES]
             return {"error": f"Command timed out after {timeout}s. Partial output:\n{partial}", "success": False}
@@ -419,6 +382,91 @@ class ToolExecutor:
         }
         if truncated:
             res["truncation_notice"] = f"[output truncated: showing first {len(stdout) + len(stderr)} of {combined_len} bytes]"
+        return res
+
+    def _exec_command_streaming(self, shell_cmd: Any, use_shell: bool, cwd: str | None) -> dict[str, Any]:
+        """Execute a command with no timeout, streaming output in real-time.
+
+        Uses subprocess.Popen with reader threads so output is displayed as it
+        arrives.  A rolling buffer (MAX_STREAMING_BUFFER) bounds memory usage
+        for very long-running processes; the returned result keeps at most the
+        last MAX_EXEC_OUTPUT_BYTES of each stream.
+        """
+        proc = subprocess.Popen(
+            shell_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=cwd or None,
+            shell=use_shell,
+        )
+
+        stdout_lines: deque[str] = deque()
+        stderr_lines: deque[str] = deque()
+        stdout_size = [0]
+        stderr_size = [0]
+
+        def _drain(stream, lines_buf, size_ref, prefix=""):
+            for raw in iter(stream.readline, b""):
+                line = raw.decode("utf-8", errors="replace")
+                lines_buf.append(line)
+                size_ref[0] += len(line)
+                while size_ref[0] > MAX_STREAMING_BUFFER and len(lines_buf) > 1:
+                    size_ref[0] -= len(lines_buf.popleft())
+                display = line.rstrip("\n\r")
+                if display:
+                    self.console.print(f"  {prefix}{display}", style="dim")
+            stream.close()
+
+        t_out = threading.Thread(
+            target=_drain, args=(proc.stdout, stdout_lines, stdout_size), daemon=True,
+        )
+        t_err = threading.Thread(
+            target=_drain, args=(proc.stderr, stderr_lines, stderr_size, "[stderr] "), daemon=True,
+        )
+        t_out.start()
+        t_err.start()
+
+        interrupted = False
+        while proc.poll() is None:
+            if self._interrupt and self._interrupt.interrupted:
+                interrupted = True
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                break
+            time.sleep(0.5)
+
+        t_out.join(timeout=10)
+        t_err.join(timeout=10)
+
+        stdout = "".join(stdout_lines)
+        stderr = "".join(stderr_lines)
+
+        total_len = len(stdout) + len(stderr)
+        truncated = total_len > MAX_EXEC_OUTPUT_BYTES
+        if truncated:
+            # Keep the tail — for long-running jobs the end is most relevant
+            if len(stdout) > MAX_EXEC_OUTPUT_BYTES:
+                stdout = stdout[-MAX_EXEC_OUTPUT_BYTES:]
+                stderr = ""
+            else:
+                remaining = MAX_EXEC_OUTPUT_BYTES - len(stdout)
+                stderr = stderr[-remaining:] if remaining > 0 else ""
+
+        res: dict[str, Any] = {
+            "stdout": stdout,
+            "stderr": stderr,
+            "exit_code": proc.returncode if proc.returncode is not None else -1,
+            "success": not interrupted and proc.returncode == 0,
+        }
+        if truncated:
+            res["truncation_notice"] = (
+                f"[output truncated: showing last {len(stdout) + len(stderr)} of {total_len} bytes]"
+            )
+        if interrupted:
+            res["error"] = "Command was interrupted by user."
         return res
 
     def _glob_files(self, pattern: str, base_dir: str | None = None, recursive: bool = True) -> dict[str, Any]:
@@ -555,61 +603,18 @@ class ToolExecutor:
 
         return {"message": f"Removed {path}", "success": True}
 
-    # ── Sub-agent tools ──────────────────────────────────────
+    # ── Sub-agent tool ───────────────────────────────────────
 
-    def _spawn_subagent(
-        self,
-        task: str = "",
-        label: str | None = None,
-        mode: str = "run",
-        timeout_seconds: int = 0,
-    ) -> dict[str, Any]:
-        """Spawn a sub-agent in run or session mode."""
-        self.console.tool(f"spawn_subagent mode={mode} task={task[:60]}")
+    def _spawn_subagent(self, task: str = "", timeout_seconds: int = 0) -> dict[str, Any]:
+        """Spawn a sub-agent and wait for it to complete."""
+        self.console.tool(f"spawn_subagent: {task[:60]}")
 
         if self.subagent_manager is None:
             return {"error": "Sub-agent spawning is not available.", "success": False}
+        if not task:
+            return {"error": "task is required.", "success": False}
 
-        if mode == "session":
-            if not label:
-                return {"error": "label is required for mode=session.", "success": False}
-            return self.subagent_manager.spawn_session(label=label)
-        else:
-            if not task:
-                return {"error": "task is required for mode=run.", "success": False}
-            return self.subagent_manager.spawn(
-                task=task,
-                label=label,
-                timeout_seconds=timeout_seconds,
-            )
-
-    def _list_subagents(self) -> dict[str, Any]:
-        """List all sub-agents."""
-        self.console.tool("list_subagents")
-
-        if self.subagent_manager is None:
-            return {"error": "Sub-agent spawning is not available.", "success": False}
-
-        runs = self.subagent_manager.list_runs()
-        return {"runs": runs, "count": len(runs), "success": True}
-
-    def _kill_subagent(self, run_id: str) -> dict[str, Any]:
-        """Kill a running sub-agent."""
-        self.console.tool(f"kill_subagent {run_id}")
-
-        if self.subagent_manager is None:
-            return {"error": "Sub-agent spawning is not available.", "success": False}
-
-        return self.subagent_manager.kill(run_id)
-
-    def _send_to_subagent(self, target: str, message: str) -> dict[str, Any]:
-        """Send a message to a persistent sub-agent session."""
-        self.console.tool(f"send_to_subagent target={target}")
-
-        if self.subagent_manager is None:
-            return {"error": "Sub-agent spawning is not available.", "success": False}
-
-        return self.subagent_manager.send(target, message)
+        return self.subagent_manager.spawn(task=task, timeout_seconds=timeout_seconds)
 
 
 TOOL_SUMMARY_MAX_LINES = 4

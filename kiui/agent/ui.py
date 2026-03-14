@@ -7,8 +7,6 @@ interactive prompting are handled in one place.
 
 from __future__ import annotations
 
-import sys
-
 from rich.console import Console
 from rich.table import Table
 from rich.theme import Theme
@@ -29,11 +27,8 @@ AGENT_THEME = Theme({
 class AgentConsole:
     """Thin wrapper around ``rich.Console`` with typed convenience methods."""
 
-    def __init__(self, pipe_mode: bool = False):
-        self._console = Console(
-            file=sys.stderr if pipe_mode else None,
-            theme=AGENT_THEME,
-        )
+    def __init__(self):
+        self._console = Console(theme=AGENT_THEME)
 
     # -- raw pass-through (for rich markup, tables, etc.) -------------------
 
