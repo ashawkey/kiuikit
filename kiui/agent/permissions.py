@@ -74,17 +74,18 @@ class PermissionController:
         self.console = console or AgentConsole()
         self._session_allowed: set[str] = set()
 
-    def check(self, tool_name: str, arguments: dict[str, Any]) -> bool:
-        """Return True if the tool call is permitted, False to deny."""
+    def check(self, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
+        """Return ``(allowed, reason)`` — *reason* is non-empty only on denial
+        when the user provides feedback."""
         if self.mode == PermissionMode.AUTO:
-            return True
+            return True, ""
 
         needs_prompt = self._needs_prompt(tool_name)
         if not needs_prompt:
-            return True
+            return True, ""
 
         if tool_name in self._session_allowed:
-            return True
+            return True, ""
 
         return self._prompt_user(tool_name, arguments)
 
@@ -94,7 +95,7 @@ class PermissionController:
         # default mode: only risky tools
         return tool_name in RISKY_TOOLS
 
-    def _prompt_user(self, tool_name: str, arguments: dict[str, Any]) -> bool:
+    def _prompt_user(self, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
         summary = _summarize_call(tool_name, arguments)
         try:
             response = self.console.confirm(
@@ -104,14 +105,26 @@ class PermissionController:
             )
         except (EOFError, KeyboardInterrupt):
             self.console.print("   [red]Denied (interrupted).[/red]")
-            return False
+            return False, ""
 
         if response in ("a", "always"):
             self._session_allowed.add(tool_name)
             self.console.print(f"   [green]✓ {tool_name} allowed for this session.[/green]")
-            return True
+            return True, ""
         if response in ("y", "yes", ""):
-            return True
+            return True, ""
 
-        self.console.print("   [red]✗ Denied.[/red]")
-        return False
+        reason = self._ask_denial_reason()
+        if reason:
+            self.console.print(f"   [red]✗ Denied:[/red] {reason}")
+        else:
+            self.console.print("   [red]✗ Denied.[/red]")
+        return False, reason
+
+    def _ask_denial_reason(self) -> str:
+        """Prompt the user for an optional reason after denying a tool call."""
+        try:
+            reason = input("   Reason (optional, Enter to skip): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            reason = ""
+        return reason

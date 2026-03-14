@@ -278,8 +278,12 @@ class LLMAgent:
             if self.verbose:
                 self.console.debug(f"Tool call {i+1}/{len(tool_calls)}: {function_name}({function_args})")
 
-            if not self.permissions.check(function_name, function_args):
-                result = {"error": f"Tool call denied by user: {function_name}", "success": False}
+            allowed, denial_reason = self.permissions.check(function_name, function_args)
+            if not allowed:
+                msg = f"Tool call denied by user: {function_name}"
+                if denial_reason:
+                    msg += f"\nUser feedback: {denial_reason}"
+                result = {"error": msg, "success": False}
             else:
                 result = self.tool_executor.execute(function_name, function_args)
             result_text = format_tool_result(result)
