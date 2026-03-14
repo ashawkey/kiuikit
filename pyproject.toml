@@ -22,10 +22,14 @@ dependencies = [
   "rich",
   "questionary",
   "pyyaml",
-  "tyro",
 ]
 
 [project.optional-dependencies]
+kia = [
+  "openai",
+  "tyro",
+  "prompt_toolkit",
+]
 full = [
   "torch", # keep this so the doc can be built successfully
   "tqdm",

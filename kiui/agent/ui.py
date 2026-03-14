@@ -21,6 +21,8 @@ AGENT_THEME = Theme({
     "warning": "bold yellow",
     "system": "bold blue",
     "tool": "bold cyan",
+    "tool_ok": "dim green",
+    "tool_fail": "red",
 })
 
 
@@ -59,6 +61,15 @@ class AgentConsole:
 
     def tool(self, msg: str):
         self._console.print(f"[TOOL] {msg}", style="tool")
+
+    def tool_result(self, msg: str, success: bool = True):
+        style = "tool_ok" if success else "tool_fail"
+        prefix = "  \u2713 " if success else "  \u2717 "
+        lines = msg.splitlines()
+        first = prefix + (lines[0] if lines else "")
+        rest = "\n".join("    " + line for line in lines[1:])
+        output = first + ("\n" + rest if rest else "")
+        self._console.print(output, style=style, markup=False)
 
     def response(self, msg: str):
         self._console.print(msg, style="response", markup=False)

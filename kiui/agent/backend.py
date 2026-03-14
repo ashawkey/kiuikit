@@ -10,7 +10,7 @@ from kiui.agent.ui import AgentConsole
 from kiui.agent.terminal import TerminalInput
 from kiui.agent.utils import get_text_content_dict, get_image_content_dict, get_kia_dir
 from kiui.agent.prompts import build_system_prompt
-from kiui.agent.tools import get_tool_definitions, ToolExecutor, format_tool_result
+from kiui.agent.tools import get_tool_definitions, ToolExecutor, format_tool_result, format_tool_summary
 from kiui.agent.subagent import SubagentManager
 from kiui.agent.permissions import PermissionController, PermissionMode
 from kiui.agent.context import (
@@ -22,6 +22,7 @@ from kiui.agent.context import (
     CHARS_PER_TOKEN,
 )
 from kiui.agent.interrupt import InterruptHandler
+from kiui.agent.models import resolve_model_profile
 
 def parse_custom_query(query: str) -> list:
     """Parse the user query into formatted content, optionally load images or text files (by using @filename).
@@ -73,7 +74,7 @@ class ContextManager:
     def __init__(self, system_prompt: str):
         self.system_prompt = {
             "role": "system",
-            "content": [get_text_content_dict(system_prompt)],
+            "content": system_prompt,
         }
         self.messages: list = []
 
@@ -110,12 +111,13 @@ class LLMAgent:
         verbose: bool = True,
         thinking_budget: Literal["low", "medium", "high"] = "low",
         pipe_mode: bool = False,
-        context_window: int = 128_000,
+        context_window: int | None = None,
         permission_mode: PermissionMode = PermissionMode.DEFAULT,
     ):
 
         self.model = model
         self.model_key = model_key
+        self.profile = resolve_model_profile(model, model_key)
         self._api_key = api_key
         self._base_url = base_url
         self.client = OpenAI(
@@ -125,7 +127,7 @@ class LLMAgent:
         self.verbose = verbose
         self.thinking_budget = thinking_budget
         self.pipe_mode = pipe_mode
-        self.context_window = context_window
+        self.context_window = context_window if context_window is not None else self.profile.context_window
 
         self.console = AgentConsole(pipe_mode=pipe_mode)
 
@@ -157,7 +159,7 @@ class LLMAgent:
             "reasoning": 0,
         }
 
-        self.console.system(f"Created Agent with model: {model}")
+        self.console.system(f"Created Agent with model: {model} (context: {self.context_window:,} tokens)")
         self.console.system(f"Permission mode: {effective_mode.value}")
         if self.verbose:
             self.console.system(f"System prompt: {self.system_prompt[:100]}...")
@@ -226,10 +228,10 @@ class LLMAgent:
             kwargs["tools"] = self.tools
             kwargs["tool_choice"] = "auto"
         
-        # thinking budget (model-specific)
-        if "gpt-5" in self.model.lower():
+        # thinking budget (driven by model profile)
+        if self.profile.thinking == "openai":
             kwargs["reasoning_effort"] = self.thinking_budget
-        elif "gemini" in self.model.lower():
+        elif self.profile.thinking == "gemini":
             kwargs["extra_body"] = {
                 "google": {
                     "thinking_config": {
@@ -282,6 +284,9 @@ class LLMAgent:
                 result = self.tool_executor.execute(function_name, function_args)
             result_text = format_tool_result(result)
 
+            success = result.get("success", False)
+            self.console.tool_result(format_tool_summary(result_text), success=success)
+
             # Layer 1: generic truncation relative to context window
             if self.context_window > 0:
                 result_text = truncate_tool_result(result_text, self.context_window)
@@ -289,7 +294,7 @@ class LLMAgent:
             tool_message = {
                 "role": "tool",
                 "tool_call_id": tool_call.id,
-                "content": [get_text_content_dict(result_text)],
+                "content": result_text,
             }
             self.context.add(tool_message)
 
@@ -445,6 +450,10 @@ class LLMAgent:
 
                 if not query:
                     continue
+
+                # exit shortcut
+                if query.lower() in ("exit", "quit"):
+                    break
 
                 # slash commands
                 if query.startswith("/"):

@@ -1,10 +1,13 @@
 import os
+from pathlib import Path
+
 import yaml
 
-def _load_config(config_path: str | None = None) -> dict:
+CONFIG_PATH = Path.home() / ".kiui.yaml"
+
+def _load_config(config_path: str | Path | None = None) -> dict:
     if config_path is None:
-        # default to ~/.kiui.yaml
-        config_path = os.path.join(os.path.expanduser('~'), '.kiui.yaml')
+        config_path = CONFIG_PATH
     if not os.path.exists(config_path):
         return {}
     with open(config_path, 'r') as f:

@@ -8,8 +8,9 @@ import tyro
 from rich.table import Table
 
 from kiui.agent.ui import AgentConsole
-from kiui.config import conf
+from kiui.config import conf, CONFIG_PATH
 from kiui.agent.backend import LLMAgent
+from kiui.agent.models import resolve_model_profile
 from kiui.agent.permissions import PermissionMode
 
 
@@ -19,7 +20,7 @@ from kiui.agent.permissions import PermissionMode
 
 @dataclass
 class ListCmd:
-    """List all available models from ~/.kiui.yaml."""
+    """List all available models from the config file (~/.kiui.yaml)."""
     pass
 
 
@@ -28,7 +29,7 @@ class ChatCmd:
     """Start interactive chat mode with the specified model."""
     model: str
     verbose: bool = False
-    context_window: int = 128_000
+    context_window: int | None = None
     permission_mode: PermissionMode = PermissionMode.DEFAULT
 
 
@@ -38,7 +39,7 @@ class ExecCmd:
     model: str
     prompt: str
     verbose: bool = False
-    context_window: int = 128_000
+    context_window: int | None = None
     permission_mode: PermissionMode = PermissionMode.AUTO
     result_file: str | None = None
 
@@ -48,7 +49,7 @@ class PipeCmd:
     """Run in pipe mode for sub-agent communication."""
     model: str
     verbose: bool = False
-    context_window: int = 128_000
+    context_window: int | None = None
     permission_mode: PermissionMode = PermissionMode.AUTO
 
 
@@ -70,7 +71,7 @@ def get_agent(cfg: ChatCmd | ExecCmd | PipeCmd, pipe_mode: bool = False) -> LLMA
     openai_conf = conf.get("openai", {})
 
     if cfg.model not in openai_conf:
-        console.error(f"Model '{cfg.model}' not found in ~/.kiui.yaml")
+        console.error(f"Model '{cfg.model}' not found in config: {CONFIG_PATH}")
         console.print("Available models:", list(openai_conf.keys()))
         return None
 
@@ -99,20 +100,39 @@ def cmd_list(cfg: ListCmd):
     openai_conf = conf.get("openai", {})
 
     if not openai_conf:
-        console.error("No models found in ~/.kiui.yaml")
-        console.print("Please add model configurations under the 'openai' key.")
+        exists = CONFIG_PATH.exists()
+        console.error(f"No models found in config: {CONFIG_PATH}")
+        if not exists:
+            console.print(
+                f"Config file does not exist. Create it at:\n  {CONFIG_PATH}\n\n"
+                "Example:\n"
+                "openai:\n"
+                "  my-model:\n"
+                "    model: gpt-4o\n"
+                "    api_key: sk-...\n"
+                "    base_url: https://api.openai.com/v1"
+            )
+        else:
+            console.print("Please add model configurations under the 'openai' key.")
         return
 
     table = Table(title="Available Models", show_header=True, header_style="bold magenta")
     table.add_column("Name", style="cyan", no_wrap=True)
     table.add_column("Model", style="green")
     table.add_column("Base URL", style="yellow")
+    table.add_column("Context", style="blue", justify="right")
+    table.add_column("Thinking", style="magenta")
 
     for name, model_conf in openai_conf.items():
+        model_id = model_conf.get("model", name)
+        profile = resolve_model_profile(model_id, name)
+        ctx = f"{profile.context_window // 1000}K"
         table.add_row(
             name,
-            model_conf.get("model", "N/A"),
+            model_id,
             model_conf.get("base_url", "N/A"),
+            ctx,
+            profile.thinking or "-",
         )
 
     console.table(table)

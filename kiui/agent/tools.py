@@ -375,20 +375,25 @@ class ToolExecutor:
 
         timeout = max(1, min(timeout or 120, 600))
 
+        run_kwargs: dict[str, Any] = dict(
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=timeout,
+            cwd=cwd or None,
+        )
+
         if sys.platform == "win32":
-            shell_cmd = ["cmd.exe", "/c", command]
+            # shell=True passes the string directly to cmd.exe /c,
+            # avoiding list2cmdline backslash-escaping that cmd.exe
+            # does not understand (breaks quoted arguments).
+            run_kwargs["shell"] = True
+            shell_cmd = command
         else:
             shell_cmd = ["/bin/bash", "-lc", command]
 
         try:
-            result = subprocess.run(
-                shell_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=timeout,
-                cwd=cwd or None,
-            )
+            result = subprocess.run(shell_cmd, **run_kwargs)
         except subprocess.TimeoutExpired as e:
             partial = (e.stdout or "")[:MAX_EXEC_OUTPUT_BYTES]
             return {"error": f"Command timed out after {timeout}s. Partial output:\n{partial}", "success": False}
@@ -605,6 +610,33 @@ class ToolExecutor:
             return {"error": "Sub-agent spawning is not available.", "success": False}
 
         return self.subagent_manager.send(target, message)
+
+
+TOOL_SUMMARY_MAX_LINES = 4
+TOOL_SUMMARY_MAX_CHARS = 300
+
+
+def format_tool_summary(result_text: str, max_lines: int = TOOL_SUMMARY_MAX_LINES, max_chars: int = TOOL_SUMMARY_MAX_CHARS) -> str:
+    """Truncate a formatted tool result into a brief summary for user display."""
+    lines = result_text.splitlines()
+    total_lines = len(lines)
+
+    if total_lines <= max_lines and len(result_text) <= max_chars:
+        return result_text
+
+    shown = lines[:max_lines]
+    summary = "\n".join(shown)
+
+    if len(summary) > max_chars:
+        summary = summary[:max_chars].rstrip()
+
+    remaining = total_lines - max_lines
+    if remaining > 0:
+        summary += f"\n... ({total_lines} lines total)"
+    elif len(result_text) > max_chars:
+        summary += "..."
+
+    return summary
 
 
 def format_tool_result(result: dict[str, Any]) -> str:
