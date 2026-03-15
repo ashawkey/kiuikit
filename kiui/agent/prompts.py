@@ -4,22 +4,6 @@ import os
 import platform
 from datetime import datetime
 from pathlib import Path
-from typing import Any
-
-from kiui.agent.tools import get_tool_definitions
-
-_TOOL_TIPS = {
-    "read_file": "Output truncated to 2000 lines / 50KB. Use offset/limit for large files.",
-    "write_file": "Creates parent directories automatically.",
-    "edit_file": "old_text must match exactly including whitespace.",
-    "exec_command": "Output capped at 50KB. Use timeout for long-running commands.",
-    "glob_files": "Faster and safer than exec_command with find. Max 500 results.",
-    "grep_files": "Returns up to 200 matches with file path and line number.",
-    "web_fetch": "Content capped at 20K chars.",
-    "web_search": "Search the web for real-time information.",
-    "remove_file": "Remove a file or directory.",
-    "spawn_subagent": "Runs in the foreground; blocks until the sub-agent completes.",
-}
 
 
 def build_system_prompt(exec_mode: bool = False) -> str:
@@ -32,7 +16,7 @@ def build_system_prompt(exec_mode: bool = False) -> str:
 
     # 1. Core identity
     sections.append(
-        "You are a terminal-based AI coding agent. "
+        "You are a terminal-based AI agent. "
         "Be helpful, accurate, and concise. "
         "Prioritize correctness, then clarity, then brevity."
     )
@@ -64,17 +48,17 @@ You are running as an autonomous sub-agent. There is NO user to interact with.
 - Avoid destructive or irreversible actions unless the task explicitly requires them.
 - Prefer safe, reversible operations.""")
 
-    # 4. Available tools
-    sections.append(_build_tools_section())
+    # 4. Tool usage guidance
+    sections.append("""## Tool Usage
+- Always check tool results before proceeding.
+- Prefer glob_files / grep_files over exec_command for file discovery and search.""")
 
     # 5. Task execution
     sections.append("""## Task Execution
 - Keep going until the task is completely resolved before yielding back to the user.
 - Fix problems at the root cause rather than applying surface-level patches.
 - Avoid unneeded complexity. Keep changes minimal and consistent with existing style.
-- Do not attempt to fix unrelated bugs or broken tests.
-- Use `exec_command` with `git log` / `git blame` to search history if additional context is needed.
-- Do not add inline comments unless explicitly requested.""")
+- Do not attempt to fix unrelated bugs or broken tests.""")
 
     # 6. Sub-agents
     sections.append("""## Sub-Agents
@@ -91,24 +75,6 @@ Use sub-agents when you want to delegate a self-contained task (e.g., research, 
     sections.append(_build_context_section())
 
     return "\n\n".join(sections)
-
-
-def _build_tools_section() -> str:
-    """Build tools section listing all available tools with tips."""
-    tools = get_tool_definitions()
-    tool_lines = []
-    for tool in tools:
-        func = tool["function"]
-        name = func["name"]
-        description = func["description"]
-        tip = _TOOL_TIPS.get(name, "")
-        if tip:
-            tool_lines.append(f"- **{name}**: {description} — {tip}")
-        else:
-            tool_lines.append(f"- **{name}**: {description}")
-
-    return "## Available Tools\n" + "\n".join(tool_lines) + \
-        "\n\nUse tools by making function calls. Always check tool results before proceeding."
 
 
 def _build_project_section() -> str:

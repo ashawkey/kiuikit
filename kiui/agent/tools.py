@@ -86,7 +86,7 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                     "Execute a shell command and return stdout, stderr, and exit code. "
                     "By default there is no timeout and the command runs until completion. "
                     "Output is streamed to the console in real-time and the last 50KB is returned. "
-                    "Set timeout > 0 to impose a time limit."
+                    "Set timeout > 0 to impose a time limit for long-running commands."
                 ),
                 "parameters": {
                     "type": "object",
@@ -110,7 +110,8 @@ def get_tool_definitions() -> list[dict[str, Any]]:
             "function": {
                 "name": "glob_files",
                 "description": (
-                    "Find files matching a glob pattern. Searches recursively by default. "
+                    "Find files matching a glob pattern. Preferred over exec_command with find. "
+                    "Searches recursively by default. "
                     "Set recursive=false to match only in the immediate directory. Max 500 results."
                 ),
                 "parameters": {

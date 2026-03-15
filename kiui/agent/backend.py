@@ -4,7 +4,19 @@ import time
 import json
 from pathlib import Path
 from typing import Literal
-from openai import OpenAI
+from openai import (
+    OpenAI,
+    APIConnectionError,
+    APITimeoutError,
+    RateLimitError,
+    InternalServerError,
+    AuthenticationError,
+    PermissionDeniedError,
+    NotFoundError,
+    BadRequestError,
+    UnprocessableEntityError,
+    APIStatusError,
+)
 from kiui.agent.ui import AgentConsole
 from kiui.agent.terminal import TerminalInput
 from kiui.agent.utils import get_text_content_dict, get_image_content_dict, get_kia_dir
@@ -73,6 +85,56 @@ def parse_custom_query(query: str) -> list:
 
     return content
 
+class FatalAPIError(Exception):
+    """Unrecoverable API error (e.g., auth failure, quota exhausted)."""
+
+
+# Keywords in RateLimitError messages that signal quota/billing issues (fatal).
+_QUOTA_KEYWORDS = ("quota", "insufficient", "billing", "exceeded your current", "budget")
+
+
+def _classify_api_error(error: Exception) -> tuple[bool, str]:
+    """Classify an API error as retryable or fatal.
+
+    Returns ``(is_retryable, human_readable_message)``.
+    """
+    # --- clearly retryable (network / transient) ---
+    if isinstance(error, APIConnectionError):
+        return True, f"Connection error: {error}"
+    if isinstance(error, APITimeoutError):
+        return True, f"Request timed out: {error}"
+    if isinstance(error, InternalServerError):
+        return True, f"Server error ({error.status_code}): {error.message}"
+
+    # --- rate limit: retryable unless it's a quota/billing issue ---
+    if isinstance(error, RateLimitError):
+        msg_lower = str(error).lower()
+        if any(kw in msg_lower for kw in _QUOTA_KEYWORDS):
+            return False, f"Quota/billing error: {error.message}"
+        return True, f"Rate limited: {error.message}"
+
+    # --- clearly fatal ---
+    if isinstance(error, AuthenticationError):
+        return False, f"Authentication failed (check your API key): {error.message}"
+    if isinstance(error, PermissionDeniedError):
+        return False, f"Permission denied: {error.message}"
+    if isinstance(error, NotFoundError):
+        return False, f"Resource not found (check model name): {error.message}"
+    if isinstance(error, BadRequestError):
+        return False, f"Bad request: {error.message}"
+    if isinstance(error, UnprocessableEntityError):
+        return False, f"Unprocessable request: {error.message}"
+
+    # --- other APIStatusError subtypes ---
+    if isinstance(error, APIStatusError):
+        if error.status_code >= 500:
+            return True, f"Server error ({error.status_code}): {error.message}"
+        return False, f"API error ({error.status_code}): {error.message}"
+
+    # Unknown — assume retryable so we don't silently swallow transient issues
+    return True, f"Unexpected error: {error}"
+
+
 class ContextManager:
     """Flat conversation history with context-management hooks."""
     def __init__(self, system_prompt: str):
@@ -106,6 +168,9 @@ class ContextManager:
 
 
 class LLMAgent:
+    MAX_RETRIES = 10
+    INITIAL_BACKOFF = 1.0   # seconds
+
     def __init__(
         self, 
         model: str,
@@ -176,8 +241,21 @@ class LLMAgent:
         if usage.completion_tokens_details and usage.completion_tokens_details.reasoning_tokens:
             self.token_totals["reasoning"] += usage.completion_tokens_details.reasoning_tokens
 
+    def _interruptible_sleep(self, seconds: float):
+        """Sleep in short increments so Ctrl+C / interrupts are responsive."""
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            if self.interrupt.interrupted:
+                return
+            time.sleep(min(0.5, max(0, deadline - time.monotonic())))
+
     def call_api(self):
-        """Call the API using current context."""
+        """Call the API using current context, with automatic retry for transient errors.
+
+        Retryable errors (network, timeout, rate-limit, 5xx) are retried with
+        exponential backoff + jitter.  Fatal errors (auth, quota, bad request)
+        raise ``FatalAPIError`` immediately.
+        """
 
         # context management: prune old tool results, then compact if needed
         if self.context_window > 0:
@@ -224,7 +302,32 @@ class LLMAgent:
                 },
             }
 
-        response = self.client.chat.completions.create(**kwargs)
+        # ---- retry loop with exponential backoff ----
+        for attempt in range(self.MAX_RETRIES + 1):
+            if self.interrupt.interrupted:
+                raise InterruptedError("Interrupted while waiting to call API")
+
+            try:
+                response = self.client.chat.completions.create(**kwargs)
+                break  # success
+            except Exception as e:
+                retryable, err_msg = _classify_api_error(e)
+
+                if not retryable:
+                    raise FatalAPIError(err_msg) from e
+
+                if attempt < self.MAX_RETRIES:
+                    wait_time = self.INITIAL_BACKOFF * (2 ** attempt)
+                    self.console.system(
+                        f"[Retry {attempt + 1}/{self.MAX_RETRIES}] {err_msg} "
+                        f"— retrying in {wait_time:.1f}s…"
+                    )
+                    self._interruptible_sleep(wait_time)
+                else:
+                    raise FatalAPIError(
+                        f"Max retries ({self.MAX_RETRIES}) exceeded. Last error: {err_msg}"
+                    ) from e
+
         message = response.choices[0].message
         usage = response.usage
 
@@ -290,6 +393,9 @@ class LLMAgent:
 
         Supports flag-based cancellation: if interrupted, rolls back messages
         from the current iteration and recreates the HTTP client.
+
+        Fatal API errors (auth, quota, bad request, …) are caught, displayed
+        to the user, and cause the turn to end gracefully rather than crash.
         """
 
         while True:
@@ -300,6 +406,10 @@ class LLMAgent:
 
             try:
                 message = self.call_api()
+            except FatalAPIError as e:
+                self.context.rollback(snapshot)
+                self.console.error(f"API call failed: {e}")
+                return None
             except Exception:
                 if self.interrupt.interrupted:
                     self.context.rollback(snapshot)
