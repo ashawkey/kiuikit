@@ -1,6 +1,7 @@
 """Built-in tool definitions and executor for kiui agent."""
 
 import json
+import locale
 import os
 import re
 import shutil
@@ -349,17 +350,31 @@ class ToolExecutor:
                 shell_cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True,
                 timeout=timeout,
                 cwd=cwd or None,
                 shell=use_shell,
             )
         except subprocess.TimeoutExpired as e:
-            partial = (e.stdout or "")[:MAX_EXEC_OUTPUT_BYTES]
+            encoding = locale.getpreferredencoding()
+            def decode_bytes(b):
+                if not b: return ""
+                try:
+                    return b.decode(encoding)
+                except UnicodeDecodeError:
+                    return b.decode("utf-8", errors="replace")
+            partial = decode_bytes(e.stdout)[:MAX_EXEC_OUTPUT_BYTES]
             return {"error": f"Command timed out after {timeout}s. Partial output:\n{partial}", "success": False}
 
-        stdout = result.stdout or ""
-        stderr = result.stderr or ""
+        encoding = locale.getpreferredencoding()
+        def decode_bytes(b):
+            if not b: return ""
+            try:
+                return b.decode(encoding)
+            except UnicodeDecodeError:
+                return b.decode("utf-8", errors="replace")
+
+        stdout = decode_bytes(result.stdout)
+        stderr = decode_bytes(result.stderr)
 
         truncated = False
         combined_len = len(stdout) + len(stderr)
@@ -403,8 +418,12 @@ class ToolExecutor:
         stderr_size = [0]
 
         def _drain(stream, lines_buf, size_ref, prefix=""):
+            encoding = locale.getpreferredencoding()
             for raw in iter(stream.readline, b""):
-                line = raw.decode("utf-8", errors="replace")
+                try:
+                    line = raw.decode(encoding)
+                except UnicodeDecodeError:
+                    line = raw.decode("utf-8", errors="replace")
                 lines_buf.append(line)
                 size_ref[0] += len(line)
                 while size_ref[0] > MAX_STREAMING_BUFFER and len(lines_buf) > 1:
@@ -457,6 +476,7 @@ class ToolExecutor:
             "stderr": stderr,
             "exit_code": proc.returncode if proc.returncode is not None else -1,
             "success": not interrupted and proc.returncode == 0,
+            "streamed": True,
         }
         if truncated:
             res["truncation_notice"] = (

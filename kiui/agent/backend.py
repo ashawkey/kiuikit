@@ -375,7 +375,11 @@ class LLMAgent:
             result_text = format_tool_result(result)
 
             success = result.get("success", False)
-            self.console.tool_result(format_tool_summary(result_text), success=success)
+            if result.get("streamed"):
+                exit_code = result.get("exit_code", "?")
+                self.console.tool_result(f"exit code {exit_code}", success=success)
+            else:
+                self.console.tool_result(format_tool_summary(result_text), success=success)
 
             # Layer 1: generic truncation relative to context window
             if self.context_window > 0:
