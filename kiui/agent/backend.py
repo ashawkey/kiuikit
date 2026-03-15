@@ -2,6 +2,7 @@ import os
 import re
 import time
 import json
+from pathlib import Path
 from typing import Literal
 from openai import OpenAI
 from kiui.agent.ui import AgentConsole
@@ -27,6 +28,7 @@ def parse_custom_query(query: str) -> list:
     Supported file types:
     - @image.png/jpg/jpeg: load an image
     - @file.txt/md/json/yaml: read a local text file
+    Use @"path with spaces/file.txt" for paths containing spaces or special characters.
     e.g. "Please describe the following image @path/to/image.png, and tell me the weather." will be parsed into: 
     [
         {"type": "text", "text": "Please describe the following image"},
@@ -36,7 +38,8 @@ def parse_custom_query(query: str) -> list:
     """
     content = []
 
-    pattern = re.compile(r"@([\w.\/\\:-]+)")
+    # Match @path (unquoted) or @"path with spaces" (quoted)
+    pattern = re.compile(r'@"([^"]+)"|@([\w.\/\\:-]+)')
     
     image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'}
     text_extensions = {'.txt', '.md', '.json', '.yaml', '.yml'}
@@ -47,15 +50,18 @@ def parse_custom_query(query: str) -> list:
         if pre_text:
             content.append(get_text_content_dict(pre_text))
 
-        file_path = match.group(1)
+        file_path = match.group(1) or match.group(2)
         _, ext = os.path.splitext(file_path.lower())
         
         if ext in image_extensions:
             content.append(get_image_content_dict(file_path))
         elif ext in text_extensions:
-            with open(file_path, "r") as f:
-                file_content = f.read()
-            content.append(get_text_content_dict(file_content))
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    file_content = f.read()
+                content.append(get_text_content_dict(file_content))
+            except (FileNotFoundError, PermissionError, OSError) as e:
+                content.append(get_text_content_dict(f"[Error reading @{file_path}: {e}]"))
         else:
             content.append(get_text_content_dict(f"@{file_path}"))
             
@@ -136,10 +142,10 @@ class LLMAgent:
 
         # subagent manager (only if we have a model_key for spawning children)
         self.subagent_manager = SubagentManager(model_key=model_key, console=self.console) if model_key else None
+        self.interrupt = InterruptHandler()
         self.tool_executor = ToolExecutor(console=self.console, subagent_manager=self.subagent_manager, interrupt_handler=self.interrupt)
 
         self.context = ContextManager(self.system_prompt)
-        self.interrupt = InterruptHandler()
 
         self.round_id = 0
 
@@ -153,8 +159,7 @@ class LLMAgent:
 
         self.console.system(f"Created Agent with model: {model} (context: {self.context_window:,} tokens)")
         self.console.system(f"Permission mode: {permission_mode.value}")
-        if self.verbose:
-            self.console.system(f"System prompt: {self.system_prompt[:100]}...")
+        self.console.system(f"System prompt: {self.system_prompt[:100]}...")
 
 
     def _recreate_client(self):
@@ -258,9 +263,9 @@ class LLMAgent:
 
             allowed, denial_reason = self.permissions.check(function_name, function_args)
             if not allowed:
-                msg = f"Tool call denied by user: {function_name}"
+                msg = f"Tool call denied: {function_name}"
                 if denial_reason:
-                    msg += f"\nUser feedback: {denial_reason}"
+                    msg += f"\nReason: {denial_reason}"
                 result = {"error": msg, "success": False}
             else:
                 result = self.tool_executor.execute(function_name, function_args)
@@ -319,7 +324,7 @@ class LLMAgent:
 
     # ----- slash commands ---------------------------------------------------
 
-    COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "perm"}
+    COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "perm", "save", "load", "context"}
 
     def _handle_command(self, raw: str) -> bool:
         """Handle a /command.  Returns True if the agent loop should stop."""
@@ -338,6 +343,12 @@ class LLMAgent:
             self._cmd_clear()
         elif cmd == "perm":
             self._cmd_perm(raw)
+        elif cmd == "save":
+            self._cmd_save(raw)
+        elif cmd == "load":
+            self._cmd_load(raw)
+        elif cmd == "context":
+            self._cmd_context()
 
         return False
 
@@ -345,12 +356,15 @@ class LLMAgent:
         self.console.print(
             "[bold blue]Available commands:[/bold blue]\n"
             "\n"
-            "  [cyan]/help[/cyan]     — Show this help message\n"
-            "  [cyan]/compact[/cyan]  — Force context compaction via LLM summarization\n"
-            "  [cyan]/usage[/cyan]    — Show token usage for this session\n"
-            "  [cyan]/perm[/cyan]     — Show or change permission mode (/perm auto|default|strict)\n"
-            "  [cyan]/clear[/cyan]    — Clear conversation history (keep system prompt)\n"
-            "  [cyan]/exit[/cyan]     — Exit the agent (also: /quit)\n"
+            "  [cyan]/help[/cyan]        — Show this help message\n"
+            "  [cyan]/context[/cyan]     — Show a concise one-line-per-message context log\n"
+            "  [cyan]/compact[/cyan]     — Force context compaction via LLM summarization\n"
+            "  [cyan]/usage[/cyan]       — Show token usage for this session\n"
+            "  [cyan]/perm[/cyan]        — Show or change permission mode (/perm auto|default|strict)\n"
+            "  [cyan]/save[/cyan] [name] — Save session to .kia/sessions/ (default: timestamp)\n"
+            "  [cyan]/load[/cyan] [name] — Load a saved session (no name: list available)\n"
+            "  [cyan]/clear[/cyan]       — Clear conversation history (keep system prompt)\n"
+            "  [cyan]/exit[/cyan]        — Exit the agent (also: /quit)\n"
             "\n"
             "  Attach files with @filename (images & text files supported).\n"
             "  Press [bold]Enter[/bold] to send, [bold]Escape → Enter[/bold] for a newline."
@@ -385,14 +399,98 @@ class LLMAgent:
         self.round_id = 0
         self.console.system("Conversation cleared.")
 
+    def _cmd_context(self):
+        msgs = self.context.messages
+        if not msgs:
+            self.console.system("Context is empty (no messages).")
+            return
+
+        total_chars = 0
+        lines = [f"[bold blue]Context log ({len(msgs)} messages):[/bold blue]"]
+
+        # build a map from tool_call_id -> tool function name for annotation
+        tc_id_to_name: dict[str, str] = {}
+        for m in msgs:
+            role = m.get("role", "") if isinstance(m, dict) else getattr(m, "role", "")
+            if role == "assistant":
+                tool_calls = (m.get("tool_calls") if isinstance(m, dict) else getattr(m, "tool_calls", None)) or []
+                for tc in tool_calls:
+                    tc_id = tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
+                    name = (tc.get("function", {}).get("name", "?") if isinstance(tc, dict)
+                            else getattr(getattr(tc, "function", None), "name", "?"))
+                    if tc_id:
+                        tc_id_to_name[tc_id] = name
+
+        for idx, m in enumerate(msgs):
+            role = m.get("role", "") if isinstance(m, dict) else getattr(m, "role", "")
+            content = m.get("content", "") if isinstance(m, dict) else getattr(m, "content", "") or ""
+
+            # extract text
+            if isinstance(content, str):
+                text = content
+            elif isinstance(content, list):
+                text = " ".join(
+                    item.get("text", "") for item in content
+                    if isinstance(item, dict) and item.get("type") == "text"
+                )
+            else:
+                text = ""
+
+            chars = len(text)
+            tool_calls = []
+            if role == "assistant":
+                tool_calls = (m.get("tool_calls") if isinstance(m, dict) else getattr(m, "tool_calls", None)) or []
+                for tc in tool_calls:
+                    args = (tc.get("function", {}).get("arguments", "") if isinstance(tc, dict)
+                            else getattr(getattr(tc, "function", None), "arguments", "") or "")
+                    chars += len(args) if isinstance(args, str) else 0
+
+            total_chars += chars
+
+            # one-line preview (strip newlines, cap length)
+            preview = text.replace("\n", " ").strip()
+            if len(preview) > 80:
+                preview = preview[:77] + "..."
+
+            # format per role
+            role_tag = f"[cyan]{role:>9}[/cyan]"
+            size_tag = f"[dim]{chars:>6} ch[/dim]"
+
+            if role == "assistant" and tool_calls:
+                n_tc = len(tool_calls)
+                tc_names = ", ".join(
+                    (tc.get("function", {}).get("name", "?") if isinstance(tc, dict)
+                     else getattr(getattr(tc, "function", None), "name", "?"))
+                    for tc in tool_calls
+                )
+                extra = f"[yellow]{n_tc} call{'s' if n_tc > 1 else ''}[/yellow] ({tc_names})"
+                if preview:
+                    lines.append(f"  [dim]#{idx:<3}[/dim] {role_tag} {size_tag}  {extra}  {preview}")
+                else:
+                    lines.append(f"  [dim]#{idx:<3}[/dim] {role_tag} {size_tag}  {extra}")
+            elif role == "tool":
+                tc_id = m.get("tool_call_id") if isinstance(m, dict) else getattr(m, "tool_call_id", None)
+                tool_name = tc_id_to_name.get(tc_id, "?") if tc_id else "?"
+                lines.append(f"  [dim]#{idx:<3}[/dim] {role_tag} {size_tag}  [magenta]({tool_name})[/magenta]  {preview}")
+            else:
+                lines.append(f"  [dim]#{idx:<3}[/dim] {role_tag} {size_tag}  {preview}")
+
+        est_tokens = total_chars // CHARS_PER_TOKEN
+        ctx_pct = est_tokens / self.context_window * 100 if self.context_window else 0
+        lines.append(f"\n  [bold]Total:[/bold] ~{est_tokens:,} tokens / {self.context_window:,} [{ctx_pct:.0f}%]")
+
+        self.console.print("\n".join(lines))
+
     def _cmd_perm(self, raw: str):
         parts = raw.split()
         if len(parts) < 2:
             mode = self.permissions.mode.value
             allowed = ", ".join(sorted(self.permissions._session_allowed)) or "(none)"
+            work_dir = self.permissions.safety.work_dir
             self.console.print(
                 f"[bold blue]Permission mode:[/bold blue] [cyan]{mode}[/cyan]\n"
                 f"  Session-allowed tools: {allowed}\n"
+                f"  Safety guard work dir: {work_dir}\n"
                 f"  Usage: [cyan]/perm auto|default|strict[/cyan]"
             )
             return
@@ -407,6 +505,99 @@ class LLMAgent:
         self.permissions.mode = new_mode
         self.permissions._session_allowed.clear()
         self.console.system(f"Permission mode changed to: {new_mode.value}")
+
+    # ----- session save / load ------------------------------------------------
+
+    SESSIONS_DIR_NAME = "sessions"
+
+    def _sessions_dir(self) -> Path:
+        d = get_kia_dir() / self.SESSIONS_DIR_NAME
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def save_session(self, name: str | None = None) -> Path:
+        """Save the current session state to a JSON file. Returns the file path."""
+        if not name:
+            name = time.strftime("%Y%m%d_%H%M%S")
+
+        data = {
+            "model": self.model,
+            "round_id": self.round_id,
+            "token_totals": self.token_totals,
+            "system_prompt": self.context.system_prompt,
+            "messages": self.context.messages,
+        }
+
+        path = self._sessions_dir() / f"{name}.json"
+        path.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+        return path
+
+    def load_session(self, name: str) -> bool:
+        """Load a previously saved session by name. Returns True on success."""
+        path = self._sessions_dir() / f"{name}.json"
+        if not path.exists():
+            self.console.error(f"Session file not found: {path}")
+            return False
+        
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as e:
+            self.console.error(f"Failed to read session file: {e}")
+            return False
+
+        if not isinstance(data, dict) or "messages" not in data:
+            self.console.error(f"Corrupted session file (missing 'messages' key): {path}")
+            return False
+
+        saved_model = data.get("model", "")
+        if saved_model != self.model:
+            self.console.system(f"Note: session was saved with model '{saved_model}', current model is '{self.model}'")
+
+        self.context.replace_messages(data["messages"])
+        self.round_id = data.get("round_id", 0)
+        saved_totals = data.get("token_totals")
+        if saved_totals and isinstance(saved_totals, dict):
+            self.token_totals.update(saved_totals)
+
+        self.console.system(
+            f"Loaded session '{name}' ({len(self.context.messages)} messages, round {self.round_id})"
+        )
+        return True
+
+    def _cmd_save(self, raw: str):
+        parts = raw.split(maxsplit=1)
+        name = parts[1].strip() if len(parts) > 1 else None
+        if not self.context.messages:
+            self.console.system("Nothing to save — conversation is empty.")
+            return
+        path = self.save_session(name)
+        self.console.system(f"Session saved to {path} ({len(self.context.messages)} messages)")
+
+    def _cmd_load(self, raw: str):
+        parts = raw.split(maxsplit=1)
+
+        if len(parts) < 2 or not parts[1].strip():
+            sessions_dir = self._sessions_dir()
+            files = sorted(sessions_dir.glob("*.json"))
+            if not files:
+                self.console.system(f"No saved sessions in {sessions_dir}")
+                return
+            lines = [f"[bold blue]Saved sessions ({sessions_dir}):[/bold blue]"]
+            for f in files:
+                stem = f.stem
+                try:
+                    meta = json.loads(f.read_text(encoding="utf-8"))
+                    n_msgs = len(meta.get("messages", []))
+                    rnd = meta.get("round_id", "?")
+                    model = meta.get("model", "?")
+                    lines.append(f"  [cyan]{stem}[/cyan]  — {n_msgs} msgs, round {rnd}, model: {model}")
+                except Exception:
+                    lines.append(f"  [cyan]{stem}[/cyan]  — (unreadable)")
+            self.console.print("\n".join(lines))
+            return
+
+        name = parts[1].strip()
+        self.load_session(name)
 
     # ----- main loops -------------------------------------------------------
 

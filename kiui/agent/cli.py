@@ -1,14 +1,12 @@
 import os
-import json
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Annotated, Union
 
 import tyro
 from rich.table import Table
 
+from kiui.config import conf, LOCAL_CONFIG_PATH
 from kiui.agent.ui import AgentConsole
-from kiui.config import conf, CONFIG_PATH
 from kiui.agent.backend import LLMAgent
 from kiui.agent.models import resolve_model_profile
 from kiui.agent.permissions import PermissionMode
@@ -41,7 +39,6 @@ class ExecCmd:
     verbose: bool = False
     context_window: int | None = None
     permission_mode: PermissionMode = PermissionMode.AUTO
-    result_file: str | None = None
 
 
 Command = Union[
@@ -61,7 +58,7 @@ def get_agent(cfg: ChatCmd | ExecCmd, exec_mode: bool = False) -> LLMAgent | Non
     openai_conf = conf.get("openai", {})
 
     if cfg.model not in openai_conf:
-        console.error(f"Model '{cfg.model}' not found in config: {CONFIG_PATH}")
+        console.error(f"Model '{cfg.model}' not found in config: {LOCAL_CONFIG_PATH}")
         console.print("Available models:", list(openai_conf.keys()))
         return None
 
@@ -90,11 +87,11 @@ def cmd_list(cfg: ListCmd):
     openai_conf = conf.get("openai", {})
 
     if not openai_conf:
-        exists = CONFIG_PATH.exists()
-        console.error(f"No models found in config: {CONFIG_PATH}")
+        exists = LOCAL_CONFIG_PATH.exists()
+        console.error(f"No models found in config: {LOCAL_CONFIG_PATH}")
         if not exists:
             console.print(
-                f"Config file does not exist. Create it at:\n  {CONFIG_PATH}\n\n"
+                f"Config file does not exist. Create it at:\n  {LOCAL_CONFIG_PATH}\n\n"
                 "Example:\n"
                 "openai:\n"
                 "  my-model:\n"
@@ -135,16 +132,7 @@ def cmd_chat(cfg: ChatCmd):
 
 def cmd_exec(cfg: ExecCmd):
     if agent := get_agent(cfg, exec_mode=True):
-        response = agent.execute(cfg.prompt)
-
-        if cfg.result_file and response:
-            result = {
-                "summary": response[:2000],
-                "response": response,
-            }
-            result_path = Path(cfg.result_file)
-            result_path.parent.mkdir(parents=True, exist_ok=True)
-            result_path.write_text(json.dumps(result, indent=2))
+        agent.execute(cfg.prompt)
 
 
 # ---------------------------------------------------------------------------

@@ -197,10 +197,6 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                             "type": "string",
                             "description": "Natural language task for the sub-agent",
                         },
-                        "timeout_seconds": {
-                            "type": "integer",
-                            "description": "Kill sub-agent after this many seconds, 0=no timeout (default: 0)",
-                        },
                     },
                     "required": ["task"],
                 },
@@ -605,7 +601,7 @@ class ToolExecutor:
 
     # ── Sub-agent tool ───────────────────────────────────────
 
-    def _spawn_subagent(self, task: str = "", timeout_seconds: int = 0) -> dict[str, Any]:
+    def _spawn_subagent(self, task: str = "") -> dict[str, Any]:
         """Spawn a sub-agent and wait for it to complete."""
         self.console.tool(f"spawn_subagent: {task[:60]}")
 
@@ -614,7 +610,7 @@ class ToolExecutor:
         if not task:
             return {"error": "task is required.", "success": False}
 
-        return self.subagent_manager.spawn(task=task, timeout_seconds=timeout_seconds)
+        return self.subagent_manager.spawn(task=task)
 
 
 TOOL_SUMMARY_MAX_LINES = 4

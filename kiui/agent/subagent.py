@@ -1,20 +1,13 @@
-"""Sub-agent spawning for kiui agent — foreground one-shot only."""
+"""Sub-agent spawning for kiui agent — foreground in-process only."""
 
-import json
 import os
-import subprocess
-import sys
-from datetime import datetime
-from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 from kiui.agent.ui import AgentConsole
-from kiui.agent.utils import get_kia_dir
 
 
 class SubagentManager:
-    """Spawn isolated sub-agent processes and wait for completion (synchronous)."""
+    """Spawn in-process sub-agents and wait for completion (synchronous)."""
 
     def __init__(
         self,
@@ -30,79 +23,64 @@ class SubagentManager:
     def spawn(
         self,
         task: str,
-        timeout_seconds: int = 0,
         cwd: str | None = None,
     ) -> dict[str, Any]:
-        """Spawn a sub-agent and wait for it to complete.
+        """Spawn an in-process sub-agent and wait for it to complete.
 
-        Runs ``kia exec --model <key> "task"`` as a subprocess.
-        Blocks until the subprocess finishes and returns the result directly.
+        Creates a new LLMAgent in the same process and calls execute().
+        Returns the result directly from memory.
         """
         if self._depth >= self.max_depth:
             return {"error": f"Max spawn depth reached ({self.max_depth}).", "success": False}
 
-        run_id = str(uuid4())[:8]
+        # avoid circular import at beginning of file
+        from kiui.config import conf
+        from kiui.agent.backend import LLMAgent
+        from kiui.agent.permissions import PermissionMode
+
+        openai_conf = conf.get("openai", {})
+        if self.model_key not in openai_conf:
+            return {"error": f"Model '{self.model_key}' not found in config.", "success": False}
+
+        model_conf = openai_conf[self.model_key]
         work_dir = cwd or os.getcwd()
-        result_file = get_kia_dir(work_dir) / "subagent-runs" / f"{run_id}.json"
-        result_file.parent.mkdir(parents=True, exist_ok=True)
+        old_cwd = os.getcwd()
 
         label = task[:60]
-        self.console.system(f"── sub-agent '{label}' ({run_id}) start ──")
+        self.console.system(f"── sub-agent '{label}' start ──")
 
-        process = subprocess.Popen(
-            [
-                sys.executable, "-m", "kiui.agent.cli",
-                "exec", "--model", self.model_key,
-                "--result-file", str(result_file),
-                "--prompt", task,
-            ],
-            cwd=work_dir,
-            env={**os.environ, "KIA_SPAWN_DEPTH": str(self._depth + 1)},
-            stderr=subprocess.PIPE,
-        )
+        old_depth = os.environ.get("KIA_SPAWN_DEPTH")
+        os.environ["KIA_SPAWN_DEPTH"] = str(self._depth + 1)
 
         try:
-            effective_timeout = timeout_seconds if timeout_seconds > 0 else None
-            try:
-                _, stderr = process.communicate(timeout=effective_timeout)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.communicate()
-                self.console.system(f"── sub-agent '{label}' ({run_id}) timed out ──")
-                return {"error": f"Timed out after {timeout_seconds}s", "run_id": run_id, "success": False}
+            os.chdir(work_dir)
 
-            exit_code = process.returncode
-            stderr_text = stderr.decode("utf-8", errors="replace") if stderr else ""
+            agent = LLMAgent(
+                model=model_conf.get("model", self.model_key),
+                api_key=model_conf.get("api_key", ""),
+                base_url=model_conf.get("base_url", ""),
+                model_key=self.model_key,
+                verbose=False,
+                permission_mode=PermissionMode.AUTO,
+                exec_mode=True,
+            )
+            response = agent.execute(task)
 
-            result = None
-            if result_file.exists():
-                try:
-                    result = json.loads(result_file.read_text())
-                except (json.JSONDecodeError, OSError):
-                    pass
+            self.console.system(f"── sub-agent '{label}' finished ──")
 
-            summary = ""
-            if result:
-                summary = result.get("summary", result.get("response", ""))
-
-            self.console.system(f"── sub-agent '{label}' ({run_id}) finished (exit code {exit_code}) ──")
-
-            if exit_code != 0:
-                error_detail = stderr_text[:1000] if stderr_text else "(no stderr)"
-                return {
-                    "error": f"Sub-agent failed (exit code {exit_code}):\n{error_detail}",
-                    "run_id": run_id,
-                    "exit_code": exit_code,
-                    "success": False,
-                }
-
+            summary = response[:2000] if response else ""
             return {
-                "message": f"Sub-agent completed.\n{summary[:2000]}",
-                "run_id": run_id,
-                "exit_code": 0,
+                "message": f"Sub-agent completed.\n{summary}" if summary else "Sub-agent completed with no response.",
                 "success": True,
             }
 
         except Exception as e:
-            self.console.system(f"── sub-agent '{label}' ({run_id}) error: {e} ──")
-            return {"error": f"Sub-agent error: {e}", "run_id": run_id, "success": False}
+            self.console.system(f"── sub-agent '{label}' error: {e} ──")
+            return {"error": f"Sub-agent error: {e}", "success": False}
+
+        finally:
+            os.chdir(old_cwd)
+            if old_depth is None:
+                os.environ.pop("KIA_SPAWN_DEPTH", None)
+            else:
+                os.environ["KIA_SPAWN_DEPTH"] = old_depth
