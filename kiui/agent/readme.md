@@ -42,24 +42,26 @@ kia list
 ### Start an interactive chat
 
 ```bash
-kia chat <model_name>
-```
-
-Example:
-```bash
-kia chat gpt-4o
+kia chat --model <model_name>
 ```
 
 ### Execute a single command
 
 ```bash
-kia exec <model_name> "your prompt here"
+kia exec --model <model_name> "your prompt here"
 ```
 
-Example:
-```bash
-kia exec gpt-4o "summarize the current directory"
-```
+## Slash commands
+
+The agent supports the following slash commands in the CLI:
+- `/help`: Show this help message.
+- `/context`: Show a concise one-line-per-message context log.
+- `/compact`: Force context compaction via LLM summarization.
+- `/usage`: Show token usage for this session.
+- `/perm`: Show or change permission mode (/perm auto|default|strict).
+- `/save`: Save session to .kia/sessions/ (default: timestamp).
+- `/load`: Load a saved session (no name: list available).
+- `/clear`: Clear conversation history (keep system prompt).
 
 ## Tools
 
