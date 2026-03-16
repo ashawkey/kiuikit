@@ -278,6 +278,15 @@ class PermissionController:
         self._session_allowed: set[str] = set()
         self.safety = SafetyGuard(work_dir=work_dir)
 
+    @property
+    def session_allowed_tools(self) -> frozenset[str]:
+        """Return the set of tools allowed for this session (via 'always' prompt)."""
+        return frozenset(self._session_allowed)
+
+    def reset_session(self) -> None:
+        """Clear all session-level tool allowances."""
+        self._session_allowed.clear()
+
     def check(self, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
         """Return ``(allowed, reason)`` — *reason* is non-empty only on denial
         when the user provides feedback."""

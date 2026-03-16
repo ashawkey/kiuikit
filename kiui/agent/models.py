@@ -10,7 +10,7 @@ from dataclasses import dataclass
 class ModelProfile:
     """Properties of a model family that affect API behaviour."""
 
-    context_window: int = 128_000
+    context_length: int = 128_000
     thinking: str | None = None  # "openai" | "gemini" | None
 
 
@@ -18,34 +18,34 @@ class ModelProfile:
 # Matching is case-insensitive substring; first hit wins.
 MODEL_CATALOG: list[tuple[str, ModelProfile]] = [
     # --- OpenAI / o-series ---
-    ("gpt-5",    ModelProfile(context_window=1_000_000, thinking="openai")),
-    ("gpt-4o",   ModelProfile(context_window=128_000)),
+    ("gpt-5",    ModelProfile(context_length=1_000_000, thinking="openai")),
+    ("gpt-4o",   ModelProfile(context_length=128_000)),
 
     # --- Google Gemini ---
-    ("gemini-3",   ModelProfile(context_window=1_000_000, thinking="gemini")),
-    ("gemini",     ModelProfile(context_window=1_000_000, thinking="gemini")),
+    ("gemini-3",   ModelProfile(context_length=1_000_000, thinking="gemini")),
+    ("gemini",     ModelProfile(context_length=1_000_000, thinking="gemini")),
 
     # --- Anthropic Claude ---
-    ("claude-opus-4",   ModelProfile(context_window=200_000)),
-    ("claude-sonnet-4", ModelProfile(context_window=200_000)),
-    ("claude",          ModelProfile(context_window=200_000)),
+    ("claude-opus-4",   ModelProfile(context_length=200_000)),
+    ("claude-sonnet-4", ModelProfile(context_length=200_000)),
+    ("claude",          ModelProfile(context_length=200_000)),
 
     # --- DeepSeek ---
-    ("deepseek-reasoner", ModelProfile(context_window=128_000)),
-    ("deepseek-chat",     ModelProfile(context_window=128_000)),
-    ("deepseek",          ModelProfile(context_window=128_000)),
+    ("deepseek-reasoner", ModelProfile(context_length=128_000)),
+    ("deepseek-chat",     ModelProfile(context_length=128_000)),
+    ("deepseek",          ModelProfile(context_length=128_000)),
 ]
 
 DEFAULT_PROFILE = ModelProfile()
 
 
-def resolve_model_profile(model_id: str, model_key: str = "") -> ModelProfile:
+def resolve_model_profile(model_id: str, model_alias: str = "") -> ModelProfile:
     """Match a model identifier against the catalog.
 
-    Tries *model_id* first, then *model_key* as a fallback.
+    Tries *model_id* first, then *model_alias* as a fallback.
     Returns ``DEFAULT_PROFILE`` when nothing matches.
     """
-    for candidate in (model_id, model_key):
+    for candidate in (model_id, model_alias):
         if not candidate:
             continue
         lower = candidate.lower()

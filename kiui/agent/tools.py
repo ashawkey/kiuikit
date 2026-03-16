@@ -29,6 +29,17 @@ _SKIP_DIRS = frozenset({
 })
 
 
+def _decode_bytes(b: bytes | None) -> str:
+    """Decode subprocess output bytes using the preferred locale encoding."""
+    if not b:
+        return ""
+    encoding = locale.getpreferredencoding()
+    try:
+        return b.decode(encoding)
+    except UnicodeDecodeError:
+        return b.decode("utf-8", errors="replace")
+
+
 def get_tool_definitions() -> list[dict[str, Any]]:
     """Return OpenAI-format tool definitions for all built-in tools."""
     return [
@@ -223,10 +234,11 @@ class ToolExecutor:
         "spawn_subagent": "_spawn_subagent",
     }
 
-    def __init__(self, console: AgentConsole | None = None, subagent_manager=None, interrupt_handler=None):
+    def __init__(self, console: AgentConsole | None = None, subagent_manager=None, interrupt_handler=None, work_dir: str | None = None):
         self.console = console or AgentConsole()
         self.subagent_manager = subagent_manager
         self._interrupt = interrupt_handler
+        self._work_dir = work_dir
 
     def execute(self, function_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Dispatch and execute a tool call. Returns dict with success key."""
@@ -257,7 +269,7 @@ class ToolExecutor:
         total_lines = len(all_lines)
         lines = all_lines
 
-        if offset:
+        if offset is not None:
             lines = lines[max(0, offset - 1):]
 
         effective_limit = limit if limit is not None else MAX_READ_LINES
@@ -331,6 +343,7 @@ class ToolExecutor:
         """Execute shell command."""
         self.console.tool(f"exec_command: {command}")
 
+        cwd = cwd or self._work_dir
         if timeout is None:
             timeout = 0
 
@@ -355,26 +368,11 @@ class ToolExecutor:
                 shell=use_shell,
             )
         except subprocess.TimeoutExpired as e:
-            encoding = locale.getpreferredencoding()
-            def decode_bytes(b):
-                if not b: return ""
-                try:
-                    return b.decode(encoding)
-                except UnicodeDecodeError:
-                    return b.decode("utf-8", errors="replace")
-            partial = decode_bytes(e.stdout)[:MAX_EXEC_OUTPUT_BYTES]
+            partial = _decode_bytes(e.stdout)[:MAX_EXEC_OUTPUT_BYTES]
             return {"error": f"Command timed out after {timeout}s. Partial output:\n{partial}", "success": False}
 
-        encoding = locale.getpreferredencoding()
-        def decode_bytes(b):
-            if not b: return ""
-            try:
-                return b.decode(encoding)
-            except UnicodeDecodeError:
-                return b.decode("utf-8", errors="replace")
-
-        stdout = decode_bytes(result.stdout)
-        stderr = decode_bytes(result.stderr)
+        stdout = _decode_bytes(result.stdout)
+        stderr = _decode_bytes(result.stderr)
 
         truncated = False
         combined_len = len(stdout) + len(stderr)
@@ -418,12 +416,8 @@ class ToolExecutor:
         stderr_size = [0]
 
         def _drain(stream, lines_buf, size_ref, prefix=""):
-            encoding = locale.getpreferredencoding()
             for raw in iter(stream.readline, b""):
-                try:
-                    line = raw.decode(encoding)
-                except UnicodeDecodeError:
-                    line = raw.decode("utf-8", errors="replace")
+                line = _decode_bytes(raw)
                 lines_buf.append(line)
                 size_ref[0] += len(line)
                 while size_ref[0] > MAX_STREAMING_BUFFER and len(lines_buf) > 1:
@@ -490,11 +484,17 @@ class ToolExecutor:
         """Find files matching a glob pattern."""
         self.console.tool(f"glob_files {pattern} (recursive={recursive})")
 
-        base = Path(base_dir) if base_dir else Path.cwd()
+        base = Path(base_dir or self._work_dir or Path.cwd())
         if not base.is_dir():
             return {"error": f"Not a directory: {base}", "success": False}
 
-        iterator = base.glob(pattern) if ("**" in pattern or not recursive) else base.rglob(pattern)
+        if not recursive:
+            sanitized = pattern.replace("**", "*")
+            iterator = base.glob(sanitized)
+        elif "**" in pattern:
+            iterator = base.glob(pattern)
+        else:
+            iterator = base.rglob(pattern)
 
         matches = []
         for p in iterator:
@@ -522,7 +522,7 @@ class ToolExecutor:
         """Search file contents using a regex pattern."""
         self.console.tool(f"grep_files {pattern}")
 
-        base = Path(path) if path else Path.cwd()
+        base = Path(path) if path else Path(self._work_dir or Path.cwd())
 
         flags = re.IGNORECASE if case_insensitive else 0
         try:
@@ -562,13 +562,28 @@ class ToolExecutor:
         }
 
     def _web_search(self, query: str) -> dict[str, Any]:
-        """Web search placeholder."""
+        """Web search using DuckDuckGo."""
         self.console.tool(f"web_search: {query}")
-        return {
-            "message": f"TODO: Implement web search for query: {query}",
-            "results": [],
-            "success": True,
-        }
+        try:
+            from ddgs import DDGS
+        except ImportError:
+            return {"error": "web_search requires ddgs: pip install ddgs", "success": False}
+
+        try:
+            results = DDGS().text(query, max_results=5)
+            if not results:
+                return {"content": "No results found.", "success": True}
+            
+            formatted_results = []
+            for res in results:
+                title = res.get("title", "No title")
+                href = res.get("href", "No URL")
+                body = res.get("body", "No description")
+                formatted_results.append(f"Title: {title}\nURL: {href}\nSnippet: {body}\n")
+            
+            return {"content": "\n".join(formatted_results), "success": True}
+        except Exception as e:
+            return {"error": f"Search failed: {e}", "success": False}
 
     def _web_fetch(self, url: str) -> dict[str, Any]:
         """Fetch URL content and convert to readable text."""
@@ -580,7 +595,10 @@ class ToolExecutor:
             return {"error": "web_fetch requires httpx and beautifulsoup4: pip install httpx beautifulsoup4", "success": False}
 
         try:
-            response = httpx.get(url, timeout=30.0, follow_redirects=True)
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+            response = httpx.get(url, headers=headers, timeout=30.0, follow_redirects=True)
             response.raise_for_status()
         except Exception as e:
             return {"error": f"Failed to fetch URL: {e}", "success": False}
@@ -674,9 +692,14 @@ def format_tool_result(result: dict[str, Any]) -> str:
     elif "message" in result:
         return result["message"]
     elif "stdout" in result:
-        text = result["stdout"]
-        if result.get("stderr"):
-            text += f"\n[stderr]: {result['stderr']}"
+        stdout = result["stdout"]
+        stderr = result.get("stderr", "")
+        if stdout and stderr:
+            text = f"{stdout}\n[stderr]: {stderr}"
+        elif stderr:
+            text = f"[stderr]: {stderr}"
+        else:
+            text = stdout
         if result.get("truncation_notice"):
             text += f"\n{result['truncation_notice']}"
         return text

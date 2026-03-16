@@ -3,20 +3,8 @@ import re
 import time
 import json
 from pathlib import Path
-from typing import Literal
-from openai import (
-    OpenAI,
-    APIConnectionError,
-    APITimeoutError,
-    RateLimitError,
-    InternalServerError,
-    AuthenticationError,
-    PermissionDeniedError,
-    NotFoundError,
-    BadRequestError,
-    UnprocessableEntityError,
-    APIStatusError,
-)
+from typing import Any, Literal
+from openai import OpenAI
 from kiui.agent.ui import AgentConsole
 from kiui.agent.terminal import TerminalInput
 from kiui.agent.utils import get_text_content_dict, get_image_content_dict, get_kia_dir
@@ -31,6 +19,11 @@ from kiui.agent.context import (
     compact_context,
     estimate_context_chars,
     CHARS_PER_TOKEN,
+    get_role,
+    get_text,
+    get_tool_calls,
+    get_tool_call_id,
+    msg_chars,
 )
 from kiui.agent.interrupt import InterruptHandler
 from kiui.agent.models import resolve_model_profile
@@ -85,84 +78,35 @@ def parse_custom_query(query: str) -> list:
 
     return content
 
-class FatalAPIError(Exception):
-    """Unrecoverable API error (e.g., auth failure, quota exhausted)."""
-
-
-# Keywords in RateLimitError messages that signal quota/billing issues (fatal).
-_QUOTA_KEYWORDS = ("quota", "insufficient", "billing", "exceeded your current", "budget")
-
-
-def _classify_api_error(error: Exception) -> tuple[bool, str]:
-    """Classify an API error as retryable or fatal.
-
-    Returns ``(is_retryable, human_readable_message)``.
-    """
-    # --- clearly retryable (network / transient) ---
-    if isinstance(error, APIConnectionError):
-        return True, f"Connection error: {error}"
-    if isinstance(error, APITimeoutError):
-        return True, f"Request timed out: {error}"
-    if isinstance(error, InternalServerError):
-        return True, f"Server error ({error.status_code}): {error.message}"
-
-    # --- rate limit: retryable unless it's a quota/billing issue ---
-    if isinstance(error, RateLimitError):
-        msg_lower = str(error).lower()
-        if any(kw in msg_lower for kw in _QUOTA_KEYWORDS):
-            return False, f"Quota/billing error: {error.message}"
-        return True, f"Rate limited: {error.message}"
-
-    # --- clearly fatal ---
-    if isinstance(error, AuthenticationError):
-        return False, f"Authentication failed (check your API key): {error.message}"
-    if isinstance(error, PermissionDeniedError):
-        return False, f"Permission denied: {error.message}"
-    if isinstance(error, NotFoundError):
-        return False, f"Resource not found (check model name): {error.message}"
-    if isinstance(error, BadRequestError):
-        return False, f"Bad request: {error.message}"
-    if isinstance(error, UnprocessableEntityError):
-        return False, f"Unprocessable request: {error.message}"
-
-    # --- other APIStatusError subtypes ---
-    if isinstance(error, APIStatusError):
-        if error.status_code >= 500:
-            return True, f"Server error ({error.status_code}): {error.message}"
-        return False, f"API error ({error.status_code}): {error.message}"
-
-    # Unknown — assume retryable so we don't silently swallow transient issues
-    return True, f"Unexpected error: {error}"
-
-
 class ContextManager:
     """Flat conversation history with context-management hooks."""
+
     def __init__(self, system_prompt: str):
-        self.system_prompt = {
+        self.system_prompt: dict[str, str] = {
             "role": "system",
             "content": system_prompt,
         }
-        self.messages: list = []
+        self.messages: list[Any] = []
 
-    def add(self, content):
-        self.messages.append(content)
+    def add(self, message: dict[str, Any] | Any) -> None:
+        self.messages.append(message)
 
-    def get(self, include_system: bool = True) -> list:
-        res = []
+    def get(self, include_system: bool = True) -> list[Any]:
+        res: list[Any] = []
         if include_system:
             res.append(self.system_prompt)
         res.extend(self.messages)
         return res
 
-    def replace_messages(self, new_messages: list):
+    def replace_messages(self, new_messages: list[Any]) -> None:
         """Replace all messages (used after compaction)."""
         self.messages = list(new_messages)
 
-    def checkpoint(self) -> list:
+    def checkpoint(self) -> list[Any]:
         """Return a shallow copy of messages for rollback on interruption."""
         return list(self.messages)
 
-    def rollback(self, snapshot: list):
+    def rollback(self, snapshot: list[Any]) -> None:
         """Restore messages to a previous checkpoint."""
         self.messages = snapshot
 
@@ -176,17 +120,18 @@ class LLMAgent:
         model: str,
         api_key: str,
         base_url: str,
-        model_key: str = "",
+        model_alias: str = "",
         verbose: bool = True,
         thinking_budget: Literal["low", "medium", "high"] = "low",
-        context_window: int | None = None,
+        context_length: int | None = None,
         permission_mode: PermissionMode = PermissionMode.DEFAULT,
         exec_mode: bool = False,
+        work_dir: str | None = None,
     ):
 
         self.model = model
-        self.model_key = model_key
-        self.profile = resolve_model_profile(model, model_key)
+        self.model_alias = model_alias
+        self.profile = resolve_model_profile(model, model_alias)
         self._api_key = api_key
         self._base_url = base_url
         self.client = OpenAI(
@@ -195,20 +140,20 @@ class LLMAgent:
         )
         self.verbose = verbose
         self.thinking_budget = thinking_budget
-        self.context_window = context_window if context_window is not None else self.profile.context_window
+        self.context_length = context_length if context_length is not None else self.profile.context_length
 
         self.console = AgentConsole()
 
         # built-in system prompt and tools
-        self.system_prompt = build_system_prompt(exec_mode=exec_mode)
+        self.system_prompt = build_system_prompt(exec_mode=exec_mode, work_dir=work_dir)
         self.tools = get_tool_definitions()
 
-        self.permissions = PermissionController(mode=permission_mode, console=self.console)
+        self.permissions = PermissionController(mode=permission_mode, console=self.console, work_dir=work_dir)
 
-        # subagent manager (only if we have a model_key for spawning children)
-        self.subagent_manager = SubagentManager(model_key=model_key, console=self.console) if model_key else None
+        # subagent manager (only if we have a model_alias for spawning children)
+        self.subagent_manager = SubagentManager(model_alias=model_alias, console=self.console) if model_alias else None
         self.interrupt = InterruptHandler()
-        self.tool_executor = ToolExecutor(console=self.console, subagent_manager=self.subagent_manager, interrupt_handler=self.interrupt)
+        self.tool_executor = ToolExecutor(console=self.console, subagent_manager=self.subagent_manager, interrupt_handler=self.interrupt, work_dir=work_dir)
 
         self.context = ContextManager(self.system_prompt)
 
@@ -222,7 +167,7 @@ class LLMAgent:
             "reasoning": 0,
         }
 
-        self.console.system(f"Created Agent with model: {model} (context: {self.context_window:,} tokens)")
+        self.console.system(f"Created Agent with model: {model} (context: {self.context_length:,} tokens)")
         self.console.system(f"Permission mode: {permission_mode.value}")
         self.console.system(f"System prompt: {self.system_prompt[:100]}...")
 
@@ -250,19 +195,17 @@ class LLMAgent:
             time.sleep(min(0.5, max(0, deadline - time.monotonic())))
 
     def call_api(self):
-        """Call the API using current context, with automatic retry for transient errors.
+        """Call the API using current context, with automatic retry on any error.
 
-        Retryable errors (network, timeout, rate-limit, 5xx) are retried with
-        exponential backoff + jitter.  Fatal errors (auth, quota, bad request)
-        raise ``FatalAPIError`` immediately.
+        All errors are retried with exponential backoff up to MAX_RETRIES times.
         """
 
         # context management: prune old tool results, then compact if needed
-        if self.context_window > 0:
+        if self.context_length > 0:
             self.context.replace_messages(
-                prune_context(self.context.messages, self.context_window)
+                prune_context(self.context.messages, self.context_length)
             )
-            if needs_compaction(self.context.messages, self.context_window):
+            if needs_compaction(self.context.messages, self.context_length):
                 self.console.system("Context window pressure — compacting via LLM summarization...")
                 self.context.replace_messages(
                     compact_context(self.context.messages, self.client, self.model, console=self.console)
@@ -271,10 +214,10 @@ class LLMAgent:
 
         if self.verbose:
             ctx_chars = estimate_context_chars(self.context.messages)
-            ctx_pct = ctx_chars / (self.context_window * CHARS_PER_TOKEN) * 100 if self.context_window else 0
+            ctx_pct = ctx_chars / (self.context_length * CHARS_PER_TOKEN) * 100 if self.context_length else 0
             self.console.debug(
                 f"Calling API (round: {self.round_id}, "
-                f"context: ~{ctx_chars // CHARS_PER_TOKEN}tok / {self.context_window}tok [{ctx_pct:.0f}%])"
+                f"context: ~{ctx_chars // CHARS_PER_TOKEN}tok / {self.context_length}tok [{ctx_pct:.0f}%])"
             )
 
         messages = self.context.get()
@@ -311,21 +254,16 @@ class LLMAgent:
                 response = self.client.chat.completions.create(**kwargs)
                 break  # success
             except Exception as e:
-                retryable, err_msg = _classify_api_error(e)
-
-                if not retryable:
-                    raise FatalAPIError(err_msg) from e
-
                 if attempt < self.MAX_RETRIES:
                     wait_time = self.INITIAL_BACKOFF * (2 ** attempt)
                     self.console.system(
-                        f"[Retry {attempt + 1}/{self.MAX_RETRIES}] {err_msg} "
+                        f"[Retry {attempt + 1}/{self.MAX_RETRIES}] {e} "
                         f"— retrying in {wait_time:.1f}s…"
                     )
                     self._interruptible_sleep(wait_time)
                 else:
-                    raise FatalAPIError(
-                        f"Max retries ({self.MAX_RETRIES}) exceeded. Last error: {err_msg}"
+                    raise RuntimeError(
+                        f"Max retries ({self.MAX_RETRIES}) exceeded. Last error: {e}"
                     ) from e
 
         message = response.choices[0].message
@@ -382,8 +320,8 @@ class LLMAgent:
                 self.console.tool_result(format_tool_summary(result_text), success=success)
 
             # Layer 1: generic truncation relative to context window
-            if self.context_window > 0:
-                result_text = truncate_tool_result(result_text, self.context_window)
+            if self.context_length > 0:
+                result_text = truncate_tool_result(result_text, self.context_length)
 
             tool_message = {
                 "role": "tool",
@@ -410,7 +348,7 @@ class LLMAgent:
 
             try:
                 message = self.call_api()
-            except FatalAPIError as e:
+            except RuntimeError as e:
                 self.context.rollback(snapshot)
                 self.console.error(f"API call failed: {e}")
                 return None
@@ -438,7 +376,7 @@ class LLMAgent:
 
     # ----- slash commands ---------------------------------------------------
 
-    COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "perm", "save", "load", "context"}
+    COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "perm", "model", "save", "load", "context"}
 
     def _handle_command(self, raw: str) -> bool:
         """Handle a /command.  Returns True if the agent loop should stop."""
@@ -457,6 +395,8 @@ class LLMAgent:
             self._cmd_clear()
         elif cmd == "perm":
             self._cmd_perm(raw)
+        elif cmd == "model":
+            self._cmd_model(raw)
         elif cmd == "save":
             self._cmd_save(raw)
         elif cmd == "load":
@@ -474,6 +414,7 @@ class LLMAgent:
             "  [cyan]/context[/cyan]     — Show a concise one-line-per-message context log\n"
             "  [cyan]/compact[/cyan]     — Force context compaction via LLM summarization\n"
             "  [cyan]/usage[/cyan]       — Show token usage for this session\n"
+            "  [cyan]/model[/cyan]       — Show or switch LLM model (/model <name>)\n"
             "  [cyan]/perm[/cyan]        — Show or change permission mode (/perm auto|default|strict)\n"
             "  [cyan]/save[/cyan] [name] — Save session to .kia/sessions/ (default: timestamp)\n"
             "  [cyan]/load[/cyan] [name] — Load a saved session (no name: list available)\n"
@@ -497,14 +438,14 @@ class LLMAgent:
     def _cmd_usage(self):
         ctx_chars = estimate_context_chars(self.context.messages)
         ctx_tokens = ctx_chars // CHARS_PER_TOKEN
-        ctx_pct = ctx_tokens / self.context_window * 100 if self.context_window else 0
+        ctx_pct = ctx_tokens / self.context_length * 100 if self.context_length else 0
 
         self.console.print(
             f"[bold blue]Session usage (round {self.round_id}):[/bold blue]\n"
             f"  Total tokens   : {self.token_totals['total']}\n"
             f"  Prompt tokens  : {self.token_totals['prompt']}  (cached: {self.token_totals['cached_prompt']})\n"
             f"  Output tokens  : {self.token_totals['completion']}  (reasoning: {self.token_totals['reasoning']})\n"
-            f"  Context window : ~{ctx_tokens} / {self.context_window} tokens [{ctx_pct:.0f}%]\n"
+            f"  Context window : ~{ctx_tokens} / {self.context_length} tokens [{ctx_pct:.0f}%]\n"
             f"  Messages       : {len(self.context.messages)}"
         )
 
@@ -522,76 +463,54 @@ class LLMAgent:
         total_chars = 0
         lines = [f"[bold blue]Context log ({len(msgs)} messages):[/bold blue]"]
 
-        # build a map from tool_call_id -> tool function name for annotation
+        def _tc_name(tc) -> str:
+            if isinstance(tc, dict):
+                return tc.get("function", {}).get("name", "?")
+            return getattr(getattr(tc, "function", None), "name", "?")
+
+        def _tc_id(tc) -> str | None:
+            return tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
+
         tc_id_to_name: dict[str, str] = {}
         for m in msgs:
-            role = m.get("role", "") if isinstance(m, dict) else getattr(m, "role", "")
-            if role == "assistant":
-                tool_calls = (m.get("tool_calls") if isinstance(m, dict) else getattr(m, "tool_calls", None)) or []
-                for tc in tool_calls:
-                    tc_id = tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
-                    name = (tc.get("function", {}).get("name", "?") if isinstance(tc, dict)
-                            else getattr(getattr(tc, "function", None), "name", "?"))
-                    if tc_id:
-                        tc_id_to_name[tc_id] = name
+            if get_role(m) == "assistant":
+                for tc in get_tool_calls(m):
+                    tid = _tc_id(tc)
+                    if tid:
+                        tc_id_to_name[tid] = _tc_name(tc)
 
         for idx, m in enumerate(msgs):
-            role = m.get("role", "") if isinstance(m, dict) else getattr(m, "role", "")
-            content = m.get("content", "") if isinstance(m, dict) else getattr(m, "content", "") or ""
-
-            # extract text
-            if isinstance(content, str):
-                text = content
-            elif isinstance(content, list):
-                text = " ".join(
-                    item.get("text", "") for item in content
-                    if isinstance(item, dict) and item.get("type") == "text"
-                )
-            else:
-                text = ""
-
-            chars = len(text)
-            tool_calls = []
-            if role == "assistant":
-                tool_calls = (m.get("tool_calls") if isinstance(m, dict) else getattr(m, "tool_calls", None)) or []
-                for tc in tool_calls:
-                    args = (tc.get("function", {}).get("arguments", "") if isinstance(tc, dict)
-                            else getattr(getattr(tc, "function", None), "arguments", "") or "")
-                    chars += len(args) if isinstance(args, str) else 0
-
+            role = get_role(m)
+            text = get_text(m)
+            chars = msg_chars(m)
             total_chars += chars
 
-            # one-line preview (strip newlines, cap length)
             preview = text.replace("\n", " ").strip()
             if len(preview) > 80:
                 preview = preview[:77] + "..."
 
-            # format per role
             role_tag = f"[cyan]{role:>9}[/cyan]"
             size_tag = f"[dim]{chars:>6} ch[/dim]"
 
-            if role == "assistant" and tool_calls:
-                n_tc = len(tool_calls)
-                tc_names = ", ".join(
-                    (tc.get("function", {}).get("name", "?") if isinstance(tc, dict)
-                     else getattr(getattr(tc, "function", None), "name", "?"))
-                    for tc in tool_calls
-                )
+            tcs = get_tool_calls(m) if role == "assistant" else []
+            if tcs:
+                n_tc = len(tcs)
+                tc_names = ", ".join(_tc_name(tc) for tc in tcs)
                 extra = f"[yellow]{n_tc} call{'s' if n_tc > 1 else ''}[/yellow] ({tc_names})"
                 if preview:
                     lines.append(f"  [dim]#{idx:<3}[/dim] {role_tag} {size_tag}  {extra}  {preview}")
                 else:
                     lines.append(f"  [dim]#{idx:<3}[/dim] {role_tag} {size_tag}  {extra}")
             elif role == "tool":
-                tc_id = m.get("tool_call_id") if isinstance(m, dict) else getattr(m, "tool_call_id", None)
-                tool_name = tc_id_to_name.get(tc_id, "?") if tc_id else "?"
+                tid = get_tool_call_id(m)
+                tool_name = tc_id_to_name.get(tid, "?") if tid else "?"
                 lines.append(f"  [dim]#{idx:<3}[/dim] {role_tag} {size_tag}  [magenta]({tool_name})[/magenta]  {preview}")
             else:
                 lines.append(f"  [dim]#{idx:<3}[/dim] {role_tag} {size_tag}  {preview}")
 
         est_tokens = total_chars // CHARS_PER_TOKEN
-        ctx_pct = est_tokens / self.context_window * 100 if self.context_window else 0
-        lines.append(f"\n  [bold]Total:[/bold] ~{est_tokens:,} tokens / {self.context_window:,} [{ctx_pct:.0f}%]")
+        ctx_pct = est_tokens / self.context_length * 100 if self.context_length else 0
+        lines.append(f"\n  [bold]Total:[/bold] ~{est_tokens:,} tokens / {self.context_length:,} [{ctx_pct:.0f}%]")
 
         self.console.print("\n".join(lines))
 
@@ -599,7 +518,7 @@ class LLMAgent:
         parts = raw.split()
         if len(parts) < 2:
             mode = self.permissions.mode.value
-            allowed = ", ".join(sorted(self.permissions._session_allowed)) or "(none)"
+            allowed = ", ".join(sorted(self.permissions.session_allowed_tools)) or "(none)"
             work_dir = self.permissions.safety.work_dir
             self.console.print(
                 f"[bold blue]Permission mode:[/bold blue] [cyan]{mode}[/cyan]\n"
@@ -617,8 +536,53 @@ class LLMAgent:
 
         new_mode = PermissionMode(target)
         self.permissions.mode = new_mode
-        self.permissions._session_allowed.clear()
+        self.permissions.reset_session()
         self.console.system(f"Permission mode changed to: {new_mode.value}")
+
+    def _cmd_model(self, raw: str):
+        from kiui.config import conf
+
+        parts = raw.split(maxsplit=1)
+        openai_conf = conf.get("openai", {})
+
+        if len(parts) < 2 or not parts[1].strip():
+            lines = [
+                f"[bold blue]Current model:[/bold blue] [cyan]{self.model}[/cyan]"
+                + (f" (alias: {self.model_alias})" if self.model_alias else ""),
+                f"[bold blue]Available models:[/bold blue]",
+            ]
+            for name, mc in openai_conf.items():
+                marker = " [green]◀[/green]" if name == self.model_alias else ""
+                lines.append(f"  [cyan]{name}[/cyan] → {mc.get('model', name)}{marker}")
+            lines.append(f"\n  Usage: [cyan]/model <name>[/cyan]")
+            self.console.print("\n".join(lines))
+            return
+
+        target = parts[1].strip()
+        if target not in openai_conf:
+            self.console.error(f"Model '{target}' not found in config. Use /model to list available models.")
+            return
+
+        if target == self.model_alias:
+            self.console.system(f"Already using model '{target}'.")
+            return
+
+        model_conf = openai_conf[target]
+        self.model = model_conf.get("model", target)
+        self.model_alias = target
+        self._api_key = model_conf.get("api_key", "")
+        self._base_url = model_conf.get("base_url", "")
+        self.client = OpenAI(api_key=self._api_key, base_url=self._base_url)
+        self.profile = resolve_model_profile(self.model, self.model_alias)
+        self.context_length = self.profile.context_length
+
+        if self.subagent_manager:
+            self.subagent_manager.model_alias = target
+
+        self.console.system(
+            f"Switched to model: {self.model} "
+            f"(context: {self.context_length:,} tokens, thinking: {self.profile.thinking or 'none'})"
+        )
 
     # ----- session save / load ------------------------------------------------
 
@@ -628,6 +592,15 @@ class LLMAgent:
         d = get_kia_dir() / self.SESSIONS_DIR_NAME
         d.mkdir(parents=True, exist_ok=True)
         return d
+
+    @staticmethod
+    def _serialize_message(msg) -> dict:
+        """Convert a message (dict or OpenAI object) to a plain dict for JSON."""
+        if isinstance(msg, dict):
+            return msg
+        if hasattr(msg, "model_dump"):
+            return msg.model_dump(exclude_none=True)
+        return dict(msg)
 
     def save_session(self, name: str | None = None) -> Path:
         """Save the current session state to a JSON file. Returns the file path."""
@@ -639,11 +612,11 @@ class LLMAgent:
             "round_id": self.round_id,
             "token_totals": self.token_totals,
             "system_prompt": self.context.system_prompt,
-            "messages": self.context.messages,
+            "messages": [self._serialize_message(m) for m in self.context.messages],
         }
 
         path = self._sessions_dir() / f"{name}.json"
-        path.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+        path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
         return path
 
     def load_session(self, name: str) -> bool:
@@ -717,7 +690,7 @@ class LLMAgent:
 
     def chat_loop(self):
 
-        self.console.print("[system][SYSTEM] Type [bold]/help[/bold] for available commands.[/system]")
+        self.console.system("Type `/help` for available commands.")
         self.console.system("`Enter` to send. `Escape` then `Enter` for a newline.")
         self.console.system("Ctrl+C to interrupt. Double Ctrl+C to force quit.")
         self.console.system("Current working directory: " + os.getcwd())

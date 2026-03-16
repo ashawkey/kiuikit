@@ -7,9 +7,15 @@ interactive prompting are handled in one place.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from rich.console import Console
 from rich.table import Table
 from rich.theme import Theme
+
+
+def _now() -> str:
+    return datetime.now().strftime("%H:%M")
 
 AGENT_THEME = Theme({
     "debug": "dim cyan",
@@ -41,21 +47,21 @@ class AgentConsole:
     # -- typed log helpers --------------------------------------------------
 
     def system(self, msg: str):
-        self._console.print(f"[SYSTEM] {msg}", style="system", markup=False)
+        self._console.print(f"[{_now()} SYSTEM] {msg}", style="system", markup=False)
 
     def debug(self, msg: str):
-        self._console.print(f"[DEBUG] {msg}", style="debug", markup=False)
+        self._console.print(f"[{_now()} DEBUG] {msg}", style="debug", markup=False)
 
     def error(self, msg: str):
-        self._console.print(f"[ERROR] {msg}", style="error", markup=False)
+        self._console.print(f"[{_now()} ERROR] {msg}", style="error", markup=False)
 
     def warn(self, msg: str, *, exc_info: bool = False):
-        self._console.print(f"[WARNING] {msg}", style="warning", markup=False)
+        self._console.print(f"[{_now()} WARNING] {msg}", style="warning", markup=False)
         if exc_info:
             self._console.print_exception()
 
     def tool(self, msg: str):
-        self._console.print(f"[TOOL] {msg}", style="tool")
+        self._console.print(f"[{_now()} TOOL] {msg}", style="tool")
 
     def tool_result(self, msg: str, success: bool = True):
         style = "tool_ok" if success else "tool_fail"
@@ -67,7 +73,7 @@ class AgentConsole:
         self._console.print(output, style=style, markup=False)
 
     def response(self, msg: str):
-        self._console.print(msg, style="response", markup=False)
+        self._console.print(f"[{_now()} RESP] {msg}", style="response", markup=False)
 
     # -- interactive prompts ------------------------------------------------
 

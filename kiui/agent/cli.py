@@ -1,4 +1,3 @@
-import os
 from dataclasses import dataclass
 from typing import Annotated, Union
 
@@ -27,7 +26,7 @@ class ChatCmd:
     """Start interactive chat mode with the specified model."""
     model: str
     verbose: bool = False
-    context_window: int | None = None
+    context_length: int | None = None
     permission_mode: PermissionMode = PermissionMode.DEFAULT
 
 
@@ -37,7 +36,7 @@ class ExecCmd:
     model: str
     prompt: str
     verbose: bool = False
-    context_window: int | None = None
+    context_length: int | None = None
     permission_mode: PermissionMode = PermissionMode.AUTO
 
 
@@ -68,9 +67,9 @@ def get_agent(cfg: ChatCmd | ExecCmd, exec_mode: bool = False) -> LLMAgent | Non
         model=model_conf.get("model", cfg.model),
         api_key=model_conf.get("api_key", ""),
         base_url=model_conf.get("base_url", ""),
-        model_key=cfg.model,
+        model_alias=cfg.model,
         verbose=cfg.verbose,
-        context_window=cfg.context_window,
+        context_length=cfg.context_length,
         permission_mode=cfg.permission_mode,
         exec_mode=exec_mode,
     )
@@ -113,7 +112,7 @@ def cmd_list(cfg: ListCmd):
     for name, model_conf in openai_conf.items():
         model_id = model_conf.get("model", name)
         profile = resolve_model_profile(model_id, name)
-        ctx = f"{profile.context_window // 1000}K"
+        ctx = f"{profile.context_length // 1000}K"
         table.add_row(
             name,
             model_id,

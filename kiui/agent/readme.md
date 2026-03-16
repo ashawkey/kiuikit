@@ -25,8 +25,8 @@ Example `.kiui.yaml`:
 
 ```yaml
 openai:
-  gpt: # name for convenience
-    model: gpt-4o # actual model name used in the API call
+  gpt: # model_alias, convenient name to use in the CLI
+    model: gpt-4o # actual model name used in the API
     api_key: sk-proj-...
     base_url: https://api.openai.com/v1
 ```
@@ -42,13 +42,13 @@ kia list
 ### Start an interactive chat
 
 ```bash
-kia chat --model <model_name>
+kia chat --model <model_alias>
 ```
 
 ### Execute a single command
 
 ```bash
-kia exec --model <model_name> "your prompt here"
+kia exec --model <model_alias> "your prompt here"
 ```
 
 ## Slash commands
@@ -74,4 +74,5 @@ The agent has access to the following tools:
 - `grep_files`: Search for text in files.
 - `web_search`: Search the web.
 - `web_fetch`: Fetch and parse content from a URL.
+- `remove_file`: Remove a file or directory.
 - `spawn_subagent`: Delegate a task to a new agent instance.

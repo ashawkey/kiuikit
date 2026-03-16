@@ -22,7 +22,6 @@ class TerminalInput:
 
         self.history = FileHistory(history_path) if history_path else None
         self._session = PromptSession(
-            message=[("class:prompt", "[QUERY] ")],
             multiline=False,
             style=self.style,
             history=self.history,
@@ -44,4 +43,4 @@ class TerminalInput:
         return kb
 
     def prompt(self) -> str:
-        return self._session.prompt()
+        return self._session.prompt([("class:prompt", f"[QUERY] ")])

@@ -6,11 +6,12 @@ from datetime import datetime
 from pathlib import Path
 
 
-def build_system_prompt(exec_mode: bool = False) -> str:
+def build_system_prompt(exec_mode: bool = False, work_dir: str | None = None) -> str:
     """Build the complete system prompt from ordered sections.
 
     If *exec_mode* is True the prompt tells the agent it is running
     autonomously with no user to interact with.
+    *work_dir* overrides the working directory shown in the context section.
     """
     sections = []
 
@@ -67,19 +68,20 @@ You can spawn a sub-agent to delegate work:
 Use sub-agents when you want to delegate a self-contained task (e.g., research, summarization).""")
 
     # 7. Project instructions (optional AGENTS.md)
-    project = _build_project_section()
+    project = _build_project_section(work_dir)
     if project:
         sections.append(project)
 
     # 8. Context
-    sections.append(_build_context_section())
+    sections.append(_build_context_section(work_dir))
 
     return "\n\n".join(sections)
 
 
-def _build_project_section() -> str:
+def _build_project_section(work_dir: str | None = None) -> str:
     """Include AGENTS.md project instructions if present."""
-    agents_file = Path.cwd() / "AGENTS.md"
+    base = Path(work_dir) if work_dir else Path.cwd()
+    agents_file = base / "AGENTS.md"
     if not agents_file.exists():
         return ""
     try:
@@ -89,11 +91,12 @@ def _build_project_section() -> str:
         return ""
 
 
-def _build_context_section() -> str:
+def _build_context_section(work_dir: str | None = None) -> str:
     """Build context section with current environment information."""
+    cwd = work_dir or str(Path.cwd())
     return f"""## Current Context
 - Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-- Working Directory: {Path.cwd()}
+- Working Directory: {cwd}
 - Operating System: {platform.system()} {platform.release()}
 - Python: {platform.python_version()}
 - User: {os.getenv("USER") or os.getenv("USERNAME", "unknown")}"""

@@ -51,13 +51,13 @@ PRUNABLE_TOOLS = frozenset({
 # ---------------------------------------------------------------------------
 
 
-def _get_role(msg: Any) -> str:
+def get_role(msg: Any) -> str:
     if isinstance(msg, dict):
         return msg.get("role", "")
     return getattr(msg, "role", "")
 
 
-def _get_text(msg: Any) -> str:
+def get_text(msg: Any) -> str:
     """Extract concatenated text content from a message."""
     if isinstance(msg, dict):
         content = msg.get("content", "")
@@ -74,7 +74,7 @@ def _get_text(msg: Any) -> str:
     return ""
 
 
-def _set_text(msg: dict, text: str) -> dict:
+def set_text(msg: dict, text: str) -> dict:
     """Return a shallow copy of *msg* with text content replaced."""
     content = msg.get("content")
     if isinstance(content, list):
@@ -82,23 +82,23 @@ def _set_text(msg: dict, text: str) -> dict:
     return {**msg, "content": text}
 
 
-def _get_tool_calls(msg: Any) -> list:
+def get_tool_calls(msg: Any) -> list:
     if isinstance(msg, dict):
         return msg.get("tool_calls") or []
     return getattr(msg, "tool_calls", None) or []
 
 
-def _get_tool_call_id(msg: Any) -> str | None:
+def get_tool_call_id(msg: Any) -> str | None:
     if isinstance(msg, dict):
         return msg.get("tool_call_id")
     return getattr(msg, "tool_call_id", None)
 
 
-def _msg_chars(msg: Any) -> int:
+def msg_chars(msg: Any) -> int:
     """Rough character cost of a single message."""
-    chars = len(_get_text(msg))
-    if _get_role(msg) == "assistant":
-        for tc in _get_tool_calls(msg):
+    chars = len(get_text(msg))
+    if get_role(msg) == "assistant":
+        for tc in get_tool_calls(msg):
             if isinstance(tc, dict):
                 args = tc.get("function", {}).get("arguments", "")
             else:
@@ -108,7 +108,7 @@ def _msg_chars(msg: Any) -> int:
 
 
 def estimate_context_chars(messages: list) -> int:
-    return sum(_msg_chars(m) for m in messages)
+    return sum(msg_chars(m) for m in messages)
 
 
 # ---------------------------------------------------------------------------
@@ -116,11 +116,11 @@ def estimate_context_chars(messages: list) -> int:
 # ---------------------------------------------------------------------------
 
 
-def truncate_tool_result(text: str, context_window: int) -> str:
+def truncate_tool_result(text: str, context_length: int) -> str:
     """Cap a tool result string to a size proportional to the context window."""
     max_chars = max(
         TRUNCATION_MIN,
-        min(int(context_window * TRUNCATION_RATIO * CHARS_PER_TOKEN), TRUNCATION_MAX),
+        min(int(context_length * TRUNCATION_RATIO * CHARS_PER_TOKEN), TRUNCATION_MAX),
     )
     if len(text) <= max_chars:
         return text
@@ -140,13 +140,13 @@ def truncate_tool_result(text: str, context_window: int) -> str:
 
 def _find_tool_name(messages: list, tool_idx: int) -> str | None:
     """Walk backward from a tool-result message to find the originating tool name."""
-    target_id = _get_tool_call_id(messages[tool_idx])
+    target_id = get_tool_call_id(messages[tool_idx])
     if not target_id:
         return None
     for i in range(tool_idx - 1, -1, -1):
-        if _get_role(messages[i]) != "assistant":
+        if get_role(messages[i]) != "assistant":
             continue
-        for tc in _get_tool_calls(messages[i]):
+        for tc in get_tool_calls(messages[i]):
             tc_id = tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
             if tc_id == target_id:
                 if isinstance(tc, dict):
@@ -179,14 +179,14 @@ def _prunable_range(messages: list) -> tuple[int, int]:
     """
     start = 0
     for i, m in enumerate(messages):
-        if _get_role(m) == "user":
+        if get_role(m) == "user":
             start = i
             break
 
     remaining = KEEP_LAST_ASSISTANTS
     end = len(messages)
     for i in range(len(messages) - 1, -1, -1):
-        if _get_role(messages[i]) == "assistant":
+        if get_role(messages[i]) == "assistant":
             remaining -= 1
             if remaining == 0:
                 end = i
@@ -198,7 +198,7 @@ def _prunable_range(messages: list) -> tuple[int, int]:
     return start, end
 
 
-def prune_context(messages: list, context_window: int) -> list:
+def prune_context(messages: list, context_length: int) -> list:
     """Prune old tool results to manage context window usage.
 
     Phase 1 (soft trim, 30 %): keep head + tail of large prunable results.
@@ -206,10 +206,10 @@ def prune_context(messages: list, context_window: int) -> list:
 
     Returns a new list — does not mutate the input.
     """
-    if not messages or context_window <= 0:
+    if not messages or context_length <= 0:
         return list(messages)
 
-    char_window = context_window * CHARS_PER_TOKEN
+    char_window = context_length * CHARS_PER_TOKEN
     total_chars = estimate_context_chars(messages)
 
     if total_chars < char_window * SOFT_TRIM_RATIO:
@@ -220,7 +220,7 @@ def prune_context(messages: list, context_window: int) -> list:
     prunable: list[int] = []
     for i in range(start, end):
         msg = messages[i]
-        if _get_role(msg) != "tool" or not isinstance(msg, dict):
+        if get_role(msg) != "tool" or not isinstance(msg, dict):
             continue
         name = _find_tool_name(messages, i)
         if name and name in PRUNABLE_TOOLS:
@@ -233,10 +233,10 @@ def prune_context(messages: list, context_window: int) -> list:
 
     # Phase 1: soft trim
     for i in prunable:
-        text = _get_text(result[i])
+        text = get_text(result[i])
         trimmed = _soft_trim(text)
         if trimmed is not None:
-            result[i] = _set_text(result[i], trimmed)
+            result[i] = set_text(result[i], trimmed)
             total_chars += len(trimmed) - len(text)
 
     ratio = total_chars / char_window
@@ -244,15 +244,15 @@ def prune_context(messages: list, context_window: int) -> list:
         return result
 
     # Phase 2: hard clear (only if enough prunable content exists)
-    prunable_chars = sum(len(_get_text(result[i])) for i in prunable)
+    prunable_chars = sum(len(get_text(result[i])) for i in prunable)
     if prunable_chars < MIN_PRUNABLE_CHARS:
         return result
 
     for i in prunable:
         if ratio < HARD_CLEAR_RATIO:
             break
-        old_len = len(_get_text(result[i]))
-        result[i] = _set_text(result[i], HARD_CLEAR_PLACEHOLDER)
+        old_len = len(get_text(result[i]))
+        result[i] = set_text(result[i], HARD_CLEAR_PLACEHOLDER)
         total_chars += len(HARD_CLEAR_PLACEHOLDER) - old_len
         ratio = total_chars / char_window
 
@@ -291,14 +291,14 @@ Conversation:
 Summary:"""
 
 
-def needs_compaction(messages: list, context_window: int) -> bool:
-    char_window = context_window * CHARS_PER_TOKEN
+def needs_compaction(messages: list, context_length: int) -> bool:
+    char_window = context_length * CHARS_PER_TOKEN
     return estimate_context_chars(messages) > char_window * COMPACTION_RATIO
 
 
 def _safe_split_index(messages: list, idx: int) -> int:
     """Walk backward so the split never lands inside a tool-call / result pair."""
-    while idx > 1 and _get_role(messages[idx]) == "tool":
+    while idx > 1 and get_role(messages[idx]) == "tool":
         idx -= 1
     return idx
 
@@ -307,8 +307,8 @@ def _messages_to_text(messages: list) -> str:
     """Convert messages to a concise text for the summarization prompt."""
     parts: list[str] = []
     for msg in messages:
-        role = _get_role(msg)
-        text = _get_text(msg)
+        role = get_role(msg)
+        text = get_text(msg)
         limit = _SUMMARY_CHAR_LIMITS.get(role, 500)
 
         if role == "system":
@@ -318,7 +318,7 @@ def _messages_to_text(messages: list) -> str:
         elif role == "assistant":
             if text:
                 parts.append(f"Assistant: {text[:limit]}")
-            for tc in _get_tool_calls(msg):
+            for tc in get_tool_calls(msg):
                 name = (
                     tc.get("function", {}).get("name", "?")
                     if isinstance(tc, dict)
