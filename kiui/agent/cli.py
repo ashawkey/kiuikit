@@ -24,7 +24,7 @@ class ListCmd:
 @dataclass
 class ChatCmd:
     """Start interactive chat mode with the specified model."""
-    model: str
+    model: str = ""
     verbose: bool = False
     context_length: int | None = None
     permission_mode: PermissionMode = PermissionMode.DEFAULT
@@ -33,8 +33,8 @@ class ChatCmd:
 @dataclass
 class ExecCmd:
     """Execute a single query and return the result."""
-    model: str
     prompt: str
+    model: str = ""
     verbose: bool = False
     context_length: int | None = None
     permission_mode: PermissionMode = PermissionMode.AUTO
@@ -55,6 +55,12 @@ def get_agent(cfg: ChatCmd | ExecCmd, exec_mode: bool = False) -> LLMAgent | Non
     """Create an LLMAgent from a config dataclass. Returns None if model not found."""
     console = AgentConsole()
     openai_conf = conf.get("openai", {})
+
+    if not cfg.model:
+        if not openai_conf:
+            console.error(f"No models found in config: {LOCAL_CONFIG_PATH}")
+            return None
+        cfg.model = next(iter(openai_conf))
 
     if cfg.model not in openai_conf:
         console.error(f"Model '{cfg.model}' not found in config: {LOCAL_CONFIG_PATH}")
