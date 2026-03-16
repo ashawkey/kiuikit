@@ -15,7 +15,7 @@ from rich.theme import Theme
 
 
 def _now() -> str:
-    return datetime.now().strftime("%H:%M")
+    return datetime.now().strftime("%H:%M:%S")
 
 AGENT_THEME = Theme({
     "debug": "dim cyan",

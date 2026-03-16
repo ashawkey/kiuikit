@@ -202,15 +202,37 @@ class LLMAgent:
 
         # context management: prune old tool results, then compact if needed
         if self.context_length > 0:
+            t_prune = time.monotonic()
             self.context.replace_messages(
                 prune_context(self.context.messages, self.context_length)
             )
+            prune_elapsed = time.monotonic() - t_prune
+            if self.verbose and prune_elapsed > 0.1:
+                self.console.debug(f"Context pruning took {prune_elapsed:.2f}s")
+
             if needs_compaction(self.context.messages, self.context_length):
-                self.console.system("Context window pressure — compacting via LLM summarization...")
+                before_chars = estimate_context_chars(self.context.messages)
+                before_msgs = len(self.context.messages)
+                before_tokens = before_chars // CHARS_PER_TOKEN
+                self.console.system(
+                    f"Context window pressure — compacting via LLM summarization "
+                    f"({before_msgs} messages, ~{before_tokens:,} tokens)..."
+                )
+                t_compact = time.monotonic()
                 self.context.replace_messages(
                     compact_context(self.context.messages, self.client, self.model, console=self.console)
                 )
-                self.console.system("Compaction complete.")
+                compact_elapsed = time.monotonic() - t_compact
+                after_chars = estimate_context_chars(self.context.messages)
+                after_msgs = len(self.context.messages)
+                after_tokens = after_chars // CHARS_PER_TOKEN
+                saved_pct = (1 - after_chars / before_chars) * 100 if before_chars else 0
+                self.console.system(
+                    f"Compaction complete ({compact_elapsed:.1f}s): "
+                    f"{before_msgs} messages → {after_msgs} messages, "
+                    f"~{before_tokens:,} tokens → ~{after_tokens:,} tokens "
+                    f"(saved {saved_pct:.0f}%)"
+                )
 
         if self.verbose:
             ctx_chars = estimate_context_chars(self.context.messages)
@@ -246,6 +268,7 @@ class LLMAgent:
             }
 
         # ---- retry loop with exponential backoff ----
+        t_api = time.monotonic()
         for attempt in range(self.MAX_RETRIES + 1):
             if self.interrupt.interrupted:
                 raise InterruptedError("Interrupted while waiting to call API")
@@ -265,6 +288,7 @@ class LLMAgent:
                     raise RuntimeError(
                         f"Max retries ({self.MAX_RETRIES}) exceeded. Last error: {e}"
                     ) from e
+        api_elapsed = time.monotonic() - t_api
 
         message = response.choices[0].message
         usage = response.usage
@@ -276,7 +300,7 @@ class LLMAgent:
             cached = getattr(usage.prompt_tokens_details, "cached_tokens", None) if usage.prompt_tokens_details else None
             reasoning = getattr(usage.completion_tokens_details, "reasoning_tokens", None) if usage.completion_tokens_details else None
             self.console.debug(
-                f"API Response total_tokens: {usage.total_tokens} = "
+                f"API response in {api_elapsed:.1f}s — total_tokens: {usage.total_tokens} = "
                 f"output: {usage.completion_tokens} (reasoning: {reasoning or 'N/A'}) "
                 f"input: {usage.prompt_tokens} (cached: {cached or 'N/A'})"
             )
@@ -289,6 +313,7 @@ class LLMAgent:
     def execute_tool_calls(self, tool_calls: list):
         """Execute tool calls via the built-in ToolExecutor."""
 
+        t_all = time.monotonic()
         for i, tool_call in enumerate(tool_calls):
             if self.interrupt.interrupted:
                 break
@@ -303,6 +328,7 @@ class LLMAgent:
                 self.console.debug(f"Tool call {i+1}/{len(tool_calls)}: {function_name}({function_args})")
 
             allowed, denial_reason = self.permissions.check(function_name, function_args)
+            t_exec = time.monotonic()
             if not allowed:
                 msg = f"Tool call denied: {function_name}"
                 if denial_reason:
@@ -310,12 +336,13 @@ class LLMAgent:
                 result = {"error": msg, "success": False}
             else:
                 result = self.tool_executor.execute(function_name, function_args)
+            exec_elapsed = time.monotonic() - t_exec
             result_text = format_tool_result(result)
 
             success = result.get("success", False)
             if result.get("streamed"):
                 exit_code = result.get("exit_code", "?")
-                self.console.tool_result(f"exit code {exit_code}", success=success)
+                self.console.tool_result(f"exit code {exit_code} ({exec_elapsed:.1f}s)", success=success)
             else:
                 self.console.tool_result(format_tool_summary(result_text), success=success)
 
@@ -330,6 +357,10 @@ class LLMAgent:
             }
             self.context.add(tool_message)
 
+        total_elapsed = time.monotonic() - t_all
+        if self.verbose and len(tool_calls) > 1:
+            self.console.debug(f"All {len(tool_calls)} tool calls completed in {total_elapsed:.1f}s")
+
     def get_response(self):
         """Process the context and update the current response.
 
@@ -340,9 +371,17 @@ class LLMAgent:
         to the user, and cause the turn to end gracefully rather than crash.
         """
 
+        iteration = 0
+        t_turn_start = time.monotonic()
+
         while True:
             if self.interrupt.interrupted:
                 return None
+
+            iteration += 1
+            t_iter = time.monotonic()
+            if self.verbose and iteration > 1:
+                self.console.debug(f"--- Agentic loop iteration {iteration} ---")
 
             snapshot = self.context.checkpoint()
 
@@ -364,9 +403,16 @@ class LLMAgent:
                 self.console.response(message.content)
 
             if not message.tool_calls:
+                if self.verbose:
+                    turn_elapsed = time.monotonic() - t_turn_start
+                    self.console.debug(f"Turn complete: {iteration} iteration(s) in {turn_elapsed:.1f}s")
                 return message.content if message.content else None
 
             self.execute_tool_calls(message.tool_calls)
+
+            if self.verbose:
+                iter_elapsed = time.monotonic() - t_iter
+                self.console.debug(f"Iteration {iteration} total: {iter_elapsed:.1f}s")
 
             if self.interrupt.interrupted:
                 self.context.rollback(snapshot)
@@ -429,11 +475,26 @@ class LLMAgent:
         if len(self.context.messages) <= 2:
             self.console.system("Not enough messages to compact.")
             return
-        self.console.system("Compacting conversation...")
+        before_chars = estimate_context_chars(self.context.messages)
+        before_msgs = len(self.context.messages)
+        before_tokens = before_chars // CHARS_PER_TOKEN
+        self.console.system(
+            f"Compacting conversation "
+            f"({before_msgs} messages, ~{before_tokens:,} tokens)..."
+        )
         self.context.replace_messages(
             compact_context(self.context.messages, self.client, self.model, console=self.console)
         )
-        self.console.system("Compaction complete.")
+        after_chars = estimate_context_chars(self.context.messages)
+        after_msgs = len(self.context.messages)
+        after_tokens = after_chars // CHARS_PER_TOKEN
+        saved_pct = (1 - after_chars / before_chars) * 100 if before_chars else 0
+        self.console.system(
+            f"Compaction complete: "
+            f"{before_msgs} messages → {after_msgs} messages, "
+            f"~{before_tokens:,} tokens → ~{after_tokens:,} tokens "
+            f"(saved {saved_pct:.0f}%)"
+        )
 
     def _cmd_usage(self):
         ctx_chars = estimate_context_chars(self.context.messages)
