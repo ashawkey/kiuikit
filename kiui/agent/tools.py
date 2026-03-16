@@ -78,13 +78,14 @@ def get_tool_definitions() -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "edit_file",
-                "description": "Make a surgical edit to a file by replacing exact text. old_text must match exactly (including whitespace) and must appear exactly once in the file. If it matches multiple locations, include more surrounding context to disambiguate.",
+                "description": "Make a surgical edit to a file by replacing exact text. old_text must match exactly (including whitespace). By default it must appear exactly once; set replace_all=true to replace every occurrence.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "path": {"type": "string", "description": "Path to the file to edit"},
                         "old_text": {"type": "string", "description": "Exact text to find and replace"},
                         "new_text": {"type": "string", "description": "New text to replace the old text with"},
+                        "replace_all": {"type": "boolean", "description": "Replace all occurrences instead of requiring exactly one (default: false)"},
                     },
                     "required": ["path", "old_text", "new_text"],
                 },
@@ -302,7 +303,7 @@ class ToolExecutor:
 
         return {"message": f"Successfully wrote {len(content)} characters to {path}", "success": True}
 
-    def _edit_file(self, path: str, old_text: str, new_text: str) -> dict[str, Any]:
+    def _edit_file(self, path: str, old_text: str, new_text: str, replace_all: bool = False) -> dict[str, Any]:
         """Make surgical edit to file by replacing exact text."""
         self.console.tool(f"edit_file {path}")
 
@@ -316,11 +317,25 @@ class ToolExecutor:
         occurrence_count = content.count(old_text)
         if occurrence_count == 0:
             return {"error": f"Text not found in file: {old_text[:100]}...", "success": False}
+
+        if replace_all:
+            new_content = content.replace(old_text, new_text)
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(new_content)
+
+            if len(old_text) < 200 and len(new_text) < 200:
+                diff_msg = f"Replaced {occurrence_count} occurrence(s):\n- {old_text}\n+ {new_text}"
+            else:
+                diff_msg = f"Replaced {occurrence_count} occurrence(s): {len(old_text)} chars → {len(new_text)} chars each"
+
+            return {"message": f"Successfully edited {path}\n{diff_msg}", "success": True}
+
         if occurrence_count > 1:
             return {
                 "error": (
                     f"old_text matches {occurrence_count} locations in {path}. "
-                    "Include more surrounding context in old_text to make it unique."
+                    "Include more surrounding context in old_text to make it unique, "
+                    "or set replace_all=true to replace every occurrence."
                 ),
                 "success": False,
             }
@@ -524,6 +539,82 @@ class ToolExecutor:
 
         base = Path(path) if path else Path(self._work_dir or Path.cwd())
 
+        if shutil.which("rg"):
+            return self._grep_ripgrep(pattern, base, file_glob, case_insensitive)
+        return self._grep_python(pattern, base, file_glob, case_insensitive)
+
+    def _grep_ripgrep(
+        self,
+        pattern: str,
+        base: Path,
+        file_glob: str | None,
+        case_insensitive: bool,
+    ) -> dict[str, Any]:
+        """Search using ripgrep for performance."""
+        cmd = [
+            "rg", "--no-heading", "--line-number",
+            "--max-columns", "200",
+            "--max-columns-preview",
+            "--color", "never",
+        ]
+        if case_insensitive:
+            cmd.append("--ignore-case")
+        if file_glob:
+            cmd.extend(["--glob", file_glob])
+        cmd.extend(["--", pattern, str(base)])
+
+        try:
+            result = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=30,
+            )
+        except subprocess.TimeoutExpired:
+            return {"error": "ripgrep timed out after 30s", "success": False}
+        except FileNotFoundError:
+            return self._grep_python(pattern, base, file_glob, case_insensitive)
+
+        if result.returncode not in (0, 1):  # 1 = no matches
+            stderr = _decode_bytes(result.stderr).strip()
+            return {"error": f"ripgrep error: {stderr}", "success": False}
+
+        stdout = _decode_bytes(result.stdout)
+        matches = []
+        for raw_line in stdout.splitlines():
+            if len(matches) >= MAX_GREP_MATCHES:
+                break
+            # rg output: file:line:text
+            parts = raw_line.split(":", 2)
+            if len(parts) < 3:
+                continue
+            file_str, lineno_str, text = parts
+            try:
+                lineno = int(lineno_str)
+            except ValueError:
+                continue
+            # make path relative to base when possible
+            try:
+                rel = str(Path(file_str).relative_to(base))
+            except ValueError:
+                rel = file_str
+            matches.append({"file": rel, "line": lineno, "text": text[:200]})
+
+        return {
+            "matches": matches,
+            "count": len(matches),
+            "truncated": len(matches) == MAX_GREP_MATCHES,
+            "success": True,
+        }
+
+    def _grep_python(
+        self,
+        pattern: str,
+        base: Path,
+        file_glob: str | None,
+        case_insensitive: bool,
+    ) -> dict[str, Any]:
+        """Pure-Python fallback when ripgrep is not available."""
         flags = re.IGNORECASE if case_insensitive else 0
         try:
             compiled = re.compile(pattern, flags)

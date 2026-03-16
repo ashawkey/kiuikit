@@ -18,7 +18,7 @@ from kiui.agent.context import (
     needs_compaction,
     compact_context,
     estimate_context_chars,
-    CHARS_PER_TOKEN,
+    TokenEstimator,
     get_role,
     get_text,
     get_tool_calls,
@@ -100,6 +100,8 @@ class ContextManager:
 
     def replace_messages(self, new_messages: list[Any]) -> None:
         """Replace all messages (used after compaction)."""
+        if new_messages is self.messages:
+            return
         self.messages = list(new_messages)
 
     def checkpoint(self) -> list[Any]:
@@ -141,6 +143,7 @@ class LLMAgent:
         self.verbose = verbose
         self.thinking_budget = thinking_budget
         self.context_length = context_length if context_length is not None else self.profile.context_length
+        self.token_estimator = TokenEstimator()
 
         self.console = AgentConsole()
 
@@ -203,29 +206,35 @@ class LLMAgent:
         # context management: prune old tool results, then compact if needed
         if self.context_length > 0:
             t_prune = time.monotonic()
+            cpt = self.token_estimator.chars_per_token
             self.context.replace_messages(
-                prune_context(self.context.messages, self.context_length)
+                prune_context(self.context.messages, self.context_length, cpt)
             )
             prune_elapsed = time.monotonic() - t_prune
             if self.verbose and prune_elapsed > 0.1:
                 self.console.debug(f"Context pruning took {prune_elapsed:.2f}s")
 
-            if needs_compaction(self.context.messages, self.context_length):
+            if needs_compaction(self.context.messages, self.context_length, cpt):
                 before_chars = estimate_context_chars(self.context.messages)
                 before_msgs = len(self.context.messages)
-                before_tokens = before_chars // CHARS_PER_TOKEN
+                before_tokens = self.token_estimator.chars_to_tokens(before_chars)
                 self.console.system(
                     f"Context window pressure — compacting via LLM summarization "
                     f"({before_msgs} messages, ~{before_tokens:,} tokens)..."
                 )
                 t_compact = time.monotonic()
                 self.context.replace_messages(
-                    compact_context(self.context.messages, self.client, self.model, console=self.console)
+                    compact_context(
+                        self.context.messages, self.client, self.model,
+                        console=self.console,
+                        context_length=self.context_length,
+                        chars_per_token=cpt,
+                    )
                 )
                 compact_elapsed = time.monotonic() - t_compact
                 after_chars = estimate_context_chars(self.context.messages)
                 after_msgs = len(self.context.messages)
-                after_tokens = after_chars // CHARS_PER_TOKEN
+                after_tokens = self.token_estimator.chars_to_tokens(after_chars)
                 saved_pct = (1 - after_chars / before_chars) * 100 if before_chars else 0
                 self.console.system(
                     f"Compaction complete ({compact_elapsed:.1f}s): "
@@ -236,10 +245,11 @@ class LLMAgent:
 
         if self.verbose:
             ctx_chars = estimate_context_chars(self.context.messages)
-            ctx_pct = ctx_chars / (self.context_length * CHARS_PER_TOKEN) * 100 if self.context_length else 0
+            ctx_tokens = self.token_estimator.chars_to_tokens(ctx_chars)
+            ctx_pct = ctx_tokens / self.context_length * 100 if self.context_length else 0
             self.console.debug(
                 f"Calling API (round: {self.round_id}, "
-                f"context: ~{ctx_chars // CHARS_PER_TOKEN}tok / {self.context_length}tok [{ctx_pct:.0f}%])"
+                f"context: ~{ctx_tokens}tok / {self.context_length}tok [{ctx_pct:.0f}%])"
             )
 
         messages = self.context.get()
@@ -294,6 +304,9 @@ class LLMAgent:
         usage = response.usage
 
         self._accumulate_usage(usage)
+        self.token_estimator.calibrate(
+            estimate_context_chars(messages), usage.prompt_tokens
+        )
         self.context.add(message)
 
         if self.verbose:
@@ -348,7 +361,7 @@ class LLMAgent:
 
             # Layer 1: generic truncation relative to context window
             if self.context_length > 0:
-                result_text = truncate_tool_result(result_text, self.context_length)
+                result_text = truncate_tool_result(result_text, self.context_length, self.token_estimator.chars_per_token)
 
             tool_message = {
                 "role": "tool",
@@ -477,17 +490,22 @@ class LLMAgent:
             return
         before_chars = estimate_context_chars(self.context.messages)
         before_msgs = len(self.context.messages)
-        before_tokens = before_chars // CHARS_PER_TOKEN
+        before_tokens = self.token_estimator.chars_to_tokens(before_chars)
         self.console.system(
             f"Compacting conversation "
             f"({before_msgs} messages, ~{before_tokens:,} tokens)..."
         )
         self.context.replace_messages(
-            compact_context(self.context.messages, self.client, self.model, console=self.console)
+            compact_context(
+                self.context.messages, self.client, self.model,
+                console=self.console,
+                context_length=self.context_length,
+                chars_per_token=self.token_estimator.chars_per_token,
+            )
         )
         after_chars = estimate_context_chars(self.context.messages)
         after_msgs = len(self.context.messages)
-        after_tokens = after_chars // CHARS_PER_TOKEN
+        after_tokens = self.token_estimator.chars_to_tokens(after_chars)
         saved_pct = (1 - after_chars / before_chars) * 100 if before_chars else 0
         self.console.system(
             f"Compaction complete: "
@@ -498,7 +516,7 @@ class LLMAgent:
 
     def _cmd_usage(self):
         ctx_chars = estimate_context_chars(self.context.messages)
-        ctx_tokens = ctx_chars // CHARS_PER_TOKEN
+        ctx_tokens = self.token_estimator.chars_to_tokens(ctx_chars)
         ctx_pct = ctx_tokens / self.context_length * 100 if self.context_length else 0
 
         self.console.print(
@@ -569,7 +587,7 @@ class LLMAgent:
             else:
                 lines.append(f"  [dim]#{idx:<3}[/dim] {role_tag} {size_tag}  {preview}")
 
-        est_tokens = total_chars // CHARS_PER_TOKEN
+        est_tokens = self.token_estimator.chars_to_tokens(total_chars)
         ctx_pct = est_tokens / self.context_length * 100 if self.context_length else 0
         lines.append(f"\n  [bold]Total:[/bold] ~{est_tokens:,} tokens / {self.context_length:,} [{ctx_pct:.0f}%]")
 

@@ -3,7 +3,7 @@
 Three layers of context window management:
 1. Tool output truncation — cap individual tool results relative to context window.
 2. Context pruning — soft-trim then hard-clear old tool results at 30%/50%.
-3. Compaction — LLM-summarize oldest messages when context exceeds 60%.
+3. Compaction — LLM-summarize oldest messages when context exceeds 75%.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from kiui.agent.ui import AgentConsole
 # Constants
 # ---------------------------------------------------------------------------
 
-CHARS_PER_TOKEN = 4
+DEFAULT_CHARS_PER_TOKEN = 3.3  # conservative for code-heavy workloads
 
 # Layer 1: generic truncation of a single tool result
 TRUNCATION_RATIO = 0.3  # max result size as fraction of context window
@@ -39,12 +39,59 @@ HARD_CLEAR_PLACEHOLDER = "[compacted: tool output removed to free context]"
 
 # Layer 3: compaction threshold
 COMPACTION_RATIO = 0.75
+COMPACTION_TARGET_RATIO = 0.5  # target context usage after compaction
 COMPACTION_SUMMARY_MAX_CHARS = 50_000
 
 PRUNABLE_TOOLS = frozenset({
     "read_file", "exec_command", "web_fetch",
     "web_search", "glob_files", "grep_files",
 })
+
+
+# ---------------------------------------------------------------------------
+# Self-calibrating token estimator
+# ---------------------------------------------------------------------------
+
+
+class TokenEstimator:
+    """Self-calibrating chars-per-token estimator.
+
+    Starts with a conservative default and refines via exponential
+    moving average each time real token counts are observed from the API.
+    """
+
+    EMA_ALPHA = 0.15  # smoothing factor (higher = faster adaptation)
+    MIN_RATIO = 2.0
+    MAX_RATIO = 6.0
+
+    def __init__(self, initial: float = DEFAULT_CHARS_PER_TOKEN):
+        self._ratio = initial
+        self._calibrated = False
+
+    @property
+    def chars_per_token(self) -> float:
+        return self._ratio
+
+    def calibrate(self, prompt_chars: int, prompt_tokens: int) -> None:
+        """Update the ratio from an observed (chars, tokens) pair."""
+        if prompt_tokens < 100:  # too few tokens to be meaningful
+            return
+        observed = prompt_chars / prompt_tokens
+        observed = max(self.MIN_RATIO, min(self.MAX_RATIO, observed))
+        if not self._calibrated:
+            self._ratio = observed
+            self._calibrated = True
+        else:
+            self._ratio = (1 - self.EMA_ALPHA) * self._ratio + self.EMA_ALPHA * observed
+
+    def tokens_to_chars(self, tokens: int) -> int:
+        """Convert a token count to an estimated character count."""
+        return int(tokens * self._ratio)
+
+    def chars_to_tokens(self, chars: int) -> int:
+        """Convert a character count to an estimated token count."""
+        return int(chars / self._ratio) if self._ratio > 0 else chars
+
 
 # ---------------------------------------------------------------------------
 # Message helpers (handle both dict messages and OpenAI ChatCompletionMessage)
@@ -116,11 +163,11 @@ def estimate_context_chars(messages: list) -> int:
 # ---------------------------------------------------------------------------
 
 
-def truncate_tool_result(text: str, context_length: int) -> str:
+def truncate_tool_result(text: str, context_length: int, chars_per_token: float = DEFAULT_CHARS_PER_TOKEN) -> str:
     """Cap a tool result string to a size proportional to the context window."""
     max_chars = max(
         TRUNCATION_MIN,
-        min(int(context_length * TRUNCATION_RATIO * CHARS_PER_TOKEN), TRUNCATION_MAX),
+        min(int(context_length * TRUNCATION_RATIO * chars_per_token), TRUNCATION_MAX),
     )
     if len(text) <= max_chars:
         return text
@@ -138,24 +185,24 @@ def truncate_tool_result(text: str, context_length: int) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _find_tool_name(messages: list, tool_idx: int) -> str | None:
-    """Walk backward from a tool-result message to find the originating tool name."""
-    target_id = get_tool_call_id(messages[tool_idx])
-    if not target_id:
-        return None
-    for i in range(tool_idx - 1, -1, -1):
-        if get_role(messages[i]) != "assistant":
+def _build_tool_name_index(messages: list) -> dict[str, str]:
+    """Build a tool_call_id → tool_name lookup from all assistant messages.
+
+    Single O(n) pass replaces the per-tool-message backward walk.
+    """
+    index: dict[str, str] = {}
+    for msg in messages:
+        if get_role(msg) != "assistant":
             continue
-        for tc in get_tool_calls(messages[i]):
+        for tc in get_tool_calls(msg):
             tc_id = tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
-            if tc_id == target_id:
-                if isinstance(tc, dict):
-                    return tc.get("function", {}).get("name")
-                return getattr(getattr(tc, "function", None), "name", None)
-        # Tool results always directly follow their originating assistant
-        # message, so only the first assistant found can be the match.
-        break
-    return None
+            if isinstance(tc, dict):
+                name = tc.get("function", {}).get("name")
+            else:
+                name = getattr(getattr(tc, "function", None), "name", None)
+            if tc_id and name:
+                index[tc_id] = name
+    return index
 
 
 def _soft_trim(text: str) -> str | None:
@@ -198,36 +245,40 @@ def _prunable_range(messages: list) -> tuple[int, int]:
     return start, end
 
 
-def prune_context(messages: list, context_length: int) -> list:
+def prune_context(messages: list, context_length: int, chars_per_token: float = DEFAULT_CHARS_PER_TOKEN) -> list:
     """Prune old tool results to manage context window usage.
 
     Phase 1 (soft trim, 30 %): keep head + tail of large prunable results.
     Phase 2 (hard clear, 50 %): replace entire results with a placeholder.
 
-    Returns a new list — does not mutate the input.
+    Returns the original list when no pruning is needed, or a new list
+    with pruned messages otherwise.
     """
     if not messages or context_length <= 0:
-        return list(messages)
+        return messages
 
-    char_window = context_length * CHARS_PER_TOKEN
+    char_window = context_length * chars_per_token
     total_chars = estimate_context_chars(messages)
 
     if total_chars < char_window * SOFT_TRIM_RATIO:
-        return list(messages)
+        return messages
 
     start, end = _prunable_range(messages)
+
+    tool_name_index = _build_tool_name_index(messages)
 
     prunable: list[int] = []
     for i in range(start, end):
         msg = messages[i]
         if get_role(msg) != "tool" or not isinstance(msg, dict):
             continue
-        name = _find_tool_name(messages, i)
+        tc_id = get_tool_call_id(msg)
+        name = tool_name_index.get(tc_id) if tc_id else None
         if name and name in PRUNABLE_TOOLS:
             prunable.append(i)
 
     if not prunable:
-        return list(messages)
+        return messages
 
     result = list(messages)
 
@@ -291,8 +342,8 @@ Conversation:
 Summary:"""
 
 
-def needs_compaction(messages: list, context_length: int) -> bool:
-    char_window = context_length * CHARS_PER_TOKEN
+def needs_compaction(messages: list, context_length: int, chars_per_token: float = DEFAULT_CHARS_PER_TOKEN) -> bool:
+    char_window = context_length * chars_per_token
     return estimate_context_chars(messages) > char_window * COMPACTION_RATIO
 
 
@@ -340,8 +391,14 @@ def compact_context(
     client: Any,
     model: str,
     console: AgentConsole | None = None,
+    context_length: int = 0,
+    chars_per_token: float = DEFAULT_CHARS_PER_TOKEN,
 ) -> list:
-    """Compact messages by LLM-summarizing the oldest ~40 %.
+    """Compact messages by LLM-summarizing the oldest portion.
+
+    When *context_length* is provided the split point is calculated to
+    bring context usage down to ~50 %.  Otherwise falls back to 40 % of
+    messages.
 
     *messages* should **not** include the system prompt (it is managed
     separately by ContextManager).  Returns a new list.
@@ -349,7 +406,28 @@ def compact_context(
     if len(messages) <= 2:
         return list(messages)
 
-    split_index = max(1, int(len(messages) * 0.4))
+    if context_length > 0:
+        char_window = context_length * chars_per_token
+        total_chars = estimate_context_chars(messages)
+        chars_to_free = total_chars - char_window * COMPACTION_TARGET_RATIO
+
+        if chars_to_free <= 0:
+            return list(messages)
+
+        # Walk forward accumulating chars until we've covered enough
+        cumulative = 0
+        split_index = 1
+        max_split = max(1, len(messages) - 2)  # always keep at least 2 messages
+        for i in range(1, len(messages)):
+            cumulative += msg_chars(messages[i])
+            if cumulative >= chars_to_free:
+                split_index = min(i + 1, max_split)
+                break
+        else:
+            split_index = max_split
+    else:
+        split_index = max(1, int(len(messages) * 0.4))
+
     split_index = _safe_split_index(messages, split_index)
 
     to_compact = messages[:split_index]
