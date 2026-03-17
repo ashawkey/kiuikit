@@ -9,11 +9,6 @@ import os
 import signal
 import sys
 import time
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from kiui.agent.backend import LLMAgent
-
 
 class InterruptHandler:
     DOUBLE_PRESS_WINDOW = 1.5  # seconds
@@ -23,7 +18,7 @@ class InterruptHandler:
         self._task_running = False
         self._last_sigint: float = 0.0
         self._original_handler = signal.getsignal(signal.SIGINT)
-        self._agent: "LLMAgent | None" = None
+        self._agent = None
         self._installed = False
 
     @property
@@ -34,7 +29,7 @@ class InterruptHandler:
         """Clear the interrupted flag (call before each agent iteration)."""
         self._interrupted = False
 
-    def install(self, agent: "LLMAgent"):
+    def install(self, agent):
         """Install the SIGINT handler. Idempotent."""
         self._agent = agent
         if not self._installed:
