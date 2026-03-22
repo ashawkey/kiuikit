@@ -279,11 +279,43 @@ def node_details(target: str):
     else:
         console.print(f"[red]Error fetching jobs: {err_q}[/red]")
 
+def _get_unique_node_summary() -> Tuple[int, Dict[str, int]]:
+    """Get unique node counts by state using sinfo -N (one line per node)."""
+    cmd = ["sinfo", "-N", "-h", "-o", "%N|%T"]
+    code, out, err = _run_cmd(cmd)
+
+    node_state: Dict[str, str] = {}
+    if code == 0 and out.strip():
+        for line in out.splitlines():
+            parts = line.split("|")
+            if len(parts) < 2:
+                continue
+            node_name, state = parts[0].strip(), parts[1].strip()
+            node_state[node_name] = state
+
+    state_counts: Dict[str, int] = {"idle": 0, "mix": 0, "alloc": 0, "drain": 0, "down": 0, "other": 0}
+    for state in node_state.values():
+        s = state.replace("*", "").lower()
+        if "idle" in s:
+            state_counts["idle"] += 1
+        elif "mix" in s:
+            state_counts["mix"] += 1
+        elif "alloc" in s:
+            state_counts["alloc"] += 1
+        elif "drain" in s:
+            state_counts["drain"] += 1
+        elif "down" in s:
+            state_counts["down"] += 1
+        else:
+            state_counts["other"] += 1
+
+    return len(node_state), state_counts
+
+
 def info():
     """
     Wrapper for `sinfo` to show partition and node status.
     """
-    # Use pipe delimiter for easier parsing
     # %P: Partition, %a: Avail, %l: TimeLimit, %D: Nodes, %T: State, %N: NodeList
     cmd = ["sinfo", "-o", "%P|%a|%l|%D|%T|%N"]
     code, out, err = _run_cmd(cmd)
@@ -304,10 +336,6 @@ def info():
     if lines and "PARTITION" in lines[0]:
         lines = lines[1:]
 
-    total_nodes_count = 0
-    # Group states for summary
-    state_counts = {"idle": 0, "mix": 0, "alloc": 0, "drain": 0, "down": 0, "other": 0}
-
     for line in lines:
         parts = line.split("|")
         if len(parts) < 6:
@@ -315,39 +343,21 @@ def info():
         
         partition, avail, timelimit, nodes_str, state, nodelist = [p.strip() for p in parts]
         
-        # Colorize state
-        state_clean = state.replace("*", "") # Remove * suffix if present
+        state_clean = state.replace("*", "")
         
         if "idle" in state_clean:
             state_style = "green"
-            count_key = "idle"
         elif "mix" in state_clean:
             state_style = "yellow"
-            count_key = "mix"
         elif "alloc" in state_clean:
             state_style = "blue"
-            count_key = "alloc"
         elif "drain" in state_clean:
             state_style = "red"
-            count_key = "drain"
         elif "down" in state_clean:
             state_style = "bold red"
-            count_key = "down"
         else:
             state_style = "white"
-            count_key = "other"
 
-        try:
-            n_count = int(nodes_str)
-            total_nodes_count += n_count
-            if count_key in state_counts:
-                state_counts[count_key] += n_count
-            else:
-                state_counts["other"] += n_count
-        except ValueError:
-            pass
-
-        # Colorize avail
         avail_style = "green" if avail == "up" else "red"
 
         table.add_row(
@@ -359,7 +369,9 @@ def info():
             nodelist
         )
 
-    # Summary string
+    # Unique node summary (deduplicated across partitions)
+    total_nodes, state_counts = _get_unique_node_summary()
+
     summary_parts = []
     if state_counts["idle"] > 0:
         summary_parts.append(f"[green]Idle: {state_counts['idle']}[/green]")
@@ -373,7 +385,7 @@ def info():
         summary_parts.append(f"[bold red]Down: {state_counts['down']}[/bold red]")
     
     summary_str = ", ".join(summary_parts)
-    title = f"Slurm Nodes (Total: {total_nodes_count} | {summary_str})"
+    title = f"Slurm Nodes (Total: {total_nodes} | {summary_str})"
 
     console.print(Panel(table, title=title, border_style="blue"))
 
@@ -484,61 +496,43 @@ def log_output(target: Optional[str] = None, num_lines: Optional[int] = 100, sho
         pass
 
 
-def monitor(target: str):
-    """
-    Monitor GPU usage for a job using nvidia-smi via ssh.
-    """
-    infos = get_job_info(target)
-    if not infos:
-        return
-    
-    if len(infos) > 1:
-        console.print(f"[yellow]Warning:[/yellow] Multiple jobs found. Monitoring the first one: {infos[0].jid}")
-
-    info = infos[0]
-    
-    # Check if job is running
-    state = info.data.get("JobState") or info.data.get("State")
-    if state and "RUNNING" not in state:
-         console.print(f"[yellow]Job {info.jid} is in state {state} (not RUNNING).[/yellow]")
-
-    nodelist_raw = info.node_list
-    if not nodelist_raw:
-        console.print(f"[yellow]Job {info.jid} does not have assigned nodes yet.[/yellow]")
+def _cancel_jobs(job_ids: List[str], job_names: Optional[Dict[str, str]] = None):
+    """Confirm and cancel a list of job IDs."""
+    if not job_ids:
+        console.print("[yellow]No jobs to cancel.[/yellow]")
         return
 
-    # Expand NodeList
-    cmd = ["scontrol", "show", "hostnames", nodelist_raw]
-    code, out, err = _run_cmd(cmd)
-    if code != 0:
-        nodes = [nodelist_raw] # Fallback
+    console.print(f"[bold red]You are about to cancel {len(job_ids)} job(s):[/bold red]")
+    for jid in job_ids:
+        label = f"  - {jid}"
+        if job_names and jid in job_names:
+            label += f" ({job_names[jid]})"
+        console.print(label)
+
+    confirm = questionary.confirm("Are you sure?").ask()
+    if not confirm:
+        console.print("[yellow]Cancellation aborted.[/yellow]")
+        return
+
+    cmd_cancel = ["scancel"] + job_ids
+    code, _, err = _run_cmd(cmd_cancel)
+    if code == 0:
+        console.print(f"[green]Successfully cancelled {len(job_ids)} job(s).[/green]")
     else:
-        nodes = out.splitlines()
-
-    try:
-        console.print(f"[bold cyan]Monitoring Job {info.jid} on nodes: {', '.join(nodes)}[/bold cyan]")
-        
-        for node in nodes:
-            console.print(Panel(f"Node: [bold]{node}[/bold]", border_style="blue"))
-            # Run nvidia-smi
-            ssh_cmd = ["ssh", node, "nvidia-smi"]
-            subprocess.run(ssh_cmd) 
-
-    except KeyboardInterrupt:
-        pass
-    except Exception as e:
-        console.print(f"[bold red]Error monitoring job:[/bold red] {e}")
+        console.print(f"[bold red]Error cancelling jobs:[/bold red] {err}")
 
 
-def cancel(user: Optional[str] = None):
+def cancel(targets: Optional[List[str]] = None, user: Optional[str] = None):
     """
-    Interactive cancel command.
+    Cancel jobs. Direct mode if job IDs given, interactive otherwise.
     """
+    if targets:
+        _cancel_jobs(targets)
+        return
+
     if user is None:
         user = getpass.getuser()
 
-    # Get running/pending jobs
-    # %i: JobID, %P: Partition, %j: Name, %u: User, %t: State, %M: Time, %D: Nodes
     cmd = ["squeue", "-u", user, "-o", "%i|%P|%200j|%u|%t|%M|%D", "--noheader"]
     code, out, err = _run_cmd(cmd)
 
@@ -551,17 +545,13 @@ def cancel(user: Optional[str] = None):
         return
 
     choices = []
-    job_map = {}
+    job_map: Dict[str, str] = {}
 
-    lines = out.splitlines()
-    for line in lines:
+    for line in out.splitlines():
         parts = line.split("|")
         if len(parts) < 7:
             continue
-        
         jobid, partition, name, username, state, time_str, nodes = [p.strip() for p in parts]
-        
-        # Format for display
         display_text = f"{jobid:<10} | {state:<10} | {partition:<10} | {name}"
         choices.append(questionary.Choice(display_text, value=jobid))
         job_map[jobid] = name
@@ -570,21 +560,20 @@ def cancel(user: Optional[str] = None):
         console.print(f"[green]No active jobs found for user {user}.[/green]")
         return
 
-    # Prompt user
     selected_job_ids = questionary.checkbox(
         "Select jobs to cancel (Enter to confirm):",
         choices=choices,
         style=questionary.Style([
-            ('qmark', 'fg:#673ab7 bold'),       
-            ('question', 'bold'),               
-            ('answer', 'fg:#f44336 bold'),      
-            ('pointer', 'fg:#673ab7 bold'),     
-            ('highlighted', 'fg:#673ab7 bold'), 
-            ('selected', 'fg:#cc5454'),         
-            ('separator', 'fg:#cc5454'),        
-            ('instruction', ''),                
-            ('text', ''),                       
-            ('disabled', 'fg:#858585 italic')   
+            ('qmark', 'fg:#673ab7 bold'),
+            ('question', 'bold'),
+            ('answer', 'fg:#f44336 bold'),
+            ('pointer', 'fg:#673ab7 bold'),
+            ('highlighted', 'fg:#673ab7 bold'),
+            ('selected', 'fg:#cc5454'),
+            ('separator', 'fg:#cc5454'),
+            ('instruction', ''),
+            ('text', ''),
+            ('disabled', 'fg:#858585 italic')
         ])
     ).ask()
 
@@ -592,24 +581,7 @@ def cancel(user: Optional[str] = None):
         console.print("[yellow]No jobs selected.[/yellow]")
         return
 
-    # Confirm cancellation
-    console.print(f"[bold red]You are about to cancel {len(selected_job_ids)} jobs:[/bold red]")
-    for jid in selected_job_ids:
-        console.print(f"  - {jid} ({job_map.get(jid, 'Unknown')})")
-    
-    confirm = questionary.confirm("Are you sure?").ask()
-    
-    if confirm:
-        # Execute scancel
-        cmd_cancel = ["scancel"] + selected_job_ids
-        code_c, out_c, err_c = _run_cmd(cmd_cancel)
-        
-        if code_c == 0:
-            console.print(f"[green]Successfully cancelled {len(selected_job_ids)} jobs.[/green]")
-        else:
-            console.print(f"[bold red]Error cancelling jobs:[/bold red] {err_c}")
-    else:
-        console.print("[yellow]Cancellation aborted.[/yellow]")
+    _cancel_jobs(selected_job_ids, job_map)
 
 
 def queue(user: Optional[str] = None, all_users: bool = False):
@@ -813,8 +785,107 @@ def history(user: Optional[str] = None, days: int = 3, all_users: bool = False):
 
     console.print(Panel(table, title=title, border_style="blue"))
 
+def _parse_gpu_count(tres_per_node: str) -> int:
+    """Extract GPU count from squeue %b (tres-per-node) field."""
+    if not tres_per_node or tres_per_node in ["N/A", "(null)"]:
+        return 0
+    m = re.search(r"gpu[^,]*?:(\d+)", tres_per_node)
+    return int(m.group(1)) if m else 0
+
+
+def usage(partition: Optional[str] = None, top_n: Optional[int] = None):
+    """
+    Show cluster resource usage grouped by user, sorted by GPU count.
+    """
+    cmd = ["squeue", "--noheader", "-o", "%u|%t|%D|%C|%b"]
+    if partition:
+        cmd.extend(["-p", partition])
+
+    code, out, err = _run_cmd(cmd)
+    if code != 0:
+        console.print(f"[bold red]Error running squeue:[/bold red] {err}")
+        return
+
+    users: Dict[str, Dict[str, int]] = {}
+
+    for line in out.splitlines():
+        parts = line.split("|")
+        if len(parts) < 5:
+            continue
+        user, state, nodes_str, cpus_str, tres_per_node = [p.strip() for p in parts]
+
+        if user not in users:
+            users[user] = {"running": 0, "pending": 0, "nodes": 0, "gpus": 0, "cpus": 0}
+
+        if state == "R":
+            try:
+                n_nodes = int(nodes_str)
+                n_cpus = int(cpus_str)
+            except ValueError:
+                n_nodes = 0
+                n_cpus = 0
+            gpus_per_node = _parse_gpu_count(tres_per_node)
+            users[user]["running"] += 1
+            users[user]["nodes"] += n_nodes
+            users[user]["cpus"] += n_cpus
+            users[user]["gpus"] += gpus_per_node * n_nodes
+        elif state == "PD":
+            users[user]["pending"] += 1
+
+    if not users:
+        msg = "No jobs found."
+        if partition:
+            msg = f"No jobs found in partition '{partition}'."
+        console.print(f"[green]{msg}[/green]")
+        return
+
+    sorted_users = sorted(users.items(), key=lambda x: (x[1]["gpus"], x[1]["nodes"]), reverse=True)
+
+    if top_n is not None and top_n > 0:
+        sorted_users = sorted_users[:top_n]
+
+    totals = {"running": 0, "pending": 0, "nodes": 0, "gpus": 0, "cpus": 0}
+    for _, d in users.items():
+        for k in totals:
+            totals[k] += d[k]
+
+    table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="bold cyan", expand=True)
+    table.add_column("#", justify="right", style="dim", no_wrap=True)
+    table.add_column("User", style="bold yellow")
+    table.add_column("Running", justify="right")
+    table.add_column("GPUs", justify="right", style="bold")
+    table.add_column("Nodes", justify="right")
+    table.add_column("CPUs", justify="right")
+    table.add_column("Pending", justify="right", style="dim")
+
+    for rank, (user, d) in enumerate(sorted_users, 1):
+        table.add_row(
+            str(rank),
+            user,
+            str(d["running"]),
+            str(d["gpus"]),
+            str(d["nodes"]),
+            str(d["cpus"]),
+            str(d["pending"]),
+        )
+
+    title_parts = [f"Running: {totals['running']} jobs",
+                   f"{totals['gpus']} GPUs",
+                   f"{totals['nodes']} nodes"]
+    if totals["pending"] > 0:
+        title_parts.append(f"Pending: {totals['pending']}")
+    subtitle = f"{len(users)} users"
+    if partition:
+        subtitle += f" | partition: {partition}"
+    if top_n is not None and top_n < len(users):
+        subtitle += f" | showing top {top_n}"
+    title = f"Cluster Usage ({' | '.join(title_parts)})"
+
+    console.print(Panel(table, title=title, subtitle=subtitle, border_style="blue"))
+
+
 def main():
-    parser = argparse.ArgumentParser(prog="kis", description="kiui slurm utilities")
+    parser = argparse.ArgumentParser(prog="ks", description="kiui slurm utilities")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     # Info command
@@ -844,13 +915,15 @@ def main():
     l_parser.add_argument("--stderr", "-e", action="store_true", help="Include stderr output")
     l_parser.add_argument("--user", "-u", type=str, help="Show jobs from specific user (interactive mode only)")
 
-    # Monitor command
-    m_parser = sub.add_parser("monitor", aliases=["m"], help="Monitor GPU usage for a job")
-    m_parser.add_argument("target", help="Job ID or Name")
-
     # Cancel command
-    c_parser = sub.add_parser("cancel", aliases=["c"], help="Interactive cancel jobs")
-    c_parser.add_argument("--user", "-u", type=str, help="Show jobs from specific user (defaults to current user)")
+    c_parser = sub.add_parser("cancel", aliases=["c"], help="Cancel jobs (interactive if no IDs given)")
+    c_parser.add_argument("targets", nargs="*", help="Job ID(s) to cancel directly (interactive if omitted)")
+    c_parser.add_argument("--user", "-u", type=str, help="Show jobs from specific user (interactive mode only)")
+
+    # Usage command
+    u_parser = sub.add_parser("usage", aliases=["u"], help="Show cluster resource usage by user")
+    u_parser.add_argument("--top", "-n", type=int, default=None, help="Show only the top N users")
+    u_parser.add_argument("--partition", "-p", type=str, default=None, help="Filter by partition")
 
     args = parser.parse_args()
 
@@ -867,10 +940,10 @@ def main():
         history(user=args.user, days=args.days, all_users=args.all)
     elif args.cmd in ["log", "l"]:
         log_output(args.target, num_lines=args.lines, show_all=args.all, show_stderr=args.stderr, user=args.user)
-    elif args.cmd in ["monitor", "m"]:
-        monitor(args.target)
     elif args.cmd in ["cancel", "c"]:
-        cancel(args.user)
+        cancel(targets=args.targets or None, user=args.user)
+    elif args.cmd in ["usage", "u"]:
+        usage(partition=args.partition, top_n=args.top)
     else:
         parser.print_help()
 

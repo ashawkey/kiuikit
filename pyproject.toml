@@ -68,7 +68,7 @@ kire = "kiui.render:main"
 kisr = "kiui.sr:main"
 kivi = "kiui.video:main"
 kiss = "kiui.sys:main"
-kism = "kiui.slurm:main"
+ks = "kiui.slurm:main"
 kia = "kiui.agent.cli:main"
 
 [tool.setuptools]

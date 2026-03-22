@@ -9,54 +9,64 @@ Wraps Slurm CLI with clean and beautiful output.
 ```bash
 python -m kiui.slurm --help
 # short cut:
-kism --help
+ks --help
 
 # check cluster information (sinfo)
-kism info
-kism i # short cut
+ks info
+ks i # short cut
 
 # check node details (scontrol show node)
-kism i <nodename>
+ks i <nodename>
 
 # check job details (scontrol show job)
-kism job <jobid>
-kism j <jobid> # short cut
+ks job <jobid>
+ks j <jobid> # short cut
 
 # show current user's jobs (squeue)
-kism queue
-kism q # short cut
+ks queue
+ks q # short cut
 
 # show all users' jobs
-kism q -a
+ks q -a
 
 # show specific user's jobs
-kism q -u <username>
+ks q -u <username>
 
 # check job history (sacct)
-kism history
-kism h # short cut
+ks history
+ks h # short cut
 
 # check job history for the last 7 days (default is 3)
-kism h -d 7
+ks h -d 7
 
 # check job logs (stdout, last 100 lines)
-kism log <jobid>
-kism l <jobid> # short cut
+ks log <jobid>
+ks l <jobid> # short cut
 
 # check job stderr
-kism l <jobid> -e
+ks l <jobid> -e
 
 # check all job logs (no truncation)
-kism l <jobid> -a
+ks l <jobid> -a
 
 # check last N lines of job logs (default is 100)
-kism l <jobid> -n 500
+ks l <jobid> -n 500
 
-# monitor job GPU usage (snapshot)
-kism monitor <jobid>
-kism m <jobid> # short cut
+# interactive cancel jobs (will prompt for selection and confirmation)
+ks cancel
+ks c # short cut
 
-# interactive cancel jobs (will prompt for confirmation)
-kism cancel
-kism c # shortcut
+# directly cancel specific job(s) by ID
+ks c <jobid>
+ks c <jobid1> <jobid2>
+
+# show cluster resource usage by user (sorted by GPU count)
+ks usage
+ks u # short cut
+
+# show top 10 users by resource usage
+ks u -n 10
+
+# filter usage by partition
+ks u -p batch
 ```
