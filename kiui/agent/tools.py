@@ -5,6 +5,7 @@ import locale
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -38,6 +39,29 @@ def _decode_bytes(b: bytes | None) -> str:
         return b.decode(encoding)
     except UnicodeDecodeError:
         return b.decode("utf-8", errors="replace")
+
+
+def _kill_proc_tree(proc: subprocess.Popen) -> None:
+    """Kill a process and all its descendants."""
+    if sys.platform == "win32":
+        try:
+            subprocess.run(
+                ["taskkill", "/T", "/F", "/PID", str(proc.pid)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+            )
+        except Exception:
+            proc.kill()
+    else:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, OSError):
+            proc.kill()
 
 
 def get_tool_definitions() -> list[dict[str, Any]]:
@@ -97,22 +121,14 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                 "name": "exec_command",
                 "description": (
                     "Execute a shell command and return stdout, stderr, and exit code. "
-                    "By default there is no timeout and the command runs until completion. "
-                    "Output is streamed to the console in real-time and the last 50KB is returned. "
-                    "Set timeout > 0 to impose a time limit for long-running commands."
+                    "The command runs until completion. "
+                    "Output is streamed to the console in real-time and the last 50KB is returned."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "command": {"type": "string", "description": "Shell command to execute"},
                         "cwd": {"type": "string", "description": "Working directory (optional)"},
-                        "timeout": {
-                            "type": "integer",
-                            "description": (
-                                "Timeout in seconds. 0 = no timeout (default). "
-                                "Set > 0 to impose a time limit."
-                            ),
-                        },
                     },
                     "required": ["command"],
                 },
@@ -354,76 +370,31 @@ class ToolExecutor:
 
         return {"message": f"Successfully edited {path}\n{diff_msg}", "success": True}
 
-    def _exec_command(self, command: str, cwd: str | None = None, timeout: int | None = None) -> dict[str, Any]:
-        """Execute shell command."""
-        self.console.tool(f"exec_command: {command}")
-
-        cwd = cwd or self._work_dir
-        if timeout is None:
-            timeout = 0
-
-        if sys.platform == "win32":
-            shell_cmd: Any = command
-            use_shell = True
-        else:
-            shell_cmd = ["/bin/bash", "-lc", command]
-            use_shell = False
-
-        if timeout == 0:
-            return self._exec_command_streaming(shell_cmd, use_shell, cwd)
-
-        timeout = max(1, timeout)
-        try:
-            result = subprocess.run(
-                shell_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=timeout,
-                cwd=cwd or None,
-                shell=use_shell,
-            )
-        except subprocess.TimeoutExpired as e:
-            partial = _decode_bytes(e.stdout)[:MAX_EXEC_OUTPUT_BYTES]
-            return {"error": f"Command timed out after {timeout}s. Partial output:\n{partial}", "success": False}
-
-        stdout = _decode_bytes(result.stdout)
-        stderr = _decode_bytes(result.stderr)
-
-        truncated = False
-        combined_len = len(stdout) + len(stderr)
-        if combined_len > MAX_EXEC_OUTPUT_BYTES:
-            truncated = True
-            if len(stdout) > MAX_EXEC_OUTPUT_BYTES:
-                stdout = stdout[:MAX_EXEC_OUTPUT_BYTES]
-                stderr = ""
-            else:
-                stderr = stderr[:MAX_EXEC_OUTPUT_BYTES - len(stdout)]
-
-        res = {
-            "stdout": stdout,
-            "stderr": stderr,
-            "exit_code": result.returncode,
-            "success": result.returncode == 0,
-        }
-        if truncated:
-            res["truncation_notice"] = f"[output truncated: showing first {len(stdout) + len(stderr)} of {combined_len} bytes]"
-        return res
-
-    def _exec_command_streaming(self, shell_cmd: Any, use_shell: bool, cwd: str | None) -> dict[str, Any]:
-        """Execute a command with no timeout, streaming output in real-time.
+    def _exec_command(self, command: str, cwd: str | None = None) -> dict[str, Any]:
+        """Execute a shell command, streaming output in real-time.
 
         Uses subprocess.Popen with reader threads so output is displayed as it
         arrives.  A rolling buffer (MAX_STREAMING_BUFFER) bounds memory usage
         for very long-running processes; the returned result keeps at most the
         last MAX_EXEC_OUTPUT_BYTES of each stream.
         """
-        proc = subprocess.Popen(
-            shell_cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=cwd or None,
-            shell=use_shell,
-        )
+        self.console.tool(f"exec_command: {command}")
+
+        cwd = cwd or self._work_dir
+
+        if sys.platform == "win32":
+            shell_cmd: Any = command
+            proc = subprocess.Popen(
+                shell_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                cwd=cwd or None, shell=True,
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+            )
+        else:
+            shell_cmd = ["/bin/bash", "-lc", command]
+            proc = subprocess.Popen(
+                shell_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                cwd=cwd or None, start_new_session=True,
+            )
 
         stdout_lines: deque[str] = deque()
         stderr_lines: deque[str] = deque()
@@ -455,13 +426,14 @@ class ToolExecutor:
         while proc.poll() is None:
             if self._interrupt and self._interrupt.interrupted:
                 interrupted = True
-                proc.terminate()
-                try:
-                    proc.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    proc.kill()
+                _kill_proc_tree(proc)
                 break
             time.sleep(0.5)
+
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
 
         t_out.join(timeout=10)
         t_err.join(timeout=10)
@@ -472,7 +444,6 @@ class ToolExecutor:
         total_len = len(stdout) + len(stderr)
         truncated = total_len > MAX_EXEC_OUTPUT_BYTES
         if truncated:
-            # Keep the tail — for long-running jobs the end is most relevant
             if len(stdout) > MAX_EXEC_OUTPUT_BYTES:
                 stdout = stdout[-MAX_EXEC_OUTPUT_BYTES:]
                 stderr = ""
@@ -485,7 +456,6 @@ class ToolExecutor:
             "stderr": stderr,
             "exit_code": proc.returncode if proc.returncode is not None else -1,
             "success": not interrupted and proc.returncode == 0,
-            "streamed": True,
         }
         if truncated:
             res["truncation_notice"] = (
