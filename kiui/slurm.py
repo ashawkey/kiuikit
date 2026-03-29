@@ -884,6 +884,94 @@ def usage(partition: Optional[str] = None, top_n: Optional[int] = None):
     console.print(Panel(table, title=title, subtitle=subtitle, border_style="blue"))
 
 
+def pending(user: Optional[str] = None, top_n: int = 10):
+    """
+    Show top pending jobs sorted by priority for all users and the current user.
+    """
+    current_user = user or getpass.getuser()
+
+    cmd = [
+        "squeue", "-t", "PD", "--sort=-Q",
+        "--noheader", "-o", "%Q|%i|%P|%200j|%u|%M|%D|%R|%V",
+    ]
+    code, out, err = _run_cmd(cmd)
+    if code != 0:
+        console.print(f"[bold red]Error running squeue:[/bold red] {err}")
+        return
+
+    rows_all = []
+    rows_me = []
+    for line in out.splitlines():
+        parts = line.split("|")
+        if len(parts) < 9:
+            continue
+        priority, jobid, partition, name, username, time_str, nodes, reason, submit_time_str = [
+            p.strip() for p in parts
+        ]
+        row = (priority, jobid, partition, name, username, time_str, nodes, reason, submit_time_str)
+        rows_all.append(row)
+        if username == current_user:
+            rows_me.append(row)
+
+    def _build_table(rows, limit):
+        table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="bold cyan", expand=True)
+        table.add_column("#", justify="right", style="dim", no_wrap=True)
+        table.add_column("Priority", justify="right", style="bold magenta")
+        table.add_column("JobID", style="bold", no_wrap=True)
+        table.add_column("Partition")
+        table.add_column("Name", overflow="fold")
+        table.add_column("User", style="yellow")
+        table.add_column("Wait Time")
+        table.add_column("Nodes", justify="right")
+        table.add_column("Reason", style="dim")
+
+        for rank, (priority, jobid, partition, name, username, time_str, nodes, reason, submit_time_str) in enumerate(rows[:limit], 1):
+            try:
+                submit_time = datetime.fromisoformat(submit_time_str)
+                delta = datetime.now() - submit_time
+                days = delta.days
+                seconds = delta.seconds
+                hours = seconds // 3600
+                minutes = (seconds % 3600) // 60
+                sec = seconds % 60
+                if days > 0:
+                    wait_str = f"{days}-{hours:02d}:{minutes:02d}:{sec:02d}"
+                else:
+                    wait_str = f"{hours:02d}:{minutes:02d}:{sec:02d}"
+            except Exception:
+                wait_str = time_str or "N/A"
+
+            table.add_row(
+                str(rank),
+                priority,
+                jobid,
+                partition,
+                name,
+                username,
+                Text(wait_str, style="yellow"),
+                nodes,
+                Text(reason, style="yellow"),
+            )
+        return table
+
+    total_all = len(rows_all)
+    total_me = len(rows_me)
+
+    # All users table
+    title_all = f"Top Pending Jobs — All Users (showing {min(top_n, total_all)}/{total_all})"
+    if total_all == 0:
+        console.print(Panel("[green]No pending jobs in the cluster.[/green]", title=title_all, border_style="blue"))
+    else:
+        console.print(Panel(_build_table(rows_all, top_n), title=title_all, border_style="blue"))
+
+    # Current user table
+    title_me = f"Top Pending Jobs — [bold gold1]{current_user}[/bold gold1] (showing {min(top_n, total_me)}/{total_me})"
+    if total_me == 0:
+        console.print(Panel(f"[green]No pending jobs for {current_user}.[/green]", title=title_me, border_style="green"))
+    else:
+        console.print(Panel(_build_table(rows_me, top_n), title=title_me, border_style="green"))
+
+
 def main():
     parser = argparse.ArgumentParser(prog="ks", description="kiui slurm utilities")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -920,6 +1008,11 @@ def main():
     c_parser.add_argument("targets", nargs="*", help="Job ID(s) to cancel directly (interactive if omitted)")
     c_parser.add_argument("--user", "-u", type=str, help="Show jobs from specific user (interactive mode only)")
 
+    # Pending command
+    p_parser = sub.add_parser("pending", aliases=["p"], help="Show top pending jobs sorted by priority")
+    p_parser.add_argument("--top", "-n", type=int, default=10, help="Number of top jobs to show (default: 10)")
+    p_parser.add_argument("--user", "-u", type=str, help="Override current user for the per-user table")
+
     # Usage command
     u_parser = sub.add_parser("usage", aliases=["u"], help="Show cluster resource usage by user")
     u_parser.add_argument("--top", "-n", type=int, default=None, help="Show only the top N users")
@@ -942,6 +1035,8 @@ def main():
         log_output(args.target, num_lines=args.lines, show_all=args.all, show_stderr=args.stderr, user=args.user)
     elif args.cmd in ["cancel", "c"]:
         cancel(targets=args.targets or None, user=args.user)
+    elif args.cmd in ["pending", "p"]:
+        pending(user=args.user, top_n=args.top)
     elif args.cmd in ["usage", "u"]:
         usage(partition=args.partition, top_n=args.top)
     else:
