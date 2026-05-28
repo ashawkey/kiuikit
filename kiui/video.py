@@ -2,7 +2,7 @@ import os
 import subprocess
 import json
 import math
-import tempfile
+import sys
 from typing import Tuple
 
 import cv2
@@ -306,6 +306,90 @@ def _infer_encoder(src_codec: str, codec: Optional[str]) -> str:
     return "libx264"
 
 
+def _encoder_dimension_multiple(encoder: str) -> int:
+    """Return the dimension multiple needed by common chroma-subsampled encoders."""
+    lower_encoder = encoder.lower()
+    chroma_subsampled_encoders = {
+        "h264",
+        "libx264",
+        "h264_nvenc",
+        "h265",
+        "hevc",
+        "libx265",
+        "hevc_nvenc",
+        "mpeg4",
+    }
+    return 2 if lower_encoder in chroma_subsampled_encoders else 1
+
+
+def _nearest_positive_multiple(value: int, multiple: int) -> int:
+    """Round *value* to the closest positive multiple of *multiple*."""
+    if value <= 0:
+        raise ValueError("video width and height must be > 0.")
+    if multiple <= 1:
+        return value
+
+    lower = (value // multiple) * multiple
+    upper = lower + multiple
+    if lower <= 0:
+        return upper
+    if value - lower <= upper - value:
+        return lower
+    return upper
+
+
+def _make_size_encoder_compatible(width: int, height: int, encoder: str) -> Tuple[int, int, int]:
+    """Adjust a target size to satisfy common encoder chroma subsampling limits."""
+    multiple = _encoder_dimension_multiple(encoder)
+    return (
+        _nearest_positive_multiple(width, multiple),
+        _nearest_positive_multiple(height, multiple),
+        multiple,
+    )
+
+
+def _apply_encoder_quiet_flags(cmd: list, encoder: str) -> None:
+    """Suppress encoder library chatter while keeping real errors visible."""
+    lower_encoder = encoder.lower()
+    if lower_encoder in ["libx265", "hevc", "h265"]:
+        cmd += ["-x265-params", "log-level=error"]
+
+
+def _run_ffmpeg_quietly(cmd: list) -> None:
+    """Run ffmpeg quietly, printing stderr/stdout only if the command fails."""
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode == 0:
+        return
+
+    stderr = result.stderr.strip()
+    stdout = result.stdout.strip()
+    if stderr:
+        print(stderr, file=sys.stderr)
+    elif stdout:
+        print(stdout, file=sys.stderr)
+
+    error = subprocess.CalledProcessError(
+        result.returncode,
+        cmd,
+        output=result.stdout,
+        stderr=result.stderr,
+    )
+    setattr(error, "_kiui_reported", True)
+    raise error
+
+
+def _exit_subprocess_error(error: subprocess.CalledProcessError) -> None:
+    """Exit CLI subprocess failures without a Python traceback."""
+    if not getattr(error, "_kiui_reported", False):
+        stderr = error.stderr.strip() if error.stderr else ""
+        stdout = error.output.strip() if error.output else ""
+        if stderr:
+            print(stderr, file=sys.stderr)
+        elif stdout:
+            print(stdout, file=sys.stderr)
+    raise SystemExit(error.returncode)
+
+
 def _apply_codec_tag(cmd: list, encoder: str, src_tag: str) -> None:
     """Preserve container codec tag (sample entry) when reasonable.
 
@@ -416,6 +500,10 @@ def resize_video(
             ``q:v`` internally when CRF is provided.
         preset: ffmpeg preset, e.g. ``"slow"``, ``"medium"``, ``"fast"``.
         fps: If not None, resample video to this FPS.
+
+    If the requested size is incompatible with the selected encoder's default
+    chroma subsampling, it is rounded to the closest compatible size and a
+    warning is printed.
     """
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True) if os.path.dirname(output_path) != "" else None
@@ -443,7 +531,19 @@ def resize_video(
 
     # choose codec if not specified
     codec = _infer_encoder(src_codec, codec)
-    lower_codec = codec.lower()
+
+    compatible_width, compatible_height, dimension_multiple = _make_size_encoder_compatible(
+        width, height, codec
+    )
+    if compatible_width != width or compatible_height != height:
+        print(
+            "Warning: requested output size "
+            f"{width}x{height} may be incompatible with {codec}'s chroma subsampling; "
+            f"using closest compatible size {compatible_width}x{compatible_height} "
+            f"(dimensions must be multiples of {dimension_multiple}).",
+            file=sys.stderr,
+        )
+        width, height = compatible_width, compatible_height
 
     vf_filters = [f"scale={width}:{height}:flags=lanczos"]
     if fps is not None:
@@ -465,6 +565,9 @@ def resize_video(
 
     cmd = [
         "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
         "-y",
         "-i",
         input_path,
@@ -476,6 +579,7 @@ def resize_video(
 
     # preserve container codec tag (sample entry) for better compatibility
     _apply_codec_tag(cmd, codec, src_tag)
+    _apply_encoder_quiet_flags(cmd, codec)
 
     if fps is not None:
         # Force CFR output behavior for widest compatibility across ffmpeg versions.
@@ -502,7 +606,7 @@ def resize_video(
         output_path,
     ]
 
-    subprocess.run(cmd, check=True)
+    _run_ffmpeg_quietly(cmd)
 
 
 def split_video(
@@ -726,36 +830,39 @@ def main():
 
     args = parser.parse_args()
 
-    if args.cmd == "info":
-        print_video_info(args.path)
-    elif args.cmd == "resize":
-        resize_video(
-            input_path=args.input,
-            output_path=args.output,
-            width=args.width,
-            height=args.height,
-            codec=args.codec,
-            crf=args.crf,
-            preset=args.preset,
-            fps=args.fps,
-        )
-    elif args.cmd == "split":
-        # basic validation for CLI: require either timestamps or uniform
-        if (not args.timestamps or len(args.timestamps) == 0) and args.uniform is None:
-            raise ValueError("split: please provide either --timestamps or --uniform.")
-        if args.uniform is not None and args.timestamps and len(args.timestamps) > 0:
-            raise ValueError("split: please provide only one of --timestamps or --uniform, not both.")
+    try:
+        if args.cmd == "info":
+            print_video_info(args.path)
+        elif args.cmd == "resize":
+            resize_video(
+                input_path=args.input,
+                output_path=args.output,
+                width=args.width,
+                height=args.height,
+                codec=args.codec,
+                crf=args.crf,
+                preset=args.preset,
+                fps=args.fps,
+            )
+        elif args.cmd == "split":
+            # basic validation for CLI: require either timestamps or uniform
+            if (not args.timestamps or len(args.timestamps) == 0) and args.uniform is None:
+                raise ValueError("split: please provide either --timestamps or --uniform.")
+            if args.uniform is not None and args.timestamps and len(args.timestamps) > 0:
+                raise ValueError("split: please provide only one of --timestamps or --uniform, not both.")
 
-        split_video(
-            input_path=args.input,
-            output_dir=args.output_dir,
-            timestamps=args.timestamps or [],
-            codec=args.codec,
-            crf=args.crf,
-            preset=args.preset,
-            uniform=args.uniform,
-            drop_last=args.drop_last,
-        )
+            split_video(
+                input_path=args.input,
+                output_dir=args.output_dir,
+                timestamps=args.timestamps or [],
+                codec=args.codec,
+                crf=args.crf,
+                preset=args.preset,
+                uniform=args.uniform,
+                drop_last=args.drop_last,
+            )
+    except subprocess.CalledProcessError as error:
+        _exit_subprocess_error(error)
 
 
 if __name__ == "__main__":

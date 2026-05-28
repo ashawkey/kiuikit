@@ -58,6 +58,8 @@ By default, `kivi`:
 - Infers a reasonable encoder (`libx264`, `libx265`, `mpeg4`, …) from the input codec.
 - Tries to match the original bitrate per pixel (scaled by resolution / fps), to preserve quality and file size characteristics.
 - Keeps the codec tag (e.g. `hvc1` vs `hev1`) when using HEVC / H.264 encoders for better compatibility.
+- Warns and rounds the output size to the closest encoder-compatible dimensions when chroma subsampling requires it (for example, `libx265` / 4:2:0 output needs even width and height).
+- Runs ffmpeg quietly on successful resizes, while still showing `kivi` warnings and ffmpeg errors.
 
 You can also override the encoder and quality explicitly:
 
