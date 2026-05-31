@@ -609,6 +609,261 @@ def resize_video(
     _run_ffmpeg_quietly(cmd)
 
 
+def _has_audio(path: str) -> bool:
+    """Return True if the file has at least one audio stream."""
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "a",
+        "-show_entries",
+        "stream=index",
+        "-of",
+        "csv=p=0",
+        path,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    return result.returncode == 0 and result.stdout.strip() != ""
+
+
+def _plan_preview_geometry(
+    *,
+    src_w: int,
+    src_h: int,
+    src_fps: float,
+    video_bitrate: float,
+    max_long_side: int,
+    max_fps: float,
+    min_long_side: int,
+    min_fps: float,
+    target_bpp: float,
+) -> Tuple[int, int, float]:
+    """Decide preview resolution and fps, downsampling only when needed.
+
+    Resolution is reduced before framerate. The function first caps the long
+    side and fps to the requested maxima, then shrinks resolution so the
+    available ``video_bitrate`` yields at least ``target_bpp`` bits per pixel;
+    only if resolution hits ``min_long_side`` and quality is still starved does
+    it drop the framerate toward ``min_fps``.
+
+    Args:
+        video_bitrate: Available video bitrate budget in bits per second
+            (<= 0 means unknown; geometry is then only capped, not bpp-driven).
+
+    Returns:
+        (dst_w, dst_h, dst_fps) before encoder-compatibility rounding.
+    """
+
+    src_long = max(src_w, src_h)
+    # 1) hard caps: never upscale; clamp long side and fps.
+    scale = min(1.0, max_long_side / src_long)
+    dst_fps = min(src_fps, max_fps) if src_fps and src_fps > 0 else max_fps
+
+    # 2) quality-driven resolution reduction to hit target bits-per-pixel.
+    if video_bitrate > 0 and dst_fps > 0 and target_bpp > 0:
+        max_pixels = video_bitrate / (target_bpp * dst_fps)
+        cur_pixels = (src_w * scale) * (src_h * scale)
+        if cur_pixels > max_pixels:
+            scale *= math.sqrt(max_pixels / cur_pixels)
+
+    # clamp resolution to the floor (but never upscale beyond the cap above).
+    floor_scale = min(1.0, min_long_side / src_long)
+    if src_long * scale < min_long_side:
+        scale = floor_scale
+
+    dst_w = max(1, int(round(src_w * scale)))
+    dst_h = max(1, int(round(src_h * scale)))
+
+    # 3) framerate reduction only if resolution floor is reached and bpp still low.
+    if video_bitrate > 0 and target_bpp > 0:
+        fps_for_quality = video_bitrate / (target_bpp * dst_w * dst_h)
+        if fps_for_quality < dst_fps:
+            dst_fps = max(min_fps, min(dst_fps, fps_for_quality))
+
+    return dst_w, dst_h, dst_fps
+
+
+def preview_video(
+    input_path: str,
+    output_path: Optional[str] = None,
+    target_mb: float = 10.0,
+    codec: str = "libx264",
+    crf: int = 23,
+    preset: str = "medium",
+    max_resolution: int = 1920,
+    min_resolution: int = 480,
+    max_fps: float = 30.0,
+    min_fps: float = 15.0,
+    audio_kbps: int = 128,
+    target_bpp: float = 0.06,
+    verbose: bool = True,
+) -> str:
+    """Create a share-friendly preview that stays under a file-size target.
+
+    The preview uses a widely compatible codec (defaults to H.264 / yuv420p in
+    an mp4 container with faststart and AAC audio) and is encoded with
+    "capped CRF": quality-driven CRF with a ``maxrate`` cap derived from the
+    size target, so short/simple clips keep high quality while long/large ones
+    stay under the cap. Downsampling is applied only when the input is too large
+    for the budget, preferring resolution reduction over framerate reduction.
+
+    Args:
+        input_path: Path to the input video.
+        output_path: Path to the output video. If None, ``<input>_preview.mp4``
+            next to the input is used.
+        target_mb: Target maximum file size in MB (mebibytes). Default 10.
+        codec: Video encoder. Default ``"libx264"`` for best compatibility.
+        crf: Constant Rate Factor (quality; lower is better). Default 23.
+        preset: ffmpeg preset, e.g. ``"slow"``, ``"medium"``, ``"fast"``.
+        max_resolution: Cap on the longest spatial side (px). Inputs larger than
+            this (e.g. 2K/4K) are downscaled. Default 1920.
+        min_resolution: Floor on the longest side (px) when downscaling for
+            quality. Default 480.
+        max_fps: Cap on framerate. Inputs faster than this are resampled down.
+        min_fps: Floor on framerate when reducing fps for quality.
+        audio_kbps: AAC audio bitrate; also reserved from the size budget. Set 0
+            to drop audio. Ignored if the input has no audio.
+        target_bpp: Desired bits-per-pixel-per-frame used to decide downsampling.
+        verbose: Print a before/after summary.
+
+    Returns:
+        The output path.
+    """
+
+    if output_path is None:
+        base, _ = os.path.splitext(input_path)
+        output_path = f"{base}_preview.mp4"
+
+    out_dir = os.path.dirname(output_path)
+    if out_dir != "":
+        os.makedirs(out_dir, exist_ok=True)
+
+    info = get_video_info(input_path)
+    src_w, src_h = info["width"], info["height"]
+    src_fps = info["fps"]
+    duration = info["duration"]
+    src_bitrate = info["bitrate"]
+
+    has_audio = _has_audio(input_path) and audio_kbps > 0
+
+    # bitrate budget from size target (mebibytes -> bits), reserving overhead + audio.
+    target_bytes = target_mb * 1024 * 1024
+    overhead = 0.03  # container / muxing slack
+    video_bitrate = 0.0
+    if duration > 0:
+        budget_bits = target_bytes * 8 * (1 - overhead)
+        if has_audio:
+            budget_bits -= audio_kbps * 1000 * duration
+        video_bitrate = max(0.0, budget_bits / duration)
+
+    # decide geometry (resolution first, framerate second).
+    dst_w, dst_h, dst_fps = _plan_preview_geometry(
+        src_w=src_w,
+        src_h=src_h,
+        src_fps=src_fps,
+        video_bitrate=video_bitrate,
+        max_long_side=max_resolution,
+        max_fps=max_fps,
+        min_long_side=min_resolution,
+        min_fps=min_fps,
+        target_bpp=target_bpp,
+    )
+
+    # make encoder-compatible (even dimensions for chroma subsampling).
+    dst_w, dst_h, _ = _make_size_encoder_compatible(dst_w, dst_h, codec)
+
+    fps_changed = src_fps > 0 and abs(dst_fps - src_fps) > 1e-3
+    res_changed = dst_w != src_w or dst_h != src_h
+
+    vf_filters = []
+    if res_changed:
+        vf_filters.append(f"scale={dst_w}:{dst_h}:flags=lanczos")
+    if fps_changed:
+        vf_filters.append(f"fps=fps={dst_fps:.6g}:round=near")
+    # yuv420p for maximal playback compatibility.
+    vf_filters.append("format=yuv420p")
+    vf_filter = ",".join(vf_filters)
+
+    cmd = [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        input_path,
+        "-vf",
+        vf_filter,
+        "-c:v",
+        codec,
+        "-crf",
+        str(crf),
+        "-preset",
+        preset,
+    ]
+
+    _apply_encoder_quiet_flags(cmd, codec)
+
+    # capped CRF: bound the average bitrate so the file stays under target.
+    if video_bitrate > 0:
+        kbps = max(100, int(video_bitrate // 1000))
+        # no point exceeding source bitrate.
+        if src_bitrate > 0:
+            kbps = min(kbps, max(100, src_bitrate // 1000))
+        cmd += [
+            "-maxrate",
+            f"{kbps}k",
+            "-bufsize",
+            f"{2 * kbps}k",
+        ]
+
+    if fps_changed:
+        cmd += ["-vsync", "cfr"]
+
+    if has_audio:
+        cmd += ["-c:a", "aac", "-b:a", f"{audio_kbps}k"]
+    else:
+        cmd += ["-an"]
+
+    # faststart enables progressive playback / streaming before full download.
+    cmd += ["-movflags", "+faststart", output_path]
+
+    _run_ffmpeg_quietly(cmd)
+
+    out_size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
+
+    if verbose:
+        def _mb(n: int) -> str:
+            return f"{n / (1024 * 1024):.2f} MB"
+
+        console = Console()
+        table = Table(title=f"Preview: {input_path} -> {output_path}")
+        table.add_column("Field", style="cyan", no_wrap=True)
+        table.add_column("Source", style="yellow")
+        table.add_column("Preview", style="green")
+        table.add_row("Resolution", f"{src_w} x {src_h}", f"{dst_w} x {dst_h}")
+        table.add_row(
+            "FPS",
+            f"{src_fps:.3f}" if src_fps > 0 else "Unknown",
+            f"{dst_fps:.3f}",
+        )
+        table.add_row("Codec", info["codec"], codec)
+        table.add_row("File size", _mb(info.get("filesize", 0)), _mb(out_size))
+        table.add_row("Target", "", f"<= {target_mb:.1f} MB")
+        console.print(table)
+
+        if out_size > target_bytes:
+            print(
+                f"Warning: preview ({_mb(out_size)}) still exceeds the target "
+                f"({target_mb:.1f} MB). Try a lower --crf-ceiling resolution, "
+                f"a smaller --max-resolution, or a lower --max-fps.",
+                file=sys.stderr,
+            )
+
+    return output_path
+
+
 def split_video(
     input_path: str,
     output_dir: str,
@@ -791,6 +1046,70 @@ def main():
         help="Target FPS. If provided, ffmpeg will resample the frames to this FPS.",
     )
 
+    # preview
+    parser_preview = subparsers.add_parser(
+        "preview",
+        help="Create a share-friendly preview under a file-size target.",
+    )
+    parser_preview.add_argument("input", type=str, help="Path to input video.")
+    parser_preview.add_argument(
+        "output",
+        type=str,
+        nargs="?",
+        default=None,
+        help="Path to output video. Default: <input>_preview.mp4.",
+    )
+    parser_preview.add_argument(
+        "--target-mb",
+        type=float,
+        default=10.0,
+        help="Target maximum file size in MB. Default 10.",
+    )
+    parser_preview.add_argument(
+        "--codec",
+        type=str,
+        default="libx264",
+        choices=["libx264", "libx265", "h264_nvenc", "hevc_nvenc"],
+        help="Video encoder. Default libx264 (most compatible).",
+    )
+    parser_preview.add_argument(
+        "--crf",
+        type=int,
+        default=23,
+        help="CRF quality ceiling (lower is higher-quality). Default 23.",
+    )
+    parser_preview.add_argument("--preset", type=str, default="medium", help="ffmpeg preset.")
+    parser_preview.add_argument(
+        "--max-resolution",
+        type=int,
+        default=1920,
+        help="Cap on the longest side (px). Larger inputs are downscaled. Default 1920.",
+    )
+    parser_preview.add_argument(
+        "--min-resolution",
+        type=int,
+        default=480,
+        help="Floor on the longest side (px) when downscaling. Default 480.",
+    )
+    parser_preview.add_argument(
+        "--max-fps",
+        type=float,
+        default=30.0,
+        help="Cap on framerate. Faster inputs are resampled down. Default 30.",
+    )
+    parser_preview.add_argument(
+        "--min-fps",
+        type=float,
+        default=15.0,
+        help="Floor on framerate when reducing fps for quality. Default 15.",
+    )
+    parser_preview.add_argument(
+        "--audio-kbps",
+        type=int,
+        default=128,
+        help="AAC audio bitrate (kbps). 0 to drop audio. Default 128.",
+    )
+
     # split
     parser_split = subparsers.add_parser("split", help="Split a video into clips.")
     parser_split.add_argument("input", type=str, help="Path to input video.")
@@ -843,6 +1162,20 @@ def main():
                 crf=args.crf,
                 preset=args.preset,
                 fps=args.fps,
+            )
+        elif args.cmd == "preview":
+            preview_video(
+                input_path=args.input,
+                output_path=args.output,
+                target_mb=args.target_mb,
+                codec=args.codec,
+                crf=args.crf,
+                preset=args.preset,
+                max_resolution=args.max_resolution,
+                min_resolution=args.min_resolution,
+                max_fps=args.max_fps,
+                min_fps=args.min_fps,
+                audio_kbps=args.audio_kbps,
             )
         elif args.cmd == "split":
             # basic validation for CLI: require either timestamps or uniform
