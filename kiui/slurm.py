@@ -1,6 +1,8 @@
 import argparse
 import subprocess
 import getpass
+import glob
+import os
 import re
 from datetime import datetime, timedelta
 from typing import List, Optional, Sequence, Tuple, Dict
@@ -89,8 +91,56 @@ class JobInfo:
         x = self.job_name
         if x:
             path = path.replace("%x", x)
-            
+
         return path
+
+    def output_logs(self, rank: int = 0) -> Tuple[Optional[str], Dict[str, Optional[str]]]:
+        """Resolve the real program output files for this job.
+
+        Slurm's StdOut (``job.out``) only captures the sbatch shell echoes
+        (Nodelist, MASTER_ADDR, preflight). The launcher tees each rank's
+        stdout+stderr into ``log_<PROCID>.txt`` and, under APS, also writes a
+        unified all-rank log named ``<jobname>_<jobid>_*.log`` in the same
+        directory.
+
+        Returns ``(preferred_path, available)`` where ``available`` maps logical
+        names ("rank", "aps", "batch", "batch_err") to concrete paths (or None).
+        ``preferred_path`` is the rank log if present and non-empty, else the APS
+        log, else ``job.out`` (covers jobs that have not reached ``srun`` yet).
+        """
+        stdout_path = self.stdout_path
+        available: Dict[str, Optional[str]] = {"rank": None, "aps": None, "batch": None, "batch_err": None}
+        if not stdout_path:
+            return None, available
+
+        log_dir = os.path.dirname(stdout_path)
+        available["batch"] = stdout_path
+        available["batch_err"] = self.stderr_path
+
+        rank_log = os.path.join(log_dir, f"log_{rank}.txt")
+        if os.path.isfile(rank_log):
+            available["rank"] = rank_log
+
+        # APS unified log: <jobname>_<jobid>_date_*.log . Match on jobid to be robust
+        # to job names that contain underscores/special chars. Pick the newest.
+        aps_matches = glob.glob(os.path.join(log_dir, f"*_{self.jid}_*.log"))
+        if aps_matches:
+            available["aps"] = max(aps_matches, key=lambda p: os.path.getmtime(p))
+
+        def _nonempty(p: Optional[str]) -> bool:
+            try:
+                return bool(p) and os.path.getsize(p) > 0
+            except OSError:
+                return False
+
+        if _nonempty(available["rank"]):
+            preferred = available["rank"]
+        elif _nonempty(available["aps"]):
+            preferred = available["aps"]
+        else:
+            preferred = stdout_path
+
+        return preferred, available
 
 def get_job_info(target: str) -> List[JobInfo]:
     """
@@ -390,9 +440,14 @@ def info():
     console.print(Panel(table, title=title, border_style="blue"))
 
 
-def log_output(target: Optional[str] = None, num_lines: Optional[int] = 100, show_all: bool = False, show_stderr: bool = False, user: Optional[str] = None):
+def log_output(target: Optional[str] = None, num_lines: Optional[int] = 100, show_all: bool = False, show_stderr: bool = False, user: Optional[str] = None, rank: int = 0, batch: bool = False, aps: bool = False, follow: bool = False):
     """
     Show logs for a job.
+
+    By default shows the per-rank training log (``log_<rank>.txt``, rank 0),
+    which is where the launcher tees the actual program output. Use ``--batch``
+    for the raw sbatch shell log (``job.out``), ``--aps`` for the unified
+    all-rank log, ``--rank N`` for another rank, and ``--follow`` to stream.
     """
     if target is None:
         if user is None:
@@ -456,39 +511,57 @@ def log_output(target: Optional[str] = None, num_lines: Optional[int] = 100, sho
         console.print(f"[yellow]Warning:[/yellow] Multiple jobs found for '{target}'. Showing logs for the first one: {infos[0].jid}")
 
     info = infos[0]
-    
-    stdout_path = info.stdout_path
-    stderr_path = info.stderr_path
 
-    if not stdout_path:
-        console.print(f"[bold red]Error:[/bold red] StdOut path not found for job {info.jid}.")
+    preferred, available = info.output_logs(rank=rank)
+
+    # Select the file to read based on flags (default: per-rank training log).
+    if batch:
+        chosen = available["batch_err"] if show_stderr and available["batch_err"] else available["batch"]
+        chosen_label = "batch stderr (job.err)" if (show_stderr and available["batch_err"]) else "batch (job.out)"
+    elif aps:
+        if not available["aps"]:
+            console.print(f"[bold red]Error:[/bold red] No APS unified log found for job {info.jid}.")
+            return
+        chosen = available["aps"]
+        chosen_label = "APS unified (all ranks)"
+    else:
+        chosen = preferred
+        if chosen == available["rank"]:
+            chosen_label = f"rank {rank} (log_{rank}.txt)"
+        elif chosen == available["aps"]:
+            chosen_label = "APS unified (all ranks)"
+        else:
+            chosen_label = "batch (job.out) — job may not have started yet"
+
+    if not chosen:
+        console.print(f"[bold red]Error:[/bold red] No log file found for job {info.jid}.")
         return
 
-    files_to_read = [stdout_path]
+    # Summarize what else is available so the user knows how to switch.
+    alts = []
+    if available["rank"] and chosen != available["rank"]:
+        alts.append(f"rank: -r {rank}")
+    if available["aps"] and chosen != available["aps"]:
+        alts.append("aps: --aps")
+    if available["batch"] and chosen != available["batch"]:
+        alts.append("batch: -b")
+    alt_str = f"\nOther logs: {', '.join(alts)}" if alts else ""
 
-    if show_stderr:
-        if not stderr_path:
-            console.print(f"[bold red]Error:[/bold red] StdErr path not found for job {info.jid}.")
-            return
-        if stderr_path == stdout_path:
-            # still show stdout
-            console.print(f"[bold yellow]Warning:[/bold yellow] StdOut and StdErr paths are the same for job {info.jid}.")
-        else:
-            # only show stderr
-            files_to_read = [stderr_path]
-        
-    console.print(Panel(f"Reading logs for Job {info.jid}\nFiles: {', '.join(files_to_read)}", border_style="blue"))
+    console.print(Panel(f"Reading logs for Job {info.jid} — {chosen_label}\nFile: {chosen}{alt_str}", border_style="blue"))
 
     # Construct command
     tail_cmd = ["tail"]
-    
-    if show_all:
+
+    if show_all and not follow:
         tail_cmd.extend(["-n", "+1"])
     elif num_lines is not None:
         tail_cmd.extend(["-n", str(num_lines)])
-        
-    tail_cmd.extend(files_to_read)
-    
+
+    if follow:
+        tail_cmd.append("-f")
+
+    tail_cmd.append(chosen)
+
     try:
         # Use subprocess to stream output to stdout directly
         subprocess.run(tail_cmd, check=False)
@@ -996,11 +1069,15 @@ def main():
     h_parser.add_argument("--user", "-u", type=str, help="Show jobs from specific user")
 
     # Log command
-    l_parser = sub.add_parser("log", aliases=["l"], help="Show job logs (stdout only by default)")
+    l_parser = sub.add_parser("log", aliases=["l"], help="Show job logs (per-rank training log by default)")
     l_parser.add_argument("target", nargs="?", help="Job ID or Name")
     l_parser.add_argument("--lines", "-n", type=int, default=100, help="Output the last N lines (default: 100)")
     l_parser.add_argument("--all", "-a", action="store_true", help="Output all lines")
-    l_parser.add_argument("--stderr", "-e", action="store_true", help="Include stderr output")
+    l_parser.add_argument("--follow", "-f", action="store_true", help="Stream the log (tail -f)")
+    l_parser.add_argument("--rank", "-r", type=int, default=0, help="Show log_<rank>.txt for this rank (default: 0)")
+    l_parser.add_argument("--batch", "-b", action="store_true", help="Show the raw sbatch shell log (job.out)")
+    l_parser.add_argument("--aps", action="store_true", help="Show the unified all-rank APS log")
+    l_parser.add_argument("--stderr", "-e", action="store_true", help="With --batch, show job.err (per-rank logs already combine stdout+stderr)")
     l_parser.add_argument("--user", "-u", type=str, help="Show jobs from specific user (interactive mode only)")
 
     # Cancel command
@@ -1032,7 +1109,7 @@ def main():
     elif args.cmd in ["history", "h"]:
         history(user=args.user, days=args.days, all_users=args.all)
     elif args.cmd in ["log", "l"]:
-        log_output(args.target, num_lines=args.lines, show_all=args.all, show_stderr=args.stderr, user=args.user)
+        log_output(args.target, num_lines=args.lines, show_all=args.all, show_stderr=args.stderr, user=args.user, rank=args.rank, batch=args.batch, aps=args.aps, follow=args.follow)
     elif args.cmd in ["cancel", "c"]:
         cancel(targets=args.targets or None, user=args.user)
     elif args.cmd in ["pending", "p"]:
