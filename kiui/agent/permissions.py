@@ -35,6 +35,7 @@ SAFE_TOOLS = frozenset({
     "grep_files",
     "web_search",
     "web_fetch",
+    "load_skill",
 })
 
 RISKY_TOOLS = frozenset({
@@ -249,7 +250,7 @@ def _summarize_call(name: str, args: dict[str, Any]) -> str:
     if name == "exec_command":
         return f"exec_command: {args.get('command', '?')}"
     if name in ("write_file", "edit_file", "read_file", "remove_file"):
-        return f"{name}: {args.get('path', '?')}"
+        return f"{name}: {args.get('file', '?')}"
     if name == "spawn_subagent":
         return f"spawn_subagent: {args.get('task', '?')[:80]}"
     return name

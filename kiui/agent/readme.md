@@ -36,20 +36,30 @@ openai:
 ### List available models
 
 ```bash
-kia list
+kia --list
 ```
 
 ### Start an interactive chat
 
 ```bash
-kia chat --model <model_alias>
+kia --model <model_alias>
 ```
 
-### Execute a single command
+Simply running `kia` (with no arguments) starts a chat with the first configured model.
+
+### Additional options
 
 ```bash
-kia exec --model <model_alias> "your prompt here"
+kia --model <model_alias> --verbose --perm strict --resume [session_id]
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--model` | Model alias from config (default: first configured) |
+| `--verbose` | Enable verbose debug output |
+| `--perm MODE` | `auto`, `default`, or `strict` |
+| `--resume [SESSION_ID]` | Resume a session (bare `--resume` lists saved sessions) |
+| `--list` | List available models and exit |
 
 ## Slash commands
 

@@ -488,6 +488,8 @@ class ToolExecutor:
 
         t_out.join(timeout=10)
         t_err.join(timeout=10)
+        if t_out.is_alive() or t_err.is_alive():
+            self.console.warn("exec_command: reader threads did not finish within 10 s — output may be truncated")
 
         stdout = "".join(stdout_lines)
         stderr = "".join(stderr_lines)
@@ -527,8 +529,13 @@ class ToolExecutor:
             return {"error": f"Not a directory: {base}", "success": False}
 
         if not recursive:
-            sanitized = pattern.replace("**", "*")
-            iterator = base.glob(sanitized)
+            if "**" in pattern:
+                return {
+                    "error": "recursive=False but pattern contains '**'. "
+                    "Use recursive=True for recursive globbing, or remove '**' for a flat search.",
+                    "success": False,
+                }
+            iterator = base.glob(pattern)
         elif "**" in pattern:
             iterator = base.glob(pattern)
         else:
@@ -679,9 +686,9 @@ class ToolExecutor:
         """Web search using DuckDuckGo."""
         self.console.tool(f"web_search: {query}")
         try:
-            from ddgs import DDGS
+            from duckduckgo_search import DDGS
         except ImportError:
-            return {"error": "web_search requires ddgs: pip install ddgs", "success": False}
+            return {"error": "web_search requires duckduckgo_search: pip install duckduckgo_search", "success": False}
 
         try:
             results = DDGS().text(query, max_results=5)

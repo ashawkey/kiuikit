@@ -248,7 +248,9 @@ class AgentConsole:
             return
 
         indent = " " * len(prefix)
-        pad_to = self._console.width
+        # Cap padding to a reasonable width so we don't generate huge
+        # strings of trailing spaces on wide terminals.
+        pad_to = min(self._console.width, 160)
         language = self._guess_language(path)
         has_old = bool(old_text)
         start_line = line_num if line_num is not None else 1
@@ -261,7 +263,9 @@ class AgentConsole:
                 t.append(ln, style=LN)
                 t.append("- ", style=f"bold {SIGN_RED}")
                 t.append(self._highlight_line(line, language))
-                t.append(" " * max(0, pad_to - len(t)))
+                padding = max(0, pad_to - t.cell_len)
+                if padding:
+                    t.append(" " * padding)
                 t.stylize(f"on {BG_RED}")
                 self._console.print(t)
 
@@ -272,7 +276,9 @@ class AgentConsole:
                 t.append(ln, style=LN)
                 t.append("+ ", style=f"bold {SIGN_GREEN}")
                 t.append(self._highlight_line(line, language))
-                t.append(" " * max(0, pad_to - len(t)))
+                padding = max(0, pad_to - t.cell_len)
+                if padding:
+                    t.append(" " * padding)
                 t.stylize(f"on {BG_GREEN}")
                 self._console.print(t)
 
@@ -295,28 +301,6 @@ class AgentConsole:
         self._console.print("\n".join(out_lines), style="input", markup=False)
 
     # -- interactive prompts ------------------------------------------------
-
-    def confirm(self, prompt: str, choices: list[str] | None = None) -> str:
-        """Display *prompt* with rich styling, then use questionary for interactive selection.
-
-        Returns one of the choice strings (lowercased), or "" if cancelled.
-        """
-        self._console.print(f"{_DOT} {prompt}", style="warning", highlight=False)
-        if choices is None:
-            choices = ["Yes", "No", "Always allow this tool"]
-        try:
-            answer = questionary.select(
-                "",
-                choices=choices,
-                qmark="",
-                style=_QS_STYLE,
-                use_indicator=True,
-            ).unsafe_ask()
-        except KeyboardInterrupt:
-            return ""
-        if answer is None:
-            return ""
-        return answer.lower()
 
     def select(
         self,

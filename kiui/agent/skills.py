@@ -43,10 +43,6 @@ def discover_skills(work_dir: str | Path | None = None) -> dict[str, dict]:
         skill_name = item.name
         description = _extract_description(body)
 
-        if skill_name in skills:
-            # Duplicate name — last one wins (unlikely for folder names, but safe)
-            pass
-
         skills[skill_name] = {
             "path": str(skill_md),
             "description": description,

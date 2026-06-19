@@ -26,14 +26,12 @@ MODEL_CATALOG: list[tuple[str, ModelProfile]] = [
     ("gemini",     ModelProfile(context_length=1_000_000, thinking="gemini")),
 
     # --- Anthropic Claude ---
-    ("claude-opus-4",   ModelProfile(context_length=200_000)),
-    ("claude-sonnet-4", ModelProfile(context_length=200_000)),
-    ("claude",          ModelProfile(context_length=200_000)),
+    ("claude",          ModelProfile(context_length=1_000_000)),
 
     # --- DeepSeek ---
-    ("deepseek-reasoner", ModelProfile(context_length=128_000)),
-    ("deepseek-chat",     ModelProfile(context_length=128_000)),
-    ("deepseek",          ModelProfile(context_length=128_000)),
+    ("deepseek-v4-pro", ModelProfile(context_length=1_000_000)),
+    ("deepseek-v4-flash",     ModelProfile(context_length=1_000_000)),
+    ("deepseek",          ModelProfile(context_length=1_000_000)),
 ]
 
 DEFAULT_PROFILE = ModelProfile()

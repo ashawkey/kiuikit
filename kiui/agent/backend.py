@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import time
 import json
 from pathlib import Path
@@ -26,7 +27,7 @@ from kiui.agent.context import (
     get_tool_call_id,
     msg_chars,
 )
-from kiui.agent.interrupt import InterruptHandler
+from kiui.agent.interrupt import InterruptHandler, ForceExit, InterruptedError
 from kiui.agent.rewind import ChangeTracker
 from kiui.agent.models import resolve_model_profile
 
@@ -46,7 +47,7 @@ def parse_custom_query(query: str) -> list:
     content = []
 
     # Match @path (unquoted) or @"path with spaces" (quoted)
-    pattern = re.compile(r'@"([^"]+)"|@([\w.\/\\:-]+)')
+    pattern = re.compile(r'@"([^"]+)"|@([\w.\/\\:~-]+)')
     
     image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'}
     text_extensions = {'.txt', '.md', '.json', '.yaml', '.yml'}
@@ -167,6 +168,8 @@ class LLMAgent:
         self.context = ContextManager(self.system_prompt)
 
         self.round_id = 0
+        self._session_id: str | None = None  # set by chat_loop
+        self._last_save_time: float = 0.0  # throttle auto-saves
 
         self.token_totals = {
             "total": 0,
@@ -267,7 +270,6 @@ class LLMAgent:
 
         if self.tools:
             kwargs["tools"] = self.tools
-            kwargs["tool_choice"] = "auto"
         
         # thinking budget (driven by model profile)
         if self.profile.thinking == "openai":
@@ -292,6 +294,8 @@ class LLMAgent:
                 with self.console.thinking():
                     response = self.client.chat.completions.create(**kwargs)
                 break  # success
+            except InterruptedError:
+                raise
             except Exception as e:
                 if attempt < self.MAX_RETRIES:
                     wait_time = self.INITIAL_BACKOFF * (2 ** attempt)
@@ -365,7 +369,7 @@ class LLMAgent:
             elif function_name in ("edit_file", "write_file") and "diff" in result:
                 self.console.diff_edit(**result["diff"], success=success)
             elif function_name == "read_file":
-                self._display_read_result(result, success, result_text)
+                self._display_read_result(result, success)
             elif function_name in ("glob_files", "grep_files"):
                 self._display_search_result(function_name, result, success)
             else:
@@ -388,10 +392,10 @@ class LLMAgent:
 
     # -- per-tool result display helpers ------------------------------------
 
-    def _display_read_result(self, result: dict[str, Any], success: bool, result_text: str) -> None:
+    def _display_read_result(self, result: dict[str, Any], success: bool) -> None:
         """Compact read_file result: show path, line count, success."""
         if not success:
-            self.console.tool_result(format_tool_summary(result_text), success=False)
+            self.console.tool_result(format_tool_summary(format_tool_result(result)), success=False)
             return
         lines_read = result.get("lines_read", "?")
         self.console.tool_result(f"{lines_read} lines read", success=True)
@@ -585,12 +589,25 @@ class LLMAgent:
         )
 
     def _cmd_clear(self):
+        # Save the current session before starting fresh
+        if self._session_id and self.context.messages:
+            try:
+                self.save_session(self._session_id)
+                self.console.system(f"Session '{self._session_id}' saved.")
+            except Exception as e:
+                self.console.warn(f"Could not save session before clear: {e}")
+
+        # Start a brand-new session
+        self._session_id = time.strftime("%Y%m%d_%H%M%S")
+        self._last_save_time = 0.0  # allow immediate save of the new session
         self.context.replace_messages([])
         self.round_id = 0
-        self.changes = None
-        self.tool_executor._change_tracker = None
-        self.tool_executor._get_round_id = None
-        self.console.system("Conversation cleared.")
+        # Create a fresh change tracker for the new session
+        _wd = self.tool_executor._work_dir or os.getcwd()
+        self.changes = ChangeTracker(self._session_id, _wd, self.console)
+        self.tool_executor._change_tracker = self.changes
+        self.tool_executor._get_round_id = lambda: self.round_id
+        self.console.system(f"Started new session '{self._session_id}'.")
 
     def _cmd_rewind(self, raw: str):
         """Handle /rewind — roll back to a previous round."""
@@ -618,6 +635,7 @@ class LLMAgent:
         else:
             # Build round choices for questionary picker
             round_choices: list[str] = []
+            round_map: dict[str, int] = {}  # choice label → round number
             for r in rounds:
                 n = r["round"]
                 preview = r["preview"]
@@ -637,7 +655,9 @@ class LLMAgent:
                     change_str = f"  ({', '.join(parts_line)})"
                 elif files == 0 and added == 0 and removed == 0:
                     change_str = "  (no file changes)"
-                round_choices.append(f"Round {n:>3} — {preview}{change_str}")
+                label = f"Round {n:>3} — {preview}{change_str}"
+                round_choices.append(label)
+                round_map[label] = n
 
             picked = self.console.select(
                 message="Pick a round to revert",
@@ -645,14 +665,9 @@ class LLMAgent:
             )
             if picked is None:
                 return
-            # Parse round number from the choice string
-            try:
-                target_round = int(picked.split()[1])
-            except (ValueError, IndexError):
+            target_round = round_map.get(picked)
+            if target_round is None or target_round < 1 or target_round > len(rounds):
                 self.console.error(f"Invalid choice: {picked}")
-                return
-            if target_round < 1 or target_round > len(rounds):
-                self.console.error(f"Round must be between 1 and {len(rounds)}.")
                 return
 
         # Revert to the state BEFORE target_round
@@ -1005,12 +1020,12 @@ class LLMAgent:
         self.console.system("Current working directory: " + os.getcwd())
 
         # Auto-save session id: reuse resumed session or generate a new one
-        session_id = resumed_session_id or time.strftime("%Y%m%d_%H%M%S")
+        self._session_id = resumed_session_id or time.strftime("%Y%m%d_%H%M%S")
 
         # Initialize change tracker for code+conversation rollback
         _wd = self.tool_executor._work_dir or os.getcwd()
         if self.changes is None:
-            self.changes = ChangeTracker(session_id, _wd, self.console)
+            self.changes = ChangeTracker(self._session_id, _wd, self.console)
         # Wire the tracker into the tool executor for per-operation tracking
         self.tool_executor._change_tracker = self.changes
         self.tool_executor._get_round_id = lambda: self.round_id
@@ -1051,6 +1066,8 @@ class LLMAgent:
                         self.interrupt.set_task_running(True)
                         try:
                             self._run_bash_command(bash_cmd)
+                        except ForceExit:
+                            break
                         finally:
                             self.interrupt.set_task_running(False)
                     else:
@@ -1077,12 +1094,17 @@ class LLMAgent:
                 self.interrupt.set_task_running(True)
                 try:
                     self.get_response()
+                except ForceExit:
+                    break
                 finally:
                     self.interrupt.set_task_running(False)
 
-                # Auto-save after each round
+                # Auto-save after each round (throttled: ≤ once per 30 s)
                 try:
-                    self.save_session(session_id)
+                    now = time.monotonic()
+                    if now - self._last_save_time >= 30:
+                        self.save_session(self._session_id)
+                        self._last_save_time = now
                 except Exception:
                     pass  # never let save failure break the loop
         finally:
@@ -1102,6 +1124,9 @@ class LLMAgent:
                 self.interrupt.set_task_running(True)
                 try:
                     self._run_bash_command(bash_cmd)
+                except ForceExit:
+                    self._print_token_summary()
+                    sys.exit(1)
                 finally:
                     self.interrupt.set_task_running(False)
                     self.interrupt.uninstall()
@@ -1118,6 +1143,9 @@ class LLMAgent:
         self.interrupt.set_task_running(True)
         try:
             response = self.get_response()
+        except ForceExit:
+            self._print_token_summary()
+            sys.exit(1)
         finally:
             self.interrupt.set_task_running(False)
             self.interrupt.uninstall()

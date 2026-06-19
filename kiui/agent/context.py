@@ -451,8 +451,8 @@ def compact_context(
         summary = "[Compaction failed — older context may be incomplete]"
 
     summary_msg: dict[str, Any] = {
-        "role": "system",
+        "role": "user",
         "content": f"[Previous conversation summary]\n{summary}",
     }
 
-    return [summary_msg] + list(to_keep)
+    return [summary_msg] + to_keep

@@ -1,17 +1,25 @@
 """Graceful Ctrl+C handling for the kiui agent.
 
 - Single Ctrl+C during a task: sets _interrupted flag, aborts the active API request
-- Double Ctrl+C (within 1.5s): force-exits via os._exit(1) with best-effort cleanup
+- Double Ctrl+C (within 1.0s): raises ForceExit to unwind the stack cleanly
 - At the prompt (no task running): raises KeyboardInterrupt for prompt_toolkit
 """
 
-import os
 import signal
 import sys
 import time
 
+
+class InterruptedError(Exception):
+    """Raised on single Ctrl+C to abort the current API call / tool execution."""
+
+
+class ForceExit(BaseException):
+    """Raised on double Ctrl+C to trigger a clean stack unwind and exit."""
+
+
 class InterruptHandler:
-    DOUBLE_PRESS_WINDOW = 1.5  # seconds
+    DOUBLE_PRESS_WINDOW = 1.0  # seconds
 
     def __init__(self):
         self._interrupted = False
@@ -26,8 +34,9 @@ class InterruptHandler:
         return self._interrupted
 
     def reset(self):
-        """Clear the interrupted flag (call before each agent iteration)."""
+        """Clear the interrupted flag and double-press timer (call before each agent iteration)."""
         self._interrupted = False
+        self._last_sigint = 0.0
 
     def install(self, agent):
         """Install the SIGINT handler. Idempotent."""
@@ -50,15 +59,16 @@ class InterruptHandler:
     def _on_sigint(self, signum, frame):
         now = time.monotonic()
 
-        if now - self._last_sigint < self.DOUBLE_PRESS_WINDOW:
+        if self._task_running and now - self._last_sigint < self.DOUBLE_PRESS_WINDOW:
             self._force_exit()
             return
 
-        self._last_sigint = now
-
         if not self._task_running:
+            # At the prompt — let the KeyboardInterrupt propagate up
+            self._last_sigint = 0.0
             raise KeyboardInterrupt
 
+        self._last_sigint = now
         self._interrupted = True
         sys.stderr.write("\nInterrupting... (press Ctrl+C again to force quit)\n")
         sys.stderr.flush()
@@ -71,7 +81,7 @@ class InterruptHandler:
                 pass
 
     def _force_exit(self):
-        """Immediate exit with best-effort cleanup."""
+        """Raise ForceExit to unwind the stack cleanly."""
         sys.stderr.write("\nForce quitting...\n")
         sys.stderr.flush()
         if self._agent:
@@ -79,4 +89,4 @@ class InterruptHandler:
                 self._agent._print_token_summary()
             except Exception:
                 pass
-        os._exit(1)
+        raise ForceExit
