@@ -238,6 +238,9 @@ class LLMAgent:
                     },
                 },
             }
+        elif self.profile.thinking == "deepseek":
+            kwargs["reasoning_effort"] = "max"
+            kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
 
         # ---- retry loop with exponential backoff ----
         t_api = time.monotonic()

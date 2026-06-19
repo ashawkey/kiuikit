@@ -11,7 +11,7 @@ class ModelProfile:
     """Properties of a model family that affect API behaviour."""
 
     context_length: int = 128_000
-    thinking: str | None = None  # "openai" | "gemini" | None
+    thinking: str | None = None  # "openai" | "gemini" | "deepseek" | None
 
 
 # Ordered most-specific → least-specific within each family.
@@ -29,9 +29,9 @@ MODEL_CATALOG: list[tuple[str, ModelProfile]] = [
     ("claude",          ModelProfile(context_length=1_000_000)),
 
     # --- DeepSeek ---
-    ("deepseek-v4-pro", ModelProfile(context_length=1_000_000)),
-    ("deepseek-v4-flash",     ModelProfile(context_length=1_000_000)),
-    ("deepseek",          ModelProfile(context_length=1_000_000)),
+    ("deepseek-v4-pro", ModelProfile(context_length=1_000_000, thinking="deepseek")),
+    ("deepseek-v4-flash",     ModelProfile(context_length=1_000_000, thinking="deepseek")),
+    ("deepseek",          ModelProfile(context_length=1_000_000, thinking="deepseek")),
 ]
 
 DEFAULT_PROFILE = ModelProfile()
