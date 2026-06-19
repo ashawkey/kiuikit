@@ -7,9 +7,7 @@ snapshots or fragile ignore rules.
 
 from __future__ import annotations
 
-import hashlib
 import json
-import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,14 +21,14 @@ class ChangeRecord:
     """One file modification that can be undone."""
     round_id: int
     path: str          # relative to work_dir
-    op: str            # "write" | "edit" | "remove" | "exec_batch"
+    op: str            # "write" | "edit" | "remove"
     # For write / edit: original content (None = file didn't exist)
     original_content: str | None = None
+    # For write / edit: content after the change (for diff stats)
+    new_content: str | None = None
     # For remove: where the backed-up file lives (relative to rewind base)
     backup_path: str | None = None
     was_dir: bool = False
-    # For exec_batch: path to dir containing originals of changed files
-    exec_batch_dir: str | None = None
 
 
 class ChangeTracker:
@@ -63,9 +61,9 @@ class ChangeTracker:
             "path": r.path,
             "op": r.op,
             "original_content": r.original_content,
+            "new_content": r.new_content,
             "backup_path": r.backup_path,
             "was_dir": r.was_dir,
-            "exec_batch_dir": r.exec_batch_dir,
         } for r in self._log]
         (self._base / "change_log.json").write_text(
             json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -75,7 +73,7 @@ class ChangeTracker:
     # Track individual file operations  (call BEFORE the tool acts)
     # ------------------------------------------------------------------
 
-    def track_write(self, round_id: int, path: str):
+    def track_write(self, round_id: int, path: str, content: str = ""):
         """Capture *path* content before it is overwritten / created."""
         abs_path = self.work_dir / path
         original = None
@@ -87,9 +85,10 @@ class ChangeTracker:
         self._log.append(ChangeRecord(
             round_id=round_id, path=path, op="write",
             original_content=original,
+            new_content=content,
         ))
 
-    def track_edit(self, round_id: int, path: str):
+    def track_edit(self, round_id: int, path: str, old_text: str = "", new_text: str = ""):
         """Capture *path* content before an edit is applied."""
         abs_path = self.work_dir / path
         original = None
@@ -97,9 +96,14 @@ class ChangeTracker:
             original = abs_path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             original = None
+        # Compute what the file will look like after the edit
+        after = original
+        if original is not None and old_text:
+            after = original.replace(old_text, new_text)
         self._log.append(ChangeRecord(
             round_id=round_id, path=path, op="edit",
             original_content=original,
+            new_content=after,
         ))
 
     def track_remove(self, round_id: int, path: str):
@@ -131,115 +135,6 @@ class ChangeTracker:
             round_id=round_id, path=path, op="remove",
             backup_path=backup_path, was_dir=was_dir,
         ))
-
-    # ------------------------------------------------------------------
-    # Track exec_command  (pre / post pair)
-    # ------------------------------------------------------------------
-
-    def pre_exec_backup(self) -> str:
-        """Walk work_dir (skip only .kia), copy every file to a temp dir.
-
-        Returns the batch directory path relative to ``self._base``.
-        Call ``post_exec_compare(batch_rel, round_id)`` after the command.
-        """
-        batch_dir = self._base / f"exec_pre_{len(self._log)}"
-        batch_dir.mkdir(parents=True, exist_ok=True)
-
-        count = 0
-        for root, dirs, files in os.walk(self.work_dir, topdown=True):
-            dirs[:] = [d for d in dirs if d != ".kia"]
-            for fname in files:
-                fpath = Path(root) / fname
-                try:
-                    rel = fpath.relative_to(self.work_dir)
-                except ValueError:
-                    continue
-                dest = batch_dir / rel
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                try:
-                    shutil.copy2(fpath, dest)
-                    count += 1
-                except OSError:
-                    pass
-
-        batch_rel = batch_dir.relative_to(self._base).as_posix()
-        self.console.system(f"Pre-exec backup: {count} files saved")
-        return batch_rel
-
-    def post_exec_compare(self, batch_rel: str, round_id: int):
-        """Compare current work_dir against pre-exec backup.
-
-        Keeps originals only for files that changed or were deleted.
-        Stores a ChangeRecord if anything changed.
-        """
-        batch_dir = self._base / batch_rel
-        if not batch_dir.exists():
-            return
-
-        has_changes = False
-
-        # 1. Find files in backup that changed or were deleted
-        for backup_root, dirs, files in os.walk(batch_dir, topdown=True):
-            for fname in files:
-                backup_path = Path(backup_root) / fname
-                try:
-                    rel = backup_path.relative_to(batch_dir)
-                except ValueError:
-                    continue
-                current_path = self.work_dir / rel
-
-                if not current_path.exists():
-                    # File deleted — keep backup
-                    has_changes = True
-                elif current_path.is_file():
-                    try:
-                        current_h = hashlib.sha256(current_path.read_bytes()).hexdigest()
-                        backup_h = hashlib.sha256(backup_path.read_bytes()).hexdigest()
-                        if current_h == backup_h:
-                            backup_path.unlink()  # unchanged → discard
-                        else:
-                            has_changes = True
-                    except OSError:
-                        has_changes = True  # keep on error
-                else:
-                    backup_path.unlink()  # now a dir → discard
-
-            # Remove empty dirs in backup
-            for d in dirs:
-                dpath = Path(backup_root) / d
-                try:
-                    if not any(dpath.iterdir()):
-                        dpath.rmdir()
-                except OSError:
-                    pass
-
-        # 2. Find files that were created (exist now, not in backup)
-        #    → add empty marker file to backup
-        for root, dirs, files in os.walk(self.work_dir, topdown=True):
-            dirs[:] = [d for d in dirs if d != ".kia"]
-            for fname in files:
-                fpath = Path(root) / fname
-                try:
-                    rel = fpath.relative_to(self.work_dir)
-                except ValueError:
-                    continue
-                marker = batch_dir / rel
-                if not marker.exists():
-                    marker.parent.mkdir(parents=True, exist_ok=True)
-                    try:
-                        marker.write_bytes(b"")  # empty = "didn't exist before"
-                        has_changes = True
-                    except OSError:
-                        pass
-
-        if has_changes:
-            self._log.append(ChangeRecord(
-                round_id=round_id, path="", op="exec_batch",
-                exec_batch_dir=batch_rel,
-            ))
-            self._save_log()
-        else:
-            shutil.rmtree(batch_dir, ignore_errors=True)
 
     # ------------------------------------------------------------------
     # Rollback – code
@@ -314,52 +209,10 @@ class ChangeTracker:
                     except OSError:
                         pass
 
-            elif rec.op == "exec_batch":
-                if rec.exec_batch_dir:
-                    batch = self._base / rec.exec_batch_dir
-                    if batch.exists():
-                        undone += self._invert_exec_batch(batch)
-
         # Remove rolled-back entries from log
         self._log = [r for r in self._log if r.round_id <= target_round]
         self._save_log()
         return undone
-
-    def _invert_exec_batch(self, batch_dir: Path) -> int:
-        """Restore files from an exec_batch backup."""
-        restored = 0
-        for backup_root, dirs, files in os.walk(batch_dir, topdown=True):
-            for fname in files:
-                backup_path = Path(backup_root) / fname
-                try:
-                    rel = backup_path.relative_to(batch_dir)
-                except ValueError:
-                    continue
-                current_path = self.work_dir / rel
-                try:
-                    content = backup_path.read_bytes()
-                except OSError:
-                    continue
-
-                if content == b"":
-                    # Empty marker → file was created by exec_command → delete
-                    try:
-                        if current_path.exists():
-                            current_path.unlink()
-                            restored += 1
-                    except OSError:
-                        pass
-                else:
-                    # Restore original content
-                    try:
-                        current_path.parent.mkdir(parents=True, exist_ok=True)
-                        current_path.write_bytes(content)
-                        restored += 1
-                    except OSError:
-                        pass
-
-        shutil.rmtree(batch_dir, ignore_errors=True)
-        return restored
 
     # ------------------------------------------------------------------
     # Conversation rollback
@@ -383,8 +236,44 @@ class ChangeTracker:
     # Picker helpers
     # ------------------------------------------------------------------
 
+    def _compute_round_stats(self, round_id: int) -> tuple[int, int, int]:
+        """Return (files_changed, lines_added, lines_removed) for a round."""
+        files: set[str] = set()
+        added = 0
+        removed = 0
+
+        for rec in self._log:
+            if rec.round_id != round_id:
+                continue
+
+            if rec.op in ("write", "edit"):
+                if rec.path:
+                    files.add(rec.path)
+                old_lines = rec.original_content.count("\n") if rec.original_content else 0
+                new_lines = rec.new_content.count("\n") if rec.new_content else 0
+                if rec.original_content and not rec.original_content.endswith("\n"):
+                    old_lines += 1
+                if rec.new_content and not rec.new_content.endswith("\n"):
+                    new_lines += 1
+                if rec.op == "write" and rec.original_content is None:
+                    # New file — all lines are added
+                    added += new_lines
+                else:
+                    added += max(0, new_lines - old_lines)
+                    removed += max(0, old_lines - new_lines)
+
+            elif rec.op == "remove":
+                if rec.path:
+                    files.add(rec.path)
+                old_lines = rec.original_content.count("\n") if rec.original_content else 0
+                if rec.original_content and not rec.original_content.endswith("\n"):
+                    old_lines += 1
+                removed += old_lines
+
+        return len(files), added, removed
+
     def build_round_list(self, messages: list) -> list[dict]:
-        """Return [{round: int, preview: str}] for each round."""
+        """Return [{round: int, preview: str, files: int, added: int, removed: int}] for each round."""
         rounds = []
         round_num = 0
         for msg in messages:
@@ -392,5 +281,12 @@ class ChangeTracker:
                 round_num += 1
                 text = get_text(msg).replace("\n", " ").strip()
                 preview = text[:80] + ("..." if len(text) > 80 else "")
-                rounds.append({"round": round_num, "preview": preview})
+                files, added, removed = self._compute_round_stats(round_num)
+                rounds.append({
+                    "round": round_num,
+                    "preview": preview,
+                    "files": files,
+                    "added": added,
+                    "removed": removed,
+                })
         return rounds

@@ -4,12 +4,10 @@ from dataclasses import dataclass
 from typing import Annotated, Union
 
 import tyro
-from rich.table import Table
 
 from kiui.config import conf, LOCAL_CONFIG_PATH
 from kiui.agent.ui import AgentConsole
 from kiui.agent.backend import LLMAgent
-from kiui.agent.models import resolve_model_profile
 from kiui.agent.permissions import PermissionMode
 
 
@@ -105,7 +103,7 @@ def _last_user_preview(messages: list) -> str:
 
 
 def _pick_session(console: AgentConsole) -> str | None:
-    """List saved sessions and let the user pick one interactively."""
+    """List saved sessions and let the user pick one interactively using questionary."""
     from kiui.agent.utils import get_kia_dir
 
     sessions_dir = get_kia_dir() / "sessions"
@@ -118,15 +116,8 @@ def _pick_session(console: AgentConsole) -> str | None:
         console.system(f"No saved sessions in {sessions_dir}")
         return None
 
-    table = Table(title="Saved Sessions", show_header=True, header_style="bold magenta")
-    table.add_column("#", style="dim", justify="right", no_wrap=True)
-    table.add_column("Session ID", style="cyan")
-    table.add_column("Messages", style="green", justify="right")
-    table.add_column("Rounds", style="yellow", justify="right")
-    table.add_column("Model", style="blue")
-    table.add_column("Preview", style="dim", no_wrap=False)
-
     entries: list[str] = []
+    choice_labels: list[str] = []
     for i, f in enumerate(files, 1):
         stem = f.stem
         try:
@@ -138,25 +129,24 @@ def _pick_session(console: AgentConsole) -> str | None:
             preview = _last_user_preview(messages)
         except Exception:
             n_msgs, rnd, model, preview = "?", "?", "?", ""
-        table.add_row(str(i), stem, str(n_msgs), str(rnd), str(model), preview)
         entries.append(stem)
+        # Build a compact label for the questionary picker
+        label = f"{stem}  │  msgs:{n_msgs}  rounds:{rnd}  model:{model}"
+        if preview:
+            label += f"  │  {preview}"
+        choice_labels.append(label)
 
-    console.table(table)
-
-    try:
-        choice = input(f"Pick a session [1-{len(entries)}] or press Enter to cancel: ").strip()
-    except (EOFError, KeyboardInterrupt):
+    picked = console.select(
+        message="Pick a session to resume",
+        choices=choice_labels,
+    )
+    if picked is None:
         return None
 
-    if not choice:
-        return None
-
-    try:
-        idx = int(choice) - 1
-        if 0 <= idx < len(entries):
-            return entries[idx]
-    except ValueError:
-        pass
+    # Find which entry was chosen by matching the label
+    for i, label in enumerate(choice_labels):
+        if label == picked:
+            return entries[i]
 
     console.error("Invalid selection.")
     return None

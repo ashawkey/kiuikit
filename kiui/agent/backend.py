@@ -172,9 +172,8 @@ class LLMAgent:
             "reasoning": 0,
         }
 
-        self.console.system(f"Created Agent with model: {model} (context: {self.context_length:,} tokens)")
-        self.console.system(f"Permission mode: {permission_mode.value}")
-        self.console.system(f"System prompt: {self.system_prompt[:100]}...")
+        self.console.system(f"Created Agent with model: {model} (context: {self.context_length:,} tokens), permission: {permission_mode.value}")
+        # self.console.system(f"System prompt: {self.system_prompt[:100]}...")
 
 
     def _recreate_client(self):
@@ -286,7 +285,8 @@ class LLMAgent:
                 raise InterruptedError("Interrupted while waiting to call API")
 
             try:
-                response = self.client.chat.completions.create(**kwargs)
+                with self.console.thinking():
+                    response = self.client.chat.completions.create(**kwargs)
                 break  # success
             except Exception as e:
                 if attempt < self.MAX_RETRIES:
@@ -435,6 +435,23 @@ class LLMAgent:
                 self.console.system("Interrupted — partial response rolled back.")
                 return None
 
+    # ----- bash command (!) ------------------------------------------------
+
+    def _run_bash_command(self, command: str) -> None:
+        """Execute a shell command starting with '!' directly, without sending to the model.
+
+        Output is streamed in real-time and the command can be interrupted via Ctrl+C.
+        """
+        self.console.tool(f"! {command}")
+        result = self.tool_executor.execute("exec_command", {"command": command})
+        result_text = format_tool_result(result)
+        success = result.get("success", False)
+        if result.get("streamed", True):
+            exit_code = result.get("exit_code", "?")
+            self.console.tool_result(f"exit code {exit_code}", success=success)
+        else:
+            self.console.tool_result(format_tool_summary(result_text), success=success)
+
     # ----- slash commands ---------------------------------------------------
 
     COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "perm", "model", "context", "rewind"}
@@ -469,6 +486,7 @@ class LLMAgent:
         self.console.print(
             "[bold blue]Available commands:[/bold blue]\n"
             "\n"
+            "  [cyan]!<cmd>[/cyan]       — Run a shell command directly (e.g. !ls, !git diff)\n"
             "  [cyan]/help[/cyan]        — Show this help message\n"
             "  [cyan]/context[/cyan]     — Show a concise one-line-per-message context log\n"
             "  [cyan]/compact[/cyan]     — Force context compaction via LLM summarization\n"
@@ -479,8 +497,6 @@ class LLMAgent:
             "  [cyan]/clear[/cyan]       — Clear conversation history (keep system prompt)\n"
             "  [cyan]/exit[/cyan]        — Exit the agent (also: /quit)\n"
             "\n"
-            "  Sessions are auto-saved after each round.\n"
-            "  Use [cyan]kia --resume <id>[/cyan] to resume, or [cyan]kia --resume[/cyan] to pick.\n"
             "  Attach files with @filename (images & text files supported).\n"
             "  Press [bold]Enter[/bold] to send, [bold]Escape → Enter[/bold] for a newline."
         )
@@ -554,71 +570,120 @@ class LLMAgent:
         if len(parts) >= 2:
             try:
                 target_round = int(parts[1])
-                if target_round < 0 or target_round > len(rounds):
-                    self.console.error(f"Round must be between 0 and {len(rounds)}.")
+                if target_round < 1 or target_round > len(rounds):
+                    self.console.error(f"Round must be between 1 and {len(rounds)}.")
                     return
             except ValueError:
                 self.console.error(f"Invalid round number: {parts[1]}")
                 return
         else:
-            # Show picker
-            self.console.print("[bold blue]── Rounds ──[/bold blue]")
+            # Build round choices for questionary picker
+            round_choices: list[str] = []
             for r in rounds:
-                self.console.print(f"  [cyan]{r['round']:>3}[/cyan]  {r['preview']}")
-            self.console.print(f"  [dim]  0  (initial state — before any messages)[/dim]")
+                n = r["round"]
+                preview = r["preview"]
+                files = r.get("files", 0)
+                added = r.get("added", 0)
+                removed = r.get("removed", 0)
+                # Build change summary
+                parts_line = []
+                if files > 0:
+                    parts_line.append(f"{files} file{'s' if files > 1 else ''}")
+                if added > 0:
+                    parts_line.append(f"+{added} line{'s' if added > 1 else ''}")
+                if removed > 0:
+                    parts_line.append(f"-{removed} line{'s' if removed > 1 else ''}")
+                change_str = ""
+                if parts_line:
+                    change_str = f"  ({', '.join(parts_line)})"
+                elif files == 0 and added == 0 and removed == 0:
+                    change_str = "  (no file changes)"
+                round_choices.append(f"Round {n:>3} — {preview}{change_str}")
 
+            picked = self.console.select(
+                message="Pick a round to revert",
+                choices=round_choices,
+            )
+            if picked is None:
+                return
+            # Parse round number from the choice string
             try:
-                choice = input(f"Pick a round to rewind to [0-{len(rounds)}]: ").strip()
-            except (EOFError, KeyboardInterrupt):
+                target_round = int(picked.split()[1])
+            except (ValueError, IndexError):
+                self.console.error(f"Invalid choice: {picked}")
                 return
-            if not choice:
+            if target_round < 1 or target_round > len(rounds):
+                self.console.error(f"Round must be between 1 and {len(rounds)}.")
                 return
-            try:
-                target_round = int(choice)
-            except ValueError:
-                self.console.error(f"Invalid choice: {choice}")
-                return
-            if target_round < 0 or target_round > len(rounds):
-                self.console.error(f"Round must be between 0 and {len(rounds)}.")
-                return
+
+        # Revert to the state BEFORE target_round
+        actual_target = target_round - 1
 
         # Ask revert mode
-        self.console.print(f"\n[bold blue]Rewind to round {target_round}:[/bold blue]")
-        if target_round > 0 and target_round <= len(rounds):
-            preview = rounds[target_round - 1]["preview"]
-            self.console.print(f"  Last kept round: [cyan]{target_round}[/cyan] — {preview}")
-        elif target_round == 0:
-            self.console.print(f"  Last kept round: [cyan]0[/cyan] — (initial state)")
+        self.console.print(f"\n[bold blue]? Revert round {target_round}?[/bold blue]")
+        if actual_target > 0:
+            preview = rounds[actual_target - 1]["preview"]
+            self.console.print(f"  Will roll back to after round [cyan]{actual_target}[/cyan] — {preview}")
+        else:
+            self.console.print(f"  Will roll back to [cyan]initial state[/cyan] (before any messages)")
 
-        self.console.print("\n  [cyan][1][/cyan] Conversation only (keep code changes)")
-        self.console.print("  [cyan][2][/cyan] Code + conversation (restore both)")
-        self.console.print("  [cyan][3][/cyan] Code only (keep conversation)")
-        try:
-            mode = input("  Choose [1/2/3] or Enter to cancel: ").strip()
-        except (EOFError, KeyboardInterrupt):
+        # Show what will be reverted
+        reverted_rounds = list(range(target_round, len(rounds) + 1))
+        total_files = 0
+        total_added = 0
+        total_removed = 0
+        for r in rounds:
+            if r["round"] >= target_round:
+                total_files += r.get("files", 0)
+                total_added += r.get("added", 0)
+                total_removed += r.get("removed", 0)
+        if total_files > 0 or total_added > 0 or total_removed > 0:
+            impact = []
+            if total_files > 0:
+                impact.append(f"{total_files} file{'s' if total_files > 1 else ''}")
+            if total_added > 0:
+                impact.append(f"+{total_added} lines")
+            if total_removed > 0:
+                impact.append(f"-{total_removed} lines")
+            self.console.print(f"  Code impact: [yellow]{', '.join(impact)}[/yellow] across {len(reverted_rounds)} round{'s' if len(reverted_rounds) > 1 else ''}")
+
+        mode_choice = self.console.select(
+            message="Choose revert mode",
+            choices=[
+                "1. Conversation only (keep code changes)",
+                "2. Code + conversation (restore both)",
+                "3. Code only (keep conversation)",
+            ],
+        )
+        if mode_choice is None:
             return
-        if mode not in ("1", "2", "3"):
-            return
+        mode = mode_choice[0]  # "1", "2", or "3"
 
         revert_code = mode in ("2", "3")
         revert_conv = mode in ("1", "2")
 
         # Execute rollback
-        self.console.system(f"Rewinding to round {target_round}...")
+        self.console.system(f"Reverting round {target_round} and later...")
 
         if revert_code:
-            restored = self.changes.rollback_code(target_round)
+            restored = self.changes.rollback_code(actual_target)
             self.console.system(f"Code reverted: {restored} files restored.")
         else:
             self.console.system("Code changes preserved.")
 
         if revert_conv:
             self.context.messages, self.round_id = self.changes.rollback_conversation(
-                self.context.messages, target_round
+                self.context.messages, actual_target
             )
             self.console.system(f"Conversation rolled back to round {self.round_id} ({len(self.context.messages)} messages).")
         else:
             self.console.system("Conversation preserved.")
+
+        # Persist the rewinded state to disk
+        try:
+            self.save_session(self.changes.session_id)
+        except Exception:
+            pass
 
     def _cmd_context(self):
         msgs = self.context.messages
@@ -832,7 +897,7 @@ class LLMAgent:
             role = get_role(msg)
             if role == "user":
                 text = get_text(msg)
-                self.console.print(f"[bold yellow][QUERY][/bold yellow] {text}", markup=False)
+                self.console.print(f"> {text}", style="input", markup=False)
 
             elif role == "assistant":
                 text = get_text(msg)
@@ -868,14 +933,13 @@ class LLMAgent:
 
     def chat_loop(self, resumed_session_id: str | None = None):
 
-        self.console.system("Type `/help` for available commands.")
+        self.console.system("Type `/help` for available commands. Prefix with `!` to run shell commands.")
         self.console.system("`Enter` to send. `Escape` then `Enter` for a newline.")
         self.console.system("Ctrl+C to interrupt. Double Ctrl+C to force quit.")
         self.console.system("Current working directory: " + os.getcwd())
 
         # Auto-save session id: reuse resumed session or generate a new one
         session_id = resumed_session_id or time.strftime("%Y%m%d_%H%M%S")
-        self.console.system(f"Session: {session_id}")
 
         # Initialize change tracker for code+conversation rollback
         _wd = self.tool_executor._work_dir or os.getcwd()
@@ -912,6 +976,20 @@ class LLMAgent:
                 if query.lower() in ("exit", "quit"):
                     break
 
+                # bash command shortcut: !<command>
+                if query.startswith("!"):
+                    bash_cmd = query[1:].strip()
+                    if bash_cmd:
+                        self.interrupt.reset()
+                        self.interrupt.set_task_running(True)
+                        try:
+                            self._run_bash_command(bash_cmd)
+                        finally:
+                            self.interrupt.set_task_running(False)
+                    else:
+                        self.console.warn("Usage: !<shell command>")
+                    continue
+
                 # slash commands
                 if query.startswith("/"):
                     cmd_word = query.split()[0][1:].lower()
@@ -926,14 +1004,14 @@ class LLMAgent:
                 user_message = {"role": "user", "content": parse_custom_query(query)}
                 self.context.add(user_message)
 
+                self.round_id += 1
+
                 self.interrupt.reset()
                 self.interrupt.set_task_running(True)
                 try:
                     self.get_response()
                 finally:
                     self.interrupt.set_task_running(False)
-
-                self.round_id += 1
 
                 # Auto-save after each round
                 try:
@@ -947,6 +1025,23 @@ class LLMAgent:
     def execute(self, query: str):
         self.console.system(f"Executing query: {query}")
         t0 = time.time()
+
+        # bash command shortcut: !<command>
+        if query.startswith("!"):
+            bash_cmd = query[1:].strip()
+            if bash_cmd:
+                self.interrupt.install(self)
+                self.interrupt.reset()
+                self.interrupt.set_task_running(True)
+                try:
+                    self._run_bash_command(bash_cmd)
+                finally:
+                    self.interrupt.set_task_running(False)
+                    self.interrupt.uninstall()
+            else:
+                self.console.warn("Usage: !<shell command>")
+            return None
+
         self.interrupt.install(self)
 
         user_message = {"role": "user", "content": parse_custom_query(query)}

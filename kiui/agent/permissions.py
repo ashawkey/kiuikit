@@ -319,21 +319,31 @@ class PermissionController:
 
     def _prompt_user(self, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
         summary = _summarize_call(tool_name, arguments)
+        self.console._console.print(
+            f"\n[bold yellow]•  Permission required[/bold yellow]"
+            f"\n   [cyan]{summary}[/cyan]",
+            highlight=False,
+        )
         try:
-            response = self.console.confirm(
-                f"\n[bold yellow]⚠  Permission required[/bold yellow]"
-                f"\n   [cyan]{summary}[/cyan]",
-                options="Allow? [y]es / [n]o / [a]lways",
+            answer = self.console.select(
+                "Allow this call?",
+                choices=["Yes", "No", "Always allow this tool"],
             )
         except (EOFError, KeyboardInterrupt):
             self.console.print("   [red]Denied (interrupted).[/red]")
             return False, ""
 
-        if response in ("a", "always"):
+        if answer is None:
+            self.console.print("   [red]✗ Denied.[/red]")
+            return False, ""
+
+        response = answer.lower()
+
+        if response in ("always allow this tool", "always"):
             self._session_allowed.add(tool_name)
             self.console.print(f"   [green]✓ {tool_name} allowed for this session.[/green]")
             return True, ""
-        if response in ("y", "yes", ""):
+        if response in ("yes",):
             return True, ""
 
         reason = self._ask_denial_reason()
@@ -346,7 +356,10 @@ class PermissionController:
     def _ask_denial_reason(self) -> str:
         """Prompt the user for an optional reason after denying a tool call."""
         try:
-            reason = input("   Reason (optional, Enter to skip): ").strip()
+            reason = self.console.ask_text(
+                "   Reason (optional, Enter to skip): ",
+                default="",
+            )
         except (EOFError, KeyboardInterrupt):
             reason = ""
-        return reason
+        return (reason or "").strip()

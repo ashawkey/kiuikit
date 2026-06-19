@@ -315,7 +315,7 @@ class ToolExecutor:
         self.console.tool(f"write_file {path}")
 
         if self._change_tracker and self._get_round_id:
-            self._change_tracker.track_write(self._get_round_id(), path)
+            self._change_tracker.track_write(self._get_round_id(), path, content)
 
         file_path = Path(path)
         file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -328,12 +328,13 @@ class ToolExecutor:
         """Make surgical edit to file by replacing exact text."""
         self.console.tool(f"edit_file {path}")
 
-        if self._change_tracker and self._get_round_id:
-            self._change_tracker.track_edit(self._get_round_id(), path)
-
         file_path = Path(path)
         if not file_path.exists():
             return {"error": f"File not found: {path}", "success": False}
+
+        # Track before reading (original snapshot) but pass edit params for diff
+        if self._change_tracker and self._get_round_id:
+            self._change_tracker.track_edit(self._get_round_id(), path, old_text, new_text)
 
         with open(file_path, encoding="utf-8") as f:
             content = f.read()
@@ -389,14 +390,6 @@ class ToolExecutor:
         self.console.tool(f"exec_command: {command}")
 
         cwd = cwd or self._work_dir
-
-        # Pre-exec backup for change tracking
-        batch_rel = None
-        if self._change_tracker and self._get_round_id:
-            try:
-                batch_rel = self._change_tracker.pre_exec_backup()
-            except Exception:
-                batch_rel = None
 
         if sys.platform == "win32":
             shell_cmd: Any = command
@@ -479,13 +472,6 @@ class ToolExecutor:
             )
         if interrupted:
             res["error"] = "Command was interrupted by user."
-
-        # Post-exec comparison for change tracking
-        if batch_rel and self._change_tracker and self._get_round_id:
-            try:
-                self._change_tracker.post_exec_compare(batch_rel, self._get_round_id())
-            except Exception:
-                pass
 
         return res
 

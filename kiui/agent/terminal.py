@@ -22,7 +22,7 @@ class TerminalInput:
     def __init__(
         self,
         history_path: str | Path | None = None,
-        prompt_label: str = "[QUERY] ",
+        prompt_label: str = "> ",
     ):
         self._prompt_label = prompt_label
         self.style = Style.from_dict({
