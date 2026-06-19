@@ -5,6 +5,7 @@
 - At the prompt (no task running): raises KeyboardInterrupt for prompt_toolkit
 """
 
+import _thread
 import signal
 import sys
 import time
@@ -24,6 +25,7 @@ class InterruptHandler:
     def __init__(self):
         self._interrupted = False
         self._task_running = False
+        self._force_exit_pending = False
         self._last_sigint: float = 0.0
         self._original_handler = signal.getsignal(signal.SIGINT)
         self._agent = None
@@ -80,13 +82,21 @@ class InterruptHandler:
             except Exception:
                 pass
 
+        # On Windows, signal handlers run in a separate thread so closing the
+        # client above may not unblock the main thread.  _thread.interrupt_main()
+        # raises KeyboardInterrupt in the main thread at the next opportunity.
+        _thread.interrupt_main()
+
     def _force_exit(self):
         """Raise ForceExit to unwind the stack cleanly."""
         sys.stderr.write("\nForce quitting...\n")
         sys.stderr.flush()
+        self._force_exit_pending = True
         if self._agent:
             try:
                 self._agent._print_token_summary()
             except Exception:
                 pass
-        raise ForceExit
+        # On Windows the signal handler runs in a separate thread so we
+        # cannot raise ForceExit directly — route it through the main thread.
+        _thread.interrupt_main()

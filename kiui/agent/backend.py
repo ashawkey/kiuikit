@@ -296,6 +296,13 @@ class LLMAgent:
                 break  # success
             except InterruptedError:
                 raise
+            except KeyboardInterrupt:
+                # _thread.interrupt_main() from the signal handler delivers a
+                # KeyboardInterrupt into the main thread (critical on Windows
+                # where signal handlers run in a separate thread).
+                if self.interrupt._force_exit_pending:
+                    raise ForceExit()
+                raise InterruptedError("Interrupted by user")
             except Exception as e:
                 if attempt < self.MAX_RETRIES:
                     wait_time = self.INITIAL_BACKOFF * (2 ** attempt)
@@ -445,6 +452,15 @@ class LLMAgent:
             except RuntimeError as e:
                 self.context.rollback(snapshot)
                 self.console.error(f"API call failed: {e}")
+                return None
+            except KeyboardInterrupt:
+                # Safety net for KeyboardInterrupt that escapes call_api()
+                # (e.g. raised during _interruptible_sleep on Windows).
+                if self.interrupt._force_exit_pending:
+                    raise ForceExit()
+                self.context.rollback(snapshot)
+                self._recreate_client()
+                self.console.system("Interrupted — partial response rolled back.")
                 return None
             except Exception:
                 if self.interrupt.interrupted:
