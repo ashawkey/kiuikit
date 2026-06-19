@@ -83,6 +83,42 @@ else:
         return False
 
 
+class CancelWatcher:
+    """Background watcher that flips ``.cancelled`` on ESC / Ctrl+C.
+
+    Wrap a polling loop you drive yourself (e.g. waiting on a subprocess)::
+
+        with CancelWatcher() as w:
+            while proc.poll() is None:
+                if w.cancelled:
+                    kill(proc); break
+                time.sleep(0.1)
+
+    Inactive (never cancels) when stdin isn't an interactive console.
+    """
+
+    def __init__(self) -> None:
+        self.cancelled = False
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._active = _can_watch()
+
+    def __enter__(self) -> "CancelWatcher":
+        if self._active:
+            self._thread = threading.Thread(target=self._run, daemon=True)
+            self._thread.start()
+        return self
+
+    def _run(self) -> None:
+        if _watch_for_cancel(self._stop):
+            self.cancelled = True
+
+    def __exit__(self, *args) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=0.3)
+
+
 def run_interruptible(fn: Callable[[], T]) -> T:
     """Run blocking *fn* while watching for ESC / Ctrl+C.
 

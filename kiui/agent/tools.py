@@ -2,8 +2,10 @@
 
 import json
 import locale
+import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -13,6 +15,26 @@ from pathlib import Path
 from typing import Any
 
 from kiui.agent.ui import AgentConsole
+from kiui.agent.interrupt import CancelWatcher
+
+
+def _terminate_process(proc: subprocess.Popen) -> None:
+    """Kill *proc* and its child process tree (best-effort)."""
+    if proc.poll() is not None:
+        return
+    try:
+        if sys.platform == "win32":
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+        else:
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
 
 MAX_READ_LINES = 2000
 MAX_READ_BYTES = 50_000
@@ -447,8 +469,21 @@ class ToolExecutor:
         t_out.start()
         t_err.start()
 
-        while proc.poll() is None:
-            time.sleep(0.5)
+        # Wait for the process, watching the keyboard so ESC / Ctrl+C aborts it.
+        interrupted = False
+        try:
+            with CancelWatcher() as watcher:
+                while proc.poll() is None:
+                    if watcher.cancelled:
+                        interrupted = True
+                        break
+                    time.sleep(0.1)
+        except KeyboardInterrupt:
+            interrupted = True
+
+        if interrupted:
+            self.console.warn("Interrupting command...")
+            _terminate_process(proc)
 
         try:
             proc.wait(timeout=5)
