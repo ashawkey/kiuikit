@@ -1,6 +1,5 @@
 import os
 import re
-import sys
 import time
 import json
 from pathlib import Path
@@ -8,7 +7,7 @@ from typing import Any, Literal
 from openai import OpenAI
 from kiui.agent.ui import AgentConsole
 from kiui.agent.terminal import TerminalInput
-from kiui.agent.utils import get_text_content_dict, get_image_content_dict, get_kia_dir
+from kiui.agent.utils import get_kia_dir
 from kiui.agent.prompts import build_system_prompt
 from kiui.agent.skills import discover_skills
 from kiui.agent.tools import get_tool_definitions, ToolExecutor, format_tool_result, format_tool_summary
@@ -27,59 +26,8 @@ from kiui.agent.context import (
     get_tool_call_id,
     msg_chars,
 )
-from kiui.agent.interrupt import InterruptHandler, ForceExit, InterruptedError
 from kiui.agent.rewind import ChangeTracker
 from kiui.agent.models import resolve_model_profile
-
-def parse_custom_query(query: str) -> list:
-    """Parse the user query into formatted content, optionally load images or text files (by using @filename).
-    Supported file types:
-    - @image.png/jpg/jpeg: load an image
-    - @file.txt/md/json/yaml: read a local text file
-    Use @"path with spaces/file.txt" for paths containing spaces or special characters.
-    e.g. "Please describe the following image @path/to/image.png, and tell me the weather." will be parsed into: 
-    [
-        {"type": "text", "text": "Please describe the following image"},
-        {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,...", "detail": "low"}},
-        {"type": "text", "text": "and tell me the weather."}
-    ]
-    """
-    content = []
-
-    # Match @path (unquoted) or @"path with spaces" (quoted)
-    pattern = re.compile(r'@"([^"]+)"|@([\w.\/\\:~-]+)')
-    
-    image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'}
-    text_extensions = {'.txt', '.md', '.json', '.yaml', '.yml'}
-    
-    last_end = 0
-    for match in pattern.finditer(query):
-        pre_text = query[last_end:match.start()].strip()
-        if pre_text:
-            content.append(get_text_content_dict(pre_text))
-
-        file_path = match.group(1) or match.group(2)
-        _, ext = os.path.splitext(file_path.lower())
-        
-        if ext in image_extensions:
-            content.append(get_image_content_dict(file_path))
-        elif ext in text_extensions:
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    file_content = f.read()
-                content.append(get_text_content_dict(file_content))
-            except (FileNotFoundError, PermissionError, OSError) as e:
-                content.append(get_text_content_dict(f"[Error reading @{file_path}: {e}]"))
-        else:
-            content.append(get_text_content_dict(f"@{file_path}"))
-            
-        last_end = match.end()
-
-    tail = query[last_end:].strip()
-    if tail:
-        content.append(get_text_content_dict(tail))
-
-    return content
 
 class ContextManager:
     """Flat conversation history with context-management hooks."""
@@ -116,6 +64,19 @@ class ContextManager:
         self.messages = snapshot
 
 
+_AT_PATH_RE = re.compile(r"(?<!\S)@([\w./\\~+-]+)")
+
+
+def _strip_at_marks(query: str) -> str:
+    """Strip the ``@`` prefix from file-path references in *query*.
+
+    Only matches ``@`` at a word boundary (preceded by whitespace or
+    start-of-string) so email addresses like ``user@host.com`` are left
+    untouched.
+    """
+    return _AT_PATH_RE.sub(r"\1", query)
+
+
 class LLMAgent:
     MAX_RETRIES = 10
     INITIAL_BACKOFF = 1.0   # seconds
@@ -142,6 +103,7 @@ class LLMAgent:
         self.client = OpenAI(
             api_key=api_key,
             base_url=base_url,
+            max_retries=0,
         )
         self.verbose = verbose
         self.thinking_budget = thinking_budget
@@ -161,9 +123,8 @@ class LLMAgent:
 
         # subagent manager (only if we have a model_alias for spawning children)
         self.subagent_manager = SubagentManager(model_alias=model_alias, console=self.console) if model_alias else None
-        self.interrupt = InterruptHandler()
         self.changes: ChangeTracker | None = None
-        self.tool_executor = ToolExecutor(console=self.console, subagent_manager=self.subagent_manager, interrupt_handler=self.interrupt, work_dir=work_dir, skills=self.skills)
+        self.tool_executor = ToolExecutor(console=self.console, subagent_manager=self.subagent_manager, work_dir=work_dir, skills=self.skills)
 
         self.context = ContextManager(self.system_prompt)
 
@@ -183,10 +144,6 @@ class LLMAgent:
         # self.console.system(f"System prompt: {self.system_prompt[:100]}...")
 
 
-    def _recreate_client(self):
-        """Recreate the OpenAI client after an interrupt-driven close."""
-        self.client = OpenAI(api_key=self._api_key, base_url=self._base_url)
-
     def _accumulate_usage(self, usage):
         """Add token counts from an API response to session totals."""
         self.token_totals["total"] += usage.total_tokens
@@ -198,12 +155,7 @@ class LLMAgent:
             self.token_totals["reasoning"] += usage.completion_tokens_details.reasoning_tokens
 
     def _interruptible_sleep(self, seconds: float):
-        """Sleep in short increments so Ctrl+C / interrupts are responsive."""
-        deadline = time.monotonic() + seconds
-        while time.monotonic() < deadline:
-            if self.interrupt.interrupted:
-                return
-            time.sleep(min(0.5, max(0, deadline - time.monotonic())))
+        time.sleep(seconds)
 
     def call_api(self):
         """Call the API using current context, with automatic retry on any error.
@@ -287,34 +239,17 @@ class LLMAgent:
         # ---- retry loop with exponential backoff ----
         t_api = time.monotonic()
         for attempt in range(self.MAX_RETRIES + 1):
-            if self.interrupt.interrupted:
-                raise InterruptedError("Interrupted while waiting to call API")
-
             try:
                 with self.console.thinking():
                     response = self.client.chat.completions.create(**kwargs)
-                break  # success
-            except InterruptedError:
-                raise
-            except KeyboardInterrupt:
-                # _thread.interrupt_main() from the signal handler delivers a
-                # KeyboardInterrupt into the main thread (critical on Windows
-                # where signal handlers run in a separate thread).
-                if self.interrupt._force_exit_pending:
-                    raise ForceExit()
-                raise InterruptedError("Interrupted by user")
+                break
             except Exception as e:
                 if attempt < self.MAX_RETRIES:
                     wait_time = self.INITIAL_BACKOFF * (2 ** attempt)
-                    self.console.system(
-                        f"[Retry {attempt + 1}/{self.MAX_RETRIES}] {e} "
-                        f"— retrying in {wait_time:.1f}s…"
-                    )
+                    self.console.system(f"[Retry {attempt + 1}/{self.MAX_RETRIES}] {e} — retrying in {wait_time:.1f}s…")
                     self._interruptible_sleep(wait_time)
                 else:
-                    raise RuntimeError(
-                        f"Max retries ({self.MAX_RETRIES}) exceeded. Last error: {e}"
-                    ) from e
+                    raise RuntimeError(f"Max retries ({self.MAX_RETRIES}) exceeded. Last error: {e}") from e
         api_elapsed = time.monotonic() - t_api
 
         message = response.choices[0].message
@@ -345,8 +280,6 @@ class LLMAgent:
 
         t_all = time.monotonic()
         for i, tool_call in enumerate(tool_calls):
-            if self.interrupt.interrupted:
-                break
             function_name = tool_call.function.name
             try:
                 function_args = json.loads(tool_call.function.arguments)
@@ -426,9 +359,6 @@ class LLMAgent:
     def get_response(self):
         """Process the context and update the current response.
 
-        Supports flag-based cancellation: if interrupted, rolls back messages
-        from the current iteration and recreates the HTTP client.
-
         Fatal API errors (auth, quota, bad request, …) are caught, displayed
         to the user, and cause the turn to end gracefully rather than crash.
         """
@@ -437,9 +367,6 @@ class LLMAgent:
         t_turn_start = time.monotonic()
 
         while True:
-            if self.interrupt.interrupted:
-                return None
-
             iteration += 1
             t_iter = time.monotonic()
             if self.verbose and iteration > 1:
@@ -453,21 +380,7 @@ class LLMAgent:
                 self.context.rollback(snapshot)
                 self.console.error(f"API call failed: {e}")
                 return None
-            except KeyboardInterrupt:
-                # Safety net for KeyboardInterrupt that escapes call_api()
-                # (e.g. raised during _interruptible_sleep on Windows).
-                if self.interrupt._force_exit_pending:
-                    raise ForceExit()
-                self.context.rollback(snapshot)
-                self._recreate_client()
-                self.console.system("Interrupted — partial response rolled back.")
-                return None
             except Exception:
-                if self.interrupt.interrupted:
-                    self.context.rollback(snapshot)
-                    self._recreate_client()
-                    self.console.system("Interrupted — partial response rolled back.")
-                    return None
                 raise
 
             if message.content:
@@ -484,12 +397,6 @@ class LLMAgent:
             if self.verbose:
                 iter_elapsed = time.monotonic() - t_iter
                 self.console.debug(f"Iteration {iteration} total: {iter_elapsed:.1f}s")
-
-            if self.interrupt.interrupted:
-                self.context.rollback(snapshot)
-                self._recreate_client()
-                self.console.system("Interrupted — partial response rolled back.")
-                return None
 
     # ----- bash command (!) ------------------------------------------------
 
@@ -556,7 +463,6 @@ class LLMAgent:
             "  [cyan]/clear[/cyan]       — Clear conversation history (keep system prompt)\n"
             "  [cyan]/exit[/cyan]        — Exit the agent (also: /quit)\n"
             "\n"
-            "  Attach files with @filename (images & text files supported).\n"
             "  Press [bold]Enter[/bold] to send, [bold]Escape → Enter[/bold] for a newline."
         )
 
@@ -652,7 +558,7 @@ class LLMAgent:
             # Build round choices for questionary picker
             round_choices: list[str] = []
             round_map: dict[str, int] = {}  # choice label → round number
-            for r in rounds:
+            for r in reversed(rounds):
                 n = r["round"]
                 preview = r["preview"]
                 files = r.get("files", 0)
@@ -873,7 +779,7 @@ class LLMAgent:
         self.model_alias = target
         self._api_key = model_conf.get("api_key", "")
         self._base_url = model_conf.get("base_url", "")
-        self.client = OpenAI(api_key=self._api_key, base_url=self._base_url)
+        self.client = OpenAI(api_key=self._api_key, base_url=self._base_url, max_retries=0)
         self.profile = resolve_model_profile(self.model, self.model_alias)
         self.context_length = self.profile.context_length
 
@@ -1032,7 +938,6 @@ class LLMAgent:
 
         self.console.system("Type `/help` for available commands. Prefix with `!` to run shell commands.")
         self.console.system("`Enter` to send. `Escape` then `Enter` for a newline.")
-        self.console.system("Ctrl+C to interrupt. Double Ctrl+C to force quit.")
         self.console.system("Current working directory: " + os.getcwd())
 
         # Auto-save session id: reuse resumed session or generate a new one
@@ -1046,15 +951,14 @@ class LLMAgent:
         self.tool_executor._change_tracker = self.changes
         self.tool_executor._get_round_id = lambda: self.round_id
 
-        terminal = TerminalInput(history_path=str(get_kia_dir() / "history"))
-        self.interrupt.install(self)
+        terminal = TerminalInput(history_path=str(get_kia_dir() / "history"), work_dir=_wd)
 
         last_prompt_sigint = 0.0
         try:
             while True:
                 try:
                     self.console._console.rule(style="dim color(240)")
-                    query = terminal.prompt().strip()
+                    query = _strip_at_marks(terminal.prompt().strip())
                     last_prompt_sigint = 0.0  # reset on successful input
                 except KeyboardInterrupt:
                     now = time.monotonic()
@@ -1078,14 +982,7 @@ class LLMAgent:
                 if query.startswith("!"):
                     bash_cmd = query[1:].strip()
                     if bash_cmd:
-                        self.interrupt.reset()
-                        self.interrupt.set_task_running(True)
-                        try:
-                            self._run_bash_command(bash_cmd)
-                        except ForceExit:
-                            break
-                        finally:
-                            self.interrupt.set_task_running(False)
+                        self._run_bash_command(bash_cmd)
                     else:
                         self.console.warn("Usage: !<shell command>")
                     continue
@@ -1101,21 +998,14 @@ class LLMAgent:
                         self.console.warn(f"Unknown command: /{cmd_word}. Type /help for available commands.")
                         continue
 
-                user_message = {"role": "user", "content": parse_custom_query(query)}
+                user_message = {"role": "user", "content": query}
                 self.context.add(user_message)
 
                 self.round_id += 1
 
                 self.console._console.rule(style="dim color(240)")
 
-                self.interrupt.reset()
-                self.interrupt.set_task_running(True)
-                try:
-                    self.get_response()
-                except ForceExit:
-                    break
-                finally:
-                    self.interrupt.set_task_running(False)
+                self.get_response()
 
                 # Auto-save after each round (throttled: ≤ once per 30 s)
                 try:
@@ -1126,49 +1016,30 @@ class LLMAgent:
                 except Exception:
                     pass  # never let save failure break the loop
         finally:
-            self.interrupt.uninstall()
             self._print_token_summary()
         
     def execute(self, query: str):
         self.console.system(f"Executing query: {query}")
         t0 = time.time()
 
+        # Strip @ prefix from file-path references
+        query = _strip_at_marks(query)
+
         # bash command shortcut: !<command>
         if query.startswith("!"):
             bash_cmd = query[1:].strip()
             if bash_cmd:
-                self.interrupt.install(self)
-                self.interrupt.reset()
-                self.interrupt.set_task_running(True)
-                try:
-                    self._run_bash_command(bash_cmd)
-                except ForceExit:
-                    self._print_token_summary()
-                    sys.exit(1)
-                finally:
-                    self.interrupt.set_task_running(False)
-                    self.interrupt.uninstall()
+                self._run_bash_command(bash_cmd)
             else:
                 self.console.warn("Usage: !<shell command>")
             return None
 
-        self.interrupt.install(self)
-
-        user_message = {"role": "user", "content": parse_custom_query(query)}
+        user_message = {"role": "user", "content": query}
         self.context.add(user_message)
 
         self.console._console.rule(style="dim color(240)")
 
-        self.interrupt.reset()
-        self.interrupt.set_task_running(True)
-        try:
-            response = self.get_response()
-        except ForceExit:
-            self._print_token_summary()
-            sys.exit(1)
-        finally:
-            self.interrupt.set_task_running(False)
-            self.interrupt.uninstall()
+        response = self.get_response()
 
         t1 = time.time()
         self.console.system(f"Execution time: {t1 - t0:.2f} seconds")

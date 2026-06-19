@@ -2,6 +2,7 @@
 
 import os
 import platform
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -105,9 +106,48 @@ def _build_project_section(work_dir: str | None = None) -> str:
 def _build_context_section(work_dir: str | None = None) -> str:
     """Build context section with current environment information."""
     cwd = work_dir or str(Path.cwd())
+    git_info = _get_git_context(cwd)
     return f"""## Current Context
 - Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 - Working Directory: {cwd}
 - Operating System: {platform.system()} {platform.release()}
 - Python: {platform.python_version()}
-- User: {os.getenv("USER") or os.getenv("USERNAME", "unknown")}"""
+- User: {os.getenv("USER") or os.getenv("USERNAME", "unknown")}{git_info}"""
+
+
+def _get_git_context(cwd: str) -> str:
+    """Return git context lines if inside a git repo, otherwise empty string."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            capture_output=True, text=True, cwd=cwd, timeout=5,
+        )
+        if result.returncode != 0:
+            return ""
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return ""
+
+    branch = _git_cmd(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd)
+    lines = []
+    if branch:
+        lines.append(f"- Git Branch: {branch}")
+    remote = _git_cmd(["git", "remote", "get-url", "origin"], cwd)
+    if remote:
+        lines.append(f"- Git Remote: {remote}")
+    status = _git_cmd(["git", "status", "--porcelain"], cwd)
+    dirty = "dirty" if status else "clean"
+    lines.append(f"- Git Status: {dirty}")
+    return "\n" + "\n".join(lines)
+
+
+def _git_cmd(args: list, cwd: str) -> str | None:
+    """Run a git command and return stripped stdout, or None on failure."""
+    try:
+        result = subprocess.run(
+            args, capture_output=True, text=True, cwd=cwd, timeout=5,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except subprocess.TimeoutExpired:
+        pass
+    return None

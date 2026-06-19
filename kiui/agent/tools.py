@@ -2,10 +2,8 @@
 
 import json
 import locale
-import os
 import re
 import shutil
-import signal
 import subprocess
 import sys
 import threading
@@ -39,29 +37,6 @@ def _decode_bytes(b: bytes | None) -> str:
         return b.decode(encoding)
     except UnicodeDecodeError:
         return b.decode("utf-8", errors="replace")
-
-
-def _kill_proc_tree(proc: subprocess.Popen) -> None:
-    """Kill a process and all its descendants."""
-    if sys.platform == "win32":
-        try:
-            subprocess.run(
-                ["taskkill", "/T", "/F", "/PID", str(proc.pid)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=10,
-            )
-        except Exception:
-            proc.kill()
-    else:
-        try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-            try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-        except (ProcessLookupError, OSError):
-            proc.kill()
 
 
 def get_tool_definitions() -> list[dict[str, Any]]:
@@ -266,10 +241,9 @@ class ToolExecutor:
         "load_skill": "_load_skill",
     }
 
-    def __init__(self, console: AgentConsole | None = None, subagent_manager=None, interrupt_handler=None, work_dir: str | None = None, change_tracker=None, get_round_id=None, skills: dict | None = None):
+    def __init__(self, console: AgentConsole | None = None, subagent_manager=None, work_dir: str | None = None, change_tracker=None, get_round_id=None, skills: dict | None = None):
         self.console = console or AgentConsole()
         self.subagent_manager = subagent_manager
-        self._interrupt = interrupt_handler
         self._work_dir = work_dir
         self._change_tracker = change_tracker
         self._get_round_id = get_round_id  # callable → int
@@ -473,12 +447,7 @@ class ToolExecutor:
         t_out.start()
         t_err.start()
 
-        interrupted = False
         while proc.poll() is None:
-            if self._interrupt and self._interrupt.interrupted:
-                interrupted = True
-                _kill_proc_tree(proc)
-                break
             time.sleep(0.5)
 
         try:
