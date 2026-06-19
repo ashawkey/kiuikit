@@ -1,3 +1,5 @@
+import json
+import sys
 from dataclasses import dataclass
 from typing import Annotated, Union
 
@@ -28,6 +30,7 @@ class ChatCmd:
     verbose: bool = False
     context_length: int | None = None
     permission_mode: PermissionMode = PermissionMode.DEFAULT
+    resume: str | None = None  # --resume <session_id>
 
 
 @dataclass
@@ -83,6 +86,82 @@ def get_agent(cfg: ChatCmd | ExecCmd, exec_mode: bool = False) -> LLMAgent | Non
     return agent
 
 
+def _last_user_preview(messages: list) -> str:
+    """Extract a short preview from the last user message."""
+    for m in reversed(messages):
+        if isinstance(m, dict) and m.get("role") == "user":
+            content = m.get("content", "")
+            if isinstance(content, list):
+                text = " ".join(
+                    item.get("text", "")
+                    for item in content
+                    if isinstance(item, dict) and item.get("type") == "text"
+                )
+            else:
+                text = str(content)
+            text = text.replace("\n", " ").strip()
+            return text[:60] + ("..." if len(text) > 60 else "")
+    return ""
+
+
+def _pick_session(console: AgentConsole) -> str | None:
+    """List saved sessions and let the user pick one interactively."""
+    from kiui.agent.utils import get_kia_dir
+
+    sessions_dir = get_kia_dir() / "sessions"
+    if not sessions_dir.exists():
+        console.error(f"No sessions directory found: {sessions_dir}")
+        return None
+
+    files = sorted(sessions_dir.glob("*.json"), reverse=True)
+    if not files:
+        console.system(f"No saved sessions in {sessions_dir}")
+        return None
+
+    table = Table(title="Saved Sessions", show_header=True, header_style="bold magenta")
+    table.add_column("#", style="dim", justify="right", no_wrap=True)
+    table.add_column("Session ID", style="cyan")
+    table.add_column("Messages", style="green", justify="right")
+    table.add_column("Rounds", style="yellow", justify="right")
+    table.add_column("Model", style="blue")
+    table.add_column("Preview", style="dim", no_wrap=False)
+
+    entries: list[str] = []
+    for i, f in enumerate(files, 1):
+        stem = f.stem
+        try:
+            meta = json.loads(f.read_text(encoding="utf-8"))
+            messages = meta.get("messages", [])
+            n_msgs = len(messages)
+            rnd = meta.get("round_id", "?")
+            model = meta.get("model", "?")
+            preview = _last_user_preview(messages)
+        except Exception:
+            n_msgs, rnd, model, preview = "?", "?", "?", ""
+        table.add_row(str(i), stem, str(n_msgs), str(rnd), str(model), preview)
+        entries.append(stem)
+
+    console.table(table)
+
+    try:
+        choice = input(f"Pick a session [1-{len(entries)}] or press Enter to cancel: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return None
+
+    if not choice:
+        return None
+
+    try:
+        idx = int(choice) - 1
+        if 0 <= idx < len(entries):
+            return entries[idx]
+    except ValueError:
+        pass
+
+    console.error("Invalid selection.")
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Subcommand handlers
 # ---------------------------------------------------------------------------
@@ -131,8 +210,19 @@ def cmd_list(cfg: ListCmd):
 
 
 def cmd_chat(cfg: ChatCmd):
-    if agent := get_agent(cfg):
-        agent.chat_loop()
+    agent = get_agent(cfg)
+    if not agent:
+        return
+
+    # Handle --resume
+    session_id: str | None = cfg.resume
+    if session_id == "":  # bare --resume with no value → pick interactively
+        session_id = _pick_session(AgentConsole())
+
+    if session_id:
+        agent.load_session(session_id)
+
+    agent.chat_loop(resumed_session_id=session_id)
 
 
 def cmd_exec(cfg: ExecCmd):
@@ -145,13 +235,45 @@ def cmd_exec(cfg: ExecCmd):
 # ---------------------------------------------------------------------------
 
 def main():
-    cmd = tyro.cli(Command, description="LLM Agent CLI")
-    if isinstance(cmd, ListCmd):
-        cmd_list(cmd)
-    elif isinstance(cmd, ChatCmd):
+    args = sys.argv[1:]
+
+    # Pre-parse --resume with an optional value before tyro, so bare
+    # `--resume` works as well as `--resume <session_id>`.
+    cleaned: list[str] = []
+    resume_value: str | None = None
+    i = 0
+    while i < len(args):
+        if args[i] == "--resume":
+            if i + 1 < len(args) and not args[i + 1].startswith("-"):
+                resume_value = args[i + 1]
+                i += 2
+            else:
+                resume_value = ""  # sentinel for bare --resume
+                i += 1
+        else:
+            cleaned.append(args[i])
+            i += 1
+
+    # Replace sys.argv so tyro sees the cleaned version
+    sys.argv = [sys.argv[0]] + cleaned
+
+    if not cleaned:
+        # No subcommand given — default to chat
+        cmd = ChatCmd()
+        if resume_value is not None:
+            cmd.resume = resume_value
         cmd_chat(cmd)
-    elif isinstance(cmd, ExecCmd):
-        cmd_exec(cmd)
+    else:
+        cmd = tyro.cli(Command, description="LLM Agent CLI")
+        if isinstance(cmd, ChatCmd) and resume_value is not None:
+            cmd.resume = resume_value
+
+        if isinstance(cmd, ListCmd):
+            cmd_list(cmd)
+        elif isinstance(cmd, ChatCmd):
+            cmd_chat(cmd)
+        elif isinstance(cmd, ExecCmd):
+            cmd_exec(cmd)
 
 
 if __name__ == "__main__":

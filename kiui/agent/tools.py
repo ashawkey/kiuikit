@@ -251,11 +251,13 @@ class ToolExecutor:
         "spawn_subagent": "_spawn_subagent",
     }
 
-    def __init__(self, console: AgentConsole | None = None, subagent_manager=None, interrupt_handler=None, work_dir: str | None = None):
+    def __init__(self, console: AgentConsole | None = None, subagent_manager=None, interrupt_handler=None, work_dir: str | None = None, change_tracker=None, get_round_id=None):
         self.console = console or AgentConsole()
         self.subagent_manager = subagent_manager
         self._interrupt = interrupt_handler
         self._work_dir = work_dir
+        self._change_tracker = change_tracker
+        self._get_round_id = get_round_id  # callable → int
 
     def execute(self, function_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Dispatch and execute a tool call. Returns dict with success key."""
@@ -312,6 +314,9 @@ class ToolExecutor:
         """Write content to file, creating parent directories."""
         self.console.tool(f"write_file {path}")
 
+        if self._change_tracker and self._get_round_id:
+            self._change_tracker.track_write(self._get_round_id(), path)
+
         file_path = Path(path)
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with open(file_path, "w", encoding="utf-8") as f:
@@ -322,6 +327,9 @@ class ToolExecutor:
     def _edit_file(self, path: str, old_text: str, new_text: str, replace_all: bool = False) -> dict[str, Any]:
         """Make surgical edit to file by replacing exact text."""
         self.console.tool(f"edit_file {path}")
+
+        if self._change_tracker and self._get_round_id:
+            self._change_tracker.track_edit(self._get_round_id(), path)
 
         file_path = Path(path)
         if not file_path.exists():
@@ -381,6 +389,14 @@ class ToolExecutor:
         self.console.tool(f"exec_command: {command}")
 
         cwd = cwd or self._work_dir
+
+        # Pre-exec backup for change tracking
+        batch_rel = None
+        if self._change_tracker and self._get_round_id:
+            try:
+                batch_rel = self._change_tracker.pre_exec_backup()
+            except Exception:
+                batch_rel = None
 
         if sys.platform == "win32":
             shell_cmd: Any = command
@@ -463,6 +479,14 @@ class ToolExecutor:
             )
         if interrupted:
             res["error"] = "Command was interrupted by user."
+
+        # Post-exec comparison for change tracking
+        if batch_rel and self._change_tracker and self._get_round_id:
+            try:
+                self._change_tracker.post_exec_compare(batch_rel, self._get_round_id())
+            except Exception:
+                pass
+
         return res
 
     def _glob_files(self, pattern: str, base_dir: str | None = None, recursive: bool = True) -> dict[str, Any]:
@@ -687,6 +711,9 @@ class ToolExecutor:
     def _remove_file(self, path: str) -> dict[str, Any]:
         """Remove a file or directory."""
         self.console.tool(f"remove_file {path}")
+
+        if self._change_tracker and self._get_round_id:
+            self._change_tracker.track_remove(self._get_round_id(), path)
 
         target = Path(path)
         if not target.exists():

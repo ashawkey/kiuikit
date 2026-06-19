@@ -26,6 +26,7 @@ from kiui.agent.context import (
     msg_chars,
 )
 from kiui.agent.interrupt import InterruptHandler
+from kiui.agent.rewind import ChangeTracker
 from kiui.agent.models import resolve_model_profile
 
 def parse_custom_query(query: str) -> list:
@@ -156,6 +157,7 @@ class LLMAgent:
         # subagent manager (only if we have a model_alias for spawning children)
         self.subagent_manager = SubagentManager(model_alias=model_alias, console=self.console) if model_alias else None
         self.interrupt = InterruptHandler()
+        self.changes: ChangeTracker | None = None
         self.tool_executor = ToolExecutor(console=self.console, subagent_manager=self.subagent_manager, interrupt_handler=self.interrupt, work_dir=work_dir)
 
         self.context = ContextManager(self.system_prompt)
@@ -435,7 +437,7 @@ class LLMAgent:
 
     # ----- slash commands ---------------------------------------------------
 
-    COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "perm", "model", "save", "load", "context"}
+    COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "perm", "model", "context", "rewind"}
 
     def _handle_command(self, raw: str) -> bool:
         """Handle a /command.  Returns True if the agent loop should stop."""
@@ -456,12 +458,10 @@ class LLMAgent:
             self._cmd_perm(raw)
         elif cmd == "model":
             self._cmd_model(raw)
-        elif cmd == "save":
-            self._cmd_save(raw)
-        elif cmd == "load":
-            self._cmd_load(raw)
         elif cmd == "context":
             self._cmd_context()
+        elif cmd == "rewind":
+            self._cmd_rewind(raw)
 
         return False
 
@@ -475,11 +475,12 @@ class LLMAgent:
             "  [cyan]/usage[/cyan]       — Show token usage for this session\n"
             "  [cyan]/model[/cyan]       — Show or switch LLM model (/model <name>)\n"
             "  [cyan]/perm[/cyan]        — Show or change permission mode (/perm auto|default|strict)\n"
-            "  [cyan]/save[/cyan] [name] — Save session to .kia/sessions/ (default: timestamp)\n"
-            "  [cyan]/load[/cyan] [name] — Load a saved session (no name: list available)\n"
+            "  [cyan]/rewind[/cyan]      — Roll back conversation and/or code to a previous round\n"
             "  [cyan]/clear[/cyan]       — Clear conversation history (keep system prompt)\n"
             "  [cyan]/exit[/cyan]        — Exit the agent (also: /quit)\n"
             "\n"
+            "  Sessions are auto-saved after each round.\n"
+            "  Use [cyan]kia --resume <id>[/cyan] to resume, or [cyan]kia --resume[/cyan] to pick.\n"
             "  Attach files with @filename (images & text files supported).\n"
             "  Press [bold]Enter[/bold] to send, [bold]Escape → Enter[/bold] for a newline."
         )
@@ -531,7 +532,93 @@ class LLMAgent:
     def _cmd_clear(self):
         self.context.replace_messages([])
         self.round_id = 0
+        self.changes = None
+        self.tool_executor._change_tracker = None
+        self.tool_executor._get_round_id = None
         self.console.system("Conversation cleared.")
+
+    def _cmd_rewind(self, raw: str):
+        """Handle /rewind — roll back to a previous round."""
+        if not self.changes:
+            self.console.warn("Rewind is only available in interactive chat mode with a session.")
+            return
+
+        rounds = self.changes.build_round_list(self.context.messages)
+        if not rounds:
+            self.console.system("No rounds to rewind.")
+            return
+
+        parts = raw.split()
+        target_round: int | None = None
+
+        if len(parts) >= 2:
+            try:
+                target_round = int(parts[1])
+                if target_round < 0 or target_round > len(rounds):
+                    self.console.error(f"Round must be between 0 and {len(rounds)}.")
+                    return
+            except ValueError:
+                self.console.error(f"Invalid round number: {parts[1]}")
+                return
+        else:
+            # Show picker
+            self.console.print("[bold blue]── Rounds ──[/bold blue]")
+            for r in rounds:
+                self.console.print(f"  [cyan]{r['round']:>3}[/cyan]  {r['preview']}")
+            self.console.print(f"  [dim]  0  (initial state — before any messages)[/dim]")
+
+            try:
+                choice = input(f"Pick a round to rewind to [0-{len(rounds)}]: ").strip()
+            except (EOFError, KeyboardInterrupt):
+                return
+            if not choice:
+                return
+            try:
+                target_round = int(choice)
+            except ValueError:
+                self.console.error(f"Invalid choice: {choice}")
+                return
+            if target_round < 0 or target_round > len(rounds):
+                self.console.error(f"Round must be between 0 and {len(rounds)}.")
+                return
+
+        # Ask revert mode
+        self.console.print(f"\n[bold blue]Rewind to round {target_round}:[/bold blue]")
+        if target_round > 0 and target_round <= len(rounds):
+            preview = rounds[target_round - 1]["preview"]
+            self.console.print(f"  Last kept round: [cyan]{target_round}[/cyan] — {preview}")
+        elif target_round == 0:
+            self.console.print(f"  Last kept round: [cyan]0[/cyan] — (initial state)")
+
+        self.console.print("\n  [cyan][1][/cyan] Conversation only (keep code changes)")
+        self.console.print("  [cyan][2][/cyan] Code + conversation (restore both)")
+        self.console.print("  [cyan][3][/cyan] Code only (keep conversation)")
+        try:
+            mode = input("  Choose [1/2/3] or Enter to cancel: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            return
+        if mode not in ("1", "2", "3"):
+            return
+
+        revert_code = mode in ("2", "3")
+        revert_conv = mode in ("1", "2")
+
+        # Execute rollback
+        self.console.system(f"Rewinding to round {target_round}...")
+
+        if revert_code:
+            restored = self.changes.rollback_code(target_round)
+            self.console.system(f"Code reverted: {restored} files restored.")
+        else:
+            self.console.system("Code changes preserved.")
+
+        if revert_conv:
+            self.context.messages, self.round_id = self.changes.rollback_conversation(
+                self.context.messages, target_round
+            )
+            self.console.system(f"Conversation rolled back to round {self.round_id} ({len(self.context.messages)} messages).")
+        else:
+            self.console.system("Conversation preserved.")
 
     def _cmd_context(self):
         msgs = self.context.messages
@@ -728,61 +815,92 @@ class LLMAgent:
         self.console.system(
             f"Loaded session '{name}' ({len(self.context.messages)} messages, round {self.round_id})"
         )
+
+        # Replay the conversation so user can recall the context
+        self._replay_context()
         return True
 
-    def _cmd_save(self, raw: str):
-        parts = raw.split(maxsplit=1)
-        name = parts[1].strip() if len(parts) > 1 else None
-        if not self.context.messages:
-            self.console.system("Nothing to save — conversation is empty.")
-            return
-        path = self.save_session(name)
-        self.console.system(f"Session saved to {path} ({len(self.context.messages)} messages)")
-
-    def _cmd_load(self, raw: str):
-        parts = raw.split(maxsplit=1)
-
-        if len(parts) < 2 or not parts[1].strip():
-            sessions_dir = self._sessions_dir()
-            files = sorted(sessions_dir.glob("*.json"))
-            if not files:
-                self.console.system(f"No saved sessions in {sessions_dir}")
-                return
-            lines = [f"[bold blue]Saved sessions ({sessions_dir}):[/bold blue]"]
-            for f in files:
-                stem = f.stem
-                try:
-                    meta = json.loads(f.read_text(encoding="utf-8"))
-                    n_msgs = len(meta.get("messages", []))
-                    rnd = meta.get("round_id", "?")
-                    model = meta.get("model", "?")
-                    lines.append(f"  [cyan]{stem}[/cyan]  — {n_msgs} msgs, round {rnd}, model: {model}")
-                except Exception:
-                    lines.append(f"  [cyan]{stem}[/cyan]  — (unreadable)")
-            self.console.print("\n".join(lines))
+    def _replay_context(self):
+        """Replay all messages using the same display methods as live chat."""
+        msgs = self.context.messages
+        if not msgs:
             return
 
-        name = parts[1].strip()
-        self.load_session(name)
+        self.console.system("── Session context (replay) ──")
+
+        for msg in msgs:
+            role = get_role(msg)
+            if role == "user":
+                text = get_text(msg)
+                self.console.print(f"[bold yellow][QUERY][/bold yellow] {text}", markup=False)
+
+            elif role == "assistant":
+                text = get_text(msg)
+                if text:
+                    self.console.response(text)
+                for tc in get_tool_calls(msg):
+                    if isinstance(tc, dict):
+                        fn = tc.get("function", {})
+                        fname = fn.get("name", "?")
+                        try:
+                            fargs = json.loads(fn.get("arguments", "{}"))
+                        except (json.JSONDecodeError, TypeError):
+                            fargs = {}
+                    else:
+                        fname = getattr(getattr(tc, "function", None), "name", "?")
+                        try:
+                            fargs = json.loads(getattr(getattr(tc, "function", None), "arguments", "{}"))
+                        except (json.JSONDecodeError, TypeError):
+                            fargs = {}
+                    self.console.tool(f"{fname}({json.dumps(fargs, ensure_ascii=False)})")
+
+            elif role == "tool":
+                result_text = get_text(msg)
+                success = "error" not in result_text.lower()
+                summary = format_tool_summary(result_text)
+                self.console.tool_result(summary, success=success)
+
+        self.console.system("── End of replay ──")
+
+
 
     # ----- main loops -------------------------------------------------------
 
-    def chat_loop(self):
+    def chat_loop(self, resumed_session_id: str | None = None):
 
         self.console.system("Type `/help` for available commands.")
         self.console.system("`Enter` to send. `Escape` then `Enter` for a newline.")
         self.console.system("Ctrl+C to interrupt. Double Ctrl+C to force quit.")
         self.console.system("Current working directory: " + os.getcwd())
 
+        # Auto-save session id: reuse resumed session or generate a new one
+        session_id = resumed_session_id or time.strftime("%Y%m%d_%H%M%S")
+        self.console.system(f"Session: {session_id}")
+
+        # Initialize change tracker for code+conversation rollback
+        _wd = self.tool_executor._work_dir or os.getcwd()
+        if self.changes is None:
+            self.changes = ChangeTracker(session_id, _wd, self.console)
+        # Wire the tracker into the tool executor for per-operation tracking
+        self.tool_executor._change_tracker = self.changes
+        self.tool_executor._get_round_id = lambda: self.round_id
+
         terminal = TerminalInput(history_path=str(get_kia_dir() / "history"))
         self.interrupt.install(self)
 
+        last_prompt_sigint = 0.0
         try:
             while True:
                 try:
                     query = terminal.prompt().strip()
+                    last_prompt_sigint = 0.0  # reset on successful input
                 except KeyboardInterrupt:
-                    self.console.print("")
+                    now = time.monotonic()
+                    if last_prompt_sigint > 0 and now - last_prompt_sigint < 1.0:
+                        self.console.print("\nForce quitting...")
+                        break
+                    last_prompt_sigint = now
+                    self.console.print(" (press Ctrl+C again to exit)")
                     continue
                 except EOFError:
                     break
@@ -801,6 +919,9 @@ class LLMAgent:
                         if self._handle_command(query):
                             break
                         continue
+                    else:
+                        self.console.warn(f"Unknown command: /{cmd_word}. Type /help for available commands.")
+                        continue
 
                 user_message = {"role": "user", "content": parse_custom_query(query)}
                 self.context.add(user_message)
@@ -813,6 +934,12 @@ class LLMAgent:
                     self.interrupt.set_task_running(False)
 
                 self.round_id += 1
+
+                # Auto-save after each round
+                try:
+                    self.save_session(session_id)
+                except Exception:
+                    pass  # never let save failure break the loop
         finally:
             self.interrupt.uninstall()
             self._print_token_summary()

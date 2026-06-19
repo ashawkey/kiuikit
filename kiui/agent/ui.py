@@ -20,13 +20,13 @@ def _now() -> str:
 AGENT_THEME = Theme({
     "debug": "dim cyan",
     "input": "bold yellow",
-    "response": "bold green",
+    "response": "white",
     "error": "bold red",
     "warning": "bold yellow",
     "system": "bold blue",
-    "tool": "bold cyan",
-    "tool_ok": "dim green",
-    "tool_fail": "red",
+    "tool": "color(244)",
+    "tool_ok": "color(244)",
+    "tool_fail": "color(244)",
 })
 
 
