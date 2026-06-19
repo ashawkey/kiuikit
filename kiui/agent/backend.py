@@ -1090,6 +1090,8 @@ class LLMAgent:
 
                 self.round_id += 1
 
+                self.console._console.rule(style="dim color(240)")
+
                 self.interrupt.reset()
                 self.interrupt.set_task_running(True)
                 try:
@@ -1138,6 +1140,8 @@ class LLMAgent:
 
         user_message = {"role": "user", "content": parse_custom_query(query)}
         self.context.add(user_message)
+
+        self.console._console.rule(style="dim color(240)")
 
         self.interrupt.reset()
         self.interrupt.set_task_running(True)

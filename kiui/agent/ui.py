@@ -254,7 +254,7 @@ class AgentConsole:
         language = self._guess_language(path)
         has_old = bool(old_text)
         start_line = line_num if line_num is not None else 1
-        LN = "dim color(240)"  # line-number style: dim grey, unobtrusive
+        LN = "color(245)"  # line-number style: medium grey, readable on dark backgrounds
 
         if has_old:
             for i, line in enumerate(old_text.splitlines()):
