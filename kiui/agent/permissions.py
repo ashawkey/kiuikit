@@ -118,7 +118,7 @@ class SafetyGuard:
     def check(self, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
         """Return ``(allowed, reason)``.  *reason* is non-empty when blocked."""
         if tool_name in ("write_file", "edit_file", "remove_file"):
-            return self._check_path(arguments.get("path", ""))
+            return self._check_path(arguments.get("file", ""))
         if tool_name == "exec_command":
             return self._check_command(arguments.get("command", ""))
         return True, ""

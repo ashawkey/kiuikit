@@ -9,6 +9,7 @@ from kiui.agent.ui import AgentConsole
 from kiui.agent.terminal import TerminalInput
 from kiui.agent.utils import get_text_content_dict, get_image_content_dict, get_kia_dir
 from kiui.agent.prompts import build_system_prompt
+from kiui.agent.skills import discover_skills
 from kiui.agent.tools import get_tool_definitions, ToolExecutor, format_tool_result, format_tool_summary
 from kiui.agent.subagent import SubagentManager
 from kiui.agent.permissions import PermissionController, PermissionMode
@@ -148,8 +149,11 @@ class LLMAgent:
 
         self.console = AgentConsole()
 
+        # discover skills from .kia/skills/
+        self.skills = discover_skills(work_dir)
+
         # built-in system prompt and tools
-        self.system_prompt = build_system_prompt(exec_mode=exec_mode, work_dir=work_dir)
+        self.system_prompt = build_system_prompt(exec_mode=exec_mode, work_dir=work_dir, skills=self.skills)
         self.tools = get_tool_definitions()
 
         self.permissions = PermissionController(mode=permission_mode, console=self.console, work_dir=work_dir)
@@ -158,7 +162,7 @@ class LLMAgent:
         self.subagent_manager = SubagentManager(model_alias=model_alias, console=self.console) if model_alias else None
         self.interrupt = InterruptHandler()
         self.changes: ChangeTracker | None = None
-        self.tool_executor = ToolExecutor(console=self.console, subagent_manager=self.subagent_manager, interrupt_handler=self.interrupt, work_dir=work_dir)
+        self.tool_executor = ToolExecutor(console=self.console, subagent_manager=self.subagent_manager, interrupt_handler=self.interrupt, work_dir=work_dir, skills=self.skills)
 
         self.context = ContextManager(self.system_prompt)
 
@@ -358,6 +362,12 @@ class LLMAgent:
             if result.get("streamed"):
                 exit_code = result.get("exit_code", "?")
                 self.console.tool_result(f"exit code {exit_code} ({exec_elapsed:.1f}s)", success=success)
+            elif function_name in ("edit_file", "write_file") and "diff" in result:
+                self.console.diff_edit(**result["diff"], success=success)
+            elif function_name == "read_file":
+                self._display_read_result(result, success, result_text)
+            elif function_name in ("glob_files", "grep_files"):
+                self._display_search_result(function_name, result, success)
             else:
                 self.console.tool_result(format_tool_summary(result_text), success=success)
 
@@ -375,6 +385,32 @@ class LLMAgent:
         total_elapsed = time.monotonic() - t_all
         if self.verbose and len(tool_calls) > 1:
             self.console.debug(f"All {len(tool_calls)} tool calls completed in {total_elapsed:.1f}s")
+
+    # -- per-tool result display helpers ------------------------------------
+
+    def _display_read_result(self, result: dict[str, Any], success: bool, result_text: str) -> None:
+        """Compact read_file result: show path, line count, success."""
+        if not success:
+            self.console.tool_result(format_tool_summary(result_text), success=False)
+            return
+        lines_read = result.get("lines_read", "?")
+        self.console.tool_result(f"{lines_read} lines read", success=True)
+
+    def _display_search_result(self, tool_name: str, result: dict[str, Any], success: bool) -> None:
+        """Compact glob_files/grep_files result: show match count / file count."""
+        if not success:
+            error_msg = result.get("error", "Unknown error")
+            self.console.tool_result(error_msg, success=False)
+            return
+        count = result.get("count", 0)
+        truncated = result.get("truncated", False)
+        if tool_name == "glob_files":
+            msg = f"{count} files matched"
+        else:
+            msg = f"{count} matches"
+        if truncated:
+            msg += " (truncated to 500)"
+        self.console.tool_result(msg, success=True)
 
     def get_response(self):
         """Process the context and update the current response.
@@ -454,7 +490,7 @@ class LLMAgent:
 
     # ----- slash commands ---------------------------------------------------
 
-    COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "perm", "model", "context", "rewind"}
+    COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "perm", "model", "context", "rewind", "skills"}
 
     def _handle_command(self, raw: str) -> bool:
         """Handle a /command.  Returns True if the agent loop should stop."""
@@ -479,6 +515,8 @@ class LLMAgent:
             self._cmd_context()
         elif cmd == "rewind":
             self._cmd_rewind(raw)
+        elif cmd == "skills":
+            self._cmd_skills()
 
         return False
 
@@ -492,6 +530,7 @@ class LLMAgent:
             "  [cyan]/compact[/cyan]     — Force context compaction via LLM summarization\n"
             "  [cyan]/usage[/cyan]       — Show token usage for this session\n"
             "  [cyan]/model[/cyan]       — Show or switch LLM model (/model <name>)\n"
+            "  [cyan]/skills[/cyan]      — List installed skills from .kia/skills/\n"
             "  [cyan]/perm[/cyan]        — Show or change permission mode (/perm auto|default|strict)\n"
             "  [cyan]/rewind[/cyan]      — Roll back conversation and/or code to a previous round\n"
             "  [cyan]/clear[/cyan]       — Clear conversation history (keep system prompt)\n"
@@ -815,6 +854,33 @@ class LLMAgent:
             f"(context: {self.context_length:,} tokens, thinking: {self.profile.thinking or 'none'})"
         )
 
+    def _cmd_skills(self):
+        """List installed skills from .kia/skills/."""
+        if not self.skills:
+            skills_dir = (Path(self.tool_executor._work_dir) if self.tool_executor._work_dir else Path.cwd()) / ".kia" / "skills"
+            self.console.print(
+                f"[bold blue]No skills installed.[/bold blue]\n"
+                f"\n"
+                f"  Skills are folders under [cyan]{skills_dir}[/cyan] each containing a [cyan]SKILL.md[/cyan] file.\n"
+                f"\n"
+                f"  [bold]Example:[/bold]\n"
+                f"    [cyan]{skills_dir / 'git-workflow' / 'SKILL.md'}[/cyan]\n"
+                f"\n"
+                f"  The SKILL.md should describe what the skill does and provide domain-specific instructions.\n"
+                f"  When a skill is relevant, the model can invoke [cyan]load_skill[/cyan] to load its full prompt."
+            )
+            return
+
+        self.console.print(f"[bold blue]Installed skills ({len(self.skills)}):[/bold blue]\n")
+        for name, info in sorted(self.skills.items()):
+            desc = info.get("description", "")
+            path = info.get("path", "")
+            loaded = " [green](loaded)[/green]" if name in self.tool_executor._loaded_skills else ""
+            self.console.print(f"  [cyan]{name}[/cyan]{loaded}")
+            self.console.print(f"    {desc}")
+            self.console.print(f"    [dim]{path}[/dim]")
+            self.console.print()
+
     # ----- session save / load ------------------------------------------------
 
     SESSIONS_DIR_NAME = "sessions"
@@ -897,7 +963,7 @@ class LLMAgent:
             role = get_role(msg)
             if role == "user":
                 text = get_text(msg)
-                self.console.print(f"> {text}", style="input", markup=False)
+                self.console.user_input(text)
 
             elif role == "assistant":
                 text = get_text(msg)
@@ -956,6 +1022,7 @@ class LLMAgent:
         try:
             while True:
                 try:
+                    self.console._console.rule(style="dim color(240)")
                     query = terminal.prompt().strip()
                     last_prompt_sigint = 0.0  # reset on successful input
                 except KeyboardInterrupt:

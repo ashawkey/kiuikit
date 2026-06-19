@@ -27,11 +27,12 @@ class TerminalInput:
         self._prompt_label = prompt_label
         self.style = Style.from_dict({
             "prompt": "bold ansiyellow",
+            "": "ansiyellow",
         })
 
         self.history = FileHistory(str(history_path)) if history_path else None
         self._session = PromptSession(
-            multiline=False,
+            multiline=True,
             style=self.style,
             history=self.history,
             auto_suggest=AutoSuggestFromHistory(),
@@ -43,6 +44,10 @@ class TerminalInput:
 
     def _create_keybindings(self) -> KeyBindings:
         kb = KeyBindings()
+
+        @kb.add("enter")
+        def _(event):
+            event.current_buffer.validate_and_handle()
 
         @kb.add("escape", "enter")
         def _(event):

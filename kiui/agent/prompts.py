@@ -5,13 +5,17 @@ import platform
 from datetime import datetime
 from pathlib import Path
 
+from kiui.agent.skills import discover_skills, build_skills_prompt_section
 
-def build_system_prompt(exec_mode: bool = False, work_dir: str | None = None) -> str:
+
+def build_system_prompt(exec_mode: bool = False, work_dir: str | None = None, skills: dict | None = None) -> str:
     """Build the complete system prompt from ordered sections.
 
     If *exec_mode* is True the prompt tells the agent it is running
     autonomously with no user to interact with.
     *work_dir* overrides the working directory shown in the context section.
+    *skills* is a pre-discovered skills dict; if None, skills are discovered
+    automatically from *work_dir*.
     """
     sections = []
 
@@ -67,12 +71,19 @@ You can spawn a sub-agent to delegate work:
 - **spawn_subagent**: runs a task in a separate process and returns the result when done.
 Use sub-agents when you want to delegate a self-contained task (e.g., research, summarization).""")
 
-    # 7. Project instructions (optional AGENTS.md)
+    # 7. Skills
+    if skills is None:
+        skills = discover_skills(work_dir)
+    skills_section = build_skills_prompt_section(skills)
+    if skills_section:
+        sections.append(skills_section)
+
+    # 8. Project instructions (optional AGENTS.md)
     project = _build_project_section(work_dir)
     if project:
         sections.append(project)
 
-    # 8. Context
+    # 9. Context
     sections.append(_build_context_section(work_dir))
 
     return "\n\n".join(sections)

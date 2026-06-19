@@ -75,11 +75,11 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "path": {"type": "string", "description": "Path to the file to read"},
+                        "file": {"type": "string", "description": "Path to the file to read"},
                         "offset": {"type": "integer", "description": "Line number to start reading from (1-indexed)"},
                         "limit": {"type": "integer", "description": "Maximum number of lines to read"},
                     },
-                    "required": ["path"],
+                    "required": ["file"],
                 },
             },
         },
@@ -91,10 +91,10 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "path": {"type": "string", "description": "Path to the file to write"},
+                        "file": {"type": "string", "description": "Path to the file to write"},
                         "content": {"type": "string", "description": "Content to write to the file"},
                     },
-                    "required": ["path", "content"],
+                    "required": ["file", "content"],
                 },
             },
         },
@@ -106,12 +106,12 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "path": {"type": "string", "description": "Path to the file to edit"},
+                        "file": {"type": "string", "description": "Path to the file to edit"},
                         "old_text": {"type": "string", "description": "Exact text to find and replace"},
                         "new_text": {"type": "string", "description": "New text to replace the old text with"},
                         "replace_all": {"type": "boolean", "description": "Replace all occurrences instead of requiring exactly one (default: false)"},
                     },
-                    "required": ["path", "old_text", "new_text"],
+                    "required": ["file", "old_text", "new_text"],
                 },
             },
         },
@@ -207,9 +207,9 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "path": {"type": "string", "description": "Path to the file or directory to remove"},
+                        "file": {"type": "string", "description": "Path to the file or directory to remove"},
                     },
-                    "required": ["path"],
+                    "required": ["file"],
                 },
             },
         },
@@ -232,6 +232,20 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "load_skill",
+                "description": "Load the full prompt instructions for a skill by name. Use this when a task matches a skill's domain so you can follow its specialized guidance.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Name of the skill to load"},
+                    },
+                    "required": ["name"],
+                },
+            },
+        },
     ]
 
 
@@ -249,15 +263,18 @@ class ToolExecutor:
         "web_fetch": "_web_fetch",
         "remove_file": "_remove_file",
         "spawn_subagent": "_spawn_subagent",
+        "load_skill": "_load_skill",
     }
 
-    def __init__(self, console: AgentConsole | None = None, subagent_manager=None, interrupt_handler=None, work_dir: str | None = None, change_tracker=None, get_round_id=None):
+    def __init__(self, console: AgentConsole | None = None, subagent_manager=None, interrupt_handler=None, work_dir: str | None = None, change_tracker=None, get_round_id=None, skills: dict | None = None):
         self.console = console or AgentConsole()
         self.subagent_manager = subagent_manager
         self._interrupt = interrupt_handler
         self._work_dir = work_dir
         self._change_tracker = change_tracker
         self._get_round_id = get_round_id  # callable → int
+        self._skills = skills or {}
+        self._loaded_skills: set[str] = set()
 
     def execute(self, function_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Dispatch and execute a tool call. Returns dict with success key."""
@@ -269,21 +286,21 @@ class ToolExecutor:
         except Exception as e:
             return {"error": f"Tool execution failed: {e}", "success": False}
 
-    def _read_file(self, path: str, offset: int | None = None, limit: int | None = None) -> dict[str, Any]:
+    def _read_file(self, file: str, offset: int | None = None, limit: int | None = None) -> dict[str, Any]:
         """Read file contents with optional offset and limit."""
-        self.console.tool(f"read_file {path}")
+        self.console.tool(f"read_file {file}")
 
-        file_path = Path(path)
+        file_path = Path(file)
         if not file_path.exists():
-            return {"error": f"File not found: {path}", "success": False}
+            return {"error": f"File not found: {file}", "success": False}
         if not file_path.is_file():
-            return {"error": f"Path is not a file: {path}", "success": False}
+            return {"error": f"Path is not a file: {file}", "success": False}
 
         try:
             with open(file_path, encoding="utf-8") as f:
                 all_lines = f.readlines()
         except UnicodeDecodeError:
-            return {"error": f"Cannot read binary file: {path}", "success": False}
+            return {"error": f"Cannot read binary file: {file}", "success": False}
 
         total_lines = len(all_lines)
         lines = all_lines
@@ -310,31 +327,42 @@ class ToolExecutor:
 
         return {"content": content, "lines_read": len(lines), "success": True}
 
-    def _write_file(self, path: str, content: str) -> dict[str, Any]:
+    def _write_file(self, file: str, content: str) -> dict[str, Any]:
         """Write content to file, creating parent directories."""
-        self.console.tool(f"write_file {path}")
+        self.console.tool(f"write_file {file}")
 
         if self._change_tracker and self._get_round_id:
-            self._change_tracker.track_write(self._get_round_id(), path, content)
+            self._change_tracker.track_write(self._get_round_id(), file, content)
 
-        file_path = Path(path)
+        file_path = Path(file)
         file_path.parent.mkdir(parents=True, exist_ok=True)
+        existed = file_path.exists()
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(content)
 
-        return {"message": f"Successfully wrote {len(content)} characters to {path}", "success": True}
+        return {
+            "message": f"Successfully wrote {len(content)} characters to {file}",
+            "success": True,
+            "diff": {
+                "path": file,
+                "old_text": "",        # write_file has no "old" — show all as additions
+                "new_text": content,
+                "line_num": None,
+                "count": 1,
+            },
+        }
 
-    def _edit_file(self, path: str, old_text: str, new_text: str, replace_all: bool = False) -> dict[str, Any]:
+    def _edit_file(self, file: str, old_text: str, new_text: str, replace_all: bool = False) -> dict[str, Any]:
         """Make surgical edit to file by replacing exact text."""
-        self.console.tool(f"edit_file {path}")
+        self.console.tool(f"edit_file {file}")
 
-        file_path = Path(path)
+        file_path = Path(file)
         if not file_path.exists():
-            return {"error": f"File not found: {path}", "success": False}
+            return {"error": f"File not found: {file}", "success": False}
 
         # Track before reading (original snapshot) but pass edit params for diff
         if self._change_tracker and self._get_round_id:
-            self._change_tracker.track_edit(self._get_round_id(), path, old_text, new_text)
+            self._change_tracker.track_edit(self._get_round_id(), file, old_text, new_text)
 
         with open(file_path, encoding="utf-8") as f:
             content = f.read()
@@ -348,17 +376,24 @@ class ToolExecutor:
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(new_content)
 
-            if len(old_text) < 200 and len(new_text) < 200:
-                diff_msg = f"Replaced {occurrence_count} occurrence(s):\n- {old_text}\n+ {new_text}"
-            else:
-                diff_msg = f"Replaced {occurrence_count} occurrence(s): {len(old_text)} chars → {len(new_text)} chars each"
+            diff_msg = f"Replaced {occurrence_count} occurrence(s):\n- {old_text}\n+ {new_text}"
 
-            return {"message": f"Successfully edited {path}\n{diff_msg}", "success": True}
+            return {
+                "message": f"Successfully edited {file}\n{diff_msg}",
+                "success": True,
+                "diff": {
+                    "path": file,
+                    "old_text": old_text,
+                    "new_text": new_text,
+                    "line_num": None,
+                    "count": occurrence_count,
+                },
+            }
 
         if occurrence_count > 1:
             return {
                 "error": (
-                    f"old_text matches {occurrence_count} locations in {path}. "
+                    f"old_text matches {occurrence_count} locations in {file}. "
                     "Include more surrounding context in old_text to make it unique, "
                     "or set replace_all=true to replace every occurrence."
                 ),
@@ -372,12 +407,19 @@ class ToolExecutor:
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(new_content)
 
-        if len(old_text) < 200 and len(new_text) < 200:
-            diff_msg = f"Line {line_num}:\n- {old_text}\n+ {new_text}"
-        else:
-            diff_msg = f"Line {line_num}: replaced {len(old_text)} chars with {len(new_text)} chars"
+        diff_msg = f"Line {line_num}:\n- {old_text}\n+ {new_text}"
 
-        return {"message": f"Successfully edited {path}\n{diff_msg}", "success": True}
+        return {
+            "message": f"Successfully edited {file}\n{diff_msg}",
+            "success": True,
+            "diff": {
+                "path": file,
+                "old_text": old_text,
+                "new_text": new_text,
+                "line_num": line_num,
+                "count": 1,
+            },
+        }
 
     def _exec_command(self, command: str, cwd: str | None = None) -> dict[str, Any]:
         """Execute a shell command, streaming output in real-time.
@@ -465,6 +507,7 @@ class ToolExecutor:
             "stderr": stderr,
             "exit_code": proc.returncode if proc.returncode is not None else -1,
             "success": not interrupted and proc.returncode == 0,
+            "streamed": True,
         }
         if truncated:
             res["truncation_notice"] = (
@@ -694,23 +737,23 @@ class ToolExecutor:
 
         return {"content": content, "url": url, "success": True}
 
-    def _remove_file(self, path: str) -> dict[str, Any]:
+    def _remove_file(self, file: str) -> dict[str, Any]:
         """Remove a file or directory."""
-        self.console.tool(f"remove_file {path}")
+        self.console.tool(f"remove_file {file}")
 
         if self._change_tracker and self._get_round_id:
-            self._change_tracker.track_remove(self._get_round_id(), path)
+            self._change_tracker.track_remove(self._get_round_id(), file)
 
-        target = Path(path)
+        target = Path(file)
         if not target.exists():
-            return {"error": f"Path not found: {path}", "success": False}
+            return {"error": f"Path not found: {file}", "success": False}
 
         if target.is_dir():
             shutil.rmtree(target)
         else:
             target.unlink()
 
-        return {"message": f"Removed {path}", "success": True}
+        return {"message": f"Removed {file}", "success": True}
 
     # ── Sub-agent tool ───────────────────────────────────────
 
@@ -724,6 +767,32 @@ class ToolExecutor:
             return {"error": "task is required.", "success": False}
 
         return self.subagent_manager.spawn(task=task)
+
+    # ── Skill tool ────────────────────────────────────────────
+
+    def _load_skill(self, name: str) -> dict[str, Any]:
+        """Load a skill's full prompt instructions into the conversation context."""
+        self.console.tool(f"load_skill {name}")
+
+        if not self._skills:
+            return {
+                "error": "No skills installed. Create a folder under .kia/skills/<name>/ with a SKILL.md file.",
+                "success": False,
+            }
+
+        if name not in self._skills:
+            available = ", ".join(sorted(self._skills.keys()))
+            return {
+                "error": f"Skill '{name}' not found. Available: {available}",
+                "success": False,
+            }
+
+        if name in self._loaded_skills:
+            return {"message": f"Skill '{name}' is already loaded.", "success": True}
+
+        self._loaded_skills.add(name)
+        body = self._skills[name]["body"]
+        return {"content": body, "success": True}
 
 
 TOOL_SUMMARY_MAX_LINES = 4
