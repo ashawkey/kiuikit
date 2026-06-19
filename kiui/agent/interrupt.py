@@ -1,0 +1,139 @@
+"""Keyboard interruption for the kia agent.
+
+Covers the "agent is busy" phase — while we wait for the LLM (or sleep
+during retry backoff).  The user can press **ESC** or **Ctrl+C** to cancel
+the in-flight request and return to the prompt.
+
+How it works: the blocking call runs in a daemon worker thread while the
+main thread watches the keyboard.  On a cancel key we raise
+``RequestInterrupted`` and abandon the worker.  Abandoning means the HTTP
+request keeps running until the server replies and is then discarded — fine
+for an interactive CLI (the OpenAI client owns its own connection pool).
+
+The user-input phase (Ctrl+C clears prompt / double-tap quits) is handled
+separately by prompt_toolkit key bindings in ``terminal.py``.
+"""
+
+from __future__ import annotations
+
+import sys
+import time
+import threading
+from typing import Callable, TypeVar
+
+T = TypeVar("T")
+
+
+class RequestInterrupted(Exception):
+    """Raised when the user cancels an in-flight request (ESC / Ctrl+C)."""
+
+
+# Cancel keys read from the raw console: ESC and Ctrl+C.
+_CANCEL_KEYS = ("\x1b", "\x03")
+
+
+def _can_watch() -> bool:
+    """True if stdin is an interactive console we can poll for keys."""
+    try:
+        return sys.stdin is not None and sys.stdin.isatty()
+    except Exception:
+        return False
+
+
+if sys.platform == "win32":
+    import msvcrt
+
+    def _watch_for_cancel(stop: threading.Event) -> bool:
+        """Poll the console; return True if a cancel key is pressed.
+
+        Returns False if *stop* is set first.  Swallows other keys so they
+        don't leak into the next prompt; consumes the 2-char sequences that
+        arrow / function keys emit.
+        """
+        while not stop.is_set():
+            if msvcrt.kbhit():
+                ch = msvcrt.getwch()
+                if ch in _CANCEL_KEYS:
+                    return True
+                if ch in ("\x00", "\xe0"):  # special-key prefix
+                    if msvcrt.kbhit():
+                        msvcrt.getwch()  # discard the scan code
+            else:
+                time.sleep(0.03)
+        return False
+
+else:
+    import select
+    import termios
+    import tty
+
+    def _watch_for_cancel(stop: threading.Event) -> bool:
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        try:
+            tty.setcbreak(fd)
+            while not stop.is_set():
+                r, _, _ = select.select([sys.stdin], [], [], 0.05)
+                if r:
+                    ch = sys.stdin.read(1)
+                    if ch in _CANCEL_KEYS:
+                        return True
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        return False
+
+
+def run_interruptible(fn: Callable[[], T]) -> T:
+    """Run blocking *fn* while watching for ESC / Ctrl+C.
+
+    Returns ``fn()``'s result.  Re-raises any exception ``fn`` throws.
+    Raises ``RequestInterrupted`` if the user cancels first.
+
+    When stdin isn't an interactive console, *fn* simply runs inline.
+    """
+    if not _can_watch():
+        return fn()
+
+    result: dict[str, object] = {}
+    done = threading.Event()
+
+    def worker() -> None:
+        try:
+            result["value"] = fn()
+        except BaseException as e:  # re-raised on the calling thread
+            result["error"] = e
+        finally:
+            done.set()
+
+    threading.Thread(target=worker, daemon=True).start()
+
+    stop = threading.Event()
+    cancelled = {"flag": False}
+
+    def watcher() -> None:
+        if _watch_for_cancel(stop):
+            cancelled["flag"] = True
+            done.set()  # wake the main thread
+
+    w = threading.Thread(target=watcher, daemon=True)
+    w.start()
+
+    try:
+        # done.wait() so a real SIGINT (Windows Ctrl+C) interrupts us too.
+        while not done.wait(0.1):
+            pass
+    except KeyboardInterrupt:
+        cancelled["flag"] = True
+    finally:
+        stop.set()
+        w.join(timeout=0.3)  # let posix restore terminal mode before we return
+
+    # Worker results win over a simultaneous cancel.
+    if "value" in result:
+        return result["value"]  # type: ignore[return-value]
+    if "error" in result:
+        raise result["error"]  # type: ignore[misc]
+    if cancelled["flag"]:
+        raise RequestInterrupted()
+    # Shouldn't happen, but don't hang the caller.
+    raise RequestInterrupted()

@@ -28,6 +28,7 @@ from kiui.agent.context import (
 )
 from kiui.agent.rewind import ChangeTracker
 from kiui.agent.models import resolve_model_profile
+from kiui.agent.interrupt import run_interruptible, RequestInterrupted
 
 class ContextManager:
     """Flat conversation history with context-management hooks."""
@@ -155,7 +156,9 @@ class LLMAgent:
             self.token_totals["reasoning"] += usage.completion_tokens_details.reasoning_tokens
 
     def _interruptible_sleep(self, seconds: float):
-        time.sleep(seconds)
+        # Watch the keyboard during backoff so ESC/Ctrl+C cancels the wait
+        # too (raises RequestInterrupted, which call_api lets propagate).
+        run_interruptible(lambda: time.sleep(seconds))
 
     def call_api(self):
         """Call the API using current context, with automatic retry on any error.
@@ -241,8 +244,12 @@ class LLMAgent:
         for attempt in range(self.MAX_RETRIES + 1):
             try:
                 with self.console.thinking():
-                    response = self.client.chat.completions.create(**kwargs)
+                    response = run_interruptible(
+                        lambda: self.client.chat.completions.create(**kwargs)
+                    )
                 break
+            except RequestInterrupted:
+                raise  # user cancelled — never retry, let get_response roll back
             except Exception as e:
                 if attempt < self.MAX_RETRIES:
                     wait_time = self.INITIAL_BACKOFF * (2 ** attempt)
@@ -376,6 +383,11 @@ class LLMAgent:
 
             try:
                 message = self.call_api()
+            except RequestInterrupted:
+                # Roll back to the state before this request was sent.
+                self.context.rollback(snapshot)
+                self.console.system("Request cancelled.")
+                return None
             except RuntimeError as e:
                 self.context.rollback(snapshot)
                 self.console.error(f"API call failed: {e}")
@@ -953,22 +965,17 @@ class LLMAgent:
 
         terminal = TerminalInput(history_path=str(get_kia_dir() / "history"), work_dir=_wd)
 
-        last_prompt_sigint = 0.0
         try:
             while True:
                 try:
                     self.console._console.rule(style="dim color(240)")
                     query = _strip_at_marks(terminal.prompt().strip())
-                    last_prompt_sigint = 0.0  # reset on successful input
                 except KeyboardInterrupt:
-                    now = time.monotonic()
-                    if last_prompt_sigint > 0 and now - last_prompt_sigint < 1.0:
-                        self.console.print("\nForce quitting...")
-                        break
-                    last_prompt_sigint = now
-                    self.console.print(" (press Ctrl+C again to exit)")
+                    # Ctrl+C is handled inside the prompt (clear / double-tap
+                    # to quit); a stray one here just starts a fresh prompt.
                     continue
                 except EOFError:
+                    # Ctrl+D, or double Ctrl+C on an empty prompt → quit.
                     break
 
                 if not query:

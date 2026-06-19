@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 
 from prompt_toolkit import PromptSession
+from prompt_toolkit.application import run_in_terminal
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.history import FileHistory
@@ -246,6 +248,7 @@ class TerminalInput:
         work_dir: str | Path | None = None,
     ):
         self._prompt_label = prompt_label
+        self._last_ctrl_c = 0.0  # timestamp of last Ctrl+C on an empty buffer
         self.style = Style.from_dict({
             "prompt": "bold ansiyellow",
             "": "ansiyellow",
@@ -274,6 +277,22 @@ class TerminalInput:
         @kb.add("escape", "enter")
         def _(event):
             event.current_buffer.insert_text("\n")
+
+        @kb.add("c-c")
+        def _(event):
+            buf = event.current_buffer
+            if buf.text:
+                # Non-empty prompt: Ctrl+C just clears what's typed.
+                buf.reset()
+                self._last_ctrl_c = 0.0
+                return
+            # Empty prompt: arm on first press, quit on a second within 1s.
+            now = time.monotonic()
+            if self._last_ctrl_c and now - self._last_ctrl_c < 1.0:
+                event.app.exit(exception=EOFError)  # quit the CLI
+            else:
+                self._last_ctrl_c = now
+                run_in_terminal(lambda: print("(press Ctrl+C again to exit)"))
 
         return kb
 
