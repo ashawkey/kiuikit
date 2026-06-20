@@ -131,14 +131,18 @@ def _build_memory_section(work_dir: str | None = None) -> str:
             "The following memories were saved in previous sessions. "
             "Follow these instructions whenever applicable:\n"
             f"{formatted}\n\n"
-            "When you learn a new project-specific convention, preference, or lesson, "
-            "use the **save_memory** tool to persist it."
+            "Only use **save_memory** for genuinely important insights (e.g., a critical project-wide "
+            "convention, a non-obvious architectural rule, or a recurring pitfall to avoid), "
+            "or when the user explicitly asks you to remember something. "
+            "Do NOT save trivial, obvious, or one-off observations."
         )
     else:
         return (
             "## Project Memory\n"
-            "When you learn a new project-specific convention, preference, or lesson, "
-            "use the **save_memory** tool to persist it."
+            "Only use **save_memory** for genuinely important insights (e.g., a critical project-wide "
+            "convention, a non-obvious architectural rule, or a recurring pitfall to avoid), "
+            "or when the user explicitly asks you to remember something. "
+            "Do NOT save trivial, obvious, or one-off observations."
         )
 
 

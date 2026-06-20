@@ -34,6 +34,10 @@ _DOT = "\u2022"      # bullet •
 _CHECK = "\u2713"    # ✓
 _CROSS = "\u2717"    # ✗
 
+# Diff rendering: if old + new lines exceed this, show a summary instead
+DIFF_MAX_LINES = 200
+DIFF_PREVIEW_LINES = 10  # how many lines to show from each side in summary mode
+
 AGENT_THEME = Theme({
     "debug": "dim cyan",
     "input": "bold yellow",
@@ -205,6 +209,43 @@ class AgentConsole:
         }
         return _MAP.get(ext, "text")
 
+    def _render_diff_block(
+        self,
+        lines: list[str],
+        sign: str,
+        sign_style: str,
+        bg_color: str,
+        indent: str,
+        pad_to: int,
+        language: str,
+        start_line: int,
+        limit: int | None = None,
+    ):
+        """Render a block of diff lines (either removals or additions).
+
+        When *limit* is set, only the first *limit* lines are rendered,
+        and the count of omitted lines is returned.
+        """
+        from rich.text import Text as RichText
+
+        LN = "color(245)"
+        rendered = 0
+        for i, line in enumerate(lines):
+            if limit is not None and rendered >= limit:
+                break
+            ln = f"{start_line + i:>4} "
+            t = RichText(f"{indent}", style="")
+            t.append(ln, style=LN)
+            t.append(f"{sign} ", style=sign_style)
+            t.append(self._highlight_line(line, language))
+            padding = max(0, pad_to - t.cell_len)
+            if padding:
+                t.append(" " * padding)
+            t.stylize(f"on {bg_color}")
+            self._console.print(t)
+            rendered += 1
+        return len(lines) - rendered  # omitted count
+
     def diff_edit(
         self,
         path: str,
@@ -221,14 +262,14 @@ class AgentConsole:
         - Dark green background for added lines (prefixed ``+``)
         - Full terminal-width backgrounds so the diff stands out as a block.
         - When *old_text* is empty or ``None`` (e.g. write_file), only ``+`` lines are shown.
+        - Large diffs (> DIFF_MAX_LINES total) show a summary with preview instead of
+          the full diff to avoid flooding the terminal.
         """
-        from rich.text import Text as RichText
-
         # Muted, dark backgrounds — visible but not jarring
         BG_RED = "#3a1a1a"
         BG_GREEN = "#1a3a1a"
-        SIGN_RED = "#f87171"     # soft red for the "-" sign
-        SIGN_GREEN = "#4ade80"   # soft green for the "+" sign
+        SIGN_RED = "#f87171"
+        SIGN_GREEN = "#4ade80"
 
         icon = _CHECK if success else _CROSS
         style = "tool_ok" if success else "tool_fail"
@@ -248,39 +289,63 @@ class AgentConsole:
             return
 
         indent = " " * len(prefix)
-        # Cap padding to a reasonable width so we don't generate huge
-        # strings of trailing spaces on wide terminals.
         pad_to = min(self._console.width, 160)
         language = self._guess_language(path)
         has_old = bool(old_text)
         start_line = line_num if line_num is not None else 1
-        LN = "color(245)"  # line-number style: medium grey, readable on dark backgrounds
 
+        old_lines = old_text.splitlines() if old_text else []
+        new_lines = new_text.splitlines() if new_text else []
+        total_lines = len(old_lines) + len(new_lines)
+
+        # ── summary mode for large diffs ──
+        if total_lines > DIFF_MAX_LINES:
+            removed = len(old_lines)
+            added = len(new_lines)
+            parts = []
+            if removed:
+                parts.append(f"{removed} removed")
+            if added:
+                parts.append(f"{added} added")
+            stat = ", ".join(parts)
+            self._console.print(
+                f"{indent}{stat}  (diff too large — showing first {DIFF_PREVIEW_LINES} lines per side)",
+                style="dim",
+            )
+
+            preview = DIFF_PREVIEW_LINES
+            if has_old:
+                omitted = self._render_diff_block(
+                    old_lines, "-", f"bold {SIGN_RED}", BG_RED,
+                    indent, pad_to, language, start_line, limit=preview,
+                )
+                if omitted:
+                    self._console.print(
+                        f"{indent}...  ({omitted} more removed lines)", style="dim"
+                    )
+            if new_lines:
+                omitted = self._render_diff_block(
+                    new_lines, "+", f"bold {SIGN_GREEN}", BG_GREEN,
+                    indent, pad_to, language, start_line, limit=preview,
+                )
+                if omitted:
+                    self._console.print(
+                        f"{indent}...  ({omitted} more added lines)", style="dim"
+                    )
+            return
+
+        # ── full diff ──
         if has_old:
-            for i, line in enumerate(old_text.splitlines()):
-                ln = f"{start_line + i:>4} "
-                t = RichText(f"{indent}", style="")
-                t.append(ln, style=LN)
-                t.append("- ", style=f"bold {SIGN_RED}")
-                t.append(self._highlight_line(line, language))
-                padding = max(0, pad_to - t.cell_len)
-                if padding:
-                    t.append(" " * padding)
-                t.stylize(f"on {BG_RED}")
-                self._console.print(t)
+            self._render_diff_block(
+                old_lines, "-", f"bold {SIGN_RED}", BG_RED,
+                indent, pad_to, language, start_line,
+            )
 
-        if new_text:
-            for i, line in enumerate(new_text.splitlines()):
-                ln = f"{start_line + i:>4} "
-                t = RichText(f"{indent}", style="")
-                t.append(ln, style=LN)
-                t.append("+ ", style=f"bold {SIGN_GREEN}")
-                t.append(self._highlight_line(line, language))
-                padding = max(0, pad_to - t.cell_len)
-                if padding:
-                    t.append(" " * padding)
-                t.stylize(f"on {BG_GREEN}")
-                self._console.print(t)
+        if new_lines:
+            self._render_diff_block(
+                new_lines, "+", f"bold {SIGN_GREEN}", BG_GREEN,
+                indent, pad_to, language, start_line,
+            )
 
     def response(self, msg: str):
         from rich.markdown import Markdown

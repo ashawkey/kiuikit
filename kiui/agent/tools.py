@@ -247,7 +247,7 @@ def get_tool_definitions() -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "save_memory",
-                "description": "Save a project-level memory — a terse one-liner instruction that should be followed in future sessions.",
+                "description": "Save an important project-level memory — a terse one-liner rule or insight to persist across sessions. Use sparingly: only for genuinely critical conventions, non-obvious architectural rules, recurring pitfalls, or when the user explicitly asks you to remember something. Do NOT use for trivial or obvious observations.",
                 "parameters": {
                     "type": "object",
                     "properties": {
