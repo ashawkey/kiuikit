@@ -84,7 +84,12 @@ Use sub-agents when you want to delegate a self-contained task (e.g., research, 
     if project:
         sections.append(project)
 
-    # 9. Context
+    # 9. Project memory (agent-generated, loaded from .kia/memory.md)
+    memory = _build_memory_section(work_dir)
+    if memory:
+        sections.append(memory)
+
+    # 10. Context
     sections.append(_build_context_section(work_dir))
 
     return "\n\n".join(sections)
@@ -101,6 +106,40 @@ def _build_project_section(work_dir: str | None = None) -> str:
         return f"## Project Instructions\n{content}"
     except Exception:
         return ""
+
+
+def _build_memory_section(work_dir: str | None = None) -> str:
+    """Build the project memory section for the system prompt.
+    """
+    base = Path(work_dir) if work_dir else Path.cwd()
+    memory_file = base / ".kia" / "memory.md"
+
+    # Load existing memories (best-effort)
+    memories: list[str] = []
+    if memory_file.exists():
+        try:
+            raw = memory_file.read_text(encoding="utf-8").strip()
+            if raw:
+                memories = [line.strip() for line in raw.splitlines() if line.strip()]
+        except Exception:
+            pass
+
+    if memories:
+        formatted = "\n".join(f"- {m}" for m in memories)
+        return (
+            "## Project Memory\n"
+            "The following memories were saved in previous sessions. "
+            "Follow these instructions whenever applicable:\n"
+            f"{formatted}\n\n"
+            "When you learn a new project-specific convention, preference, or lesson, "
+            "use the **save_memory** tool to persist it."
+        )
+    else:
+        return (
+            "## Project Memory\n"
+            "When you learn a new project-specific convention, preference, or lesson, "
+            "use the **save_memory** tool to persist it."
+        )
 
 
 def _build_context_section(work_dir: str | None = None) -> str:

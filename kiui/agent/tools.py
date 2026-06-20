@@ -243,6 +243,20 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "save_memory",
+                "description": "Save a project-level memory — a terse one-liner instruction that should be followed in future sessions.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "content": {"type": "string", "description": "A concise one-liner memory instruction to persist across sessions"},
+                    },
+                    "required": ["content"],
+                },
+            },
+        },
     ]
 
 
@@ -261,6 +275,7 @@ class ToolExecutor:
         "remove_file": "_remove_file",
         "spawn_subagent": "_spawn_subagent",
         "load_skill": "_load_skill",
+        "save_memory": "_save_memory",
     }
 
     def __init__(self, console: AgentConsole | None = None, subagent_manager=None, work_dir: str | None = None, change_tracker=None, get_round_id=None, skills: dict | None = None):
@@ -804,6 +819,48 @@ class ToolExecutor:
         self._loaded_skills.add(name)
         body = self._skills[name]["body"]
         return {"content": body, "success": True}
+
+    # ── Memory tool ──────────────────────────────────────────
+
+    def _save_memory(self, content: str) -> dict[str, Any]:
+        """Append a terse one-liner memory to ./.kia/memory.md.
+
+        Deduplicates against existing lines (case-insensitive after stripping),
+        so the same memory is never stored twice.
+        """
+        self.console.tool(f"save_memory: {content[:60]}")
+
+        from kiui.agent.utils import get_kia_dir
+
+        memory_file = get_kia_dir(self._work_dir) / "memory.md"
+
+        # Normalize: first line only, strip whitespace
+        line = content.split("\n")[0].strip()
+        if not line:
+            return {"error": "Memory content is empty.", "success": False}
+
+        # Read existing memories
+        existing: list[str] = []
+        if memory_file.exists():
+            try:
+                existing = memory_file.read_text(encoding="utf-8").splitlines()
+            except (OSError, UnicodeDecodeError):
+                return {"error": "Failed to read existing memory file.", "success": False}
+
+        # Deduplicate: compare normalized (stripped, lowercased)
+        normalized = line.strip().lower()
+        for existing_line in existing:
+            if existing_line.strip().lower() == normalized:
+                return {"message": f"Memory already exists: \"{line}\"", "success": True}
+
+        # Append
+        new_lines = existing + [line] if existing else [line]
+        try:
+            memory_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+        except OSError as e:
+            return {"error": f"Failed to write memory: {e}", "success": False}
+
+        return {"message": f"Memory saved: \"{line}\"", "success": True}
 
 
 TOOL_SUMMARY_MAX_LINES = 4

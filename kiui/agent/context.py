@@ -349,7 +349,7 @@ def needs_compaction(messages: list, context_length: int, chars_per_token: float
 
 def _safe_split_index(messages: list, idx: int) -> int:
     """Walk backward so the split never lands inside a tool-call / result pair."""
-    while idx > 1 and get_role(messages[idx]) == "tool":
+    while idx > 0 and get_role(messages[idx]) == "tool":
         idx -= 1
     return idx
 
@@ -406,27 +406,32 @@ def compact_context(
     if len(messages) <= 2:
         return list(messages)
 
+    max_split = max(1, len(messages) - 2)  # keep the 2 latest messages
+
     if context_length > 0:
         char_window = context_length * chars_per_token
         total_chars = estimate_context_chars(messages)
         chars_to_free = total_chars - char_window * COMPACTION_TARGET_RATIO
 
-        if chars_to_free <= 0:
-            return list(messages)
-
-        # Walk forward accumulating chars until we've covered enough
-        cumulative = 0
-        split_index = 1
-        max_split = max(1, len(messages) - 2)  # always keep at least 2 messages
-        for i in range(1, len(messages)):
-            cumulative += msg_chars(messages[i])
-            if cumulative >= chars_to_free:
-                split_index = min(i + 1, max_split)
-                break
+        if chars_to_free > 0:
+            # Walk forward accumulating chars until we've covered enough
+            cumulative = 0
+            split_index = 1
+            for i in range(0, len(messages)):
+                cumulative += msg_chars(messages[i])
+                if cumulative >= chars_to_free:
+                    split_index = i + 1
+                    break
+            else:
+                split_index = max_split
         else:
-            split_index = max_split
+            # Already under target ratio; compact a fixed fraction of oldest messages
+            split_index = int(len(messages) * 0.4)
     else:
-        split_index = max(1, int(len(messages) * 0.4))
+        # unknown context length, compact a fixed fraction of oldest messages
+        split_index = int(len(messages) * 0.4)
+
+    split_index = max(1, min(split_index, max_split))
 
     split_index = _safe_split_index(messages, split_index)
 
