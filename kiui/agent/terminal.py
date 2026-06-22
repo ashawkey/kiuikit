@@ -31,9 +31,8 @@ class AtFileCompleter(Completer):
     completion).
     """
 
-    # Hard limit on completions shown & entries scanned
+    # Hard limit on completions shown
     MAX_COMPLETIONS = 30
-    MAX_SCAN = 2000
 
     # Directories skipped during recursive scans
     _SKIP_DIRS: frozenset[str] = frozenset({
@@ -66,6 +65,14 @@ class AtFileCompleter(Completer):
         # hasn't started typing a path yet (e.g. "@ ").  A bare "@"
         # (empty *partial*) is allowed and shows the top-level listing.
         if partial and partial[0] in (" ", "\t"):
+            return
+
+        # Bail out if there is any whitespace in *partial* — means the
+        # cursor has moved past the @ token and the user is typing
+        # additional text.  This avoids expensive re-scans once the file
+        # path is confirmed.  (The backend's _AT_PATH_RE also rejects
+        # whitespace inside @ references, so this is consistent.)
+        if " " in partial or "\t" in partial:
             return
 
         base_dir, prefix = self._split(partial)
@@ -110,48 +117,46 @@ class AtFileCompleter(Completer):
             yield self._make_completion(name, base_dir, partial, entry.is_dir())
 
     def _fuzzy_completions(self, search_dir, base_dir, prefix, partial):
-        """Recursive scan with fuzzy filename matching."""
+        """Recursive scan with fuzzy filename matching.
+
+        Uses two-pass glob: substring first, then (if needed) a
+        character-sequence glob that is much cheaper than a full rglob.
+        """
         import glob as glob_module
 
         scored: list[tuple[int, str, bool]] = []  # (score, rel_path, is_dir)
         seen: set[str] = set()
-        scanned = 0
 
-        # ---- pass 1: fast substring glob ---------------------------------
-        escaped = glob_module.escape(prefix)
-        pattern = f"**/*{escaped}*"
-        try:
-            for entry in search_dir.glob(pattern):
-                if self._skip_entry(entry):
-                    continue
-                scanned += 1
-                rel = self._relative(entry)
-                if rel in seen:
-                    continue
-                seen.add(rel)
-                score = self._score(entry.name, prefix)
-                scored.append((score, rel, entry.is_dir()))
-        except PermissionError:
-            pass
-
-        # ---- pass 2: character-sequence fallback (only when needed) ------
-        if len(scored) < 5 and scanned < self.MAX_SCAN:
+        def _collect(pattern: str) -> None:
             try:
-                for entry in search_dir.rglob("*"):
+                for entry in search_dir.glob(pattern):
                     if self._skip_entry(entry):
                         continue
-                    scanned += 1
-                    if scanned > self.MAX_SCAN:
-                        break
                     rel = self._relative(entry)
                     if rel in seen:
                         continue
                     seen.add(rel)
                     score = self._score(entry.name, prefix)
-                    if score > 0:
-                        scored.append((score, rel, entry.is_dir()))
+                    scored.append((score, rel, entry.is_dir()))
             except PermissionError:
                 pass
+
+        # ---- pass 1: fast substring glob ---------------------------------
+        escaped = glob_module.escape(prefix)
+        _collect(f"**/*{escaped}*")
+
+        # ---- pass 2: character-sequence glob (only when needed) ----------
+        # Instead of a brute-force rglob("*") + manual scoring we use
+        # another glob with a * between every character, e.g. "dott" →
+        # "**/*[dD]*[oO]*[tT]*[tT]*".  The OS-level glob is orders of
+        # magnitude faster than a full Python-side walk.
+        if len(scored) < 5:
+            seq_chars = "*".join(
+                f"[{c.lower()}{c.upper()}]" if c.isalpha()
+                else glob_module.escape(c)
+                for c in prefix
+            )
+            _collect(f"**/*{seq_chars}*")
 
         # ---- sort & yield -------------------------------------------------
         # Sort: higher score first, then dirs first, then shorter path, then alpha
@@ -272,7 +277,17 @@ class TerminalInput:
 
         @kb.add("enter")
         def _(event):
-            event.current_buffer.validate_and_handle()
+            buf = event.current_buffer
+            # If the completion menu is open, dismiss it without
+            # submitting.  Tab already applies the highlighted
+            # completion to the buffer as the user cycles, so by the
+            # time Enter is pressed the correct text is already there.
+            # This lets the user press Enter to confirm a file path
+            # and then press Enter again to send the message.
+            if buf.complete_state is not None:
+                buf.complete_state = None  # dismiss the menu
+            else:
+                buf.validate_and_handle()
 
         @kb.add("escape", "enter")
         def _(event):

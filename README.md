@@ -23,55 +23,35 @@ pip install kiui[full] # install optional dependencies
 pip install git+https://github.com/ashawkey/kiuikit.git # only the minimal package
 ```
 
-### Basic Usage
+### Highlights
 
-The package comes with many helpful CLI tools:
+**CLI tools:**
 
-```bash
-# print detailed information of a video or image
-kivi --help
-kivi info <video_path>
+| Command | Description |
+|---------|-------------|
+| `kire` | GUI 3D mesh viewer with PBR rendering, auto-rotate, save video |
+| `kisr` | Super-resolution (Real-ESRGAN) |
+| `kivi` | Video/image info, resize, preview (capped-CRF), split |
+| `kiss` | System information — OS, CPU, GPU, torch, CUDA, conda |
+| `ks` | Slurm job management — queue, history, logs, cancel, usage |
+| `kia` | Minimal yet powerful AI agent — tool-use, web access, skills |
 
-# print system information
-kiss --help
-kiss os # print os, cpu, gpu, etc.
-kiss torch # print torch version, cuda availability, etc.
+**Python library:**
 
-# llm agent utils
-kia --help
-kia list # list available models (APIs should be defined in ~/.kiui.yaml)
-kia chat --model <name> # start interactive chat mode
-kia exec --model <name> "What does kiui mean?" # execute a single query
+| Module | Highlights |
+|--------|-----------|
+| `kiui.lo()` | Rich-based inspection of arrays, tensors, and any object |
+| `kiui.Mesh` | Torch-native 3D mesh — load `.obj/.glb/.ply/.fbx`, export, auto-UV, auto-normalize |
+| `kiui.read_video` / `write_video` | Video I/O with numpy/torch support |
+| `kiui.read_image` / `write_image` | Image I/O with float/HDR support |
+| `kiui.op` | Vector math (`dot`, `length`, `safe_normalize`) working on both torch & numpy |
+| `kiui.cam` | `OrbitCamera`, projection / unprojection utilities |
+| `kiui.quaternion` | Quaternion math (norm, multiply, slerp, to/from matrices) for torch & numpy |
+| `kiui.nn` | Standalone PyTorch NN blocks — MLP, DiT, UNet 2D/3D, VAE, attention, flow matching |
+| `kiui.gridencoder` | Hash-grid encoding with CUDA backend |
+| `kiui.lpips` | Clean LPIPS perceptual loss (SqueezeNet) |
+| `kiui.timer` | CUDA-synchronized timer (context manager & decorator) |
+| `kiui.equirect` | Equirectangular (360°) / cubemap utilities |
+| `kiui.geocalib` | Single-image camera intrinsics estimation |
 
-# open a GUI to render a mesh (extra dep: nvdiffrast)
-kire --help
-kire mesh.obj
-kire mesh.glb --pbr # render with PBR (metallic + roughness)
-kire mesh.obj --save_video out.mp4 --wogui # save 360 degree rotating video
-```
-
-It can also be used as a Python library:
-
-```python
-import kiui
-
-# quick inspection of array-like object
-x = torch.tensor(...)
-y = np.array(...)
-
-kiui.lo(x)
-kiui.lo(x, y) # support multiple objects
-kiui.lo(kiui) # or any other object (just print with name)
-
-# visualization tools
-img_tensor = torch.rand(3, 256, 256) 
-# support tensor of [3, H, W], [1, H, W], [H, W] / np.ndarray of [H, W ,3], [H, W, 1], [H, W] in [0, 1]
-kiui.vis.plot_image(img)
-kiui.vis.plot_image(img_tensor)
-
-# mesh utils
-from kiui.mesh import Mesh
-mesh = Mesh.load('model.obj')
-kiui.lo(mesh.v, mesh.f) # CUDA torch.Tensor
-mesh.write('new.glb') # support exporting to GLB/GLTF too (texture embedded).
-```
+See the [documentation](https://kit.kiui.moe/) for full API details.

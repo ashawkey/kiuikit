@@ -705,9 +705,9 @@ class ToolExecutor:
         """Web search using DuckDuckGo."""
         self.console.tool(f"web_search: {query}")
         try:
-            from duckduckgo_search import DDGS
+            from ddgs import DDGS
         except ImportError:
-            return {"error": "web_search requires duckduckgo_search: pip install duckduckgo_search", "success": False}
+            return {"error": "web_search requires ddgs: pip install ddgs", "success": False}
 
         try:
             results = DDGS().text(query, max_results=5)
