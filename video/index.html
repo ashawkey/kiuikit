@@ -7,7 +7,7 @@
         <link rel="prefetch" href="../_static/logo.png" as="image">
 
     <link rel="shortcut icon" href="../_static/icon.png"><!-- Generated with Sphinx 8.1.3 and Furo 2025.12.19 -->
-        <title>Video - kiui 0.3.3 documentation</title>
+        <title>Video - kiui 0.3.4 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -164,7 +164,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../"><div class="brand">kiui 0.3.3 documentation</div></a>
+      <a href="../"><div class="brand">kiui 0.3.4 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -266,7 +266,7 @@
           <section id="video">
 <h1>Video<a class="headerlink" href="#video" title="Link to this heading">¶</a></h1>
 <p><a class="reference external" href="https://github.com/ashawkey/kiuikit/blob/main/kiui/video.py">[source]</a></p>
-<p>Utilities for reading, writing, inspecting and processing videos.</p>
+<p>Utilities for reading, writing, inspecting and processing videos. Also supports image inspection.</p>
 <section id="cli">
 <h2>CLI<a class="headerlink" href="#cli" title="Link to this heading">¶</a></h2>
 <p>You can use the video tools either via the module:</p>
@@ -277,33 +277,38 @@
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>kivi<span class="w"> </span>--help
 </pre></div>
 </div>
-<section id="inspect-video-information">
-<h3>Inspect video information<a class="headerlink" href="#inspect-video-information" title="Link to this heading">¶</a></h3>
+<section id="inspect-video-or-image-information">
+<h3>Inspect video (or image) information<a class="headerlink" href="#inspect-video-or-image-information" title="Link to this heading">¶</a></h3>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>kivi<span class="w"> </span>info<span class="w"> </span>input.mp4
-
-<span class="w">      </span>Video<span class="w"> </span>Info:<span class="w"> </span>input.mp4
+</pre></div>
+</div>
+<p>This prints a rich table with:</p>
+<ul class="simple">
+<li><p><strong>Video</strong>: Resolution, FPS, duration, frames, codec (with encoder hints), codec tag, bitrate, file size, compression ratio vs raw RGB.</p></li>
+<li><p><strong>Image</strong>: Resolution, channels, dtype, format, file size, compression ratio (respects actual dtype for raw-size calculation — e.g. float32 EXRs).</p></li>
+</ul>
+<p>Example output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>      Video Info: input.mp4
 ┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃<span class="w"> </span>Field<span class="w">       </span>┃<span class="w"> </span>Value<span class="w">                                 </span>┃
+┃ Field       ┃ Value                                 ┃
 ┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│<span class="w"> </span>Type<span class="w">        </span>│<span class="w"> </span>Video<span class="w">                                 </span>│
-│<span class="w"> </span>Resolution<span class="w">  </span>│<span class="w"> </span><span class="m">640</span><span class="w"> </span>x<span class="w"> </span><span class="m">480</span><span class="w">                             </span>│
-│<span class="w"> </span>FPS<span class="w">         </span>│<span class="w"> </span><span class="m">30</span>.000<span class="w">                                </span>│
-│<span class="w"> </span>Duration<span class="w">    </span>│<span class="w"> </span><span class="m">00</span>:00:05<span class="w"> </span><span class="o">(</span><span class="m">5</span>.00<span class="w"> </span>s<span class="o">)</span><span class="w">                     </span>│
-│<span class="w"> </span>Frames<span class="w">      </span>│<span class="w"> </span><span class="m">150</span><span class="w">                                   </span>│
-│<span class="w"> </span>Codec<span class="w">       </span>│<span class="w"> </span>h264<span class="w"> </span><span class="o">(</span>encoders:<span class="w"> </span>libx264<span class="w"> </span>/<span class="w"> </span>h264_nvenc<span class="o">)</span><span class="w"> </span>│
-│<span class="w"> </span>Codec<span class="w"> </span>tag<span class="w">   </span>│<span class="w"> </span>avc1<span class="w">                                  </span>│
-│<span class="w"> </span>Bitrate<span class="w">     </span>│<span class="w"> </span><span class="m">1569577</span><span class="w"> </span>bps<span class="w">                           </span>│
-│<span class="w"> </span>File<span class="w"> </span>size<span class="w">   </span>│<span class="w"> </span><span class="m">957</span>.99<span class="w"> </span>KB<span class="w">                             </span>│
-│<span class="w"> </span>Compression<span class="w"> </span>│<span class="w"> </span><span class="m">140</span>.92x<span class="w"> </span><span class="o">(</span>raw<span class="w"> </span>/<span class="w"> </span>encoded<span class="o">)</span><span class="w">               </span>│
+│ Type        │ Video                                 │
+│ Resolution  │ 640 x 480                             │
+│ FPS         │ 30.000                                │
+│ Duration    │ 00:00:05 (5.00 s)                     │
+│ Frames      │ 150                                   │
+│ Codec       │ h264 (encoders: libx264 / h264_nvenc) │
+│ Codec tag   │ avc1                                  │
+│ Bitrate     │ 1569577 bps                           │
+│ File size   │ 957.99 KB                             │
+│ Compression │ 140.92x (raw / encoded)               │
 └─────────────┴───────────────────────────────────────┘
 </pre></div>
 </div>
-<p>This prints a rich table including:</p>
-<ul class="simple">
-<li><p>Resolution, FPS, duration</p></li>
-<li><p>Codec and codec tag (e.g., <code class="docutils literal notranslate"><span class="pre">hevc</span></code> + <code class="docutils literal notranslate"><span class="pre">hvc1</span></code> vs <code class="docutils literal notranslate"><span class="pre">hev1</span></code>)</p></li>
-<li><p>Bitrate, file size and estimated compression ratio vs raw RGB frames</p></li>
-</ul>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Inspect an image</span>
+kivi<span class="w"> </span>info<span class="w"> </span>photo.jpg
+</pre></div>
+</div>
 </section>
 <section id="resize-a-video">
 <h3>Resize a video<a class="headerlink" href="#resize-a-video" title="Link to this heading">¶</a></h3>
@@ -316,13 +321,87 @@
 <li><p>Infers a reasonable encoder (<code class="docutils literal notranslate"><span class="pre">libx264</span></code>, <code class="docutils literal notranslate"><span class="pre">libx265</span></code>, <code class="docutils literal notranslate"><span class="pre">mpeg4</span></code>, …) from the input codec.</p></li>
 <li><p>Tries to match the original bitrate per pixel (scaled by resolution / fps), to preserve quality and file size characteristics.</p></li>
 <li><p>Keeps the codec tag (e.g. <code class="docutils literal notranslate"><span class="pre">hvc1</span></code> vs <code class="docutils literal notranslate"><span class="pre">hev1</span></code>) when using HEVC / H.264 encoders for better compatibility.</p></li>
+<li><p>Warns and rounds the output size to the closest encoder-compatible dimensions when chroma subsampling requires it (for example, <code class="docutils literal notranslate"><span class="pre">libx265</span></code> / 4:2:0 output needs even width and height).</p></li>
+<li><p>Runs ffmpeg quietly on successful resizes, while still showing <code class="docutils literal notranslate"><span class="pre">kivi</span></code> warnings and ffmpeg errors.</p></li>
 </ul>
-<p>You can also override the encoder and quality explicitly:</p>
+<p>You can also override the encoder, quality, and framerate:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>kivi<span class="w"> </span>resize<span class="w"> </span>input.mp4<span class="w"> </span>output.mp4<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--width<span class="w"> </span><span class="m">640</span><span class="w"> </span>--height<span class="w"> </span><span class="m">480</span><span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>--codec<span class="w"> </span>libx264<span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>--crf<span class="w"> </span><span class="m">23</span>
+<span class="w">    </span>--crf<span class="w"> </span><span class="m">23</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--fps<span class="w"> </span><span class="m">30</span>
 </pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">--fps</span></code> flag resamples frames: for downsampling it drops frames; for upsampling it uses motion-compensated interpolation (<code class="docutils literal notranslate"><span class="pre">minterpolate</span></code>) for smoother motion.</p>
+</section>
+<section id="create-a-share-friendly-preview">
+<h3>Create a share-friendly preview<a class="headerlink" href="#create-a-share-friendly-preview" title="Link to this heading">¶</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Create a preview that stays under 10 MB (default)</span>
+kivi<span class="w"> </span>preview<span class="w"> </span>input.mp4
+
+<span class="c1"># Specify output path and target size</span>
+kivi<span class="w"> </span>preview<span class="w"> </span>input.mp4<span class="w"> </span>output.mp4<span class="w"> </span>--target-mb<span class="w"> </span><span class="m">20</span>
+
+<span class="c1"># Cap resolution and framerate</span>
+kivi<span class="w"> </span>preview<span class="w"> </span>input.mp4<span class="w"> </span>--max-resolution<span class="w"> </span><span class="m">1280</span><span class="w"> </span>--max-fps<span class="w"> </span><span class="m">24</span>
+
+<span class="c1"># Adjust quality floor</span>
+kivi<span class="w"> </span>preview<span class="w"> </span>input.mp4<span class="w"> </span>--crf<span class="w"> </span><span class="m">18</span><span class="w"> </span>--preset<span class="w"> </span>slow
+
+<span class="c1"># Drop audio</span>
+kivi<span class="w"> </span>preview<span class="w"> </span>input.mp4<span class="w"> </span>--audio-kbps<span class="w"> </span><span class="m">0</span>
+</pre></div>
+</div>
+<p>Preview uses <strong>capped CRF</strong> encoding: quality-driven CRF with a <code class="docutils literal notranslate"><span class="pre">maxrate</span></code> cap derived from the size target, so short/simple clips keep high quality while long/large ones stay under the cap. It defaults to H.264 / yuv420p / mp4 with <code class="docutils literal notranslate"><span class="pre">faststart</span></code> and AAC audio for maximum compatibility.</p>
+<p>When the input is too large for the budget, the function downsamples — preferring <strong>resolution reduction over framerate reduction</strong> — until the target bits-per-pixel is met.</p>
+<p>Full options:</p>
+<div class="table-wrapper docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Option</p></th>
+<th class="head"><p>Default</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--target-mb</span></code></p></td>
+<td><p>10.0</p></td>
+<td><p>Target maximum file size in MB</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--codec</span></code></p></td>
+<td><p>libx264</p></td>
+<td><p>Video encoder (libx264, libx265, h264_nvenc, hevc_nvenc)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--crf</span></code></p></td>
+<td><p>23</p></td>
+<td><p>CRF quality ceiling (lower = better quality)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--preset</span></code></p></td>
+<td><p>medium</p></td>
+<td><p>ffmpeg preset (slow, medium, fast, etc.)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--max-resolution</span></code></p></td>
+<td><p>1920</p></td>
+<td><p>Cap on the longest spatial side (px)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--min-resolution</span></code></p></td>
+<td><p>480</p></td>
+<td><p>Floor on the longest side (px)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--max-fps</span></code></p></td>
+<td><p>30.0</p></td>
+<td><p>Cap on framerate</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--min-fps</span></code></p></td>
+<td><p>15.0</p></td>
+<td><p>Floor on framerate</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--audio-kbps</span></code></p></td>
+<td><p>128</p></td>
+<td><p>AAC audio bitrate; 0 to drop audio</p></td>
+</tr>
+</tbody>
+</table>
 </div>
 </section>
 <section id="split-a-video">
@@ -340,14 +419,21 @@ kivi<span class="w"> </span>split<span class="w"> </span>input.mp4<span class="w
 <span class="w">    </span>--timestamps<span class="w"> </span><span class="m">60</span><span class="w"> </span>--drop_last
 </pre></div>
 </div>
+<p>With <code class="docutils literal notranslate"><span class="pre">--drop_last</span></code>, timestamps are interpreted as <strong>segment lengths</strong> (not absolute boundaries): the first segment is <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">60]</span></code>, and any remaining tail is dropped.</p>
 <p>Output clips are named as:</p>
 <div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&lt;basename&gt;_&lt;idx&gt;_&lt;seconds&gt;.mp4
 </pre></div>
 </div>
 <p>where <code class="docutils literal notranslate"><span class="pre">&lt;idx&gt;</span></code> is a zero-padded index and <code class="docutils literal notranslate"><span class="pre">&lt;seconds&gt;</span></code> is the rounded duration of that segment.</p>
+<p>You can also specify codec, CRF, and preset:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>kivi<span class="w"> </span>split<span class="w"> </span>input.mp4<span class="w"> </span>out_dir<span class="w"> </span>--uniform<span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--codec<span class="w"> </span>libx265<span class="w"> </span>--crf<span class="w"> </span><span class="m">22</span><span class="w"> </span>--preset<span class="w"> </span>fast
+</pre></div>
+</div>
+</section>
 </section>
 <section id="module-kiui.video">
-<span id="api"></span><h3>API<a class="headerlink" href="#module-kiui.video" title="Link to this heading">¶</a></h3>
+<span id="api"></span><h2>API<a class="headerlink" href="#module-kiui.video" title="Link to this heading">¶</a></h2>
 <dl class="py function">
 <dt class="sig sig-object py" id="kiui.video.read_video">
 <span class="sig-prename descclassname"><span class="pre">kiui.video.</span></span><span class="sig-name descname"><span class="pre">read_video</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">‘float’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘uint8’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘torch’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘tensor’</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'float'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/kiui/video/#read_video"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.video.read_video" title="Link to this definition">¶</a></dt>
@@ -453,6 +539,47 @@ of using CRF. For <code class="docutils literal notranslate"><span class="pre">&
 </ul>
 </dd>
 </dl>
+<p>If the requested size is incompatible with the selected encoder’s default
+chroma subsampling, it is rounded to the closest compatible size and a
+warning is printed.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kiui.video.preview_video">
+<span class="sig-prename descclassname"><span class="pre">kiui.video.</span></span><span class="sig-name descname"><span class="pre">preview_video</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_mb</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">codec</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'libx264'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">crf</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">23</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'medium'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_resolution</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1920</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_resolution</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">480</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_fps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">30.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_fps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">15.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">audio_kbps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">128</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_bpp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.06</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="../_modules/kiui/video/#preview_video"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.video.preview_video" title="Link to this definition">¶</a></dt>
+<dd><p>Create a share-friendly preview that stays under a file-size target.</p>
+<p>The preview uses a widely compatible codec (defaults to H.264 / yuv420p in
+an mp4 container with faststart and AAC audio) and is encoded with
+“capped CRF”: quality-driven CRF with a <code class="docutils literal notranslate"><span class="pre">maxrate</span></code> cap derived from the
+size target, so short/simple clips keep high quality while long/large ones
+stay under the cap. Downsampling is applied only when the input is too large
+for the budget, preferring resolution reduction over framerate reduction.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>input_path</strong> – Path to the input video.</p></li>
+<li><p><strong>output_path</strong> – Path to the output video. If None, <code class="docutils literal notranslate"><span class="pre">&lt;input&gt;_preview.mp4</span></code>
+next to the input is used.</p></li>
+<li><p><strong>target_mb</strong> – Target maximum file size in MB (mebibytes). Default 10.</p></li>
+<li><p><strong>codec</strong> – Video encoder. Default <code class="docutils literal notranslate"><span class="pre">&quot;libx264&quot;</span></code> for best compatibility.</p></li>
+<li><p><strong>crf</strong> – Constant Rate Factor (quality; lower is better). Default 23.</p></li>
+<li><p><strong>preset</strong> – ffmpeg preset, e.g. <code class="docutils literal notranslate"><span class="pre">&quot;slow&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;medium&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;fast&quot;</span></code>.</p></li>
+<li><p><strong>max_resolution</strong> – Cap on the longest spatial side (px). Inputs larger than
+this (e.g. 2K/4K) are downscaled. Default 1920.</p></li>
+<li><p><strong>min_resolution</strong> – Floor on the longest side (px) when downscaling for
+quality. Default 480.</p></li>
+<li><p><strong>max_fps</strong> – Cap on framerate. Inputs faster than this are resampled down.</p></li>
+<li><p><strong>min_fps</strong> – Floor on framerate when reducing fps for quality.</p></li>
+<li><p><strong>audio_kbps</strong> – AAC audio bitrate; also reserved from the size budget. Set 0
+to drop audio. Ignored if the input has no audio.</p></li>
+<li><p><strong>target_bpp</strong> – Desired bits-per-pixel-per-frame used to decide downsampling.</p></li>
+<li><p><strong>verbose</strong> – Print a before/after summary.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The output path.</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py function">
@@ -495,7 +622,6 @@ covered by timestamps or a full uniform interval.</p></li>
 </dl>
 </dd></dl>
 
-</section>
 </section>
 </section>
 
@@ -556,18 +682,20 @@ covered by timestamps or a full uniform interval.</p></li>
             <ul>
 <li><a class="reference internal" href="#">Video</a><ul>
 <li><a class="reference internal" href="#cli">CLI</a><ul>
-<li><a class="reference internal" href="#inspect-video-information">Inspect video information</a></li>
+<li><a class="reference internal" href="#inspect-video-or-image-information">Inspect video (or image) information</a></li>
 <li><a class="reference internal" href="#resize-a-video">Resize a video</a></li>
+<li><a class="reference internal" href="#create-a-share-friendly-preview">Create a share-friendly preview</a></li>
 <li><a class="reference internal" href="#split-a-video">Split a video</a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#module-kiui.video">API</a><ul>
 <li><a class="reference internal" href="#kiui.video.read_video"><code class="docutils literal notranslate"><span class="pre">read_video()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.video.write_video"><code class="docutils literal notranslate"><span class="pre">write_video()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.video.get_video_info"><code class="docutils literal notranslate"><span class="pre">get_video_info()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.video.print_video_info"><code class="docutils literal notranslate"><span class="pre">print_video_info()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.video.resize_video"><code class="docutils literal notranslate"><span class="pre">resize_video()</span></code></a></li>
+<li><a class="reference internal" href="#kiui.video.preview_video"><code class="docutils literal notranslate"><span class="pre">preview_video()</span></code></a></li>
 <li><a class="reference internal" href="#kiui.video.split_video"><code class="docutils literal notranslate"><span class="pre">split_video()</span></code></a></li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
@@ -581,7 +709,7 @@ covered by timestamps or a full uniform interval.</p></li>
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=60cd70ff"></script>
+</div><script src="../_static/documentation_options.js?v=1c9fc4b9"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
