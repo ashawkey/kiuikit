@@ -595,11 +595,20 @@ def _cancel_jobs(job_ids: List[str], job_names: Optional[Dict[str, str]] = None)
         console.print(f"[bold red]Error cancelling jobs:[/bold red] {err}")
 
 
-def cancel(targets: Optional[List[str]] = None, user: Optional[str] = None):
+def cancel(
+    targets: Optional[List[str]] = None,
+    user: Optional[str] = None,
+    all_jobs: bool = False,
+    pending_only: bool = False,
+):
     """
-    Cancel jobs. Direct mode if job IDs given, interactive otherwise.
+    Cancel jobs. Direct mode if job IDs given, bulk mode with --all/--pending,
+    interactive otherwise.
     """
     if targets:
+        if all_jobs or pending_only:
+            console.print("[bold red]Error:[/bold red] Job IDs cannot be combined with --all or --pending.")
+            return
         _cancel_jobs(targets)
         return
 
@@ -607,6 +616,8 @@ def cancel(targets: Optional[List[str]] = None, user: Optional[str] = None):
         user = getpass.getuser()
 
     cmd = ["squeue", "-u", user, "-o", "%i|%P|%200j|%u|%t|%M|%D", "--noheader"]
+    if pending_only:
+        cmd.extend(["-t", "PD"])
     code, out, err = _run_cmd(cmd)
 
     if code != 0:
@@ -614,11 +625,15 @@ def cancel(targets: Optional[List[str]] = None, user: Optional[str] = None):
         return
 
     if not out.strip():
-        console.print(f"[green]No active jobs found for user {user}.[/green]")
+        if pending_only:
+            console.print(f"[green]No pending jobs found for user {user}.[/green]")
+        else:
+            console.print(f"[green]No active jobs found for user {user}.[/green]")
         return
 
     choices = []
     job_map: Dict[str, str] = {}
+    job_ids: List[str] = []
 
     for line in out.splitlines():
         parts = line.split("|")
@@ -628,9 +643,17 @@ def cancel(targets: Optional[List[str]] = None, user: Optional[str] = None):
         display_text = f"{jobid:<10} | {state:<10} | {partition:<10} | {name}"
         choices.append(questionary.Choice(display_text, value=jobid))
         job_map[jobid] = name
+        job_ids.append(jobid)
 
-    if not choices:
-        console.print(f"[green]No active jobs found for user {user}.[/green]")
+    if not job_ids:
+        if pending_only:
+            console.print(f"[green]No pending jobs found for user {user}.[/green]")
+        else:
+            console.print(f"[green]No active jobs found for user {user}.[/green]")
+        return
+
+    if all_jobs or pending_only:
+        _cancel_jobs(job_ids, job_map)
         return
 
     selected_job_ids = questionary.checkbox(
@@ -1083,7 +1106,10 @@ def main():
     # Cancel command
     c_parser = sub.add_parser("cancel", aliases=["c"], help="Cancel jobs (interactive if no IDs given)")
     c_parser.add_argument("targets", nargs="*", help="Job ID(s) to cancel directly (interactive if omitted)")
-    c_parser.add_argument("--user", "-u", type=str, help="Show jobs from specific user (interactive mode only)")
+    c_parser.add_argument("--user", "-u", type=str, help="Show/cancel jobs from specific user")
+    c_group = c_parser.add_mutually_exclusive_group()
+    c_group.add_argument("--all", "-a", action="store_true", help="Cancel all active jobs for the selected user")
+    c_group.add_argument("--pending", "-p", action="store_true", help="Cancel all pending jobs for the selected user")
 
     # Pending command
     p_parser = sub.add_parser("pending", aliases=["p"], help="Show top pending jobs sorted by priority")
@@ -1111,7 +1137,7 @@ def main():
     elif args.cmd in ["log", "l"]:
         log_output(args.target, num_lines=args.lines, show_all=args.all, show_stderr=args.stderr, user=args.user, rank=args.rank, batch=args.batch, aps=args.aps, follow=args.follow)
     elif args.cmd in ["cancel", "c"]:
-        cancel(targets=args.targets or None, user=args.user)
+        cancel(targets=args.targets or None, user=args.user, all_jobs=args.all, pending_only=args.pending)
     elif args.cmd in ["pending", "p"]:
         pending(user=args.user, top_n=args.top)
     elif args.cmd in ["usage", "u"]:
