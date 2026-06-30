@@ -515,9 +515,17 @@ def log_output(target: Optional[str] = None, num_lines: Optional[int] = 100, sho
     preferred, available = info.output_logs(rank=rank)
 
     # Select the file to read based on flags (default: per-rank training log).
-    if batch:
-        chosen = available["batch_err"] if show_stderr and available["batch_err"] else available["batch"]
-        chosen_label = "batch stderr (job.err)" if (show_stderr and available["batch_err"]) else "batch (job.out)"
+    if show_stderr:
+        # job.err holds the sbatch shell stderr; per-rank logs already combine
+        # stdout+stderr, so --stderr always means the batch error log.
+        if not available["batch_err"]:
+            console.print(f"[bold red]Error:[/bold red] No stderr log (job.err) found for job {info.jid}.")
+            return
+        chosen = available["batch_err"]
+        chosen_label = "stderr (job.err)"
+    elif batch:
+        chosen = available["batch"]
+        chosen_label = "batch (job.out)"
     elif aps:
         if not available["aps"]:
             console.print(f"[bold red]Error:[/bold red] No APS unified log found for job {info.jid}.")
@@ -1100,7 +1108,7 @@ def main():
     l_parser.add_argument("--rank", "-r", type=int, default=0, help="Show log_<rank>.txt for this rank (default: 0)")
     l_parser.add_argument("--batch", "-b", action="store_true", help="Show the raw sbatch shell log (job.out)")
     l_parser.add_argument("--aps", action="store_true", help="Show the unified all-rank APS log")
-    l_parser.add_argument("--stderr", "-e", action="store_true", help="With --batch, show job.err (per-rank logs already combine stdout+stderr)")
+    l_parser.add_argument("--stderr", "-e", action="store_true", help="Show the sbatch stderr log (job.err); per-rank logs already combine stdout+stderr")
     l_parser.add_argument("--user", "-u", type=str, help="Show jobs from specific user (interactive mode only)")
 
     # Cancel command
