@@ -110,26 +110,31 @@ def _build_project_section(work_dir: str | None = None) -> str:
 
 def _build_memory_section(work_dir: str | None = None) -> str:
     """Build the project memory section for the system prompt.
+
+    Reads the memory index from .kia/memory/MEMORY.md (hierarchical storage).
+    Each entry is a markdown link [title](file.md) followed by a summary.
+    The agent can read_file individual memory files under .kia/memory/ for details.
     """
     base = Path(work_dir) if work_dir else Path.cwd()
-    memory_file = base / ".kia" / "memory.md"
+    memory_dir = base / ".kia" / "memory"
+    index_file = memory_dir / "MEMORY.md"
 
-    # Load existing memories (best-effort)
-    memories: list[str] = []
-    if memory_file.exists():
+    # Load existing memory index entries
+    entries: list[str] = []
+    if index_file.exists():
         try:
-            raw = memory_file.read_text(encoding="utf-8").strip()
+            raw = index_file.read_text(encoding="utf-8").strip()
             if raw:
-                memories = [line.strip() for line in raw.splitlines() if line.strip()]
+                entries = [line.strip() for line in raw.splitlines() if line.strip()]
         except Exception:
             pass
 
-    if memories:
-        formatted = "\n".join(f"- {m}" for m in memories)
+    if entries:
+        formatted = "\n".join(f"- {e}" for e in entries)
         return (
             "## Project Memory\n"
-            "The following memories were saved in previous sessions. "
-            "Follow these instructions whenever applicable:\n"
+            "The following memories were saved in previous sessions. Each entry links to a detailed "
+            f"memory file under `.kia/memory/`. Use **read_file** to retrieve the full details of any entry when needed.\n\n"
             f"{formatted}\n\n"
             "Only use **save_memory** for genuinely important insights (e.g., a critical project-wide "
             "convention, a non-obvious architectural rule, or a recurring pitfall to avoid), "
@@ -139,6 +144,8 @@ def _build_memory_section(work_dir: str | None = None) -> str:
     else:
         return (
             "## Project Memory\n"
+            "Memories are stored hierarchically under `.kia/memory/`: `MEMORY.md` is the index, "
+            "and individual `.md` files hold the full details. "
             "Only use **save_memory** for genuinely important insights (e.g., a critical project-wide "
             "convention, a non-obvious architectural rule, or a recurring pitfall to avoid), "
             "or when the user explicitly asks you to remember something. "

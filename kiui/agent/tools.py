@@ -247,13 +247,27 @@ def get_tool_definitions() -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "save_memory",
-                "description": "Save an important project-level memory — a terse one-liner rule or insight to persist across sessions. Use sparingly: only for genuinely critical conventions, non-obvious architectural rules, recurring pitfalls, or when the user explicitly asks you to remember something. Do NOT use for trivial or obvious observations.",
+                "description": (
+                    "Save an important project-level memory to hierarchical storage under .kia/memory/.\n"
+                    "The detailed content is written to an individual .md file, and a short index entry "
+                    "(title + summary) is appended to .kia/memory/MEMORY.md for quick reference.\n"
+                    "Use sparingly: only for genuinely critical conventions, non-obvious architectural rules, "
+                    "recurring pitfalls, or when the user explicitly asks you to remember something. "
+                    "Do NOT use for trivial or obvious observations."
+                ),
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "content": {"type": "string", "description": "A concise one-liner memory instruction to persist across sessions"},
+                        "title": {
+                            "type": "string",
+                            "description": "A short, descriptive title for this memory. Include a date if relevant (e.g., 'Conditional-IC screen method 2026-07-10'). Used as the link text in the memory index.",
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "The full detailed memory content in markdown. Saved to its own file under .kia/memory/. The first line is used as the summary in the index.",
+                        },
                     },
-                    "required": ["content"],
+                    "required": ["title", "content"],
                 },
             },
         },
@@ -822,45 +836,100 @@ class ToolExecutor:
 
     # ── Memory tool ──────────────────────────────────────────
 
-    def _save_memory(self, content: str) -> dict[str, Any]:
-        """Append a terse one-liner memory to ./.kia/memory.md.
+    @staticmethod
+    def _slugify(text: str) -> str:
+        """Convert a title string into a safe filename slug.
 
-        Deduplicates against existing lines (case-insensitive after stripping),
-        so the same memory is never stored twice.
+        Strips a trailing ISO date (YYYY-MM-DD) so the date suffix we append
+        later is not duplicated.
         """
-        self.console.tool(f"save_memory: {content[:60]}")
+        slug = text.lower().strip()
+        # Strip trailing date like "2026-07-10" or "2026-07-10."
+        slug = re.sub(r"\s*\d{4}-\d{2}-\d{2}\.*\s*$", "", slug)
+        # Replace non-alphanumeric (except hyphen/space) with hyphens
+        slug = re.sub(r"[^a-z0-9\s-]", "", slug)
+        # Replace whitespace with hyphens
+        slug = re.sub(r"\s+", "-", slug)
+        # Collapse multiple hyphens
+        slug = re.sub(r"-{2,}", "-", slug)
+        # Strip leading/trailing hyphens and dots
+        slug = slug.strip("-.")
+        return slug or "memory"
 
+    def _save_memory(self, title: str, content: str) -> dict[str, Any]:
+        """Save a hierarchical memory: detailed content → individual .md file,
+        index entry → .kia/memory/MEMORY.md.
+
+        The individual file is named ``<slug>-<YYMMDD>.md``.
+        The index entry format is: ``[title](filename)  summary``
+        where *summary* is taken from the first non-empty line of *content*.
+        """
+        self.console.tool(f"save_memory: {title[:60]}")
+
+        from datetime import datetime
         from kiui.agent.utils import get_kia_dir
 
-        memory_file = get_kia_dir(self._work_dir) / "memory.md"
+        kia_dir = get_kia_dir(self._work_dir)
+        memory_dir = kia_dir / "memory"
+        memory_dir.mkdir(parents=True, exist_ok=True)
 
-        # Normalize: first line only, strip whitespace
-        line = content.split("\n")[0].strip()
-        if not line:
+        index_file = memory_dir / "MEMORY.md"
+
+        # --- Generate filename from title + date ---
+        slug = self._slugify(title)
+        date_str = datetime.now().strftime("%y%m%d")
+        filename = f"{slug}-{date_str}.md"
+        individual_file = memory_dir / filename
+
+        # --- Extract summary from first non-empty line of content ---
+        summary = ""
+        for line in content.splitlines():
+            stripped = line.strip()
+            if stripped:
+                summary = stripped
+                break
+        if not summary:
             return {"error": "Memory content is empty.", "success": False}
 
-        # Read existing memories
-        existing: list[str] = []
-        if memory_file.exists():
+        # --- Read existing index ---
+        existing_entries: list[str] = []
+        if index_file.exists():
             try:
-                existing = memory_file.read_text(encoding="utf-8").splitlines()
+                existing_entries = index_file.read_text(encoding="utf-8").splitlines()
             except (OSError, UnicodeDecodeError):
-                return {"error": "Failed to read existing memory file.", "success": False}
+                return {"error": "Failed to read existing memory index.", "success": False}
 
-        # Deduplicate: compare normalized (stripped, lowercased)
-        normalized = line.strip().lower()
-        for existing_line in existing:
-            if existing_line.strip().lower() == normalized:
-                return {"message": f"Memory already exists: \"{line}\"", "success": True}
+        # --- Deduplicate by title ---
+        title_lower = title.strip().lower()
+        for entry in existing_entries:
+            # Extract the title from markdown link: [Title](file.md)...
+            match = re.match(r"\[([^\]]+)\]", entry)
+            if match and match.group(1).strip().lower() == title_lower:
+                return {"message": f"Memory with title \"{title}\" already exists.", "success": True}
 
-        # Append
-        new_lines = existing + [line] if existing else [line]
+        # --- Write individual memory file ---
         try:
-            memory_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+            individual_file.write_text(content, encoding="utf-8")
         except OSError as e:
-            return {"error": f"Failed to write memory: {e}", "success": False}
+            return {"error": f"Failed to write memory file: {e}", "success": False}
 
-        return {"message": f"Memory saved: \"{line}\"", "success": True}
+        # --- Append index entry ---
+        index_entry = f"[{title.strip()}]({filename})  {summary}"
+        try:
+            new_entries = existing_entries + [index_entry] if existing_entries else [index_entry]
+            index_file.write_text("\n".join(new_entries) + "\n", encoding="utf-8")
+        except OSError as e:
+            # Rollback: remove the individual file we just wrote
+            try:
+                individual_file.unlink()
+            except Exception:
+                pass
+            return {"error": f"Failed to update memory index: {e}", "success": False}
+
+        return {
+            "message": f"Memory saved: \"{title}\" → {filename}",
+            "success": True,
+        }
 
 
 TOOL_SUMMARY_MAX_LINES = 4
