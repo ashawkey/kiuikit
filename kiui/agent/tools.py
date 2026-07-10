@@ -598,7 +598,15 @@ class ToolExecutor:
         case_insensitive: bool = False,
     ) -> dict[str, Any]:
         """Search file contents using a regex pattern."""
-        self.console.tool(f"grep_files {pattern}")
+        # Build an informative log line with all search parameters
+        parts = [f"grep_files {pattern}"]
+        if path:
+            parts.append(f"path={path}")
+        if file_glob:
+            parts.append(f"glob={file_glob}")
+        if case_insensitive:
+            parts.append("(case-insensitive)")
+        self.console.tool(" ".join(parts))
 
         base = Path(path) if path else Path(self._work_dir or Path.cwd())
 
@@ -619,6 +627,7 @@ class ToolExecutor:
             "--max-columns", "200",
             "--max-columns-preview",
             "--color", "never",
+            "--path-separator", "/",
         ]
         if case_insensitive:
             cmd.append("--ignore-case")

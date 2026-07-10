@@ -10,7 +10,7 @@ from kiui.agent.terminal import TerminalInput
 from kiui.agent.utils import get_kia_dir
 from kiui.agent.prompts import build_system_prompt
 from kiui.agent.skills import discover_skills
-from kiui.agent.tools import get_tool_definitions, ToolExecutor, format_tool_result, format_tool_summary
+from kiui.agent.tools import get_tool_definitions, ToolExecutor, format_tool_result, format_tool_summary, MAX_GREP_MATCHES
 from kiui.agent.subagent import SubagentManager
 from kiui.agent.permissions import PermissionController, PermissionMode
 from kiui.agent.context import (
@@ -360,10 +360,12 @@ class LLMAgent:
         truncated = result.get("truncated", False)
         if tool_name == "glob_files":
             msg = f"{count} files matched"
+            if truncated:
+                msg += " (truncated to 500)"
         else:
             msg = f"{count} matches"
-        if truncated:
-            msg += " (truncated to 500)"
+            if truncated:
+                msg += f" (truncated to {MAX_GREP_MATCHES})"
         self.console.tool_result(msg, success=True)
 
     def get_response(self):
