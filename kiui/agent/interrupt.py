@@ -21,6 +21,8 @@ import time
 import threading
 from typing import Callable, TypeVar
 
+from kiui.agent.io import CancellationToken
+
 T = TypeVar("T")
 
 
@@ -97,8 +99,9 @@ class CancelWatcher:
     Inactive (never cancels) when stdin isn't an interactive console.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, cancellation: CancellationToken | None = None) -> None:
         self.cancelled = False
+        self._cancellation = cancellation
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._active = _can_watch()
@@ -113,13 +116,21 @@ class CancelWatcher:
         if _watch_for_cancel(self._stop):
             self.cancelled = True
 
+    @property
+    def is_cancelled(self) -> bool:
+        return self.cancelled or bool(
+            self._cancellation is not None and self._cancellation.cancelled
+        )
+
     def __exit__(self, *args) -> None:
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=0.3)
 
 
-def run_interruptible(fn: Callable[[], T]) -> T:
+def run_interruptible(
+    fn: Callable[[], T], cancellation: CancellationToken | None = None
+) -> T:
     """Run blocking *fn* while watching for ESC / Ctrl+C.
 
     Returns ``fn()``'s result.  Re-raises any exception ``fn`` throws.
@@ -127,7 +138,7 @@ def run_interruptible(fn: Callable[[], T]) -> T:
 
     When stdin isn't an interactive console, *fn* simply runs inline.
     """
-    if not _can_watch():
+    if not _can_watch() and cancellation is None:
         return fn()
 
     result: dict[str, object] = {}
@@ -151,18 +162,23 @@ def run_interruptible(fn: Callable[[], T]) -> T:
             cancelled["flag"] = True
             done.set()  # wake the main thread
 
-    w = threading.Thread(target=watcher, daemon=True)
-    w.start()
+    w = None
+    if _can_watch():
+        w = threading.Thread(target=watcher, daemon=True)
+        w.start()
 
     try:
         # done.wait() so a real SIGINT (Windows Ctrl+C) interrupts us too.
         while not done.wait(0.1):
-            pass
+            if cancellation is not None and cancellation.cancelled:
+                cancelled["flag"] = True
+                break
     except KeyboardInterrupt:
         cancelled["flag"] = True
     finally:
         stop.set()
-        w.join(timeout=0.3)  # let posix restore terminal mode before we return
+        if w is not None:
+            w.join(timeout=0.3)  # let posix restore terminal mode before we return
 
     # Worker results win over a simultaneous cancel.
     if "value" in result:

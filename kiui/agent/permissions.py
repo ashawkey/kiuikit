@@ -7,8 +7,11 @@ Three modes:
 
 A hard safety layer (`SafetyGuard`) runs *before* mode-based checks and blocks
 inherently dangerous operations regardless of mode:
-  - File writes/edits/removals outside the allowed working directory
   - Destructive shell commands (rm -rf /, mkfs, dd to devices, fork bombs, …)
+
+Files outside the working directory trigger a warning prompt in interactive
+modes (default/strict) so the user can choose to proceed.  In auto mode
+they are still blocked since there is no user to ask.
 """
 
 from __future__ import annotations
@@ -54,10 +57,12 @@ RISKY_TOOLS = frozenset({
 class SafetyGuard:
     """Hard safety layer that blocks dangerous operations regardless of mode.
 
-    Enforced rules:
-      - File modifications (write_file, edit_file, remove_file) must target
-        paths within the allowed working directory.
-      - Shell commands must not match known destructive patterns.
+    Enforced rules (hard-blocked, no override):
+      - Shell commands must not match known destructive patterns
+        (mkfs, dd to devices, rm -rf on critical paths, fork bombs, etc.)
+
+    Path-containment checks are available via :meth:`check_path` and are
+    *not* hard-blocked — the caller decides whether to override or prompt.
     """
 
     # -- Unix dangerous command patterns ------------------------------------
@@ -117,12 +122,29 @@ class SafetyGuard:
         return segments
 
     def check(self, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
-        """Return ``(allowed, reason)``.  *reason* is non-empty when blocked."""
-        if tool_name in ("write_file", "edit_file", "remove_file"):
-            return self._check_path(arguments.get("file", ""))
+        """Return ``(allowed, reason)``.  *reason* is non-empty when blocked.
+
+        Only performs *hard* checks that should never be skipped:
+        destructive shell commands, critical rm/chmod patterns, etc.
+
+        Path-containment checks (out-of-scope file edits) are handled
+        separately via :meth:`check_path` so the user can override them.
+        """
         if tool_name == "exec_command":
             return self._check_command(arguments.get("command", ""))
         return True, ""
+
+    def check_path(self, path: str) -> tuple[bool, str]:
+        """Check whether *path* is contained within the working directory.
+
+        Returns ``(True, "")`` when safe, or ``(False, reason)`` when the
+        path resolves outside the allowed work directory.
+
+        Unlike the hard safety checks in :meth:`check`, denials from this
+        method are *not* automatically fatal — the caller can surface them
+        as a user-overridable prompt.
+        """
+        return self._check_path(path)
 
     # -- path containment ---------------------------------------------------
 
@@ -260,7 +282,9 @@ class PermissionController:
     """Gate tool execution behind user confirmation when required.
 
     A hard ``SafetyGuard`` layer runs first and blocks inherently dangerous
-    operations (path escape, destructive commands) regardless of mode.
+    operations (destructive shell commands) regardless of mode.
+    Out-of-scope file paths trigger a user prompt in interactive modes
+    so the user can override the guard when needed.
 
     Responses at the prompt:
       y  — allow this call
@@ -300,6 +324,19 @@ class PermissionController:
             )
             return False, reason
 
+        # Path-containment check — hard block in AUTO mode (no user),
+        # user-overridable in DEFAULT/STRICT modes
+        if tool_name in ("write_file", "edit_file", "remove_file"):
+            safe, reason = self.safety.check_path(arguments.get("file", ""))
+            if not safe:
+                if self.mode == PermissionMode.AUTO:
+                    self.console.print(
+                        f"[bold red]🛡  Safety guard:[/bold red] [red]{reason}[/red]"
+                    )
+                    return False, reason
+                if not self._prompt_path_override(tool_name, arguments, reason):
+                    return False, reason
+
         if self.mode == PermissionMode.AUTO:
             return True, ""
 
@@ -320,15 +357,20 @@ class PermissionController:
 
     def _prompt_user(self, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
         summary = _summarize_call(tool_name, arguments)
-        self.console._console.print(
+        self.console.local(
             f"\n[bold yellow]•  Permission required[/bold yellow]"
             f"\n   [cyan]{summary}[/cyan]",
             highlight=False,
         )
         try:
+            choices = ["Yes", "No", "Always allow this tool"]
+            prompt = (
+                f"Allow this call?\n{summary}"
+                if self.console.prompt_broker is not None
+                else "Allow this call?"
+            )
             answer = self.console.select(
-                "Allow this call?",
-                choices=["Yes", "No", "Always allow this tool"],
+                prompt, choices=choices
             )
         except (EOFError, KeyboardInterrupt):
             self.console.print("   [red]Denied (interrupted).[/red]")
@@ -354,12 +396,45 @@ class PermissionController:
             self.console.print("   [red]✗ Denied.[/red]")
         return False, reason
 
+    def _prompt_path_override(
+        self, tool_name: str, arguments: dict[str, Any], safety_reason: str
+    ) -> tuple[bool, str]:
+        """Prompt the user when a file path is outside the working directory.
+
+        Returns ``(True, "")`` if the user chooses to proceed despite the
+        warning, or ``(False, reason)`` if they decline.
+        """
+        summary = _summarize_call(tool_name, arguments)
+        self.console.local(
+            f"\n[bold yellow]⚠  Out-of-scope file access[/bold yellow]"
+            f"\n   [cyan]{summary}[/cyan]"
+            f"\n   [yellow]{safety_reason}[/yellow]",
+            highlight=False,
+        )
+        try:
+            choices = ["Allow this call", "Deny"]
+            prompt = (
+                f"File is outside working directory. Allow?\n{safety_reason}"
+                if self.console.prompt_broker is not None
+                else "File is outside working directory. Allow?"
+            )
+            answer = self.console.select(prompt, choices=choices)
+        except (EOFError, KeyboardInterrupt):
+            self.console.print("   [red]Denied (interrupted).[/red]")
+            return False, ""
+
+        if answer is None or answer.lower() not in ("allow this call", "allow", "yes"):
+            self.console.print("   [red]✗ Denied — path outside working directory.[/red]")
+            return False, safety_reason
+
+        self.console.print("   [yellow]⚠ Allowed — proceeding with out-of-scope file access.[/yellow]")
+        return True, ""
+
     def _ask_denial_reason(self) -> str:
         """Prompt the user for an optional reason after denying a tool call."""
         try:
             reason = self.console.ask_text(
-                "   Reason (optional, Enter to skip): ",
-                default="",
+                "Reason for denying (optional; Enter to skip): ", default=""
             )
         except (EOFError, KeyboardInterrupt):
             reason = ""

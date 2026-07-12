@@ -15,6 +15,7 @@ A lightweight, terminal-based AI agent that can browse the web, read/write files
 - **Permissions**: Three-tier safety system (auto / default / strict) with hard safety guard for dangerous operations.
 - **Model Switching**: Hot-swap between configured models mid-session.
 - **Interactive**: Rich terminal interface with syntax highlighting, file-path autocomplete, and progress indicators.
+- **Remote Web UI**: Optional authenticated, mobile-friendly companion synchronized with the terminal.
 
 ## Installation
 
@@ -34,6 +35,8 @@ openai:
     model: gpt-4o # actual model name used in the API
     api_key: sk-proj-...
     base_url: https://api.openai.com/v1
+
+kia_web_token: web-secret # optional Web UI access token
 ```
 
 ## Usage
@@ -65,6 +68,30 @@ kia --model <model_alias> --verbose --perm strict --resume [session_id]
 | `--perm MODE` | `auto`, `default`, or `strict` |
 | `--resume [SESSION_ID]` | Resume a session (bare `--resume` lists saved sessions interactively) |
 | `--list` | List available models with context-window info and exit |
+| `--web` | Start the synchronized terminal + Web UI |
+| `--web-port PORT` | Listener port (default: `8765`) |
+
+## Web UI
+
+```bash
+kia --web --web-port 8765
+```
+
+The Web UI is available at `http://localhost:8765`. Use the OTP or `kia_web_token` to access the Web UI.
+To access from another device, we recommend using `cloudflared` to tunnel the port to a public URL.
+
+```bash
+## one-time setup
+# install and login to cloudflared
+cloudflared tunnel login
+# create a tunnel
+cloudflared tunnel create kia
+# route the tunnel to a public URL
+cloudflared tunnel route dns kia kia.kiui.moe
+
+## start the tunnel, then you can access the Web UI at https://kia.kiui.moe
+cloudflared tunnel run --url http://localhost:8765 kia
+```
 
 ## Commands
 
@@ -83,6 +110,7 @@ The agent supports the following slash commands in the CLI:
 | `/rewind [round]` | Roll back conversation and/or code to a previous round |
 | `/skills` | List installed skills from `.kia/skills/` |
 | `/clear` | Clear conversation history and start a new session |
+| `/resume [session_id]` | Save the current session, then resume a previous one (bare `/resume` picks interactively) |
 | `/exit` or `/quit` | Exit the agent |
 
 ### Bash shortcut

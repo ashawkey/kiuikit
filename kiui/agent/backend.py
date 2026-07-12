@@ -1,16 +1,27 @@
+import asyncio
+import json
 import os
+import queue
 import re
 import time
-import json
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any, Literal
+
 from openai import OpenAI
+
 from kiui.agent.ui import AgentConsole
 from kiui.agent.terminal import TerminalInput
 from kiui.agent.utils import get_kia_dir
 from kiui.agent.prompts import build_system_prompt
 from kiui.agent.skills import discover_skills
-from kiui.agent.tools import get_tool_definitions, ToolExecutor, format_tool_result, format_tool_summary, MAX_GREP_MATCHES
+from kiui.agent.tools import (
+    MAX_GREP_MATCHES,
+    ToolExecutor,
+    format_tool_result,
+    format_tool_summary,
+    get_tool_definitions,
+)
 from kiui.agent.subagent import SubagentManager
 from kiui.agent.permissions import PermissionController, PermissionMode
 from kiui.agent.context import (
@@ -29,6 +40,18 @@ from kiui.agent.context import (
 from kiui.agent.rewind import ChangeTracker
 from kiui.agent.models import resolve_model_profile
 from kiui.agent.interrupt import run_interruptible, RequestInterrupted
+from kiui.agent.io import (
+    CancellationToken,
+    EventHub,
+    InputBroker,
+    PromptBroker,
+    UserSubmission,
+)
+
+# How often the input race checks the web queue while the terminal
+# prompt is pending.
+INPUT_POLL_INTERVAL = 0.05
+
 
 class ContextManager:
     """Flat conversation history with context-management hooks."""
@@ -94,6 +117,11 @@ class LLMAgent:
         permission_mode: PermissionMode = PermissionMode.DEFAULT,
         exec_mode: bool = False,
         work_dir: str | None = None,
+        console: AgentConsole | None = None,
+        events: EventHub | None = None,
+        input_broker: InputBroker | None = None,
+        prompt_broker: PromptBroker | None = None,
+        cancellation: CancellationToken | None = None,
     ):
 
         self.model = model
@@ -111,7 +139,28 @@ class LLMAgent:
         self.context_length = context_length if context_length is not None else self.profile.context_length
         self.token_estimator = TokenEstimator()
 
-        self.console = AgentConsole()
+        self.events = events
+        self.input_broker = input_broker
+        self.prompt_broker = prompt_broker
+        self.cancellation = cancellation
+        self.console = console or AgentConsole(events=events)
+
+        if self.prompt_broker is not None:
+            self.console.prompt_broker = self.prompt_broker
+
+            async def terminal_ask_async(prompt):
+                terminal_message = prompt.message.splitlines()[0]
+                if prompt.kind == "select":
+                    return await self.console.select_terminal_async(
+                        terminal_message,
+                        choices=prompt.choices,
+                        default=prompt.default or None,
+                    )
+                return await self.console.ask_text_terminal_async(
+                    terminal_message, default=prompt.default
+                )
+
+            self.prompt_broker.set_terminal_adapter(terminal_ask_async)
 
         # discover skills from .kia/skills/
         self.skills = discover_skills(work_dir)
@@ -120,12 +169,22 @@ class LLMAgent:
         self.system_prompt = build_system_prompt(exec_mode=exec_mode, work_dir=work_dir, skills=self.skills)
         self.tools = get_tool_definitions()
 
-        self.permissions = PermissionController(mode=permission_mode, console=self.console, work_dir=work_dir)
+        self.permissions = PermissionController(
+            mode=permission_mode,
+            console=self.console,
+            work_dir=work_dir,
+        )
 
         # subagent manager (only if we have a model_alias for spawning children)
         self.subagent_manager = SubagentManager(model_alias=model_alias, console=self.console) if model_alias else None
         self.changes: ChangeTracker | None = None
-        self.tool_executor = ToolExecutor(console=self.console, subagent_manager=self.subagent_manager, work_dir=work_dir, skills=self.skills)
+        self.tool_executor = ToolExecutor(
+            console=self.console,
+            subagent_manager=self.subagent_manager,
+            work_dir=work_dir,
+            skills=self.skills,
+            cancellation=cancellation,
+        )
 
         self.context = ContextManager(self.system_prompt)
 
@@ -158,7 +217,12 @@ class LLMAgent:
     def _interruptible_sleep(self, seconds: float):
         # Watch the keyboard during backoff so ESC/Ctrl+C cancels the wait
         # too (raises RequestInterrupted, which call_api lets propagate).
-        run_interruptible(lambda: time.sleep(seconds))
+        run_interruptible(lambda: time.sleep(seconds), self.cancellation)
+
+    def _operation(self, label: str):
+        if self.cancellation is None:
+            return nullcontext()
+        return self.cancellation.operation(label)
 
     def call_api(self):
         """Call the API using current context, with automatic retry on any error.
@@ -248,7 +312,8 @@ class LLMAgent:
             try:
                 with self.console.thinking():
                     response = run_interruptible(
-                        lambda: self.client.chat.completions.create(**kwargs)
+                        lambda: self.client.chat.completions.create(**kwargs),
+                        self.cancellation,
                     )
                 break
             except RequestInterrupted:
@@ -423,7 +488,8 @@ class LLMAgent:
         Output is streamed in real-time and the command can be interrupted via Ctrl+C.
         """
         self.console.tool(f"! {command}")
-        result = self.tool_executor.execute("exec_command", {"command": command})
+        with self._operation("shell command"):
+            result = self.tool_executor.execute("exec_command", {"command": command})
         result_text = format_tool_result(result)
         success = result.get("success", False)
         if result.get("streamed", True):
@@ -434,7 +500,7 @@ class LLMAgent:
 
     # ----- slash commands ---------------------------------------------------
 
-    COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "perm", "model", "context", "rewind", "skills"}
+    COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "resume", "perm", "model", "context", "rewind", "skills"}
 
     def _handle_command(self, raw: str) -> bool:
         """Handle a /command.  Returns True if the agent loop should stop."""
@@ -451,6 +517,8 @@ class LLMAgent:
             self._cmd_usage()
         elif cmd == "clear":
             self._cmd_clear()
+        elif cmd == "resume":
+            self._cmd_resume(raw)
         elif cmd == "perm":
             self._cmd_perm(raw)
         elif cmd == "model":
@@ -478,6 +546,7 @@ class LLMAgent:
             "  [cyan]/perm[/cyan]        — Show or change permission mode (/perm auto|default|strict)\n"
             "  [cyan]/rewind[/cyan]      — Roll back conversation and/or code to a previous round\n"
             "  [cyan]/clear[/cyan]       — Clear conversation history (keep system prompt)\n"
+            "  [cyan]/resume[/cyan]      — Save current, then resume a previous session (/resume [session_id])\n"
             "  [cyan]/exit[/cyan]        — Exit the agent (also: /quit)\n"
             "\n"
             "  Press [bold]Enter[/bold] to send, [bold]Escape → Enter[/bold] for a newline."
@@ -547,6 +616,103 @@ class LLMAgent:
         self.tool_executor._change_tracker = self.changes
         self.tool_executor._get_round_id = lambda: self.round_id
         self.console.system(f"Started new session '{self._session_id}'.")
+
+    @staticmethod
+    def _session_preview(messages: list) -> str:
+        """Short preview from the last user message of a saved session."""
+        for m in reversed(messages):
+            if not (isinstance(m, dict) and m.get("role") == "user"):
+                continue
+            content = m.get("content", "")
+            if isinstance(content, list):
+                text = " ".join(
+                    item.get("text", "")
+                    for item in content
+                    if isinstance(item, dict) and item.get("type") == "text"
+                )
+            else:
+                text = str(content)
+            text = text.replace("\n", " ").strip()
+            return text[:60] + ("..." if len(text) > 60 else "")
+        return ""
+
+    def _pick_session(self) -> str | None:
+        """List saved sessions and let the user pick one interactively."""
+        sessions_dir = self._sessions_dir()
+        files = sorted(sessions_dir.glob("*.json"), reverse=True)
+        # Don't offer the current (unsaved-in-progress) session as a target.
+        files = [f for f in files if f.stem != self._session_id]
+        if not files:
+            self.console.system(f"No other saved sessions in {sessions_dir}")
+            return None
+
+        stems: list[str] = []
+        labels: list[str] = []
+        for f in files:
+            stem = f.stem
+            try:
+                meta = json.loads(f.read_text(encoding="utf-8"))
+                messages = meta.get("messages", [])
+                n_msgs = len(messages)
+                rnd = meta.get("round_id", "?")
+                model = meta.get("model", "?")
+                preview = self._session_preview(messages)
+            except Exception:
+                n_msgs, rnd, model, preview = "?", "?", "?", ""
+            label = f"{stem}  │  msgs:{n_msgs}  rounds:{rnd}  model:{model}"
+            if preview:
+                label += f"  │  {preview}"
+            stems.append(stem)
+            labels.append(label)
+
+        picked = self.console.select(message="Pick a session to resume", choices=labels)
+        if picked is None:
+            return None
+        for stem, label in zip(stems, labels):
+            if label == picked:
+                return stem
+        return None
+
+    def _cmd_resume(self, raw: str):
+        """Handle /resume — save the current session, then load a previous one."""
+        parts = raw.split(maxsplit=1)
+        target: str | None = parts[1].strip() if len(parts) > 1 else None
+
+        if target:
+            if not (self._sessions_dir() / f"{target}.json").exists():
+                self.console.error(f"Session not found: {target}")
+                return
+        else:
+            target = self._pick_session()
+            if target is None:
+                self.console.system("Resume cancelled.")
+                return
+
+        if target == self._session_id:
+            self.console.system(f"Already in session '{target}'.")
+            return
+
+        # Save the current session before switching away.
+        if self._session_id and self.context.messages:
+            try:
+                self.save_session(self._session_id)
+                self.console.system(f"Session '{self._session_id}' saved.")
+            except Exception as e:
+                self.console.warn(f"Could not save current session: {e}")
+
+        # Switch to the target session and reset per-session state.
+        old_id = self._session_id
+        old_save_time = self._last_save_time
+        self._session_id = target
+        self._last_save_time = 0.0
+        if not self.load_session(target):
+            self._session_id = old_id
+            self._last_save_time = old_save_time
+            return
+        _wd = self.tool_executor._work_dir or os.getcwd()
+        self.changes = ChangeTracker(self._session_id, _wd, self.console)
+        self.tool_executor._change_tracker = self.changes
+        self.tool_executor._get_round_id = lambda: self.round_id
 
     def _cmd_rewind(self, raw: str):
         """Handle /rewind — roll back to a previous round."""
@@ -951,6 +1117,51 @@ class LLMAgent:
 
     # ----- main loops -------------------------------------------------------
 
+    def _next_submission(self, terminal: TerminalInput) -> UserSubmission:
+        """Wait for terminal or web input and return whichever arrives first."""
+        if self.input_broker is None:
+            return UserSubmission(
+                text=terminal.prompt(), source="terminal", id="terminal"
+            )
+
+        try:
+            return self.input_broker.get_nowait()
+        except queue.Empty:
+            pass
+
+        async def wait_web() -> UserSubmission:
+            while True:
+                try:
+                    return self.input_broker.get_nowait()
+                except queue.Empty:
+                    await asyncio.sleep(INPUT_POLL_INTERVAL)
+
+        async def race() -> UserSubmission:
+            terminal_task = asyncio.create_task(terminal.prompt_async())
+            web_task = asyncio.create_task(wait_web())
+            done, _ = await asyncio.wait(
+                {terminal_task, web_task}, return_when=asyncio.FIRST_COMPLETED
+            )
+            if web_task in done:
+                if not terminal_task.done():
+                    terminal_task.cancel()
+                try:
+                    await terminal_task
+                except (asyncio.CancelledError, EOFError, KeyboardInterrupt):
+                    pass
+                return web_task.result()
+            if not web_task.done():
+                web_task.cancel()
+            try:
+                await web_task
+            except asyncio.CancelledError:
+                pass
+            return UserSubmission(
+                text=terminal_task.result(), source="terminal", id="terminal"
+            )
+
+        return asyncio.run(race())
+
     def chat_loop(self, resumed_session_id: str | None = None):
 
         self.console.system("Type `/help` for available commands. Prefix with `!` to run shell commands.")
@@ -973,8 +1184,9 @@ class LLMAgent:
         try:
             while True:
                 try:
-                    self.console._console.rule(style="dim color(240)")
-                    query = _strip_at_marks(terminal.prompt().strip())
+                    self.console.rule()
+                    submission = self._next_submission(terminal)
+                    query = _strip_at_marks(submission.text.strip())
                 except KeyboardInterrupt:
                     # Ctrl+C is handled inside the prompt (clear / double-tap
                     # to quit); a stray one here just starts a fresh prompt.
@@ -985,6 +1197,13 @@ class LLMAgent:
 
                 if not query:
                     continue
+
+                self.console.user_input(
+                    query,
+                    source=submission.source,
+                    submission_id=submission.id,
+                    with_rule=False,
+                )
 
                 # exit shortcut
                 if query.lower() in ("exit", "quit"):
@@ -1015,9 +1234,10 @@ class LLMAgent:
 
                 self.round_id += 1
 
-                self.console._console.rule(style="dim color(240)")
+                self.console.rule()
 
-                self.get_response()
+                with self._operation("agent response"):
+                    self.get_response()
 
                 # Auto-save after each round (throttled: ≤ once per 30 s)
                 try:
@@ -1049,9 +1269,10 @@ class LLMAgent:
         user_message = {"role": "user", "content": query}
         self.context.add(user_message)
 
-        self.console._console.rule(style="dim color(240)")
+        self.console.rule()
 
-        response = self.get_response()
+        with self._operation("agent response"):
+            response = self.get_response()
 
         t1 = time.time()
         self.console.system(f"Execution time: {t1 - t0:.2f} seconds")

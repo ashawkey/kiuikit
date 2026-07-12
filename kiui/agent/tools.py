@@ -16,6 +16,7 @@ from typing import Any
 
 from kiui.agent.ui import AgentConsole
 from kiui.agent.interrupt import CancelWatcher
+from kiui.agent.io import CancellationToken
 
 
 def _terminate_process(proc: subprocess.Popen) -> None:
@@ -292,8 +293,18 @@ class ToolExecutor:
         "save_memory": "_save_memory",
     }
 
-    def __init__(self, console: AgentConsole | None = None, subagent_manager=None, work_dir: str | None = None, change_tracker=None, get_round_id=None, skills: dict | None = None):
+    def __init__(
+        self,
+        console: AgentConsole | None = None,
+        subagent_manager=None,
+        work_dir: str | None = None,
+        change_tracker=None,
+        get_round_id=None,
+        skills: dict | None = None,
+        cancellation: CancellationToken | None = None,
+    ):
         self.console = console or AgentConsole()
+        self.cancellation = cancellation
         self.subagent_manager = subagent_manager
         self._work_dir = work_dir
         self._change_tracker = change_tracker
@@ -501,9 +512,9 @@ class ToolExecutor:
         # Wait for the process, watching the keyboard so ESC / Ctrl+C aborts it.
         interrupted = False
         try:
-            with CancelWatcher() as watcher:
+            with CancelWatcher(self.cancellation) as watcher:
                 while proc.poll() is None:
-                    if watcher.cancelled:
+                    if watcher.is_cancelled:
                         interrupted = True
                         break
                     time.sleep(0.1)

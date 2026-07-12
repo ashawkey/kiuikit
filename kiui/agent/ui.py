@@ -9,11 +9,16 @@ from __future__ import annotations
 
 import threading
 import time
+from typing import TYPE_CHECKING
+
 import questionary
 from rich.console import Console
 from rich.status import Status
 from rich.table import Table
 from rich.theme import Theme
+
+if TYPE_CHECKING:
+    from kiui.agent.io import EventHub, PromptBroker
 
 # Custom questionary style that blends with the CLI aesthetic
 _QS_STYLE = questionary.Style([
@@ -59,8 +64,9 @@ class ThinkingIndicator:
     thread to update the elapsed-time counter every second.
     """
 
-    def __init__(self, console: Console):
+    def __init__(self, console: Console, events: EventHub | None = None):
         self._console = console
+        self._events = events
         self._status: Status | None = None
         self._start_time: float = 0
         self._running = False
@@ -78,6 +84,8 @@ class ThinkingIndicator:
         self._status.start()
         self._thread = threading.Thread(target=self._tick, daemon=True)
         self._thread.start()
+        if self._events is not None:
+            self._events.publish("thinking_start")
         return self
 
     def __exit__(self, *args) -> None:
@@ -86,6 +94,8 @@ class ThinkingIndicator:
             self._thread.join(timeout=1.0)
         if self._status is not None:
             self._status.stop()
+        if self._events is not None:
+            self._events.publish("thinking_stop")
 
     def _tick(self) -> None:
         """Background loop that updates the elapsed-time label."""
@@ -102,8 +112,21 @@ class ThinkingIndicator:
 class AgentConsole:
     """Thin wrapper around ``rich.Console`` with typed convenience methods."""
 
-    def __init__(self):
+    def __init__(self, events: EventHub | None = None):
         self._console = Console(theme=AGENT_THEME)
+        self.events = events
+        self.prompt_broker: PromptBroker | None = None
+
+    def _emit(self, event_type: str, **data) -> None:
+        if self.events is not None:
+            self.events.publish(event_type, **data)
+
+    def _render_plain(self, *objects, markup: bool = True) -> str:
+        """Render rich objects/markup to plain text for web clients."""
+        capture_console = Console(width=120, theme=AGENT_THEME, no_color=True)
+        with capture_console.capture() as capture:
+            capture_console.print(*objects, markup=markup)
+        return capture.get().rstrip("\n")
 
     def thinking(self) -> ThinkingIndicator:
         """Return a context manager that displays an animated thinking indicator.
@@ -113,15 +136,30 @@ class AgentConsole:
             with console.thinking():
                 response = client.chat.completions.create(...)
         """
-        return ThinkingIndicator(self._console)
+        return ThinkingIndicator(self._console, self.events)
 
     # -- raw pass-through (for rich markup, tables, etc.) -------------------
 
     def print(self, *args, **kwargs):
         self._console.print(*args, **kwargs)
+        if args and self.events is not None:
+            self._emit(
+                "output",
+                text=self._render_plain(*args, markup=kwargs.get("markup", True)),
+            )
+
+    def local(self, *args, **kwargs):
+        """Print terminal-only information such as authentication secrets."""
+        self._console.print(*args, **kwargs)
 
     def table(self, table: Table):
         self._console.print(table)
+        if self.events is not None:
+            self._emit("output", text=self._render_plain(table))
+
+    def rule(self):
+        self._console.rule(style="dim color(240)")
+        self._emit("rule")
 
     # -- block helper -------------------------------------------------------
 
@@ -139,20 +177,25 @@ class AgentConsole:
 
     def system(self, msg: str):
         self._block(msg, style="system", prefix=f"{_DOT} ")
+        self._emit("system", text=msg)
 
     def debug(self, msg: str):
         self._block(msg, style="debug", prefix=f"{_DOT} ")
+        self._emit("debug", text=msg)
 
     def error(self, msg: str):
         self._block(msg, style="error", prefix=f"{_DOT} ")
+        self._emit("error", text=msg)
 
     def warn(self, msg: str, *, exc_info: bool = False):
         self._block(msg, style="warning", prefix=f"{_DOT} ")
+        self._emit("warning", text=msg)
         if exc_info:
             self._console.print_exception()
 
     def tool(self, msg: str):
         self._block(msg, style="tool", prefix=f"{_DOT} ")
+        self._emit("tool_start", text=msg)
 
     def tool_result(self, msg: str, success: bool = True):
         style = "tool_ok" if success else "tool_fail"
@@ -164,6 +207,7 @@ class AgentConsole:
         rest = "\n".join(indent + line for line in lines[1:])
         output = first + ("\n" + rest if rest else "")
         self._console.print(output, style=style, markup=False)
+        self._emit("tool_result", text=msg, success=success)
 
     def _highlight_line(self, code: str, language: str) -> "Text":
         """Return a ``rich.text.Text`` with syntax-highlighted *code*.
@@ -284,6 +328,15 @@ class AgentConsole:
 
         prefix = f"{_DOT} {icon} "
         self._console.print(f"{prefix}{header}", style=style)
+        self._emit(
+            "diff",
+            path=path,
+            old_text=old_text or "",
+            new_text=new_text or "",
+            line_num=line_num,
+            count=count,
+            success=success,
+        )
 
         if not success:
             return
@@ -350,10 +403,23 @@ class AgentConsole:
     def response(self, msg: str):
         from rich.markdown import Markdown
         self._console.print(Markdown(f"{_DOT} {msg}"))
+        self._emit("assistant_message", text=msg)
 
-    def user_input(self, msg: str):
-        """Print user input with a horizontal rule for visual separation."""
-        self._console.rule(style="dim color(240)")
+    def user_input(
+        self,
+        msg: str,
+        *,
+        source: str = "replay",
+        submission_id: str | None = None,
+        with_rule: bool = True,
+    ):
+        """Print user input with a horizontal rule for visual separation.
+
+        Single emission point for ``user_message`` events — callers must not
+        publish the event themselves.
+        """
+        if with_rule:
+            self._console.rule(style="dim color(240)")
         lines = msg.splitlines()
         if not lines:
             return
@@ -364,6 +430,10 @@ class AgentConsole:
             content = prefix + line if i == 0 else indent + line
             out_lines.append(content)
         self._console.print("\n".join(out_lines), style="input", markup=False)
+        data = {"text": msg, "source": source}
+        if submission_id is not None:
+            data["submission_id"] = submission_id
+        self._emit("user_message", **data)
 
     # -- interactive prompts ------------------------------------------------
 
@@ -379,6 +449,26 @@ class AgentConsole:
 
         Returns the chosen string, or None if cancelled.
         """
+        if self.prompt_broker is not None:
+            return self.prompt_broker.ask(
+                "select", message, choices=choices, default=default or ""
+            )
+        return self.select_terminal(
+            message,
+            choices,
+            default=default,
+            use_indicator=use_indicator,
+        )
+
+    def select_terminal(
+        self,
+        message: str,
+        choices: list[str],
+        *,
+        default: str | None = None,
+        use_indicator: bool = True,
+    ) -> str | None:
+        """Render a select prompt only on the local terminal."""
         try:
             return questionary.select(
                 message,
@@ -388,6 +478,27 @@ class AgentConsole:
                 use_indicator=use_indicator,
             ).unsafe_ask()
         except KeyboardInterrupt:
+            return None
+
+    async def select_terminal_async(
+        self,
+        message: str,
+        choices: list[str],
+        *,
+        default: str | None = None,
+        use_indicator: bool = True,
+    ) -> str | None:
+        """Render a local select while allowing web input to race it."""
+        question = questionary.select(
+            message,
+            choices=choices,
+            default=default,
+            style=_QS_STYLE,
+            use_indicator=use_indicator,
+        )
+        try:
+            return await question.unsafe_ask_async()
+        except (KeyboardInterrupt, EOFError):
             return None
 
     def ask_text(
@@ -402,6 +513,23 @@ class AgentConsole:
 
         Returns the input string, or None if cancelled.
         """
+        if self.prompt_broker is not None:
+            return self.prompt_broker.ask(
+                "text", message, default=default
+            )
+        return self.ask_text_terminal(
+            message, default=default, multiline=multiline, validate=validate
+        )
+
+    def ask_text_terminal(
+        self,
+        message: str,
+        *,
+        default: str = "",
+        multiline: bool = False,
+        validate: questionary.Validator | None = None,
+    ) -> str | None:
+        """Render a text prompt only on the local terminal."""
         try:
             return questionary.text(
                 message,
@@ -411,4 +539,25 @@ class AgentConsole:
                 style=_QS_STYLE,
             ).unsafe_ask()
         except KeyboardInterrupt:
+            return None
+
+    async def ask_text_terminal_async(
+        self,
+        message: str,
+        *,
+        default: str = "",
+        multiline: bool = False,
+        validate: questionary.Validator | None = None,
+    ) -> str | None:
+        """Render a local text prompt while allowing web input to race it."""
+        question = questionary.text(
+            message,
+            default=default,
+            multiline=multiline,
+            validate=validate,
+            style=_QS_STYLE,
+        )
+        try:
+            return await question.unsafe_ask_async()
+        except (KeyboardInterrupt, EOFError):
             return None

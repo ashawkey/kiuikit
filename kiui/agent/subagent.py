@@ -61,6 +61,7 @@ class SubagentManager:
                 permission_mode=PermissionMode.AUTO,
                 exec_mode=True,
                 work_dir=work_dir,
+                console=self.console,
             )
             response = agent.execute(task)
 

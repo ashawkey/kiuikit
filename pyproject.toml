@@ -13,7 +13,7 @@ authors = [
 ]
 urls = { Homepage = "https://github.com/ashawkey/kiuikit" }
 
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 
 dependencies = [
   "lazy_loader",
@@ -32,6 +32,8 @@ kia = [
   "ddgs",
   "httpx",
   "beautifulsoup4",
+  "fastapi>=0.120",
+  "uvicorn[standard]>=0.38",
 ]
 full = [
   "torch", # keep this so the doc can be built successfully
@@ -61,6 +63,8 @@ full = [
   "httpx",
   "beautifulsoup4",
   "ddgs",
+  "fastapi>=0.120",
+  "uvicorn[standard]>=0.38",
 ]
 
 [project.scripts]

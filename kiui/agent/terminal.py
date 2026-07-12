@@ -270,6 +270,7 @@ class TerminalInput:
             validator=NonEmptyInputValidator(),
             validate_while_typing=False,
             completer=AtFileCompleter(work_dir),
+            erase_when_done=True,
         )
 
     def _create_keybindings(self) -> KeyBindings:
@@ -319,3 +320,9 @@ class TerminalInput:
             EOFError: When the user presses Ctrl+D (end of input).
         """
         return self._session.prompt([("class:prompt", self._prompt_label)])
+
+    async def prompt_async(self) -> str:
+        """Read input without moving prompt_toolkit off the main thread."""
+        return await self._session.prompt_async(
+            [("class:prompt", self._prompt_label)]
+        )
