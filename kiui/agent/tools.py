@@ -470,10 +470,12 @@ class ToolExecutor:
         cwd = cwd or self._work_dir
 
         if sys.platform == "win32":
-            shell_cmd: Any = command
+            # Use PowerShell (with user profile) as the modern default on Windows.
+            # -NoLogo suppresses the copyright banner; profile is loaded by default.
+            shell_cmd = ["powershell", "-NoLogo", "-Command", command]
             proc = subprocess.Popen(
                 shell_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                cwd=cwd or None, shell=True,
+                cwd=cwd or None,
                 creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
             )
         else:
