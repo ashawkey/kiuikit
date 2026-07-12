@@ -1,6 +1,8 @@
 import asyncio
+import json
 import threading
 import time
+from pathlib import Path
 
 import pytest
 
@@ -18,6 +20,9 @@ def test_event_hub_orders_and_bounds_replay():
 
     assert [event.seq for event in hub.after(0)] == [second.seq, third.seq]
     assert hub.latest_seq == third.seq
+    assert hub.oldest_seq == second.seq
+    assert hub.has_replay_gap(0)
+    assert not hub.has_replay_gap(second.seq - 1)
 
 
 def test_event_hub_clips_oversized_text_fields():
@@ -204,6 +209,22 @@ def test_prompt_broker_accepts_terminal_async_adapter():
     assert resolved[-1].data["source"] == "terminal"
 
 
+def test_prompt_broker_ask_inside_running_event_loop():
+    hub = EventHub()
+    broker = PromptBroker(hub)
+
+    async def choose_yes(_prompt):
+        await asyncio.sleep(0)
+        return "Yes"
+
+    async def invoke_sync_api():
+        # Regression: this used to call asyncio.run() on this active loop.
+        return broker.ask("select", "Continue?", choices=["Yes", "No"])
+
+    broker.set_terminal_adapter(choose_yes)
+    assert asyncio.run(invoke_sync_api()) == "Yes"
+
+
 def test_web_answer_cancels_pending_terminal_adapter():
     hub = EventHub()
     broker = PromptBroker(hub)
@@ -249,3 +270,18 @@ def test_operation_context_always_finishes():
         "operation_end",
     ]
 
+
+def test_change_tracker_close_persists_resumable_log(tmp_path, monkeypatch):
+    from kiui.agent.rewind import ChangeTracker
+
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    work_dir = tmp_path / "work"
+    work_dir.mkdir()
+    tracker = ChangeTracker("session", work_dir, AgentConsole())
+    tracker.track_write(1, "created.txt", "new content")
+
+    tracker.close()
+
+    log_path = tmp_path / ".kia" / "rewind" / "session" / "change_log.json"
+    records = json.loads(log_path.read_text(encoding="utf-8"))
+    assert records[0]["path"] == "created.txt"

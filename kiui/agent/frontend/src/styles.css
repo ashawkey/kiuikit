@@ -29,18 +29,18 @@
   --diff-del-text: #ffc4d2;
   --overlay: rgba(0, 0, 0, 0.6);
 
-  /* ---- Derived translucent variants (recompute per theme) ---- */
-  --accent-weak: color-mix(in srgb, var(--accent) 16%, transparent);
-  --accent-faint: color-mix(in srgb, var(--accent) 8%, transparent);
-  --accent-focus: color-mix(in srgb, var(--accent) 45%, transparent);
-  --info-weak: color-mix(in srgb, var(--info) 24%, transparent);
-  --danger-weak: color-mix(in srgb, var(--danger) 24%, transparent);
-  --danger-faint: color-mix(in srgb, var(--danger) 8%, transparent);
-  --warning-weak: color-mix(in srgb, var(--warning) 24%, transparent);
-  --link-underline: color-mix(in srgb, var(--link) 45%, transparent);
-  --btn-subtle: color-mix(in srgb, var(--text) 6%, transparent);
-  --pill-bg: color-mix(in srgb, var(--surface) 82%, transparent);
-  --hairline: color-mix(in srgb, var(--line-strong) 40%, transparent);
+  /* ---- Static fallbacks for browsers without color-mix() ---- */
+  --accent-weak: rgba(249, 38, 114, 0.16);
+  --accent-faint: rgba(249, 38, 114, 0.08);
+  --accent-focus: rgba(249, 38, 114, 0.45);
+  --info-weak: rgba(102, 217, 239, 0.24);
+  --danger-weak: rgba(255, 97, 136, 0.24);
+  --danger-faint: rgba(255, 97, 136, 0.08);
+  --warning-weak: rgba(253, 151, 31, 0.24);
+  --link-underline: rgba(102, 217, 239, 0.45);
+  --btn-subtle: rgba(248, 248, 242, 0.06);
+  --pill-bg: rgba(45, 46, 40, 0.82);
+  --hairline: rgba(248, 248, 242, 0.08);
 
   /* ---- Layout (theme-agnostic) ---- */
   --content: 820px;
@@ -80,6 +80,33 @@
   --diff-del-bg: #ffebe9;
   --diff-del-text: #1f2328;
   --overlay: rgba(31, 35, 40, 0.45);
+  --accent-weak: rgba(9, 105, 218, 0.16);
+  --accent-faint: rgba(9, 105, 218, 0.08);
+  --accent-focus: rgba(9, 105, 218, 0.45);
+  --info-weak: rgba(9, 105, 218, 0.24);
+  --danger-weak: rgba(207, 34, 46, 0.24);
+  --danger-faint: rgba(207, 34, 46, 0.08);
+  --warning-weak: rgba(154, 103, 0, 0.24);
+  --link-underline: rgba(9, 105, 218, 0.45);
+  --btn-subtle: rgba(31, 35, 40, 0.06);
+  --pill-bg: rgba(255, 255, 255, 0.82);
+  --hairline: rgba(175, 184, 193, 0.40);
+}
+
+@supports (color: color-mix(in srgb, black, white)) {
+  :root {
+    --accent-weak: color-mix(in srgb, var(--accent) 16%, transparent);
+    --accent-faint: color-mix(in srgb, var(--accent) 8%, transparent);
+    --accent-focus: color-mix(in srgb, var(--accent) 45%, transparent);
+    --info-weak: color-mix(in srgb, var(--info) 24%, transparent);
+    --danger-weak: color-mix(in srgb, var(--danger) 24%, transparent);
+    --danger-faint: color-mix(in srgb, var(--danger) 8%, transparent);
+    --warning-weak: color-mix(in srgb, var(--warning) 24%, transparent);
+    --link-underline: color-mix(in srgb, var(--link) 45%, transparent);
+    --btn-subtle: color-mix(in srgb, var(--text) 6%, transparent);
+    --pill-bg: color-mix(in srgb, var(--surface) 82%, transparent);
+    --hairline: color-mix(in srgb, var(--line-strong) 40%, transparent);
+  }
 }
 
 * { box-sizing: border-box; }
@@ -113,6 +140,20 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
 }
 .login input:focus { border-color: var(--muted); }
 .login input:disabled { opacity: 0.6; }
+.login-submit {
+  width: 100%;
+  min-height: 3.1rem;
+  margin-top: 0.6rem;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 9px;
+  font-size: 0.95rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+.login-submit:hover:not(:disabled) { filter: brightness(1.08); }
+.login-submit:disabled { opacity: 0.55; cursor: default; }
 .form-error {
   min-height: 1.25rem;
   margin: 0.65rem 0 0;
@@ -121,7 +162,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
   text-align: center;
 }
 
-.app-shell { min-height: 100dvh; padding-bottom: 11rem; }
+/* Reserve the scrollbar gutter always, so a session with a scrollbar and one
+   without stay horizontally identical (composer + timeline share one center). */
+html { scrollbar-gutter: stable; }
+.app-shell { min-height: 100dvh; padding-bottom: 8.5rem; }
 .top-controls {
   position: fixed;
   z-index: 15;
@@ -146,13 +190,76 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
 }
 .top-controls button:hover, .top-controls button:focus-visible { opacity: 1; color: var(--text); }
 .theme-toggle { line-height: 1; font-size: 0.95rem; }
+.layout { display: block; }
 .workspace {
   width: min(100%, var(--content));
-  min-height: calc(100dvh - 11rem);
+  min-height: calc(100dvh - 8.5rem);
   margin: 0 auto;
-  padding: 2rem var(--gutter) 3rem;
+  padding: 1.25rem var(--gutter) 3rem;
 }
 .timeline { display: flex; flex-direction: column; gap: 0.8rem; }
+
+/* -- session tabs (top bar) ------------------------------------------- */
+.sidebar {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  /* Leave room on the right for the fixed theme/sign-out controls. */
+  padding: 0.55rem max(7.5rem, env(safe-area-inset-right)) 0.55rem
+    max(var(--gutter), env(safe-area-inset-left));
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(8px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sidebar::-webkit-scrollbar { display: none; }
+.sidebar-title {
+  flex: none;
+  color: var(--dim);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.sidebar-empty { color: var(--muted); font-size: 0.85rem; line-height: 1.5; }
+.sidebar-empty code {
+  background: var(--code-bg);
+  padding: 0.05rem 0.3rem;
+  border-radius: 5px;
+  color: var(--mono-text);
+}
+.session-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: row; gap: 0.3rem; }
+.session-tab {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  white-space: nowrap;
+  text-align: left;
+  padding: 0.35rem 0.7rem;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.session-tab:hover { background: var(--btn-subtle); color: var(--text); }
+.session-tab.active {
+  background: var(--accent-faint);
+  border-color: var(--accent-focus);
+  color: var(--text);
+}
+.session-name { font-size: 0.85rem; font-weight: 650; }
+.session-host { font-size: 0.7rem; color: var(--dim); }
+
+@media (max-width: 640px) {
+  .sidebar-title { display: none; }
+  .session-host { display: none; }
+}
 
 .event { align-self: stretch; max-width: 100%; overflow-wrap: anywhere; animation: rise 0.2s ease both; }
 .event-head {
@@ -372,9 +479,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
 }
 .composer {
   position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.45rem;
   width: min(100%, calc(var(--content) - 2 * var(--gutter)));
   margin: auto;
-  padding: 0.6rem;
+  padding: 0.4rem 0.4rem 0.4rem 0.55rem;
   border: 1px solid var(--line-strong);
   border-radius: 16px;
   background: var(--elevated);
@@ -382,11 +492,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
 }
 .composer:focus-within { border-color: var(--accent-focus); }
 .composer textarea {
-  field-sizing: content;
-  width: 100%;
-  min-height: 2.4rem;
-  max-height: 9rem;
-  padding: 0.55rem 0.65rem;
+  flex: 1;
+  min-width: 0;
+  height: 2.4rem;              /* one line at rest; JS grows it to fit */
+  max-height: 40dvh;
+  padding: 0.5rem 0.4rem;
   resize: none;
   overflow-y: auto;
   color: var(--text);
@@ -396,10 +506,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
   line-height: 1.45;
 }
 .composer textarea::placeholder { color: var(--dim); }
-.composer-footer { display: flex; align-items: center; justify-content: space-between; padding: 0.25rem 0.25rem 0 0.65rem; }
-.hint { color: var(--dim); font-size: 0.75rem; }
-.actions { display: flex; align-items: center; gap: 0.45rem; }
-.send-button, .stop-button { height: 2.35rem; padding: 0 0.85rem; border-radius: 9px; font-size: 0.75rem; font-weight: 700; }
+.send-button, .stop-button {
+  flex: none;
+  height: 2.4rem;
+  padding: 0 0.9rem;
+  border-radius: 11px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
 .send-button { color: var(--accent-ink); background: var(--accent); border: 0; }
 .stop-button { color: var(--danger); background: var(--danger-faint); border: 1px solid var(--danger-weak); }
 .stop-button span { display: inline-block; width: 0.45rem; height: 0.45rem; margin-right: 0.3rem; border-radius: 2px; background: currentColor; }

@@ -15,7 +15,7 @@ A lightweight, terminal-based AI agent that can browse the web, read/write files
 - **Permissions**: Three-tier safety system (auto / default / strict) with hard safety guard for dangerous operations.
 - **Model Switching**: Hot-swap between configured models mid-session.
 - **Interactive**: Rich terminal interface with syntax highlighting, file-path autocomplete, and progress indicators.
-- **Remote Web UI**: Optional authenticated, mobile-friendly companion synchronized with the terminal.
+- **Remote Web UI**: Optional authenticated, mobile-friendly companion synchronized with the terminal. A shared hub multiplexes many terminal agents into one page (a tab per agent) behind a single port.
 
 ## Installation
 
@@ -68,17 +68,37 @@ kia --model <model_alias> --verbose --perm strict --resume [session_id]
 | `--perm MODE` | `auto`, `default`, or `strict` |
 | `--resume [SESSION_ID]` | Resume a session (bare `--resume` lists saved sessions interactively) |
 | `--list` | List available models with context-window info and exit |
-| `--web` | Start the synchronized terminal + Web UI |
-| `--web-port PORT` | Listener port (default: `8765`) |
+| `--hub` | Run the shared web hub daemon (owns the public port) |
+| `--web` | Link this terminal agent to the running hub as a web session |
+| `--web-port PORT` | Hub listener port (default: `8765`) |
 
 ## Web UI
 
+The Web UI uses a **hub + agents** design so that many independent terminal
+agents — started in different directories, even from different terminals —
+share a single public port and appear as separate tabs in one browser page.
+
+- **One hub** owns the public port: `kia --hub`. It serves the UI, holds the
+  access token, and multiplexes every connected agent.
+- **Each agent** stays terminal-first and links to the hub with `kia --web`.
+  Terminal and web operate the same session in sync. If no hub is running the
+  agent prints a warning and continues terminal-only.
+
 ```bash
-kia --web --web-port 8765
+# 1. start the hub once (owns port 8765, prints the access token)
+kia --hub --web-port 8765
+
+# 2. from any directory / terminal, launch agents that join the hub
+cd ~/projA && kia --web
+cd ~/projB && kia --web
 ```
 
-The Web UI is available at `http://localhost:8765`. Use the OTP or `kia_web_token` to access the Web UI.
-To access from another device, we recommend using `cloudflared` to tunnel the port to a public URL.
+The hub writes its connection info (host, port, internal secret) to
+`~/.kia/hub.json`; agents read it to find the hub, so no extra config is
+needed. Use `kia_web_token` in the config (or the token printed on hub start)
+to sign in.
+
+To reach the hub from another device, tunnel the hub port with `cloudflared`:
 
 ```bash
 ## one-time setup
@@ -89,7 +109,7 @@ cloudflared tunnel create kia
 # route the tunnel to a public URL
 cloudflared tunnel route dns kia kia.kiui.moe
 
-## start the tunnel, then you can access the Web UI at https://kia.kiui.moe
+## start the tunnel, then access the Web UI at https://kia.kiui.moe
 cloudflared tunnel run --url http://localhost:8765 kia
 ```
 
@@ -109,6 +129,7 @@ The agent supports the following slash commands in the CLI:
 | `/model [name]` | Show or switch LLM model mid-session |
 | `/rewind [round]` | Roll back conversation and/or code to a previous round |
 | `/skills` | List installed skills from `.kia/skills/` |
+| `/goal [text\|clear]` | Set a goal the agent auto-iterates toward until met (see [Goals](#goals)) |
 | `/clear` | Clear conversation history and start a new session |
 | `/resume [session_id]` | Save the current session, then resume a previous one (bare `/resume` picks interactively) |
 | `/exit` or `/quit` | Exit the agent |
@@ -163,6 +184,27 @@ The `/rewind` command lets you roll back to any previous round:
 - **Code only** — keep conversation, revert file changes.
 
 Each file modification (write, edit, remove) is tracked per round so rollback can precisely invert changes.
+
+## Goals
+
+The `/goal` command sets a **standing objective** the agent works toward autonomously. After every round finishes, the agent is automatically re-prompted to check whether the goal is met:
+
+- If **met**, it calls the `report_goal(met=true)` tool and the loop stops.
+- If **not met**, it calls `report_goal(met=false, reason=...)`, keeps working, and the loop iterates again.
+
+```
+/goal all pytest tests pass and there are no lint errors
+```
+
+Usage:
+
+| Form | Effect |
+|------|--------|
+| `/goal <text>` | Set a new goal and start auto-iterating |
+| `/goal` | Show the current goal and status |
+| `/goal clear` | Clear the goal and stop iterating |
+
+There is **no fixed iteration cap** — the loop runs until the goal is reported met or you stop it. Since the terminal prompt is blocked while the loop runs, **`Ctrl+C` / `Esc` during a round is the way to stop it**, which clears the goal. Goals are saved with the session and **auto-resume** on `--resume`.
 
 ## Skills
 

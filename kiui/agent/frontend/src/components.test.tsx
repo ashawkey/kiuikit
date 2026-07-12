@@ -17,7 +17,7 @@ describe('interaction components', () => {
   it('sends composer text with Enter', () => {
     const onSend = vi.fn()
     render(<Composer pending={0} operationId={null} onSend={onSend} onCancel={() => undefined} />)
-    const field = screen.getByPlaceholderText('Type anything…')
+    const field = screen.getByPlaceholderText('Type Anything...')
     fireEvent.change(field, { target: { value: 'hello' } })
     fireEvent.keyDown(field, { key: 'Enter' })
     expect(onSend).toHaveBeenCalledWith('hello')

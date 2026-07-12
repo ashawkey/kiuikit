@@ -272,6 +272,26 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "report_goal",
+                "description": (
+                    "Report whether the current standing goal (set by the user via /goal) is met. "
+                    "Call this exactly once at the end of a goal-check turn. "
+                    "When met=true the automatic goal iteration stops; when met=false the agent is "
+                    "prompted again to keep working toward the goal."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "met": {"type": "boolean", "description": "True if the goal is now fully satisfied."},
+                        "reason": {"type": "string", "description": "Brief explanation of the current status or what still remains."},
+                    },
+                    "required": ["met"],
+                },
+            },
+        },
     ]
 
 
@@ -291,6 +311,7 @@ class ToolExecutor:
         "spawn_subagent": "_spawn_subagent",
         "load_skill": "_load_skill",
         "save_memory": "_save_memory",
+        "report_goal": "_report_goal",
     }
 
     def __init__(
@@ -311,6 +332,9 @@ class ToolExecutor:
         self._get_round_id = get_round_id  # callable → int
         self._skills = skills or {}
         self._loaded_skills: set[str] = set()
+        # Last report_goal() call result: None, or {"met": bool, "reason": str}.
+        # Consumed by LLMAgent after each goal-check round.
+        self._goal_report: dict | None = None
 
     def execute(self, function_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Dispatch and execute a tool call. Returns dict with success key."""
@@ -950,6 +974,24 @@ class ToolExecutor:
 
         return {
             "message": f"Memory saved: \"{title}\" → {filename}",
+            "success": True,
+        }
+
+    # ── Goal tool ────────────────────────────────────────────
+
+    def _report_goal(self, met: bool = False, reason: str = "") -> dict[str, Any]:
+        """Record whether the current standing goal is met.
+
+        The result is stashed on ``self._goal_report`` for the agent loop to
+        read after the round; it decides whether to keep auto-iterating.
+        """
+        met = bool(met)
+        reason = reason or ""
+        self.console.tool(f"report_goal(met={met})")
+        self._goal_report = {"met": met, "reason": reason}
+        status = "goal met" if met else "goal not yet met"
+        return {
+            "message": f"Recorded: {status}." + (f" {reason}" if reason else ""),
             "success": True,
         }
 

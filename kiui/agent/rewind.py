@@ -69,6 +69,14 @@ class ChangeTracker:
             json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8"
         )
 
+    def flush(self) -> None:
+        """Persist the in-memory log so on-disk backups remain reachable."""
+        self._save_log()
+
+    def close(self) -> None:
+        """Finish using this tracker without deleting resumable rewind data."""
+        self.flush()
+
     # ------------------------------------------------------------------
     # Track individual file operations  (call BEFORE the tool acts)
     # ------------------------------------------------------------------

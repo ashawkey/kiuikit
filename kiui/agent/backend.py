@@ -192,6 +192,13 @@ class LLMAgent:
         self._session_id: str | None = None  # set by chat_loop
         self._last_save_time: float = 0.0  # throttle auto-saves
 
+        # ----- /goal auto-iteration state -----
+        self.goal: str | None = None       # standing goal text (persists across rounds)
+        self.goal_active: bool = False     # whether the auto-iterate loop is armed
+        self.goal_iterations: int = 0      # number of goal-check rounds run so far
+        self._pending_auto: str | None = None  # queued auto-injected prompt (goal check)
+        self._last_interrupted: bool = False   # set by get_response when a round is cancelled
+
         self.token_totals = {
             "total": 0,
             "prompt": 0,
@@ -442,6 +449,7 @@ class LLMAgent:
 
         iteration = 0
         t_turn_start = time.monotonic()
+        self._last_interrupted = False
 
         while True:
             iteration += 1
@@ -457,6 +465,7 @@ class LLMAgent:
                 # Roll back to the state before this request was sent.
                 self.context.rollback(snapshot)
                 self.console.system("Request cancelled.")
+                self._last_interrupted = True
                 return None
             except RuntimeError as e:
                 self.context.rollback(snapshot)
@@ -500,7 +509,7 @@ class LLMAgent:
 
     # ----- slash commands ---------------------------------------------------
 
-    COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "resume", "perm", "model", "context", "rewind", "skills"}
+    COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "resume", "perm", "model", "context", "rewind", "skills", "goal"}
 
     def _handle_command(self, raw: str) -> bool:
         """Handle a /command.  Returns True if the agent loop should stop."""
@@ -529,6 +538,8 @@ class LLMAgent:
             self._cmd_rewind(raw)
         elif cmd == "skills":
             self._cmd_skills()
+        elif cmd == "goal":
+            self._cmd_goal(raw)
 
         return False
 
@@ -543,6 +554,7 @@ class LLMAgent:
             "  [cyan]/usage[/cyan]       — Show token usage for this session\n"
             "  [cyan]/model[/cyan]       — Show or switch LLM model (/model <name>)\n"
             "  [cyan]/skills[/cyan]      — List installed skills from .kia/skills/\n"
+            "  [cyan]/goal[/cyan]        — Set a goal the agent auto-iterates toward (/goal <text> | clear)\n"
             "  [cyan]/perm[/cyan]        — Show or change permission mode (/perm auto|default|strict)\n"
             "  [cyan]/rewind[/cyan]      — Roll back conversation and/or code to a previous round\n"
             "  [cyan]/clear[/cyan]       — Clear conversation history (keep system prompt)\n"
@@ -610,12 +622,107 @@ class LLMAgent:
         self._last_save_time = 0.0  # allow immediate save of the new session
         self.context.replace_messages([])
         self.round_id = 0
+        # Drop any standing goal — the new session starts clean.
+        self.goal = None
+        self.goal_active = False
+        self.goal_iterations = 0
+        self._pending_auto = None
         # Create a fresh change tracker for the new session
         _wd = self.tool_executor._work_dir or os.getcwd()
+        if self.changes is not None:
+            self.changes.close()
         self.changes = ChangeTracker(self._session_id, _wd, self.console)
         self.tool_executor._change_tracker = self.changes
         self.tool_executor._get_round_id = lambda: self.round_id
         self.console.system(f"Started new session '{self._session_id}'.")
+
+    # ----- /goal auto-iteration --------------------------------------------
+
+    def _cmd_goal(self, raw: str):
+        """Handle /goal — set, show, or clear the standing goal.
+
+        Usage:
+          /goal <text>   set a new goal and start auto-iterating
+          /goal          show current goal and status
+          /goal clear    clear the goal and stop auto-iteration
+        """
+        parts = raw.split(maxsplit=1)
+        arg = parts[1].strip() if len(parts) > 1 else ""
+        low = arg.lower()
+
+        if not arg:  # status
+            if self.goal:
+                self.console.print(
+                    f"[bold blue]Goal[/bold blue] ([green]active[/green] if running, "
+                    f"{self.goal_iterations} iteration(s)):\n  {self.goal}\n"
+                    "  [dim]Ctrl+C during the loop to stop, or /goal clear[/dim]"
+                )
+            else:
+                self.console.print("No goal set. Use [cyan]/goal <description>[/cyan] to set one.")
+            return
+
+        if low in ("clear", "off", "stop", "none"):
+            self.goal = None
+            self.goal_active = False
+            self.goal_iterations = 0
+            self._pending_auto = None
+            self.console.system("Goal cleared.")
+            return
+
+        # set a brand-new goal
+        self.goal = arg
+        self.goal_active = True
+        self.goal_iterations = 0
+        self._pending_auto = self._build_goal_prompt()
+        self.console.system(f"Goal set — agent will iterate until met (Ctrl+C to stop):\n  {arg}")
+
+    def _build_goal_prompt(self) -> str:
+        """The auto-injected prompt sent after each round while a goal is active."""
+        return (
+            f"[GOAL CHECK] Your standing goal is:\n{self.goal}\n\n"
+            "Assess whether this goal is now fully met.\n"
+            "- If it is fully met, call report_goal(met=true) with a brief reason.\n"
+            "- If it is not met, keep working toward it (use tools as needed), then call "
+            "report_goal(met=false, reason=...) describing what still remains.\n"
+            "Always finish your turn by calling report_goal exactly once."
+        )
+
+    def _maybe_continue_goal(self):
+        """After a round, decide whether to queue another goal-check iteration.
+
+        Reads the report_goal() result stashed on the tool executor. Stops when
+        the goal is reported met or the round was interrupted; otherwise arms the
+        next auto-iteration.
+        """
+        if not (self.goal and self.goal_active):
+            return
+
+        if self._last_interrupted:
+            # Terminal input is blocked during the loop, so Ctrl+C / Esc is the
+            # way to stop it: clear the goal entirely.
+            self.goal = None
+            self.goal_active = False
+            self.goal_iterations = 0
+            self._pending_auto = None
+            self.console.system("[goal] cleared (interrupted).")
+            return
+
+        report = getattr(self.tool_executor, "_goal_report", None)
+        if report and report.get("met"):
+            reason = report.get("reason", "")
+            self.console.system(f"[goal] ✓ met after {self.goal_iterations} iteration(s)." + (f" {reason}" if reason else ""))
+            self.goal_active = False
+            self._pending_auto = None
+            return
+
+        # not met (or the model failed to report) → iterate again
+        self.goal_iterations += 1
+        self._pending_auto = self._build_goal_prompt()
+        reason = report.get("reason", "") if report else ""
+        self.console.system(
+            f"[goal] not met (iteration {self.goal_iterations}) — continuing"
+            + (f": {reason}" if reason else "")
+        )
 
     @staticmethod
     def _session_preview(messages: list) -> str:
@@ -710,6 +817,8 @@ class LLMAgent:
             self._last_save_time = old_save_time
             return
         _wd = self.tool_executor._work_dir or os.getcwd()
+        if self.changes is not None:
+            self.changes.close()
         self.changes = ChangeTracker(self._session_id, _wd, self.console)
         self.tool_executor._change_tracker = self.changes
         self.tool_executor._get_round_id = lambda: self.round_id
@@ -1029,11 +1138,16 @@ class LLMAgent:
             "round_id": self.round_id,
             "token_totals": self.token_totals,
             "system_prompt": self.context.system_prompt,
+            "goal": self.goal,
+            "goal_active": self.goal_active,
+            "goal_iterations": self.goal_iterations,
             "messages": [self._serialize_message(m) for m in self.context.messages],
         }
 
         path = self._sessions_dir() / f"{name}.json"
         path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        if self.changes is not None and self.changes.session_id == name:
+            self.changes.flush()
         return path
 
     def load_session(self, name: str) -> bool:
@@ -1062,6 +1176,17 @@ class LLMAgent:
         saved_totals = data.get("token_totals")
         if saved_totals and isinstance(saved_totals, dict):
             self.token_totals.update(saved_totals)
+
+        # Restore the goal and auto-resume iteration; Ctrl+C stops it.
+        self.goal = data.get("goal")
+        self.goal_iterations = data.get("goal_iterations", 0)
+        if self.goal:
+            self.goal_active = True
+            self._pending_auto = self._build_goal_prompt()
+            self.console.system(f"Goal resumed — iterating until met (Ctrl+C to stop):\n  {self.goal}")
+        else:
+            self.goal_active = False
+            self._pending_auto = None
 
         self.console.system(
             f"Loaded session '{name}' ({len(self.context.messages)} messages, round {self.round_id})"
@@ -1183,51 +1308,60 @@ class LLMAgent:
 
         try:
             while True:
-                try:
+                # An armed goal queues an auto-prompt; run it instead of waiting
+                # for user input, so the agent iterates until the goal is met.
+                if self._pending_auto is not None:
+                    query = self._pending_auto
+                    self._pending_auto = None
                     self.console.rule()
-                    submission = self._next_submission(terminal)
-                    query = _strip_at_marks(submission.text.strip())
-                except KeyboardInterrupt:
-                    # Ctrl+C is handled inside the prompt (clear / double-tap
-                    # to quit); a stray one here just starts a fresh prompt.
-                    continue
-                except EOFError:
-                    # Ctrl+D, or double Ctrl+C on an empty prompt → quit.
-                    break
-
-                if not query:
-                    continue
-
-                self.console.user_input(
-                    query,
-                    source=submission.source,
-                    submission_id=submission.id,
-                    with_rule=False,
-                )
-
-                # exit shortcut
-                if query.lower() in ("exit", "quit"):
-                    break
-
-                # bash command shortcut: !<command>
-                if query.startswith("!"):
-                    bash_cmd = query[1:].strip()
-                    if bash_cmd:
-                        self._run_bash_command(bash_cmd)
-                    else:
-                        self.console.warn("Usage: !<shell command>")
-                    continue
-
-                # slash commands
-                if query.startswith("/"):
-                    cmd_word = query.split()[0][1:].lower()
-                    if cmd_word in self.COMMANDS:
-                        if self._handle_command(query):
-                            break
+                    self.console.system(f"[goal] checking (iteration {self.goal_iterations}): {self.goal}")
+                    self.console.user_input(query, source="goal", with_rule=False)
+                else:
+                    try:
+                        self.console.rule()
+                        submission = self._next_submission(terminal)
+                        query = _strip_at_marks(submission.text.strip())
+                    except KeyboardInterrupt:
+                        # Ctrl+C is handled inside the prompt (clear / double-tap
+                        # to quit); a stray one here just starts a fresh prompt.
                         continue
-                    else:
-                        self.console.warn(f"Unknown command: /{cmd_word}. Type /help for available commands.")
+                    except EOFError:
+                        # Ctrl+D, or double Ctrl+C on an empty prompt → quit.
+                        break
+
+                    if not query:
                         continue
+
+                    self.console.user_input(
+                        query,
+                        source=submission.source,
+                        submission_id=submission.id,
+                        with_rule=False,
+                    )
+
+                    # exit shortcut
+                    if query.lower() in ("exit", "quit"):
+                        break
+
+                    # bash command shortcut: !<command>
+                    if query.startswith("!"):
+                        bash_cmd = query[1:].strip()
+                        if bash_cmd:
+                            self._run_bash_command(bash_cmd)
+                        else:
+                            self.console.warn("Usage: !<shell command>")
+                        continue
+
+                    # slash commands
+                    if query.startswith("/"):
+                        cmd_word = query.split()[0][1:].lower()
+                        if cmd_word in self.COMMANDS:
+                            if self._handle_command(query):
+                                break
+                            continue
+                        else:
+                            self.console.warn(f"Unknown command: /{cmd_word}. Type /help for available commands.")
+                            continue
 
                 user_message = {"role": "user", "content": query}
                 self.context.add(user_message)
@@ -1236,8 +1370,14 @@ class LLMAgent:
 
                 self.console.rule()
 
+                # Reset any stale goal report before running the round.
+                self.tool_executor._goal_report = None
+
                 with self._operation("agent response"):
                     self.get_response()
+
+                # If a goal is armed, decide whether to iterate again.
+                self._maybe_continue_goal()
 
                 # Auto-save after each round (throttled: ≤ once per 30 s)
                 try:
@@ -1248,6 +1388,8 @@ class LLMAgent:
                 except Exception:
                     pass  # never let save failure break the loop
         finally:
+            if self.changes is not None:
+                self.changes.close()
             self._print_token_summary()
         
     def execute(self, query: str):

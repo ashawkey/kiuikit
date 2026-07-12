@@ -71,6 +71,17 @@ class EventHub:
         with self._cond:
             return self._seq
 
+    @property
+    def oldest_seq(self) -> int:
+        """Sequence number of the oldest retained event (or the next event)."""
+        with self._cond:
+            return self._events[0].seq if self._events else self._seq + 1
+
+    def has_replay_gap(self, after_seq: int) -> bool:
+        """Whether events after *after_seq* were evicted from bounded history."""
+        with self._cond:
+            return bool(self._events and after_seq < self._events[0].seq - 1)
+
 
 @dataclass(frozen=True)
 class UserSubmission:
@@ -125,6 +136,36 @@ class ActivePrompt:
 # How often ``ask`` polls the terminal task for completion while a web
 # client may answer concurrently.
 PROMPT_POLL_INTERVAL = 0.05
+
+
+def _run_prompt_coroutine(factory: Callable[[], Awaitable[None]]) -> None:
+    """Run a prompt coroutine from synchronous code in any thread.
+
+    ``asyncio.run`` cannot be called by a thread whose event loop is already
+    running. In that uncommon case the synchronous API necessarily blocks its
+    caller, so run the terminal adapter on a helper thread with its own loop.
+    Async callers that need their loop to remain responsive should offload the
+    synchronous :meth:`PromptBroker.ask` call to a worker thread.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        asyncio.run(factory())
+        return
+
+    errors: list[BaseException] = []
+
+    def run() -> None:
+        try:
+            asyncio.run(factory())
+        except BaseException as exc:
+            errors.append(exc)
+
+    worker = threading.Thread(target=run, name="kia-prompt-adapter", daemon=True)
+    worker.start()
+    worker.join()
+    if errors:
+        raise errors[0]
 
 
 class PromptBroker:
@@ -205,7 +246,7 @@ class PromptBroker:
                     self.resolve(prompt.id, answer, source="terminal")
 
             try:
-                asyncio.run(ask_both())
+                _run_prompt_coroutine(ask_both)
             except BaseException:
                 self.cancel(prompt.id, source="terminal")
                 raise

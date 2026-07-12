@@ -1,7 +1,46 @@
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from 'react'
 
-import type { Prompt } from './types'
+import type { Prompt, SessionSummary } from './types'
 import type { Theme } from './theme'
+
+export function SessionSidebar({
+  sessions,
+  activeId,
+  onSelect,
+}: {
+  sessions: SessionSummary[]
+  activeId: string | null
+  onSelect: (id: string) => void
+}) {
+  return (
+    <nav className="sidebar" aria-label="Agent sessions">
+      <div className="sidebar-title">Agents</div>
+      {sessions.length === 0 ? (
+        <p className="sidebar-empty">No agents connected. Run <code>kia --web</code>.</p>
+      ) : (
+        <ul className="session-list">
+          {sessions.map((session) => {
+            const dir = session.cwd
+              ? session.cwd.split(/[\\/]/).filter(Boolean).pop() || session.cwd
+              : session.title
+            return (
+              <li key={session.id}>
+                <button
+                  type="button"
+                  className={session.id === activeId ? 'session-tab active' : 'session-tab'}
+                  onClick={() => onSelect(session.id)}
+                  title={session.cwd}
+                >
+                  <span className="session-name">{dir}</span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </nav>
+  )
+}
 
 export function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle: () => void }) {
   const goingLight = theme === 'dark'
@@ -113,6 +152,9 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
           onChange={(event) => setToken(event.target.value)}
           required
         />
+        <button className="login-submit" type="submit" disabled={busy || !token}>
+          {busy ? 'Submitting…' : 'Submit'}
+        </button>
       </form>
       <p className="form-error" role="alert">{error}</p>
     </main>
@@ -182,6 +224,35 @@ export function Composer({
 }) {
   const [text, setText] = useState('')
   const field = useRef<HTMLTextAreaElement>(null)
+  const shell = useRef<HTMLElement>(null)
+
+  // Grow the single-line field to fit wrapped/multi-line input, up to the CSS
+  // max-height (then it scrolls). Runs on every value change.
+  useEffect(() => {
+    const el = field.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [text])
+
+  // Keep the composer above the on-screen keyboard on mobile: the visual
+  // viewport shrinks when the keyboard opens, so lift the fixed bar by the
+  // overlapped amount. A no-op on desktop (overlap is 0).
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const update = () => {
+      const overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
+      shell.current?.style.setProperty('bottom', `${overlap}px`)
+    }
+    update()
+    vv.addEventListener('resize', update)
+    vv.addEventListener('scroll', update)
+    return () => {
+      vv.removeEventListener('resize', update)
+      vv.removeEventListener('scroll', update)
+    }
+  }, [])
 
   function submit() {
     const value = text.trim()
@@ -199,25 +270,20 @@ export function Composer({
   }
 
   return (
-    <section className="composer-shell">
+    <section className="composer-shell" ref={shell}>
       <div className="composer">
         {pending ? <div className="queue-chip">{pending} message{pending === 1 ? '' : 's'} queued</div> : null}
         <textarea
           ref={field}
           rows={1}
           maxLength={32768}
-          placeholder="Type anything…"
+          placeholder="Type Anything..."
           value={text}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={keyDown}
         />
-        <div className="composer-footer">
-          <span className="hint">Shift + Enter for a new line</span>
-          <div className="actions">
-            {operationId ? <button className="stop-button" type="button" onClick={onCancel}><span /> Stop</button> : null}
-            <button className="send-button" type="button" onClick={submit}>Send</button>
-          </div>
-        </div>
+        {operationId ? <button className="stop-button" type="button" onClick={onCancel}><span /> Stop</button> : null}
+        <button className="send-button" type="button" onClick={submit}>Send</button>
       </div>
     </section>
   )

@@ -62,8 +62,11 @@ export function DiffView({ data }: { data: EventData }) {
   const oldText = data.old_text ?? ''
   const newText = data.new_text ?? ''
   const changes = diffLines(oldText, newText)
+  // Full-file writes send a null line number and are numbered from line one.
   let oldLine = data.line_num ?? 1
   let newLine = data.line_num ?? 1
+  const removed = countLines(oldText)
+  const added = countLines(newText)
 
   return (
     <div className="diff-view">
@@ -93,7 +96,10 @@ export function DiffView({ data }: { data: EventData }) {
         })}
       </div>
       <div className="diff-summary">
-        {countLines(oldText)} removed · {countLines(newText)} added
+        {removed > 0 ? `${removed} removed` : null}
+        {removed > 0 && added > 0 ? ' · ' : null}
+        {added > 0 ? `${added} added` : null}
+        {removed === 0 && added === 0 ? 'No textual changes' : null}
       </div>
     </div>
   )

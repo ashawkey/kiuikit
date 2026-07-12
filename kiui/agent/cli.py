@@ -7,12 +7,17 @@ Usage:
 """
 
 import json
+import os
+import socket
 import sys
+import time
+import uuid
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Annotated, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from kiui.agent.web import WebServer
+    from kiui.agent.hubclient import HubClient
 
 import tyro
 from rich.table import Table
@@ -36,7 +41,8 @@ class Args:
     perm: PermissionMode = PermissionMode.DEFAULT
     resume: str | None = None  # --resume [session_id]
     list: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # --list: show available models and exit
-    web: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False
+    web: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # --web: link this agent to the shared hub
+    hub: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # --hub: run the shared web hub daemon
     web_port: int = 8765
 
 
@@ -44,11 +50,12 @@ class Args:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def get_agent(args: Args) -> "tuple[LLMAgent | None, WebServer | None]":
-    """Create an LLMAgent (and its optional WebServer) from parsed arguments.
+def get_agent(args: Args) -> "tuple[LLMAgent | None, HubClient | None]":
+    """Create an LLMAgent (and its optional hub link) from parsed arguments.
 
-    Returns ``(None, None)`` if the model is not found or the web server
-    cannot be configured.
+    Returns ``(None, None)`` if the model is not found. When ``--web`` is set
+    but no hub is running, the agent is still returned for terminal-only use
+    (the hub link is best-effort).
     """
     console = AgentConsole()
     openai_conf = conf.get("openai", {})
@@ -65,28 +72,47 @@ def get_agent(args: Args) -> "tuple[LLMAgent | None, WebServer | None]":
         return None, None
 
     model_conf = openai_conf[args.model]
-    events = inputs = prompts = cancellation = web_server = None
+    events = inputs = prompts = cancellation = hub_client = None
     if args.web:
-        from kiui.agent.io import CancellationToken, EventHub, InputBroker, PromptBroker
-        from kiui.agent.web import WebServer
+        from kiui.agent.hub import discover_hub
 
-        events = EventHub()
-        inputs = InputBroker(events)
-        prompts = PromptBroker(events)
-        cancellation = CancellationToken(events)
-        try:
-            web_server = WebServer(
+        info = discover_hub(args.web_port)
+        if not info:
+            console.warn(
+                "No reachable kia hub — start one with `kia --hub`. "
+                "Continuing in terminal-only mode."
+            )
+        else:
+            from kiui.agent.io import (
+                CancellationToken, EventHub, InputBroker, PromptBroker,
+            )
+            from kiui.agent.hubclient import HubClient
+
+            events = EventHub()
+            inputs = InputBroker(events)
+            prompts = PromptBroker(events)
+            cancellation = CancellationToken(events)
+            console = AgentConsole(events=events)
+
+            cwd = os.getcwd()
+            meta = {
+                "title": f"{Path(cwd).name} · {args.model}",
+                "cwd": cwd,
+                "model": args.model,
+                "pid": os.getpid(),
+                "host": socket.gethostname(),
+            }
+            hub_client = HubClient(
                 events,
                 inputs,
                 prompts,
                 cancellation,
-                port=args.web_port,
-                token=conf.get("kia_web_token"),
+                host=info.get("host", "127.0.0.1"),
+                port=int(info.get("port", args.web_port)),
+                secret=info.get("secret", ""),
+                session_id=uuid.uuid4().hex,
+                meta=meta,
             )
-        except RuntimeError as exc:
-            console.error(str(exc))
-            return None, None
-        console = AgentConsole(events=events)
 
     agent = LLMAgent(
         model=model_conf.get("model", args.model),
@@ -101,7 +127,7 @@ def get_agent(args: Args) -> "tuple[LLMAgent | None, WebServer | None]":
         prompt_broker=prompts,
         cancellation=cancellation,
     )
-    return agent, web_server
+    return agent, hub_client
 
 
 def _last_user_preview(messages: list) -> str:
@@ -217,20 +243,43 @@ def cmd_list():
     console.table(table)
 
 
+def cmd_hub(args: Args):
+    """Run the shared web hub daemon (owns the public port)."""
+    console = AgentConsole()
+    from kiui.agent.hub import Hub
+
+    try:
+        hub = Hub(port=args.web_port, token=conf.get("kia_web_token"), console=console)
+        hub.start()
+    except Exception as exc:
+        console.error(f"Could not start hub: {exc}")
+        return
+
+    console.system(f"kia hub running at {hub.url}")
+    console.local(f"[bold yellow]Web access token:[/bold yellow] {hub.token}")
+    console.system("Link agents to it from any directory with: kia --web")
+    console.system("Press Ctrl+C to stop the hub.")
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        hub.stop()
+        console.system("Hub stopped.")
+
+
 def cmd_chat(args: Args):
-    agent, web_server = get_agent(args)
+    agent, hub_client = get_agent(args)
     if not agent:
         return
 
-    if web_server is not None:
-        try:
-            web_server.start()
-        except Exception as exc:
-            web_server.stop()
-            agent.console.error(f"Could not start Web UI: {exc}")
-            return
-        agent.console.system(f"Web UI: {web_server.url}")
-        agent.console.local(f"[bold yellow]Web access token:[/bold yellow] {web_server.token}")
+    if hub_client is not None:
+        hub_client.start()
+        agent.console.system(
+            f"Linked to kia hub at {hub_client.host}:{hub_client.port} "
+            f"(session {hub_client.session_id[:8]})"
+        )
 
     try:
         # Handle --resume
@@ -243,8 +292,8 @@ def cmd_chat(args: Args):
 
         agent.chat_loop(resumed_session_id=session_id)
     finally:
-        if web_server is not None:
-            web_server.stop()
+        if hub_client is not None:
+            hub_client.stop()
 
 
 # ---------------------------------------------------------------------------
@@ -282,6 +331,8 @@ def main():
 
     if args.list:
         cmd_list()
+    elif args.hub:
+        cmd_hub(args)
     else:
         cmd_chat(args)
 

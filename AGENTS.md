@@ -111,6 +111,9 @@ A self-contained **terminal AI agent** (comparable to Claude Code / Codex CLI). 
 | `ui.py` | Rich-based terminal UI (`AgentConsole`) |
 | `models.py` | Model profile resolution from `kiui.conf` |
 | `permissions.py` | `PermissionMode` enum (auto/default/strict) + hard safety guard |
+| `io.py` | Thread-safe shared I/O primitives (`EventHub`, `InputBroker`, `PromptBroker`, `CancellationToken`) bridging terminal + web |
+| `hub.py` | `kia --hub` shared web hub daemon: owns the public port, browser auth, session registry, multiplexes many agents into one UI |
+| `hubclient.py` | Agent-side client that links a `kia --web` terminal agent to the hub (registers a session, forwards events, injects browser actions) |
 | `context.py` | Context window management (pruning, LLM compaction) |
 | `subagent.py` | Sub-agent spawning |
 | `skills.py` | Skill pack loading from `.kia/skills/` |

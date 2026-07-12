@@ -22,11 +22,28 @@ export type Prompt = {
 export type StateMessage = {
   type: 'state'
   csrf: string
+  session: string
   stream_id: string
   latest_seq: number
+  oldest_seq: number
+  replay_truncated: boolean
   pending: number
   operation_id: string | null
   prompt: Prompt | null
+}
+
+export type SessionSummary = {
+  id: string
+  title: string
+  cwd: string
+  model: string
+  host: string
+}
+
+export type SessionsMessage = {
+  type: 'sessions'
+  csrf?: string
+  sessions: SessionSummary[]
 }
 
 export type AgentEvent = {
@@ -36,6 +53,8 @@ export type AgentEvent = {
   error?: string
   ok?: boolean
   csrf?: string
+  session?: string
+  sessions?: SessionSummary[]
   stream_id?: string
   latest_seq?: number
   pending?: number

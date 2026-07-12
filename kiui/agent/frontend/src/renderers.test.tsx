@@ -32,6 +32,12 @@ describe('content renderers', () => {
     expect(screen.getByText('new').closest('.diff-line')).toHaveClass('added')
   })
 
+  it('describes a new-file diff without an empty removal count', () => {
+    render(<DiffView data={{ path: 'new.py', old_text: '', new_text: 'one\ntwo\n', line_num: null }} />)
+    expect(screen.getByText('2 added')).toBeInTheDocument()
+    expect(screen.queryByText(/removed/)).toBeNull()
+  })
+
   it('renders a tool call as a compact code line without a label head', () => {
     const { container } = render(<EventCard event={makeEvent('tool_start', 'exec_command(ls)')} />)
     expect(container.querySelector('.event-head')).toBeNull()
