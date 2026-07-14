@@ -222,6 +222,8 @@ Skills are modular prompt packs stored in `.kia/skills/<name>/SKILL.md`. Each sk
 
 The `SKILL.md` should describe what the skill does and provide specialized instructions. When relevant, the model invokes `load_skill` to load the full prompt into context.
 
+For compatibility with other agent tools that share this convention, skills are also discovered from `.codex/skills/`, `.claude/skills/`, and `.agents/skills/`. When the same skill name appears in more than one directory, `.kia` wins, then `.codex`, `.claude`, `.agents`.
+
 ## Sessions
 
 Sessions are automatically saved after each round (throttled to ≤ once per 30 seconds) to `.kia/sessions/<session_id>.json`. Use `--resume` to pick up where you left off, or `/clear` to start a fresh session.

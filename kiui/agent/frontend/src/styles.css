@@ -111,7 +111,9 @@
 
 * { box-sizing: border-box; }
 /* Base scale bumped ~10%; all sizing below is in rem so it scales uniformly. */
-html { background: var(--bg); }
+/* Disable mobile browsers' automatic text inflation, which otherwise scales
+   individual lines inconsistently (e.g. long diff lines rendered larger). */
+html { background: var(--bg); -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body { margin: 0; min-width: 320px; min-height: 100dvh; overflow-x: clip; background: var(--bg); color: var(--text); }
 button, input, textarea { font: inherit; }
 button { color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }

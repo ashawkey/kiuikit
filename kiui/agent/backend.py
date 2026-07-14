@@ -1202,13 +1202,16 @@ class LLMAgent:
         )
 
     def _cmd_skills(self):
-        """List installed skills from .kia/skills/."""
+        """List installed skills discovered from known agent dirs."""
         if not self.skills:
-            skills_dir = (Path(self.tool_executor._work_dir) if self.tool_executor._work_dir else Path.cwd()) / ".kia" / "skills"
+            from kiui.agent.skills import SKILL_DIRS
+            base = Path(self.tool_executor._work_dir) if self.tool_executor._work_dir else Path.cwd()
+            skills_dir = base / SKILL_DIRS[0] / "skills"
+            searched = ", ".join(f"{d}/skills/" for d in SKILL_DIRS)
             self.console.print(
                 f"[bold blue]No skills installed.[/bold blue]\n"
                 f"\n"
-                f"  Skills are folders under [cyan]{skills_dir}[/cyan] each containing a [cyan]SKILL.md[/cyan] file.\n"
+                f"  Skills are folders each containing a [cyan]SKILL.md[/cyan] file, searched in: [cyan]{searched}[/cyan]\n"
                 f"\n"
                 f"  [bold]Example:[/bold]\n"
                 f"    [cyan]{skills_dir / 'git-workflow' / 'SKILL.md'}[/cyan]\n"

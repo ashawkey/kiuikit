@@ -1166,7 +1166,7 @@ class ToolExecutor:
 
         if not self._skills:
             return {
-                "error": "No skills installed. Create a folder under .kia/skills/<name>/ with a SKILL.md file.",
+                "error": "No skills installed. Create a folder under .kia/skills/<name>/ (or .codex/.claude/.agents) with a SKILL.md file.",
                 "success": False,
             }
 
