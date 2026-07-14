@@ -893,7 +893,7 @@ class LLMAgent:
             preview = rounds[actual_target - 1]["preview"]
             self.console.print(f"  Will roll back to after round [cyan]{actual_target}[/cyan] — {preview}")
         else:
-            self.console.print(f"  Will roll back to [cyan]initial state[/cyan] (before any messages)")
+            self.console.print("  Will roll back to [cyan]initial state[/cyan] (before any messages)")
 
         # Show what will be reverted
         reverted_rounds = list(range(target_round, len(rounds) + 1))
@@ -1048,12 +1048,12 @@ class LLMAgent:
             lines = [
                 f"[bold blue]Current model:[/bold blue] [cyan]{self.model}[/cyan]"
                 + (f" (alias: {self.model_alias})" if self.model_alias else ""),
-                f"[bold blue]Available models:[/bold blue]",
+                "[bold blue]Available models:[/bold blue]",
             ]
             for name, mc in openai_conf.items():
                 marker = " [green]◀[/green]" if name == self.model_alias else ""
                 lines.append(f"  [cyan]{name}[/cyan] → {mc.get('model', name)}{marker}")
-            lines.append(f"\n  Usage: [cyan]/model <name>[/cyan]")
+            lines.append("\n  Usage: [cyan]/model <name>[/cyan]")
             self.console.print("\n".join(lines))
             return
 

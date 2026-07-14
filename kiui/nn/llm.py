@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, Union, Literal
+from typing import List, Optional, Tuple
 
 import torch
 import torch.nn as nn

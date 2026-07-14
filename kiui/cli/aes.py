@@ -4,9 +4,8 @@ ref: https://github.com/christophschuhmann/improved-aesthetic-predictor/
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
-from transformers import CLIPModel, CLIPTokenizer, CLIPProcessor
+from transformers import CLIPModel, CLIPProcessor
 
 from kiui.utils import load_file_from_url
 

@@ -9,7 +9,7 @@ import torch.nn.functional as F
 
 try:
     import nvdiffrast.torch as dr
-except Exception as e:
+except Exception:
     print('[WARN] try to install nvdiffrast with `pip install git+https://github.com/NVlabs/nvdiffrast`')
     os.system('pip install git+https://github.com/NVlabs/nvdiffrast')
     import nvdiffrast.torch as dr
@@ -17,7 +17,7 @@ except Exception as e:
 GUI_AVAILABLE = True
 try:
     import dearpygui.dearpygui as dpg
-except Exception as e:
+except Exception:
     print('[WARN] cannot import dearpygui, assume running with --wogui')
     GUI_AVAILABLE = False
 
@@ -32,7 +32,7 @@ class GUI:
         self.W = opt.W
         self.H = opt.H
         if not GUI_AVAILABLE and not opt.wogui:
-            print(f'[WARN] cannot import dearpygui, assume running with --wogui')
+            print('[WARN] cannot import dearpygui, assume running with --wogui')
         self.wogui = not GUI_AVAILABLE or opt.wogui # disable gui and run in cmd
         self.cam = OrbitCamera(opt.W, opt.H, r=opt.radius, fovy=opt.fovy)
         self.bg_color = torch.ones(3, dtype=torch.float32).cuda() # default white bg

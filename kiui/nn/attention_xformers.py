@@ -7,8 +7,6 @@
 #   https://github.com/facebookresearch/dino/blob/master/vision_transformer.py
 #   https://github.com/rwightman/pytorch-image-models/tree/master/timm/models/vision_transformer.py
 
-import os
-import warnings
 
 import torch
 from torch import nn

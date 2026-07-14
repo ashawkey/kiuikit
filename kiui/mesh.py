@@ -61,7 +61,7 @@ class Mesh:
         self.ori_scale = 1
     
     def __repr__(self):
-        out = f'<kiui.mesh.Mesh>'
+        out = '<kiui.mesh.Mesh>'
         if self.v is not None: out += f' v={self.v.shape}'
         if self.f is not None: out += f' f={self.f.shape}'
         if self.vc is not None: out += f' vc={self.vc.shape}'
@@ -343,7 +343,7 @@ class Mesh:
                     
             # still not found albedo_path, or the path doesn't exist
             if albedo_path is None or not os.path.exists(albedo_path):
-                print(f"[INFO] load obj mesh: failed to load texture!")
+                print("[INFO] load obj mesh: failed to load texture!")
                 mesh.albedo = None
             else:
                 albedo = cv2.imread(albedo_path, cv2.IMREAD_UNCHANGED)
@@ -437,24 +437,24 @@ class Mesh:
                     mesh.albedo = torch.tensor(texture[..., :3], dtype=torch.float32, device=device).contiguous()
                     print(f"[INFO] load trimesh: load texture: {texture.shape}")
                 # there really can be lots of mysterious errors...
-                except Exception as e:
+                except Exception:
                     mesh.albedo = None
-                    print(f"[INFO] load trimesh: failed to load texture.")
+                    print("[INFO] load trimesh: failed to load texture.")
             else:
                 mesh.albedo = None
-                print(f"[INFO] load trimesh: failed to load texture.")
+                print("[INFO] load trimesh: failed to load texture.")
 
         vertices = _mesh.vertices
 
         try:
             texcoords = _mesh.visual.uv
             texcoords[:, 1] = 1 - texcoords[:, 1]
-        except Exception as e:
+        except Exception:
             texcoords = None
 
         try:
             normals = _mesh.vertex_normals
-        except Exception as e:
+        except Exception:
             normals = None
 
         # trimesh only support vertex uv...
@@ -679,7 +679,7 @@ class Mesh:
         """
 
         if self.albedo is not None:
-            print(f'[WARN] ply format does not support exporting texture, will ignore!')
+            print('[WARN] ply format does not support exporting texture, will ignore!')
 
         v_np = self.v.detach().cpu().numpy()
         f_np = self.f.detach().cpu().numpy()
@@ -909,7 +909,7 @@ class Mesh:
                 for v in vn_np:
                     fp.write(f"vn {v[0]} {v[1]} {v[2]} \n")
 
-            fp.write(f"usemtl defaultMat \n")
+            fp.write("usemtl defaultMat \n")
             for i in range(len(f_np)):
                 fp.write(
                     f'f {f_np[i, 0] + 1}/{ft_np[i, 0] + 1 if ft_np is not None else ""}/{fn_np[i, 0] + 1 if fn_np is not None else ""} \
@@ -918,13 +918,13 @@ class Mesh:
                 )
 
         with open(mtl_path, "w") as fp:
-            fp.write(f"newmtl defaultMat \n")
-            fp.write(f"Ka 1 1 1 \n")
-            fp.write(f"Kd 1 1 1 \n")
-            fp.write(f"Ks 0 0 0 \n")
-            fp.write(f"Tr 1 \n")
-            fp.write(f"illum 1 \n")
-            fp.write(f"Ns 0 \n")
+            fp.write("newmtl defaultMat \n")
+            fp.write("Ka 1 1 1 \n")
+            fp.write("Kd 1 1 1 \n")
+            fp.write("Ks 0 0 0 \n")
+            fp.write("Tr 1 \n")
+            fp.write("illum 1 \n")
+            fp.write("Ns 0 \n")
             if self.albedo is not None:
                 fp.write(f"map_Kd {os.path.basename(albedo_path)} \n")
             if self.metallicRoughness is not None:

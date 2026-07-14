@@ -9,7 +9,6 @@ from torch.nn import functional as F
 from torch.nn.modules.batchnorm import _BatchNorm
 
 import numpy as np
-from PIL import Image
 
 from huggingface_hub import hf_hub_download
 

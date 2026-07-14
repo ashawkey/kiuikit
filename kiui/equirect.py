@@ -174,7 +174,7 @@ def main():
     if args.path.endswith('.exr'):
         equirect = tonemap_hdr_to_ldr(equirect)
         kiui.write_image(os.path.join(args.output, f'{os.path.basename(args.path).split(".")[0]}_ldr.jpg'), equirect)
-        print(f"[INFO] tonemapped to LDR:")
+        print("[INFO] tonemapped to LDR:")
         kiui.lo(equirect)
     
     equirect = torch.from_numpy(equirect).permute(2, 0, 1)  # [3, Hp, Wp]
@@ -186,7 +186,7 @@ def main():
     yaw = torch.tensor([np.deg2rad(args.yaw)])
     
     images = render_pinhole(equirect, height, width, vfov, roll, pitch, yaw)
-    print(f"[INFO] rendered pinhole images:")
+    print("[INFO] rendered pinhole images:")
     kiui.lo(images)
 
     os.makedirs(args.output, exist_ok=True)

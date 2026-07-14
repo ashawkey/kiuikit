@@ -4,9 +4,7 @@ import math
 import json
 import tqdm
 import numpy as np
-import matplotlib.pyplot as plt
 import dearpygui.dearpygui as dpg
-from scipy.spatial.transform import Rotation
 
 from kiui.cam import OrbitCamera
 

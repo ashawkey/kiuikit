@@ -10,7 +10,7 @@ from contextlib import contextmanager, nullcontext
 
 ### blender env 
 import bpy
-from mathutils import Vector, Matrix
+from mathutils import Vector
 
 # print('=== BPY VERSION ===', bpy.app.version_string)
 

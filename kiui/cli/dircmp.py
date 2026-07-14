@@ -3,7 +3,6 @@
 
 import os
 
-import rich
 from rich.console import Console
 
 import filecmp
@@ -19,16 +18,16 @@ def report_difference(dcmp):
     # common
     commons = dcmp.common_files
     if len(commons) != 0:
-        console.print(f'[Common] ' + ', '.join(commons))
+        console.print('[Common] ' + ', '.join(commons))
     
     # only
     left_only = dcmp.left_only
     if len(left_only) != 0:
-        console.print(f'[Left Only] ' + ', '.join(left_only), style='green')
+        console.print('[Left Only] ' + ', '.join(left_only), style='green')
 
     right_only = dcmp.right_only
     if len(right_only) != 0:
-        console.print(f'[Right Only] ' + ', '.join(right_only), style='blue')
+        console.print('[Right Only] ' + ', '.join(right_only), style='blue')
     
     # diff
     for name in dcmp.diff_files:

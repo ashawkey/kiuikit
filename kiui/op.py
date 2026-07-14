@@ -3,7 +3,6 @@ import torch
 import numpy as np
 
 from kiui.typing import *
-from kiui.grid_put import grid_put
 
 # torch / numpy math utils
 def dot(x: Union[Tensor, ndarray], y: Union[Tensor, ndarray]) -> Union[Tensor, ndarray]:

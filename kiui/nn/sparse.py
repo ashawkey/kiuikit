@@ -4,7 +4,6 @@ from typing import List, Tuple, Union
 
 import torch
 from torch import nn
-import torch.nn.functional as F
 
 ''' 
 # install from source (modified from the original repo to make installation simpler)
@@ -12,10 +11,9 @@ sudo apt install libsparsehash-dev
 pip install git+https://github.com/ashawkey/torchsparse
 '''
 
-import torchsparse
 from torchsparse import SparseTensor
 from torchsparse import nn as spnn
-from torchsparse.utils.collate import sparse_collate, sparse_collate_fn
+from torchsparse.utils.collate import sparse_collate
 from torchsparse.utils.quantize import sparse_quantize
 
 class ToDenseBEVConvolution(nn.Module):

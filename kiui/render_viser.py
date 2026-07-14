@@ -7,7 +7,7 @@ import numpy as np
 try:
     import viser
     import viser.transforms as tf
-except Exception as e:
+except Exception:
     print('[WARN] try to install viser with `pip install viser`')
     os.system('pip install viser')
     import viser

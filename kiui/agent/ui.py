@@ -18,6 +18,7 @@ from rich.table import Table
 from rich.theme import Theme
 
 if TYPE_CHECKING:
+    from rich.text import Text
     from kiui.agent.io import EventHub, PromptBroker
 
 # Custom questionary style that blends with the CLI aesthetic

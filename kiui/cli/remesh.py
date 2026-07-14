@@ -1,13 +1,12 @@
 """
 This code is heavily borrowed from: https://github.com/Profactor/continuous-remeshing
 """
-import os
 import tqdm
 import tyro
 import trimesh
 import numpy as np
 from dataclasses import dataclass
-from typing import Tuple, Literal, Dict, Optional
+from typing import Tuple
 
 import torch
 import torch.nn as nn
@@ -16,7 +15,6 @@ import torch.nn.functional as F
 import nvdiffrast.torch as dr
 import torch_scatter
 
-import kiui
 from kiui.mesh import Mesh
 from kiui.cam import orbit_camera, get_perspective
 

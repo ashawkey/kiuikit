@@ -1,5 +1,4 @@
 import os
-import sys
 import glob
 import tqdm
 import json
@@ -77,7 +76,7 @@ def lo(*xs, verbose=0):
         try:
             name = varname.argname(f"xs[{i}]", func=lo)
         except:
-            name = f"UNKNOWN"
+            name = "UNKNOWN"
         _lo(x, name)
 
 
@@ -101,7 +100,7 @@ def seed_everything(seed=42, verbose=False, strict=False):
         random.seed(seed)
         if verbose: print(f'[INFO] set random.seed = {seed}')
     else:
-        if verbose: print(f'[INFO] random not imported, skip setting seed')
+        if verbose: print('[INFO] random not imported, skip setting seed')
 
     # assume numpy is imported as np
     if is_imported('np'):
@@ -109,7 +108,7 @@ def seed_everything(seed=42, verbose=False, strict=False):
         np.random.seed(seed)
         if verbose: print(f'[INFO] set np.random.seed = {seed}')
     else:
-        if verbose: print(f'[INFO] numpy not imported, skip setting seed')
+        if verbose: print('[INFO] numpy not imported, skip setting seed')
         
     if is_imported('torch'):
         import torch
@@ -121,9 +120,9 @@ def seed_everything(seed=42, verbose=False, strict=False):
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
             torch.use_deterministic_algorithms(True)
-            if verbose: print(f'[INFO] set strict deterministic mode for torch.')
+            if verbose: print('[INFO] set strict deterministic mode for torch.')
     else:
-        if verbose: print(f'[INFO] torch not imported, skip setting seed')
+        if verbose: print('[INFO] torch not imported, skip setting seed')
 
 
 def read_json(path):

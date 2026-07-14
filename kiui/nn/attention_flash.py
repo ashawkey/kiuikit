@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import kiui
 
 try:
     from flash_attn import flash_attn_func, flash_attn_varlen_func

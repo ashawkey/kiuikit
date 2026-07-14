@@ -5,7 +5,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
-import numpy as np
 
 from kiui.nn.attention_flash import SelfAttention, CrossAttention
 

@@ -1,11 +1,8 @@
 # eval the clip-similarity for an input image and a geneated mesh
-import cv2
 import torch
 import numpy as np
-from torchvision import transforms as T
-from transformers import CLIPModel, CLIPTokenizer, CLIPProcessor
+from transformers import CLIPModel, CLIPProcessor
 
-import kiui
 from kiui.render import GUI
 
 class CLIP:
@@ -39,7 +36,6 @@ class CLIP:
 
 
 if __name__ == '__main__':
-    import os
     import tqdm
     import argparse
 
