@@ -118,6 +118,7 @@ class LLMAgent:
         context_length: int | None = None,
         permission_mode: PermissionMode = PermissionMode.DEFAULT,
         exec_mode: bool = False,
+        is_subagent: bool = False,
         work_dir: str | None = None,
         console: AgentConsole | None = None,
         events: EventHub | None = None,
@@ -170,8 +171,11 @@ class LLMAgent:
         self.skills = discover_skills(work_dir)
 
         # built-in system prompt and tools
-        self.system_prompt = build_system_prompt(exec_mode=exec_mode, work_dir=work_dir, skills=self.skills)
-        self.tools = get_tool_definitions()
+        # A sub-agent must not spawn further sub-agents: spawning stays a
+        # single, sequential level deep and always returns.
+        self.is_subagent = is_subagent
+        self.system_prompt = build_system_prompt(exec_mode=exec_mode, is_subagent=is_subagent, work_dir=work_dir, skills=self.skills)
+        self.tools = get_tool_definitions(include_subagent=not is_subagent)
 
         self.permissions = PermissionController(
             mode=permission_mode,
@@ -179,8 +183,13 @@ class LLMAgent:
             work_dir=work_dir,
         )
 
-        # subagent manager (only if we have a model_alias for spawning children)
-        self.subagent_manager = SubagentManager(model_alias=model_alias, console=self.console) if model_alias else None
+        # subagent manager (only for top-level agents with a model_alias;
+        # sub-agents get None so they cannot recursively spawn children)
+        self.subagent_manager = (
+            SubagentManager(model_alias=model_alias, console=self.console)
+            if model_alias and not is_subagent
+            else None
+        )
         self.changes: ChangeTracker | None = None
         self.tool_executor = ToolExecutor(
             console=self.console,

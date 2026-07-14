@@ -180,9 +180,13 @@ def apply_edit(content: str, old_text: str, new_text: str, replace_all: bool) ->
 
 
 
-def get_tool_definitions() -> list[dict[str, Any]]:
-    """Return OpenAI-format tool definitions for all built-in tools."""
-    return [
+def get_tool_definitions(include_subagent: bool = True) -> list[dict[str, Any]]:
+    """Return OpenAI-format tool definitions for all built-in tools.
+
+    Set *include_subagent* to False for sub-agents, which must not be able to
+    spawn further sub-agents (keeps spawning a single, sequential level deep).
+    """
+    definitions = [
         {
             "type": "function",
             "function": {
@@ -464,6 +468,13 @@ def get_tool_definitions() -> list[dict[str, Any]]:
             },
         },
     ]
+
+    if not include_subagent:
+        definitions = [
+            d for d in definitions
+            if d.get("function", {}).get("name") != "spawn_subagent"
+        ]
+    return definitions
 
 
 class ToolExecutor:

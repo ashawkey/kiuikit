@@ -9,7 +9,7 @@ from pathlib import Path
 from kiui.agent.skills import discover_skills, build_skills_prompt_section
 
 
-def build_system_prompt(exec_mode: bool = False, work_dir: str | None = None, skills: dict | None = None) -> str:
+def build_system_prompt(exec_mode: bool = False, is_subagent: bool = False, work_dir: str | None = None, skills: dict | None = None) -> str:
     """Build the complete system prompt from ordered sections.
 
     If *exec_mode* is True the prompt tells the agent it is running
@@ -66,8 +66,9 @@ You are running as an autonomous sub-agent. There is NO user to interact with.
 - Avoid unneeded complexity. Keep changes minimal and consistent with existing style.
 - Do not attempt to fix unrelated bugs or broken tests.""")
 
-    # 6. Sub-agents
-    sections.append("""## Sub-Agents
+    # 6. Sub-agents (top-level agents only; sub-agents cannot spawn children)
+    if not is_subagent:
+        sections.append("""## Sub-Agents
 You can spawn a sub-agent to delegate work:
 - **spawn_subagent**: runs a task in a separate process and returns the result when done.
 Use sub-agents when you want to delegate a self-contained task (e.g., research, summarization).""")

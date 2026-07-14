@@ -63,6 +63,7 @@ class SubagentManager:
                 stream=False,
                 permission_mode=PermissionMode.AUTO,
                 exec_mode=True,
+                is_subagent=True,
                 work_dir=work_dir,
                 console=self.console,
             )
