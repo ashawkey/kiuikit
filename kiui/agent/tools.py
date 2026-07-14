@@ -939,12 +939,15 @@ class ToolExecutor:
         file_glob: str | None,
         case_insensitive: bool,
     ) -> dict[str, Any]:
-        """Search using ripgrep for performance."""
+        """Search using ripgrep with structured JSON output.
+
+        JSON mode avoids fragile ``file:line:text`` delimiter parsing: paths,
+        line numbers and match text are explicit fields, so filenames containing
+        ``:`` and matched text containing ``:`` are handled correctly, as is the
+        single-file case (where rg's text output omits the filename prefix).
+        """
         cmd = [
-            "rg", "--no-heading", "--line-number",
-            "--max-columns", "200",
-            "--max-columns-preview",
-            "--color", "never",
+            "rg", "--json",
             "--path-separator", "/",
         ]
         if case_insensitive:
@@ -969,26 +972,36 @@ class ToolExecutor:
             stderr = _decode_bytes(result.stderr).strip()
             return {"error": f"ripgrep error: {stderr}", "success": False}
 
-        stdout = _decode_bytes(result.stdout)
         matches = []
-        for raw_line in stdout.splitlines():
+        for raw_line in _decode_bytes(result.stdout).splitlines():
             if len(matches) >= MAX_GREP_MATCHES:
                 break
-            # rg output: file:line:text
-            parts = raw_line.split(":", 2)
-            if len(parts) < 3:
-                continue
-            file_str, lineno_str, text = parts
             try:
-                lineno = int(lineno_str)
-            except ValueError:
+                event = json.loads(raw_line)
+            except json.JSONDecodeError:
                 continue
-            # make path relative to base when possible
-            try:
-                rel = str(Path(file_str).relative_to(base))
-            except ValueError:
+            if event.get("type") != "match":
+                continue
+            data = event["data"]
+            # ripgrep emits {"text": ...} for valid UTF-8 or {"bytes": <base64>}
+            # for non-UTF-8 paths/lines; skip the latter rather than guess.
+            path_obj = data["path"]
+            if "text" not in path_obj:
+                continue
+            file_str = path_obj["text"]
+            lines_obj = data["lines"]
+            text = lines_obj.get("text", "").rstrip("\n")
+
+            # make path relative to base when base is a directory; when base is
+            # a single file, rg reports that file's own path, so keep it as-is.
+            if base.is_dir():
+                try:
+                    rel = str(Path(file_str).relative_to(base))
+                except ValueError:
+                    rel = file_str
+            else:
                 rel = file_str
-            matches.append({"file": rel, "line": lineno, "text": text[:200]})
+            matches.append({"file": rel, "line": data["line_number"], "text": text[:200]})
 
         return {
             "matches": matches,

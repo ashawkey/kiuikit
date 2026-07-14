@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import datetime
 import os
 import time
 from pathlib import Path
+from typing import AsyncGenerator, Iterable
 
+from filelock import FileLock
 from prompt_toolkit import PromptSession
 from prompt_toolkit.application import run_in_terminal
 from prompt_toolkit.completion import Completer, Completion
@@ -245,6 +248,35 @@ class NonEmptyInputValidator(Validator):
             raise ValidationError(message="Please enter a message.")
 
 
+class SharedFileHistory(FileHistory):
+    """``FileHistory`` safe for multiple concurrent ``kia`` agents.
+    """
+
+    def __init__(self, filename):
+        super().__init__(filename)
+        self._lock = FileLock(f"{filename}.lock")
+
+    def store_string(self, string: str) -> None:
+        payload = [f"\n# {datetime.datetime.now()}\n"]
+        payload.extend(f"+{line}\n" for line in string.split("\n"))
+        data = "".join(payload).encode("utf-8")
+        with self._lock:
+            with open(self.filename, "ab") as f:
+                f.write(data)
+
+    def load_history_strings(self) -> Iterable[str]:
+        with self._lock:
+            return super().load_history_strings()
+
+    async def load(self) -> AsyncGenerator[str, None]:
+        # prompt_toolkit calls load() before every prompt. Drop the cache so we
+        # re-read entries appended by other agents since the last prompt.
+        self._loaded = False
+        self._loaded_strings = []
+        async for item in super().load():
+            yield item
+
+
 class TerminalInput:
     def __init__(
         self,
@@ -259,7 +291,7 @@ class TerminalInput:
             "": "ansiyellow",
         })
 
-        self.history = FileHistory(str(history_path)) if history_path else None
+        self.history = SharedFileHistory(str(history_path)) if history_path else None
         self._session = PromptSession(
             multiline=True,
             style=self.style,
