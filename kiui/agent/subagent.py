@@ -58,6 +58,9 @@ class SubagentManager:
                 base_url=model_conf.get("base_url", ""),
                 model_alias=self.model_alias,
                 verbose=False,
+                # Sub-agents share the parent console; a nested rich.Live would
+                # clash with the parent's, so they render responses statically.
+                stream=False,
                 permission_mode=PermissionMode.AUTO,
                 exec_mode=True,
                 work_dir=work_dir,

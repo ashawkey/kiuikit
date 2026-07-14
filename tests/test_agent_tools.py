@@ -147,6 +147,18 @@ def test_multi_edit_sequential(tmp_path):
     assert res["success"] and f.read_text() == "baz\n"
 
 
+def test_multi_edit_rejects_non_dict_edit(tmp_path):
+    """A malformed edit (not an object) fails loudly with a clear message
+    instead of raising an opaque AttributeError, and leaves the file untouched."""
+    f = tmp_path / "m.py"
+    f.write_text("keep me\n")
+    te = ToolExecutor(work_dir=str(tmp_path))
+    res = te._multi_edit(str(f), edits=["not-a-dict"])
+    assert not res["success"]
+    assert "must be an object" in res["error"]
+    assert f.read_text() == "keep me\n"
+
+
 def test_edit_file_tolerant_on_disk(tmp_path):
     f = tmp_path / "m.py"
     f.write_text("hello   \nworld\n")

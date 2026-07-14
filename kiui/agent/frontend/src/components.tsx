@@ -16,7 +16,7 @@ export function SessionSidebar({
     <nav className="sidebar" aria-label="Agent sessions">
       <div className="sidebar-title">Agents</div>
       {sessions.length === 0 ? (
-        <p className="sidebar-empty">No agents connected. Run <code>kia --web</code>.</p>
+        <p className="sidebar-empty">No agents connected. Run <code>kia</code>.</p>
       ) : (
         <ul className="session-list">
           {sessions.map((session) => {
@@ -53,6 +53,30 @@ export function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle: () =>
       title={goingLight ? 'Light theme' : 'Dark theme'}
     >
       {goingLight ? '☀' : '☾'}
+    </button>
+  )
+}
+
+// Scroll-to-top affordance in the fixed top controls. Hidden until the user
+// has scrolled down a meaningful amount so it never clutters the initial view.
+export function ScrollTopButton({ onClick }: { onClick: () => void }) {
+  const [visible, setVisible] = useState(false)
+  useEffect(() => {
+    const onScroll = () => setVisible(window.scrollY > 400)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+  if (!visible) return null
+  return (
+    <button
+      className="scroll-top"
+      type="button"
+      onClick={onClick}
+      aria-label="Scroll to top"
+      title="Scroll to top"
+    >
+      ↑
     </button>
   )
 }
@@ -103,7 +127,7 @@ export function Thinking() {
     return () => window.clearInterval(id)
   }, [])
   return (
-    <div className="thinking" aria-label="working">
+    <div className="working" aria-label="working">
       <span /><span /><span /><em>Working… {seconds}s</em>
     </div>
   )
@@ -214,15 +238,20 @@ export function PromptDialog({
 export function Composer({
   pending,
   operationId,
+  draft,
+  onDraftChange,
   onSend,
   onCancel,
 }: {
   pending: number
   operationId: string | null
+  draft: string
+  onDraftChange: (text: string) => void
   onSend: (text: string) => void
   onCancel: () => void
 }) {
-  const [text, setText] = useState('')
+  const text = draft
+  const setText = onDraftChange
   const field = useRef<HTMLTextAreaElement>(null)
   const shell = useRef<HTMLElement>(null)
 

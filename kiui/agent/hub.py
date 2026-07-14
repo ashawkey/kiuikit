@@ -1,8 +1,8 @@
 """Shared web hub for kia terminal agents.
 
 A single ``kia --hub`` process owns the public port (the one exposed via a
-Cloudflare tunnel). Every ``kia --web`` agent stays terminal-first and, in
-addition, connects to this hub over a loopback WebSocket to register a
+Cloudflare tunnel). Every auto-linked terminal agent stays terminal-first and,
+in addition, connects to this hub over a loopback WebSocket to register a
 *session*. The hub multiplexes all registered sessions into one browser UI,
 each shown as a separate tab.
 
@@ -57,8 +57,8 @@ DEFAULT_HUB_PORT = 8765
 DISCOVERY_INFO_RETRIES = 10
 DISCOVERY_INFO_RETRY_DELAY = 0.05
 
-# Discovery file: written by the hub, read by every ``kia --web`` agent so it
-# can find the hub's port and the shared internal secret without config edits.
+# Discovery file: written by the hub, read by terminal agents so they can find
+# the hub's port and the shared internal secret without config edits.
 HUB_INFO_PATH = Path.home() / ".kia" / "hub.json"
 
 

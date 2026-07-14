@@ -38,10 +38,11 @@ class Args:
     """Terminal-based AI agent with tool-use, web access, and shell execution."""
     model: str = ""
     verbose: bool = False
+    stream: bool = True  # stream the response token-by-token as it is generated
+
     perm: PermissionMode = PermissionMode.DEFAULT
     resume: str | None = None  # --resume [session_id]
     list: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # --list: show available models and exit
-    web: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # --web: link this agent to the shared hub
     hub: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # --hub: run the shared web hub daemon
     web_port: int = 8765
 
@@ -53,9 +54,8 @@ class Args:
 def get_agent(args: Args) -> "tuple[LLMAgent | None, HubClient | None]":
     """Create an LLMAgent (and its optional hub link) from parsed arguments.
 
-    Returns ``(None, None)`` if the model is not found. When ``--web`` is set
-    but no hub is running, the agent is still returned for terminal-only use
-    (the hub link is best-effort).
+    Returns ``(None, None)`` if the model is not found. If a reachable hub is
+    running, the agent links to it automatically; otherwise it runs terminal-only.
     """
     console = AgentConsole()
     openai_conf = conf.get("openai", {})
@@ -73,46 +73,41 @@ def get_agent(args: Args) -> "tuple[LLMAgent | None, HubClient | None]":
 
     model_conf = openai_conf[args.model]
     events = inputs = prompts = cancellation = hub_client = None
-    if args.web:
-        from kiui.agent.hub import discover_hub
 
-        info = discover_hub(args.web_port)
-        if not info:
-            console.warn(
-                "No reachable kia hub — start one with `kia --hub`. "
-                "Continuing in terminal-only mode."
-            )
-        else:
-            from kiui.agent.io import (
-                CancellationToken, EventHub, InputBroker, PromptBroker,
-            )
-            from kiui.agent.hubclient import HubClient
+    from kiui.agent.hub import discover_hub
 
-            events = EventHub()
-            inputs = InputBroker(events)
-            prompts = PromptBroker(events)
-            cancellation = CancellationToken(events)
-            console = AgentConsole(events=events)
+    info = discover_hub(args.web_port)
+    if info:
+        from kiui.agent.io import (
+            CancellationToken, EventHub, InputBroker, PromptBroker,
+        )
+        from kiui.agent.hubclient import HubClient
 
-            cwd = os.getcwd()
-            meta = {
-                "title": f"{Path(cwd).name} · {args.model}",
-                "cwd": cwd,
-                "model": args.model,
-                "pid": os.getpid(),
-                "host": socket.gethostname(),
-            }
-            hub_client = HubClient(
-                events,
-                inputs,
-                prompts,
-                cancellation,
-                host=info.get("host", "127.0.0.1"),
-                port=int(info.get("port", args.web_port)),
-                secret=info.get("secret", ""),
-                session_id=uuid.uuid4().hex,
-                meta=meta,
-            )
+        events = EventHub()
+        inputs = InputBroker(events)
+        prompts = PromptBroker(events)
+        cancellation = CancellationToken(events)
+        console = AgentConsole(events=events)
+
+        cwd = os.getcwd()
+        meta = {
+            "title": f"{Path(cwd).name} · {args.model}",
+            "cwd": cwd,
+            "model": args.model,
+            "pid": os.getpid(),
+            "host": socket.gethostname(),
+        }
+        hub_client = HubClient(
+            events,
+            inputs,
+            prompts,
+            cancellation,
+            host=info.get("host", "127.0.0.1"),
+            port=int(info.get("port", args.web_port)),
+            secret=info.get("secret", ""),
+            session_id=uuid.uuid4().hex,
+            meta=meta,
+        )
 
     agent = LLMAgent(
         model=model_conf.get("model", args.model),
@@ -120,6 +115,8 @@ def get_agent(args: Args) -> "tuple[LLMAgent | None, HubClient | None]":
         base_url=model_conf.get("base_url", ""),
         model_alias=args.model,
         verbose=args.verbose,
+        stream=args.stream,
+
         permission_mode=args.perm,
         console=console,
         events=events,
@@ -257,7 +254,7 @@ def cmd_hub(args: Args):
 
     console.system(f"kia hub running at {hub.url}")
     console.local(f"[bold yellow]Web access token:[/bold yellow] {hub.token}")
-    console.system("Link agents to it from any directory with: kia --web")
+    console.system("Agents started with `kia` will auto-link while this hub is running.")
     console.system("Press Ctrl+C to stop the hub.")
     try:
         while True:
@@ -323,7 +320,7 @@ def main():
     # Replace sys.argv so tyro sees the cleaned version
     sys.argv = [sys.argv[0]] + cleaned
 
-    args = tyro.cli(Args, description="Terminal AI agent with an optional synchronized Web UI")
+    args = tyro.cli(Args, description="Terminal AI agent with auto-detected synchronized Web UI")
 
     # Patch in the pre-parsed resume value (tyro can't handle optional-value flags natively)
     if resume_value is not None:

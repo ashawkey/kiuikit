@@ -6,10 +6,12 @@ development and release builds, not by users running `kia`.
 
 ## Development
 
-Start the Python Web UI on its normal port in one terminal:
+Start the hub (which serves the Web UI) in one terminal, then launch an agent
+that auto-links to it:
 
 ```bash
-kia --web
+kia --hub        # serves the UI on port 8765 and prints the access token
+kia              # in another terminal / directory: auto-joins the hub
 ```
 
 Then start Vite in this directory:

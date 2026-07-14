@@ -647,19 +647,36 @@ class ToolExecutor:
         original = content.replace("\r\n", "\n").replace("\r", "\n")
         working = original
         total_replacements = 0
+        diffs: list[dict[str, Any]] = []
 
         for i, edit in enumerate(edits):
+            if not isinstance(edit, dict):
+                return {
+                    "error": (
+                        f"Edit #{i + 1} must be an object with 'old_text'/'new_text' "
+                        f"keys, got {type(edit).__name__}. Pass 'edits' as a list of "
+                        "objects, e.g. [{\"old_text\": \"a\", \"new_text\": \"b\"}]."
+                    ),
+                    "success": False,
+                }
             old_text = edit.get("old_text", "")
             new_text = edit.get("new_text", "")
             replace_all = bool(edit.get("replace_all", False))
             if not old_text:
                 return {"error": f"Edit #{i + 1}: old_text is required.", "success": False}
 
-            working, count, _line_num, error = apply_edit(working, old_text, new_text, replace_all)
+            working, count, line_num, error = apply_edit(working, old_text, new_text, replace_all)
             if error is not None:
                 # All-or-nothing: nothing has been written to disk yet.
                 return {"error": f"Edit #{i + 1} failed: {error} (in {file})", "success": False}
             total_replacements += count
+            diffs.append({
+                "path": file,
+                "old_text": old_text,
+                "new_text": new_text,
+                "line_num": None if replace_all else line_num,
+                "count": count,
+            })
 
         if self._change_tracker and self._get_round_id:
             self._change_tracker.track_edit_result(self._get_round_id(), file, original, working)
@@ -672,6 +689,7 @@ class ToolExecutor:
                 f"({total_replacements} replacement(s))."
             ),
             "success": True,
+            "diffs": diffs,
         }
 
     def _ls(self, path: str | None = None, all: bool = False) -> dict[str, Any]:

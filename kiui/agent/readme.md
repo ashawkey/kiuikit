@@ -8,6 +8,7 @@ A lightweight, terminal-based AI agent that can browse the web, read/write files
 - **Shell Execution**: Run arbitrary shell commands with real-time streaming output.
 - **Web Capabilities**: Search the web and fetch/parse webpage content.
 - **Tool-use**: Automatically chooses the right tool for the task.
+- **Streaming**: Responses render token-by-token in both the terminal and Web UI, with reasoning/thinking stream shown automatically for compatible models.
 - **Sub-agents**: Can spawn sub-agents to handle complex sub-tasks in-process.
 - **Skills**: Load domain-specific instructions via customizable skill packs (`.kia/skills/`).
 - **Context Management**: Automatic pruning and LLM-based compaction to stay within context windows.
@@ -65,11 +66,12 @@ kia --model <model_alias> --verbose --perm strict --resume [session_id]
 |------|-------------|
 | `--model` | Model alias from config (default: first configured) |
 | `--verbose` | Enable verbose debug output |
+| `--stream` / `--no-stream` | Stream the response token-by-token as it is generated (default: on) |
+
 | `--perm MODE` | `auto`, `default`, or `strict` |
 | `--resume [SESSION_ID]` | Resume a session (bare `--resume` lists saved sessions interactively) |
 | `--list` | List available models with context-window info and exit |
 | `--hub` | Run the shared web hub daemon (owns the public port) |
-| `--web` | Link this terminal agent to the running hub as a web session |
 | `--web-port PORT` | Hub listener port (default: `8765`) |
 
 ## Web UI
@@ -80,17 +82,17 @@ share a single public port and appear as separate tabs in one browser page.
 
 - **One hub** owns the public port: `kia --hub`. It serves the UI, holds the
   access token, and multiplexes every connected agent.
-- **Each agent** stays terminal-first and links to the hub with `kia --web`.
-  Terminal and web operate the same session in sync. If no hub is running the
-  agent prints a warning and continues terminal-only.
+- **Each agent** stays terminal-first and auto-links to a running hub when
+  started with plain `kia`. Terminal and web operate the same session in sync.
+  If no hub is running the agent simply continues terminal-only.
 
 ```bash
 # 1. start the hub once (owns port 8765, prints the access token)
 kia --hub --web-port 8765
 
-# 2. from any directory / terminal, launch agents that join the hub
-cd ~/projA && kia --web
-cd ~/projB && kia --web
+# 2. from any directory / terminal, launch agents that auto-join the hub
+cd ~/projA && kia
+cd ~/projB && kia
 ```
 
 The hub writes its connection info (host, port, internal secret) to

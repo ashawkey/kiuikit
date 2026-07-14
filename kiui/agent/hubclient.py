@@ -1,6 +1,6 @@
 """Agent-side client that links a terminal ``kia`` to the shared web hub.
 
-A ``kia --web`` process stays terminal-first. This client runs in a daemon
+A terminal ``kia`` process stays terminal-first. This client runs in a daemon
 thread, connects to the hub's loopback ``/internal/agent`` endpoint, registers
 a session, forwards every :class:`~kiui.agent.io.EventHub` event, and injects
 browser actions back into the same brokers the terminal uses — so terminal and

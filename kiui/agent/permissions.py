@@ -336,8 +336,11 @@ class PermissionController:
                         f"[bold red]🛡  Safety guard:[/bold red] [red]{reason}[/red]"
                     )
                     return False, reason
-                if not self._prompt_path_override(tool_name, arguments, reason):
-                    return False, reason
+                allowed, override_reason = self._prompt_path_override(
+                    tool_name, arguments, reason
+                )
+                if not allowed:
+                    return False, override_reason
 
         if self.mode == PermissionMode.AUTO:
             return True, ""

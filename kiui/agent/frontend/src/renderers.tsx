@@ -24,9 +24,10 @@ const labels: Record<string, string> = {
   diff: 'file change',
 }
 
-// Activity events (tool calls, results, streamed output, debug) render compact
-// without the uppercase label head; their meaning is carried by inline marks.
-const activityTypes = new Set(['tool_start', 'tool_result', 'output', 'debug'])
+// Activity events (tool calls, results, streamed output, debug, reasoning)
+// render compact without the uppercase label head; their meaning is carried by
+// inline marks or a foldable summary.
+const activityTypes = new Set(['tool_start', 'tool_result', 'output', 'debug', 'thinking'])
 
 // Output longer than this collapses behind a <details> toggle.
 const COLLAPSE_LINES = 14
@@ -115,6 +116,18 @@ export function Collapsible({ text, children }: { text: string; children: ReactN
   )
 }
 
+// Reasoning stream: always a foldable block (like tool output) with a plain
+// "thinking" summary, open by default so the live stream is visible, and
+// collapsible once the answer arrives.
+export function ThinkingBlock({ text }: { text: string }) {
+  return (
+    <details className="foldable" open>
+      <summary>thinking</summary>
+      <div className="foldable-body"><span className="thinking-text">{text}</span></div>
+    </details>
+  )
+}
+
 function EventBody({ type, text, data, failed }: {
   type: string
   text: string
@@ -127,6 +140,8 @@ function EventBody({ type, text, data, failed }: {
   switch (type) {
     case 'assistant_message':
       return <MarkdownMessage>{text}</MarkdownMessage>
+    case 'thinking':
+      return <ThinkingBlock text={clean} />
     case 'diff':
       return <DiffView data={data} />
     case 'tool_start':
@@ -148,12 +163,7 @@ function EventBody({ type, text, data, failed }: {
     case 'output':
       return <Collapsible text={clean}><AnsiOutput>{text}</AnsiOutput></Collapsible>
     case 'debug':
-      return (
-        <>
-          <span className="activity-mark" aria-hidden="true">·</span>
-          <Collapsible text={clean}><span className="activity-text">{clean}</span></Collapsible>
-        </>
-      )
+      return <Collapsible text={clean}><span className="debug-text">{clean}</span></Collapsible>
     default:
       return <>{clean}</>
   }

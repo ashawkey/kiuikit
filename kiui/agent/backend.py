@@ -24,6 +24,7 @@ from kiui.agent.tools import (
 )
 from kiui.agent.subagent import SubagentManager
 from kiui.agent.permissions import PermissionController, PermissionMode
+from kiui.agent.streaming import consume_stream
 from kiui.agent.context import (
     truncate_tool_result,
     prune_context,
@@ -112,6 +113,7 @@ class LLMAgent:
         base_url: str,
         model_alias: str = "",
         verbose: bool = True,
+        stream: bool = True,
         thinking_budget: Literal["low", "medium", "high"] = "low",
         context_length: int | None = None,
         permission_mode: PermissionMode = PermissionMode.DEFAULT,
@@ -135,6 +137,8 @@ class LLMAgent:
             max_retries=0,
         )
         self.verbose = verbose
+        self.stream = stream
+        self.show_thinking = self.profile.thinking is not None
         self.thinking_budget = thinking_budget
         self.context_length = context_length if context_length is not None else self.profile.context_length
         self.token_estimator = TokenEstimator()
@@ -291,8 +295,12 @@ class LLMAgent:
         kwargs = {
             "model": self.model,
             "messages": messages,
-            "stream": False,
+            "stream": self.stream,
         }
+        if self.stream:
+            # Ask the server to emit a final usage-only chunk so streamed turns
+            # still get accurate token accounting.
+            kwargs["stream_options"] = {"include_usage": True}
 
         if self.tools:
             kwargs["tools"] = self.tools
@@ -317,11 +325,10 @@ class LLMAgent:
         t_api = time.monotonic()
         for attempt in range(self.MAX_RETRIES + 1):
             try:
-                with self.console.thinking():
-                    response = run_interruptible(
-                        lambda: self.client.chat.completions.create(**kwargs),
-                        self.cancellation,
-                    )
+                if self.stream:
+                    message, usage = self._stream_completion(kwargs)
+                else:
+                    message, usage = self._blocking_completion(kwargs)
                 break
             except RequestInterrupted:
                 raise  # user cancelled — never retry, let get_response roll back
@@ -333,9 +340,6 @@ class LLMAgent:
                 else:
                     raise RuntimeError(f"Max retries ({self.MAX_RETRIES}) exceeded. Last error: {e}") from e
         api_elapsed = time.monotonic() - t_api
-
-        message = response.choices[0].message
-        usage = response.usage
 
         self._accumulate_usage(usage)
         self.token_estimator.calibrate(
@@ -355,6 +359,74 @@ class LLMAgent:
                 self.console.debug(f"Requested tool calls: {len(message.tool_calls)}")
 
         return message
+
+
+
+    def _blocking_completion(self, kwargs: dict):
+        """Non-streaming call: show a spinner, return ``(message, usage)``."""
+        with self.console.thinking():
+            response = run_interruptible(
+                lambda: self.client.chat.completions.create(**kwargs),
+                self.cancellation,
+            )
+        return response.choices[0].message, response.usage
+
+    def _stream_completion(self, kwargs: dict):
+        """Streaming call: render tokens live, return ``(message, usage)``.
+
+        The blocking network request that opens the stream is watched for a
+        cancel key (spinner phase). Once chunks flow, a live-rendering sink
+        replaces the spinner and stream consumption runs on a worker thread so
+        ESC / Ctrl+C / web-cancel can abandon it mid-response. On cancel we
+        raise ``RequestInterrupted`` so the round rolls back cleanly.
+        """
+        with self.console.thinking():
+            stream = run_interruptible(
+                lambda: self.client.chat.completions.create(**kwargs),
+                self.cancellation,
+            )
+
+        result: dict[str, Any] = {}
+
+        with self.console.stream_response(show_thinking=self.show_thinking) as sink:
+            def consume():
+                message, usage = consume_stream(
+                    stream,
+                    on_content=sink.on_content,
+                    on_thinking=sink.on_thinking,
+                    should_stop=lambda: (
+                        self.cancellation is not None and self.cancellation.cancelled
+                    ),
+                )
+                result["message"] = message
+                result["usage"] = usage
+
+            run_interruptible(consume, self.cancellation)
+
+        message = result["message"]
+        usage = result["usage"]
+        if usage is None:
+            # Some proxies omit the usage chunk; fall back to an estimate so
+            # accounting/calibration still works.
+            usage = self._estimate_usage(message)
+        return message, usage
+
+    def _estimate_usage(self, message) -> Any:
+        """Build a rough usage object when the stream omits the usage chunk."""
+        from openai.types import CompletionUsage
+
+        prompt_chars = estimate_context_chars(self.context.get())
+        prompt_tokens = self.token_estimator.chars_to_tokens(prompt_chars)
+        completion_chars = len(message.content or "")
+        for tc in message.tool_calls or []:
+            completion_chars += len(tc.function.arguments or "")
+        completion_tokens = self.token_estimator.chars_to_tokens(completion_chars)
+        return CompletionUsage(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+        )
+
 
 
     def execute_tool_calls(self, tool_calls: list) -> bool:
@@ -409,7 +481,11 @@ class LLMAgent:
             elif function_name in ("edit_file", "write_file") and "diff" in result:
                 self.console.diff_edit(**result["diff"], success=success)
             elif function_name == "multi_edit":
-                self.console.tool_result(format_tool_summary(result_text), success=success)
+                if result.get("diffs"):
+                    for d in result["diffs"]:
+                        self.console.diff_edit(**d, success=success)
+                else:
+                    self.console.tool_result(format_tool_summary(result_text), success=success)
             elif function_name == "read_file":
                 self._display_read_result(result, success)
             elif function_name in ("glob_files", "grep_files"):
@@ -505,7 +581,11 @@ class LLMAgent:
                 raise
 
             if message.content:
-                self.console.response(message.content)
+                # In streaming mode the content was already rendered live by
+                # the ResponseStream sink (and the assistant_message event
+                # emitted on close), so avoid printing it twice.
+                if not self.stream:
+                    self.console.response(message.content)
 
             if not message.tool_calls:
                 if self.verbose:

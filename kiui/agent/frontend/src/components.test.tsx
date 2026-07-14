@@ -1,7 +1,24 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
+import { useState } from 'react'
 import { vi } from 'vitest'
 
 import { Composer, PromptDialog, Thinking, ThemeToggle } from './components'
+
+// Controlled composer wrapper: the draft now lives in the parent (App), so the
+// test drives it through local state just like the real app does.
+function ControlledComposer({ onSend }: { onSend: (text: string) => void }) {
+  const [draft, setDraft] = useState('')
+  return (
+    <Composer
+      pending={0}
+      operationId={null}
+      draft={draft}
+      onDraftChange={setDraft}
+      onSend={onSend}
+      onCancel={() => undefined}
+    />
+  )
+}
 
 describe('interaction components', () => {
   it('toggles the theme and labels the next choice', () => {
@@ -16,7 +33,7 @@ describe('interaction components', () => {
 
   it('sends composer text with Enter', () => {
     const onSend = vi.fn()
-    render(<Composer pending={0} operationId={null} onSend={onSend} onCancel={() => undefined} />)
+    render(<ControlledComposer onSend={onSend} />)
     const field = screen.getByPlaceholderText('Type Anything...')
     fireEvent.change(field, { target: { value: 'hello' } })
     fireEvent.keyDown(field, { key: 'Enter' })

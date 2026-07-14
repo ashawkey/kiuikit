@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { Composer, Login, PromptDialog, SessionSidebar, Thinking, ThemeToggle } from './components'
+import { Composer, Login, PromptDialog, ScrollTopButton, SessionSidebar, Thinking, ThemeToggle } from './components'
 import { EventCard } from './renderers'
 import { applyTheme, hasStoredTheme, resolveInitialTheme, storeTheme } from './theme'
 import type { Theme } from './theme'
 import type { AgentEvent, ClientAction, DisplayEvent, Prompt, SessionSummary, StateMessage } from './types'
 import { displayTypes, isPrompt } from './types'
+import { appendDelta, finalizeStream } from './streaming'
 
 function appendEvent(events: DisplayEvent[], event: DisplayEvent) {
   const previous = events.at(-1)
@@ -31,7 +32,17 @@ function scrollToBottom() {
  * reconnect and no history replay. Composer/prompt render only for the active
  * pane, so exactly one of each exists in the DOM.
  */
-function SessionPane({ sessionId, active }: { sessionId: string; active: boolean }) {
+function SessionPane({
+  sessionId,
+  active,
+  draft,
+  onDraftChange,
+}: {
+  sessionId: string
+  active: boolean
+  draft: string
+  onDraftChange: (text: string) => void
+}) {
   const [events, setEvents] = useState<DisplayEvent[]>([])
   const [pending, setPending] = useState(0)
   const [operationId, setOperationId] = useState<string | null>(null)
@@ -105,6 +116,20 @@ function SessionPane({ sessionId, active }: { sessionId: string; active: boolean
         break
       case 'thinking_stop':
         setThinking(false)
+        break
+      case 'assistant_delta':
+      case 'thinking_delta':
+        setThinking(false)
+        setEvents((current) => appendDelta(current, message.type, typeof data.text === 'string' ? data.text : ''))
+        break
+      case 'assistant_message':
+      case 'thinking':
+        setEvents((current) => finalizeStream(
+          current,
+          message.type,
+          typeof data.text === 'string' ? data.text : '',
+          message.seq ? `event-${message.seq}` : `local-${++localKey.current}`,
+        ))
         break
       default:
         if (displayTypes.has(message.type)) {
@@ -197,6 +222,8 @@ function SessionPane({ sessionId, active }: { sessionId: string; active: boolean
         <Composer
           pending={pending}
           operationId={operationId}
+          draft={draft}
+          onDraftChange={onDraftChange}
           onSend={(text) => {
             send({ type: 'submit', text })
             pinned.current = true
@@ -215,6 +242,9 @@ export default function App() {
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [activeSession, setActiveSession] = useState<string | null>(null)
   const [theme, setTheme] = useState<Theme>(resolveInitialTheme)
+  // Per-session composer drafts. Panes unmount their Composer when inactive, so
+  // the in-progress text lives here to survive tab switches.
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
   const controlSocket = useRef<WebSocket | null>(null)
   const csrf = useRef('')
 
@@ -281,6 +311,14 @@ export default function App() {
     })
   }, [])
 
+  const setDraft = useCallback((sessionId: string, text: string) => {
+    setDrafts((current) => ({ ...current, [sessionId]: text }))
+  }, [])
+
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
+
   const logout = useCallback(async () => {
     try {
       await fetch('/api/logout', {
@@ -296,6 +334,7 @@ export default function App() {
     // Clearing sessions unmounts every pane, closing their sockets.
     setSessions([])
     setActiveSession(null)
+    setDrafts({})
     setAuthenticated(false)
   }, [])
 
@@ -307,6 +346,7 @@ export default function App() {
   return (
     <main className="app-shell">
       <div className="top-controls">
+        <ScrollTopButton onClick={scrollToTop} />
         <ThemeToggle theme={theme} onToggle={toggleTheme} />
         <button className="logout" type="button" onClick={logout}>Sign out</button>
       </div>
@@ -319,7 +359,13 @@ export default function App() {
             </section>
           ) : null}
           {sessions.map((session) => (
-            <SessionPane key={session.id} sessionId={session.id} active={session.id === activeSession} />
+            <SessionPane
+              key={session.id}
+              sessionId={session.id}
+              active={session.id === activeSession}
+              draft={drafts[session.id] ?? ''}
+              onDraftChange={(text) => setDraft(session.id, text)}
+            />
           ))}
         </div>
       </div>

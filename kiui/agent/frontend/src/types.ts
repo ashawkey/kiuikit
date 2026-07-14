@@ -6,6 +6,7 @@ export type EventData = {
   line_num?: number | null
   count?: number
   success?: boolean
+  streaming?: boolean
   id?: string
   pending?: number
   [key: string]: unknown
@@ -85,6 +86,7 @@ export const displayTypes = new Set([
   'output',
   'debug',
   'diff',
+  'thinking',
 ])
 
 export type DisplayEvent = {

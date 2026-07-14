@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 import questionary
 from rich.console import Console
+from rich.live import Live
 from rich.status import Status
 from rich.table import Table
 from rich.theme import Theme
@@ -51,6 +52,7 @@ AGENT_THEME = Theme({
     "error": "bold red",
     "warning": "bold yellow",
     "system": "bold blue",
+    "thinking": "dim italic color(245)",
     "tool": "color(244)",
     "tool_ok": "dim green",
     "tool_fail": "dim red",
@@ -110,6 +112,112 @@ class ThinkingIndicator:
                     pass  # best-effort; don't crash the agent on a display glitch
 
 
+class ResponseStream:
+    """Live-rendering sink for a streamed assistant turn.
+
+    Terminal: accumulated visible content is re-rendered as Markdown in a
+    ``rich.Live`` region on each token; reasoning ("thinking") text streams
+    above it in a dim block when ``show_thinking`` is set. The transient Live
+    region is torn down on ``close()``, which reprints the reasoning and the
+    content statically so the full turn survives in scrollback.
+
+    Web: every fragment is published as ``assistant_delta`` / ``thinking_delta``
+    events; on close the full reasoning and message are emitted once more as
+    ``thinking`` / ``assistant_message`` so late-joining clients get the whole
+    turn.
+    """
+
+    def __init__(
+        self,
+        console: Console,
+        events: "EventHub | None",
+        *,
+        show_thinking: bool = False,
+    ):
+        self._console = console
+        self._events = events
+        self._show_thinking = show_thinking
+        self._content = ""
+        self._thinking = ""
+        self._live: Live | None = None
+        self._closed = False
+
+    def __enter__(self) -> "ResponseStream":
+        # Live is transient: it clears itself on stop so close() can print the
+        # final Markdown in its place without duplicated lines.
+        self._live = Live(
+            "",
+            console=self._console,
+            refresh_per_second=12,
+            transient=True,
+            vertical_overflow="visible",
+        )
+        self._live.start()
+        return self
+
+    def __exit__(self, *args) -> None:
+        self.close()
+
+    def _renderable(self):
+        from rich.console import Group
+        from rich.markdown import Markdown
+        from rich.text import Text as RichText
+
+        parts = []
+        if self._thinking:
+            parts.append(RichText(self._thinking, style="thinking"))
+        if self._content:
+            parts.append(Markdown(f"{_DOT} {self._content}"))
+        return Group(*parts) if parts else RichText("")
+
+    def _refresh(self) -> None:
+        if self._live is not None:
+            try:
+                self._live.update(self._renderable())
+            except Exception:
+                pass  # display glitches must never abort the response
+
+    def on_content(self, text: str) -> None:
+        self._content += text
+        self._refresh()
+        if self._events is not None:
+            self._events.publish("assistant_delta", text=text)
+
+    def on_thinking(self, text: str) -> None:
+        # show_thinking gates reasoning output uniformly across terminal and
+        # web, so the two surfaces never disagree on whether a turn had a
+        # thinking block.
+        if not self._show_thinking:
+            return
+        self._thinking += text
+        self._refresh()
+        if self._events is not None:
+            self._events.publish("thinking_delta", text=text)
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        if self._live is not None:
+            self._live.stop()
+            self._live = None
+        # The transient Live region is cleared on stop; reprint the reasoning
+        # and content statically so the full turn survives in scrollback
+        # (thinking above the answer, matching the live layout). _thinking is
+        # only ever populated when show_thinking is set.
+        if self._thinking:
+            from rich.text import Text as RichText
+            self._console.print(RichText(self._thinking, style="thinking"))
+        if self._content:
+            from rich.markdown import Markdown
+            self._console.print(Markdown(f"{_DOT} {self._content}"))
+        if self._events is not None:
+            if self._thinking:
+                self._events.publish("thinking", text=self._thinking)
+            if self._content:
+                self._events.publish("assistant_message", text=self._content)
+
+
 class AgentConsole:
     """Thin wrapper around ``rich.Console`` with typed convenience methods."""
 
@@ -138,6 +246,16 @@ class AgentConsole:
                 response = client.chat.completions.create(...)
         """
         return ThinkingIndicator(self._console, self.events)
+
+    def stream_response(self, *, show_thinking: bool = False) -> ResponseStream:
+        """Return a live-rendering sink for a streamed assistant turn.
+
+        Usage::
+
+            with console.stream_response() as sink:
+                message, usage = consume_stream(stream, on_content=sink.on_content, ...)
+        """
+        return ResponseStream(self._console, self.events, show_thinking=show_thinking)
 
     # -- raw pass-through (for rich markup, tables, etc.) -------------------
 

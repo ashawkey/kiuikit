@@ -44,6 +44,16 @@ describe('content renderers', () => {
     expect(container.querySelector('.tool-code')).toHaveTextContent('exec_command(ls)')
   })
 
+  it('renders a thinking event as a foldable block without a label head', () => {
+    const { container } = render(<EventCard event={makeEvent('thinking', 'Let me reason about this.')} />)
+    expect(container.querySelector('.event-head')).toBeNull()
+    const details = container.querySelector('details.foldable')
+    expect(details).not.toBeNull()
+    expect(details).toHaveAttribute('open')
+    expect(details?.querySelector('summary')).toHaveTextContent('thinking')
+    expect(container.querySelector('.thinking-text')).toHaveTextContent('Let me reason about this.')
+  })
+
   it('collapses long output behind a details toggle', () => {
     const short = makeEvent('output', 'line one\nline two')
     const { container, rerender } = render(<EventCard event={short} />)
