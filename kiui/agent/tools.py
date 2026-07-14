@@ -586,6 +586,7 @@ class ToolExecutor:
                 f"[output truncated: showing last {len(stdout) + len(stderr)} of {total_len} bytes]"
             )
         if interrupted:
+            res["interrupted"] = True
             res["error"] = "Command was interrupted by user."
 
         return res

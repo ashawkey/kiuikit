@@ -357,12 +357,30 @@ class LLMAgent:
         return message
 
 
-    def execute_tool_calls(self, tool_calls: list):
-        """Execute tool calls via the built-in ToolExecutor."""
+    def execute_tool_calls(self, tool_calls: list) -> bool:
+        """Execute tool calls via the built-in ToolExecutor.
+
+        Returns True if the round was interrupted by the user (ESC / Ctrl+C /
+        web cancel) partway through, in which case any remaining tool calls are
+        answered with a synthetic "skipped" result so the assistant/tool message
+        pairing stays valid, and the caller should return to the prompt.
+        """
 
         t_all = time.monotonic()
+        interrupted = False
         for i, tool_call in enumerate(tool_calls):
             function_name = tool_call.function.name
+
+            # A user cancel during an earlier tool aborts the whole round; fill
+            # the remaining calls with a skipped result to keep the context valid.
+            if interrupted:
+                self.context.add({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": "Tool call skipped: the user interrupted the turn.",
+                })
+                continue
+
             try:
                 function_args = json.loads(tool_call.function.arguments)
             except json.JSONDecodeError as e:
@@ -408,9 +426,19 @@ class LLMAgent:
             }
             self.context.add(tool_message)
 
+            # Detect a user interrupt: either the tool self-reported it
+            # (e.g. exec_command killed by ESC) or the shared cancellation
+            # token was tripped (web cancel). Abort the remaining calls.
+            if result.get("interrupted") or (
+                self.cancellation is not None and self.cancellation.cancelled
+            ):
+                interrupted = True
+
         total_elapsed = time.monotonic() - t_all
         if self.verbose and len(tool_calls) > 1:
             self.console.debug(f"All {len(tool_calls)} tool calls completed in {total_elapsed:.1f}s")
+
+        return interrupted
 
     # -- per-tool result display helpers ------------------------------------
 
@@ -483,7 +511,15 @@ class LLMAgent:
                     self.console.debug(f"Turn complete: {iteration} iteration(s) in {turn_elapsed:.1f}s")
                 return message.content if message.content else None
 
-            self.execute_tool_calls(message.tool_calls)
+            interrupted = self.execute_tool_calls(message.tool_calls)
+
+            if interrupted:
+                # The user cancelled a tool mid-round. Stop the agentic loop
+                # and return to the prompt instead of feeding the (partial)
+                # tool results back to the model for another iteration.
+                self.console.system("Turn interrupted.")
+                self._last_interrupted = True
+                return None
 
             if self.verbose:
                 iter_elapsed = time.monotonic() - t_iter
