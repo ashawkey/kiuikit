@@ -62,6 +62,124 @@ def _decode_bytes(b: bytes | None) -> str:
         return b.decode("utf-8", errors="replace")
 
 
+def _human_size(n: int) -> str:
+    """Format a byte count compactly (e.g. 1.2K, 3.4M)."""
+    for unit in ("B", "K", "M", "G", "T"):
+        if n < 1024 or unit == "T":
+            if unit == "B":
+                return f"{n}{unit}"
+            return f"{n:.1f}{unit}"
+        n /= 1024
+    return f"{n:.1f}T"
+
+
+# ── Tolerant text matching for edits ─────────────────────────────────────
+
+def _normalize_ws(text: str) -> str:
+    """Collapse each line's trailing whitespace and unify line endings.
+
+    Used only to *locate* a match when the exact bytes differ by trailing
+    whitespace or CRLF/LF — the actual replacement always operates on the
+    real file bytes so nothing else is disturbed.
+    """
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    return "\n".join(line.rstrip() for line in lines)
+
+
+def find_match(content: str, old_text: str) -> list[tuple[int, int]]:
+    """Locate *old_text* within LF-normalized *content*, tolerating whitespace.
+
+    Returns a list of ``(start, end)`` character offsets for every match.
+    An empty list means no match. *content* must already be LF-normalized;
+    *old_text* is normalized internally.
+
+    Strategy (first that finds any match wins):
+      1. Exact substring match.
+      2. Whitespace-tolerant, line-aligned match (ignore per-line trailing
+         whitespace), mapped back to exact offsets.
+    """
+    if not old_text:
+        return []
+
+    old_norm_lf = old_text.replace("\r\n", "\n").replace("\r", "\n")
+
+    # Strategy 1: exact
+    spans: list[tuple[int, int]] = []
+    step = len(old_norm_lf)
+    idx = content.find(old_norm_lf)
+    while idx != -1:
+        spans.append((idx, idx + step))
+        idx = content.find(old_norm_lf, idx + step)
+    if spans:
+        return spans
+
+    # Strategy 2: whitespace-tolerant, line-aligned
+    norm_old = _normalize_ws(old_text)
+    if not norm_old.strip():
+        return []
+
+    lines = content.split("\n")
+    offsets: list[int] = []
+    pos = 0
+    for ln in lines:
+        offsets.append(pos)
+        pos += len(ln) + 1  # +1 for the '\n'
+    norm_lines = [ln.rstrip() for ln in lines]
+    old_lines = norm_old.split("\n")
+    n = len(old_lines)
+
+    i = 0
+    while i <= len(norm_lines) - n:
+        if norm_lines[i:i + n] == old_lines:
+            last = i + n - 1
+            spans.append((offsets[i], offsets[last] + len(lines[last])))
+            i += n  # non-overlapping
+        else:
+            i += 1
+    return spans
+
+
+def apply_edit(content: str, old_text: str, new_text: str, replace_all: bool) -> tuple[str, int, int, str | None]:
+    """Apply a single edit to *content*, returning LF-normalized content.
+
+    Returns ``(new_content, count, first_line_num, error)``:
+      - error is None on success; otherwise a human-readable message.
+      - count is how many occurrences were replaced.
+      - first_line_num is the 1-based line number of the first replacement.
+    """
+    work = content.replace("\r\n", "\n").replace("\r", "\n")
+    new_lf = new_text.replace("\r\n", "\n").replace("\r", "\n")
+
+    spans = find_match(work, old_text)
+    count = len(spans)
+    if count == 0:
+        return content, 0, 0, f"Text not found in file: {old_text[:100]}"
+
+    if count > 1 and not replace_all:
+        return (
+            content, count, 0,
+            f"matches {count} locations. Include more surrounding context to make "
+            "it unique, or set replace_all=true to replace every occurrence.",
+        )
+
+    # Splice replacements at exact offsets (correct even when tolerant matches
+    # have differing byte content).
+    pieces: list[str] = []
+    prev = 0
+    for start, end in spans:
+        pieces.append(work[prev:start])
+        pieces.append(new_lf)
+        prev = end
+        if not replace_all:
+            break
+    pieces.append(work[prev:])
+    new_content = "".join(pieces)
+
+    line_num = work[:spans[0][0]].count("\n") + 1
+    return new_content, (count if replace_all else 1), line_num, None
+
+
+
 def get_tool_definitions() -> list[dict[str, Any]]:
     """Return OpenAI-format tool definitions for all built-in tools."""
     return [
@@ -100,7 +218,7 @@ def get_tool_definitions() -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "edit_file",
-                "description": "Make a surgical edit to a file by replacing exact text. old_text must match exactly (including whitespace). By default it must appear exactly once; set replace_all=true to replace every occurrence.",
+                "description": "Make a surgical edit to a file by replacing exact text. old_text should match the file content; minor differences in trailing whitespace / line endings are tolerated. By default old_text must resolve to exactly one location; set replace_all=true to replace every occurrence.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -110,6 +228,58 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                         "replace_all": {"type": "boolean", "description": "Replace all occurrences instead of requiring exactly one (default: false)"},
                     },
                     "required": ["file", "old_text", "new_text"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "multi_edit",
+                "description": (
+                    "Apply a sequence of edits to a SINGLE file in one atomic operation. "
+                    "Edits are applied in order, each to the result of the previous one. "
+                    "If any edit fails to match, NO changes are written (all-or-nothing). "
+                    "Prefer this over multiple edit_file calls when changing several places in one file. "
+                    "Same tolerant matching as edit_file."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "file": {"type": "string", "description": "Path to the file to edit"},
+                        "edits": {
+                            "type": "array",
+                            "description": "Ordered list of edits to apply",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "old_text": {"type": "string", "description": "Exact text to find and replace"},
+                                    "new_text": {"type": "string", "description": "Replacement text"},
+                                    "replace_all": {"type": "boolean", "description": "Replace every occurrence (default: false)"},
+                                },
+                                "required": ["old_text", "new_text"],
+                            },
+                        },
+                    },
+                    "required": ["file", "edits"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "ls",
+                "description": (
+                    "List the contents of a directory (non-recursive). Shows entry names, "
+                    "type (file/dir) and size. Respects .gitignore and skips noise dirs by default. "
+                    "Prefer this over exec_command with ls for browsing directories."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Directory to list (default: working directory)"},
+                        "all": {"type": "boolean", "description": "Include hidden and gitignored entries (default: false)"},
+                    },
+                    "required": [],
                 },
             },
         },
@@ -138,7 +308,7 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                 "name": "glob_files",
                 "description": (
                     "Find files matching a glob pattern. Preferred over exec_command with find. "
-                    "Searches recursively by default. "
+                    "Searches recursively by default. Respects .gitignore and skips noise dirs. "
                     "Set recursive=false to match only in the immediate directory. Max 500 results."
                 ),
                 "parameters": {
@@ -147,6 +317,7 @@ def get_tool_definitions() -> list[dict[str, Any]]:
                         "pattern": {"type": "string", "description": "Glob pattern, e.g. '**/*.py', 'src/**/*.ts', or '*.py'"},
                         "base_dir": {"type": "string", "description": "Directory to search in (default: current directory)"},
                         "recursive": {"type": "boolean", "description": "Search subdirectories recursively (default: true)"},
+                        "include_ignored": {"type": "boolean", "description": "Include .gitignored files (default: false)"},
                     },
                     "required": ["pattern"],
                 },
@@ -302,6 +473,8 @@ class ToolExecutor:
         "read_file": "_read_file",
         "write_file": "_write_file",
         "edit_file": "_edit_file",
+        "multi_edit": "_multi_edit",
+        "ls": "_ls",
         "exec_command": "_exec_command",
         "glob_files": "_glob_files",
         "grep_files": "_grep_files",
@@ -396,7 +569,6 @@ class ToolExecutor:
 
         file_path = Path(file)
         file_path.parent.mkdir(parents=True, exist_ok=True)
-        existed = file_path.exists()
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(content)
 
@@ -413,62 +585,35 @@ class ToolExecutor:
         }
 
     def _edit_file(self, file: str, old_text: str, new_text: str, replace_all: bool = False) -> dict[str, Any]:
-        """Make surgical edit to file by replacing exact text."""
+        """Make a surgical edit to a file (whitespace-tolerant matching)."""
         self.console.tool(f"edit_file {file}")
 
         file_path = Path(file)
         if not file_path.exists():
             return {"error": f"File not found: {file}", "success": False}
+        if not file_path.is_file():
+            return {"error": f"Path is not a file: {file}", "success": False}
 
-        # Track before reading (original snapshot) but pass edit params for diff
+        try:
+            content = file_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            return {"error": f"Cannot edit binary file: {file}", "success": False}
+
+        new_content, count, line_num, error = apply_edit(content, old_text, new_text, replace_all)
+        if error is not None:
+            return {"error": f"{error} (in {file})", "success": False}
+
+        original = content.replace("\r\n", "\n").replace("\r", "\n")
         if self._change_tracker and self._get_round_id:
-            self._change_tracker.track_edit(self._get_round_id(), file, old_text, new_text)
+            self._change_tracker.track_edit_result(self._get_round_id(), file, original, new_content)
 
-        with open(file_path, encoding="utf-8") as f:
-            content = f.read()
+        file_path.write_text(new_content, encoding="utf-8")
 
-        occurrence_count = content.count(old_text)
-        if occurrence_count == 0:
-            return {"error": f"Text not found in file: {old_text[:100]}...", "success": False}
-
-        if replace_all:
-            new_content = content.replace(old_text, new_text)
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(new_content)
-
-            diff_msg = f"Replaced {occurrence_count} occurrence(s):\n- {old_text}\n+ {new_text}"
-
-            return {
-                "message": f"Successfully edited {file}\n{diff_msg}",
-                "success": True,
-                "diff": {
-                    "path": file,
-                    "old_text": old_text,
-                    "new_text": new_text,
-                    "line_num": None,
-                    "count": occurrence_count,
-                },
-            }
-
-        if occurrence_count > 1:
-            return {
-                "error": (
-                    f"old_text matches {occurrence_count} locations in {file}. "
-                    "Include more surrounding context in old_text to make it unique, "
-                    "or set replace_all=true to replace every occurrence."
-                ),
-                "success": False,
-            }
-
-        match_pos = content.index(old_text)
-        line_num = content[:match_pos].count("\n") + 1
-
-        new_content = content[:match_pos] + new_text + content[match_pos + len(old_text):]
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(new_content)
-
-        diff_msg = f"Line {line_num}:\n- {old_text}\n+ {new_text}"
-
+        diff_msg = (
+            f"Replaced {count} occurrence(s):\n- {old_text}\n+ {new_text}"
+            if replace_all
+            else f"Line {line_num}:\n- {old_text}\n+ {new_text}"
+        )
         return {
             "message": f"Successfully edited {file}\n{diff_msg}",
             "success": True,
@@ -476,10 +621,114 @@ class ToolExecutor:
                 "path": file,
                 "old_text": old_text,
                 "new_text": new_text,
-                "line_num": line_num,
-                "count": 1,
+                "line_num": None if replace_all else line_num,
+                "count": count,
             },
         }
+
+    def _multi_edit(self, file: str, edits: list | None = None) -> dict[str, Any]:
+        """Apply an ordered sequence of edits to one file, all-or-nothing."""
+        if not edits:
+            return {"error": "No edits provided.", "success": False}
+
+        self.console.tool(f"multi_edit {file} ({len(edits)} edits)")
+
+        file_path = Path(file)
+        if not file_path.exists():
+            return {"error": f"File not found: {file}", "success": False}
+        if not file_path.is_file():
+            return {"error": f"Path is not a file: {file}", "success": False}
+
+        try:
+            content = file_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            return {"error": f"Cannot edit binary file: {file}", "success": False}
+
+        original = content.replace("\r\n", "\n").replace("\r", "\n")
+        working = original
+        total_replacements = 0
+
+        for i, edit in enumerate(edits):
+            old_text = edit.get("old_text", "")
+            new_text = edit.get("new_text", "")
+            replace_all = bool(edit.get("replace_all", False))
+            if not old_text:
+                return {"error": f"Edit #{i + 1}: old_text is required.", "success": False}
+
+            working, count, _line_num, error = apply_edit(working, old_text, new_text, replace_all)
+            if error is not None:
+                # All-or-nothing: nothing has been written to disk yet.
+                return {"error": f"Edit #{i + 1} failed: {error} (in {file})", "success": False}
+            total_replacements += count
+
+        if self._change_tracker and self._get_round_id:
+            self._change_tracker.track_edit_result(self._get_round_id(), file, original, working)
+
+        file_path.write_text(working, encoding="utf-8")
+
+        return {
+            "message": (
+                f"Successfully applied {len(edits)} edit(s) to {file} "
+                f"({total_replacements} replacement(s))."
+            ),
+            "success": True,
+        }
+
+    def _ls(self, path: str | None = None, all: bool = False) -> dict[str, Any]:
+        """List a directory's immediate contents (gitignore-aware)."""
+        self.console.tool(f"ls {path or '.'}" + (" (all)" if all else ""))
+
+        base = Path(path) if path else Path(self._work_dir or Path.cwd())
+        if not base.exists():
+            return {"error": f"Path not found: {path}", "success": False}
+        if not base.is_dir():
+            return {"error": f"Not a directory: {path}", "success": False}
+
+        matcher = None
+        if not all:
+            from kiui.agent.gitignore import build_gitignore_matcher
+            matcher = build_gitignore_matcher(base)
+
+        try:
+            entries = sorted(base.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))
+        except OSError as e:
+            return {"error": f"Cannot list directory: {e}", "success": False}
+
+        dirs: list[str] = []
+        files: list[str] = []
+        skipped = 0
+        for entry in entries:
+            is_dir = entry.is_dir()
+            if not all:
+                if entry.name.startswith("."):
+                    skipped += 1
+                    continue
+                if is_dir and entry.name in _SKIP_DIRS:
+                    skipped += 1
+                    continue
+                if matcher is not None and matcher.is_ignored(entry.resolve(), is_dir):
+                    skipped += 1
+                    continue
+            if is_dir:
+                dirs.append(f"{entry.name}/")
+            else:
+                try:
+                    size = entry.stat().st_size
+                except OSError:
+                    size = 0
+                files.append(f"{entry.name}  ({_human_size(size)})")
+
+        lines = dirs + files
+        content = "\n".join(lines) if lines else "(empty)"
+        if skipped and not all:
+            content += f"\n[{skipped} hidden/ignored entr{'y' if skipped == 1 else 'ies'} omitted; use all=true to show]"
+
+        return {
+            "content": content,
+            "count": len(lines),
+            "success": True,
+        }
+
 
     def _exec_command(self, command: str, cwd: str | None = None) -> dict[str, Any]:
         """Execute a shell command, streaming output in real-time.
@@ -591,13 +840,19 @@ class ToolExecutor:
 
         return res
 
-    def _glob_files(self, pattern: str, base_dir: str | None = None, recursive: bool = True) -> dict[str, Any]:
-        """Find files matching a glob pattern."""
+    def _glob_files(self, pattern: str, base_dir: str | None = None, recursive: bool = True, include_ignored: bool = False) -> dict[str, Any]:
+        """Find files matching a glob pattern (gitignore-aware)."""
         self.console.tool(f"glob_files {pattern} (recursive={recursive})")
 
         base = Path(base_dir or self._work_dir or Path.cwd())
         if not base.is_dir():
             return {"error": f"Not a directory: {base}", "success": False}
+
+        matcher = None
+        if not include_ignored:
+            from kiui.agent.gitignore import build_gitignore_matcher
+            matcher = build_gitignore_matcher(base)
+        base_resolved = base.resolve()
 
         if not recursive:
             if "**" in pattern:
@@ -616,6 +871,13 @@ class ToolExecutor:
         for p in iterator:
             if any(part in _SKIP_DIRS for part in p.parts):
                 continue
+            if matcher is not None:
+                try:
+                    is_dir = p.is_dir()
+                except OSError:
+                    is_dir = False
+                if matcher.is_ignored((base_resolved / p.relative_to(base)), is_dir):
+                    continue
             matches.append(str(p.relative_to(base)))
             if len(matches) >= MAX_GLOB_RESULTS:
                 break
@@ -731,14 +993,24 @@ class ToolExecutor:
         except re.error as e:
             return {"error": f"Invalid regex: {e}", "success": False}
 
+        matcher = None
+        base_resolved = base
+        if base.is_dir():
+            from kiui.agent.gitignore import build_gitignore_matcher
+            matcher = build_gitignore_matcher(base)
+            base_resolved = base.resolve()
+
         def _candidate_files():
             if base.is_file():
                 yield base
             else:
                 glob_pat = file_glob or "*"
                 for p in base.rglob(glob_pat):
-                    if p.is_file() and not any(part in _SKIP_DIRS for part in p.parts):
-                        yield p
+                    if not p.is_file() or any(part in _SKIP_DIRS for part in p.parts):
+                        continue
+                    if matcher is not None and matcher.is_ignored((base_resolved / p.relative_to(base)), False):
+                        continue
+                    yield p
 
         matches = []
         for file_path in _candidate_files():

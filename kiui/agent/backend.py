@@ -408,6 +408,8 @@ class LLMAgent:
                 self.console.tool_result(f"exit code {exit_code} ({exec_elapsed:.1f}s)", success=success)
             elif function_name in ("edit_file", "write_file") and "diff" in result:
                 self.console.diff_edit(**result["diff"], success=success)
+            elif function_name == "multi_edit":
+                self.console.tool_result(format_tool_summary(result_text), success=success)
             elif function_name == "read_file":
                 self._display_read_result(result, success)
             elif function_name in ("glob_files", "grep_files"):

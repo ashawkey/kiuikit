@@ -44,7 +44,7 @@ COMPACTION_SUMMARY_MAX_CHARS = 50_000
 
 PRUNABLE_TOOLS = frozenset({
     "read_file", "exec_command", "web_fetch",
-    "web_search", "glob_files", "grep_files",
+    "web_search", "glob_files", "grep_files", "ls",
 })
 
 

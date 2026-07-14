@@ -159,3 +159,12 @@ Standalone CLI scripts (not exposed via the main package namespace, run directly
 
 ## Documentation
 Built with Sphinx, source in `docs/source/`. Published at https://kit.kiui.moe/. Each major module has a corresponding `.md` file in the docs.
+
+
+## Coding Style: Fail Fast, Trust Contracts, and Keep Comments High-Signal
+
+Keep implementation code lean, explicit, and predictable. Validate and sanitize untrusted data at system boundaries, such as API endpoints, file parsers, CLI handlers, and external integrations. Once data enters the core system, trust the established contracts, type hints, and upstream validation rather than repeatedly checking, coercing, or normalizing it.
+
+Do not add speculative safeguards, silent exception handling, arbitrary fallback values, redundant runtime type conversions, or defensive branches for states that should be impossible under the contract. Invalid internal input should fail loudly with a clear exception so the root cause can be corrected at its source. Catch exceptions only when the code can meaningfully recover, add useful context, perform required cleanup, or translate an error at a boundary.
+
+Keep comments concise, accurate, and useful. Comments should explain intent, invariants, non-obvious constraints, tradeoffs, or why an implementation differs from the obvious approach; they should not restate what the code already expresses. Whenever code behavior changes, update or remove any affected comments in the same change. Never leave stale comments that contradict or misrepresent the implementation. Prefer clear names and straightforward structure over explanatory commentary, and delete comments that no longer add insight.

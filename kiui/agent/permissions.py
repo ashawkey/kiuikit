@@ -34,6 +34,7 @@ class PermissionMode(str, Enum):
 
 SAFE_TOOLS = frozenset({
     "read_file",
+    "ls",
     "glob_files",
     "grep_files",
     "web_search",
@@ -44,6 +45,7 @@ SAFE_TOOLS = frozenset({
 RISKY_TOOLS = frozenset({
     "write_file",
     "edit_file",
+    "multi_edit",
     "exec_command",
     "remove_file",
     "spawn_subagent",
@@ -271,8 +273,8 @@ def _summarize_call(name: str, args: dict[str, Any]) -> str:
     """Build a short human-readable summary of a tool call."""
     if name == "exec_command":
         return f"exec_command: {args.get('command', '?')}"
-    if name in ("write_file", "edit_file", "read_file", "remove_file"):
-        return f"{name}: {args.get('file', '?')}"
+    if name in ("write_file", "edit_file", "multi_edit", "read_file", "remove_file", "ls"):
+        return f"{name}: {args.get('file') or args.get('path', '?')}"
     if name == "spawn_subagent":
         return f"spawn_subagent: {args.get('task', '?')[:80]}"
     return name
@@ -326,7 +328,7 @@ class PermissionController:
 
         # Path-containment check — hard block in AUTO mode (no user),
         # user-overridable in DEFAULT/STRICT modes
-        if tool_name in ("write_file", "edit_file", "remove_file"):
+        if tool_name in ("write_file", "edit_file", "multi_edit", "remove_file"):
             safe, reason = self.safety.check_path(arguments.get("file", ""))
             if not safe:
                 if self.mode == PermissionMode.AUTO:

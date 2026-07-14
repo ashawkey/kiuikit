@@ -96,23 +96,18 @@ class ChangeTracker:
             new_content=content,
         ))
 
-    def track_edit(self, round_id: int, path: str, old_text: str = "", new_text: str = ""):
-        """Capture *path* content before an edit is applied."""
-        abs_path = self.work_dir / path
-        original = None
-        try:
-            original = abs_path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            original = None
-        # Compute what the file will look like after the edit
-        after = original
-        if original is not None and old_text:
-            after = original.replace(old_text, new_text)
+    def track_edit_result(self, round_id: int, path: str, original_content: str | None, new_content: str):
+        """Record an edit with explicit before/after content, so rollback is exact.
+
+        Callers pass the actual applied result (which may differ from a naive
+        ``str.replace`` due to tolerant matching or multi-edit).
+        """
         self._log.append(ChangeRecord(
             round_id=round_id, path=path, op="edit",
-            original_content=original,
-            new_content=after,
+            original_content=original_content,
+            new_content=new_content,
         ))
+
 
     def track_remove(self, round_id: int, path: str):
         """Back up *path* before it is deleted."""

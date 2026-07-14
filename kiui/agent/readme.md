@@ -232,10 +232,12 @@ The agent has access to the following tools:
 |------|-------------|
 | `read_file` | Read file contents with optional offset/limit |
 | `write_file` | Create or overwrite files, creating parent directories |
-| `edit_file` | Surgical text replacement in files (exact match) |
+| `edit_file` | Surgical text replacement in files (whitespace-tolerant match) |
+| `multi_edit` | Apply an ordered batch of edits to one file atomically (all-or-nothing) |
+| `ls` | List a directory's immediate contents (gitignore-aware) |
 | `exec_command` | Run shell commands with real-time streaming output |
-| `glob_files` | Find files matching a glob pattern |
-| `grep_files` | Search file contents using regex (prefers ripgrep) |
+| `glob_files` | Find files matching a glob pattern (gitignore-aware) |
+| `grep_files` | Search file contents using regex (prefers ripgrep; gitignore-aware) |
 | `web_search` | Search the web via DuckDuckGo |
 | `web_fetch` | Fetch and parse content from a URL |
 | `remove_file` | Remove a file or directory |
