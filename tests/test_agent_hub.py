@@ -1,3 +1,4 @@
+import inspect
 import json
 import re
 import socket
@@ -39,6 +40,13 @@ def free_port():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
+
+
+def ws_header_kwargs(websockets, headers):
+    params = inspect.signature(websockets.connect).parameters
+    if "additional_headers" in params:
+        return {"additional_headers": headers}
+    return {"extra_headers": headers}
 
 
 # -- static / auth (browser surface) ---------------------------------------
@@ -526,9 +534,11 @@ def test_two_sessions_stream_concurrently():
 
         # Two browser sockets open at once, one per session.
         async with websockets.connect(
-            f"ws://127.0.0.1:{port}/api/ws?session=a&after=0", extra_headers=headers
+            f"ws://127.0.0.1:{port}/api/ws?session=a&after=0",
+            **ws_header_kwargs(websockets, headers),
         ) as ws_a, websockets.connect(
-            f"ws://127.0.0.1:{port}/api/ws?session=b&after=0", extra_headers=headers
+            f"ws://127.0.0.1:{port}/api/ws?session=b&after=0",
+            **ws_header_kwargs(websockets, headers),
         ) as ws_b:
             for ws in (ws_a, ws_b):
                 state = json.loads(await asyncio.wait_for(ws.recv(), 5))
