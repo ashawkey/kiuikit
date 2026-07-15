@@ -37,6 +37,11 @@ class AtFileCompleter(Completer):
     # Hard limit on completions shown
     MAX_COMPLETIONS = 30
 
+    # Upper bound on filesystem entries visited during a recursive scan.
+    # Bounds worst-case latency on huge repos so the UI never blocks for
+    # long on a single keystroke.
+    _MAX_SCAN_ENTRIES = 20000
+
     # Directories skipped during recursive scans
     _SKIP_DIRS: frozenset[str] = frozenset({
         ".git", ".hg", ".svn",
@@ -122,44 +127,54 @@ class AtFileCompleter(Completer):
     def _fuzzy_completions(self, search_dir, base_dir, prefix, partial):
         """Recursive scan with fuzzy filename matching.
 
-        Uses two-pass glob: substring first, then (if needed) a
-        character-sequence glob that is much cheaper than a full rglob.
+        Walks the tree manually with :func:`os.scandir`, pruning hidden
+        and well-known bulky directories *during* traversal so we never
+        descend into ``.git`` / ``node_modules`` / etc.  A visited-entry
+        budget (:data:`_MAX_SCAN_ENTRIES`) caps worst-case latency on very
+        large repositories, keeping the completer responsive on every
+        keystroke.
+
+        ``pathlib``'s ``**`` glob is deliberately avoided here: it eagerly
+        walks the entire subtree (including ignored dirs) before any
+        filtering, which stalls the UI on large repos.
         """
-        import glob as glob_module
-
+        pl = prefix.lower()
         scored: list[tuple[int, str, bool]] = []  # (score, rel_path, is_dir)
-        seen: set[str] = set()
+        visited = 0
+        work_dir = str(self._work_dir)
 
-        def _collect(pattern: str) -> None:
+        # DFS stack of directories to scan (start at the search root).
+        stack: list[str] = [str(search_dir)]
+        while stack and visited < self._MAX_SCAN_ENTRIES:
+            current = stack.pop()
             try:
-                for entry in search_dir.glob(pattern):
-                    if self._skip_entry(entry):
-                        continue
-                    rel = self._relative(entry)
-                    if rel in seen:
-                        continue
-                    seen.add(rel)
-                    score = self._score(entry.name, prefix)
-                    scored.append((score, rel, entry.is_dir()))
-            except PermissionError:
-                pass
+                it = os.scandir(current)
+            except (PermissionError, OSError):
+                continue
+            with it:
+                for entry in it:
+                    visited += 1
+                    if visited >= self._MAX_SCAN_ENTRIES:
+                        break
 
-        # ---- pass 1: fast substring glob ---------------------------------
-        escaped = glob_module.escape(prefix)
-        _collect(f"**/*{escaped}*")
+                    name = entry.name
+                    if name.startswith("."):
+                        continue
+                    try:
+                        is_dir = entry.is_dir()
+                    except OSError:
+                        continue
 
-        # ---- pass 2: character-sequence glob (only when needed) ----------
-        # Instead of a brute-force rglob("*") + manual scoring we use
-        # another glob with a * between every character, e.g. "dott" →
-        # "**/*[dD]*[oO]*[tT]*[tT]*".  The OS-level glob is orders of
-        # magnitude faster than a full Python-side walk.
-        if len(scored) < 5:
-            seq_chars = "*".join(
-                f"[{c.lower()}{c.upper()}]" if c.isalpha()
-                else glob_module.escape(c)
-                for c in prefix
-            )
-            _collect(f"**/*{seq_chars}*")
+                    if is_dir:
+                        if name in self._SKIP_DIRS:
+                            continue
+                        stack.append(entry.path)
+
+                    score = self._score(name, pl)
+                    if score <= 0:
+                        continue
+                    rel = os.path.relpath(entry.path, work_dir).replace(os.sep, "/")
+                    scored.append((score, rel, is_dir))
 
         # ---- sort & yield -------------------------------------------------
         # Sort: higher score first, then dirs first, then shorter path, then alpha
@@ -186,22 +201,6 @@ class AtFileCompleter(Completer):
             start_position=-len(partial) - 1,  # back to the @
             display=display,
         )
-
-    def _relative(self, entry: Path) -> str:
-        """Return *entry* as a forward-slash path relative to work_dir."""
-        try:
-            return entry.relative_to(self._work_dir).as_posix()
-        except ValueError:
-            return entry.as_posix()
-
-    def _skip_entry(self, entry: Path) -> bool:
-        """True if *entry* should be excluded from completions."""
-        # Skip hidden files/dirs and well-known bulky directories
-        if entry.name.startswith("."):
-            return True
-        if entry.is_dir() and entry.name in self._SKIP_DIRS:
-            return True
-        return False
 
     @staticmethod
     def _score(name: str, pattern: str) -> int:
