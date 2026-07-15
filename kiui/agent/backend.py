@@ -396,9 +396,9 @@ class LLMAgent:
 
         The blocking network request that opens the stream is watched for a
         cancel key (spinner phase). Once chunks flow, a live-rendering sink
-        replaces the spinner and stream consumption runs on a worker thread so
-        ESC / Ctrl+C / web-cancel can abandon it mid-response. On cancel we
-        raise ``RequestInterrupted`` so the round rolls back cleanly.
+        replaces the spinner and stream consumption runs on a worker thread.
+        Cancellation closes the stream before returning so the worker stops
+        consuming data and cannot continue writing to the closed sink.
         """
         with self.console.thinking(status_suffix=self._status_suffix()):
             stream = run_interruptible(
@@ -421,7 +421,11 @@ class LLMAgent:
                 result["message"] = message
                 result["usage"] = usage
 
-            run_interruptible(consume, self.cancellation)
+            try:
+                run_interruptible(consume, self.cancellation)
+            except RequestInterrupted:
+                stream.close()
+                raise
 
         message = result["message"]
         usage = result["usage"]
@@ -635,8 +639,13 @@ class LLMAgent:
         Output is streamed in real-time and the command can be interrupted via Ctrl+C.
         """
         self.console.tool(f"! {command}")
+        arguments = {"command": command}
+        allowed, reason = self.permissions.check_safety("exec_command", arguments)
+        if not allowed:
+            self.console.tool_result(reason, success=False)
+            return
         with self._operation("shell command"):
-            result = self.tool_executor.execute("exec_command", {"command": command})
+            result = self.tool_executor.execute("exec_command", arguments)
         result_text = format_tool_result(result)
         success = result.get("success", False)
         if result.get("streamed", True):

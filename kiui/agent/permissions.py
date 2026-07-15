@@ -5,9 +5,10 @@ Three modes:
   - default: risky tools prompt the user for confirmation
   - strict:  every tool prompts for confirmation
 
-A hard safety layer (`SafetyGuard`) runs *before* mode-based checks and blocks
-inherently dangerous operations regardless of mode:
-  - Destructive shell commands (rm -rf /, mkfs, dd to devices, fork bombs, …)
+A safety layer (`SafetyGuard`) runs *before* mode-based checks.  Its shell
+patterns reject common destructive commands (rm -rf /, mkfs, device writes,
+fork bombs, …) as defense-in-depth, but they are not a sandbox and cannot
+recognize every equivalent shell expression.
 
 Files outside the working directory trigger a warning prompt in interactive
 modes (default/strict) so the user can choose to proceed.  In auto mode
@@ -57,14 +58,15 @@ RISKY_TOOLS = frozenset({
 # ---------------------------------------------------------------------------
 
 class SafetyGuard:
-    """Hard safety layer that blocks dangerous operations regardless of mode.
+    """Reject recognized dangerous operations regardless of permission mode.
 
-    Enforced rules (hard-blocked, no override):
-      - Shell commands must not match known destructive patterns
-        (mkfs, dd to devices, rm -rf on critical paths, fork bombs, etc.)
+    Shell checks are heuristic defense-in-depth, not a security boundary: a
+    full shell can express equivalent commands in ways static pattern matching
+    cannot recognize. Use OS-level sandboxing when untrusted commands require
+    containment.
 
-    Path-containment checks are available via :meth:`check_path` and are
-    *not* hard-blocked — the caller decides whether to override or prompt.
+    Path-containment checks are available via :meth:`check_path`; the caller
+    decides whether to block, override, or prompt for those failures.
     """
 
     # -- Unix dangerous command patterns ------------------------------------
@@ -142,9 +144,9 @@ class SafetyGuard:
         Returns ``(True, "")`` when safe, or ``(False, reason)`` when the
         path resolves outside the allowed work directory.
 
-        Unlike the hard safety checks in :meth:`check`, denials from this
-        method are *not* automatically fatal — the caller can surface them
-        as a user-overridable prompt.
+        Unlike rejected patterns from :meth:`check`, denials from this method
+        are not automatically fatal — the caller can surface them as a
+        user-overridable prompt.
         """
         return self._check_path(path)
 
@@ -283,8 +285,8 @@ def _summarize_call(name: str, args: dict[str, Any]) -> str:
 class PermissionController:
     """Gate tool execution behind user confirmation when required.
 
-    A hard ``SafetyGuard`` layer runs first and blocks inherently dangerous
-    operations (destructive shell commands) regardless of mode.
+    ``SafetyGuard`` first rejects recognized destructive shell patterns as a
+    defense-in-depth measure regardless of mode. It is not a shell sandbox.
     Out-of-scope file paths trigger a user prompt in interactive modes
     so the user can override the guard when needed.
 
@@ -318,12 +320,8 @@ class PermissionController:
         """Return ``(allowed, reason)`` — *reason* is non-empty only on denial
         when the user provides feedback."""
 
-        # Hard safety layer — always active, cannot be bypassed
-        safe, reason = self.safety.check(tool_name, arguments)
+        safe, reason = self.check_safety(tool_name, arguments)
         if not safe:
-            self.console.print(
-                f"[bold red]🛡  Safety guard:[/bold red] [red]{reason}[/red]"
-            )
             return False, reason
 
         # Path-containment check — hard block in AUTO mode (no user),
@@ -353,6 +351,15 @@ class PermissionController:
             return True, ""
 
         return self._prompt_user(tool_name, arguments)
+
+    def check_safety(self, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
+        """Run safety checks without applying mode-based confirmation policy."""
+        safe, reason = self.safety.check(tool_name, arguments)
+        if not safe:
+            self.console.print(
+                f"[bold red]🛡  Safety guard:[/bold red] [red]{reason}[/red]"
+            )
+        return safe, reason
 
     def _needs_prompt(self, tool_name: str) -> bool:
         if self.mode == PermissionMode.STRICT:

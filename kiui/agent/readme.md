@@ -13,7 +13,7 @@ A lightweight, terminal-based AI agent that can browse the web, read/write files
 - **Skills**: Load domain-specific instructions via customizable skill packs (`.kia/skills/`).
 - **Context Management**: Automatic pruning and LLM-based compaction to stay within context windows.
 - **Rewind**: Roll back conversation and/or code changes to any previous round.
-- **Permissions**: Three-tier safety system (auto / default / strict) with hard safety guard for dangerous operations.
+- **Permissions**: Three confirmation modes (auto / default / strict), workspace path checks, and defense-in-depth detection of common destructive shell commands.
 - **Model Switching**: Hot-swap between configured models mid-session.
 - **Interactive**: Rich terminal interface with syntax highlighting, file-path autocomplete, and progress indicators.
 - **Remote Web UI**: Optional authenticated, mobile-friendly companion synchronized with the terminal. A shared hub multiplexes many terminal agents into one page (a tab per agent) behind a single port.
@@ -165,9 +165,11 @@ Three permission modes control when the agent asks for confirmation before execu
 | `default` | Risky tools (write, edit, remove, exec, spawn) prompt for confirmation |
 | `strict` | Every tool call prompts for confirmation |
 
-All modes are protected by a **hard safety guard** that blocks:
-- File writes/edits/removals outside the allowed working directory
-- Destructive shell commands (`rm -rf /`, `mkfs`, `dd` to devices, fork bombs, shutdown/reboot, etc.)
+The permission layer also provides:
+- Workspace path checks for file writes, edits, and removals. Outside paths are blocked in `auto` mode and require an explicit override in interactive modes.
+- Defense-in-depth detection of common destructive shell commands (`rm -rf /`, `mkfs`, device writes, fork bombs, shutdown/reboot, etc.), including direct `!` commands.
+
+Shell detection is heuristic, not a security boundary: arbitrary shell syntax can evade static pattern matching. Use an OS-level sandbox or container when commands must be contained.
 
 ## Context Management
 

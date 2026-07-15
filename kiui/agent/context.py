@@ -450,10 +450,10 @@ def compact_context(
         summary = response.choices[0].message.content.strip()
     except Exception:
         if console is not None:
-            console.warn("Context compaction LLM call failed", exc_info=True)
+            console.warn("Context compaction LLM call failed; preserving context", exc_info=True)
         else:
-            print("[WARNING] Context compaction LLM call failed", file=sys.stderr)
-        summary = "[Compaction failed — older context may be incomplete]"
+            print("[WARNING] Context compaction LLM call failed; preserving context", file=sys.stderr)
+        return list(messages)
 
     summary_msg: dict[str, Any] = {
         "role": "user",
