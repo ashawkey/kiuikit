@@ -147,12 +147,21 @@ def discover_skills(
                     errors.append({
                         "name": skill_name,
                         "path": str(skill_md),
-                        "reason": "invalid or missing YAML frontmatter (needs a non-empty 'description')",
+                        "reason": "invalid or missing YAML frontmatter",
                     })
                     continue
 
                 frontmatter, body = parsed
-                description = frontmatter.get("description", "").strip()
+                validation_errors = validate_skill(skill_name, frontmatter)
+                if validation_errors:
+                    errors.append({
+                        "name": skill_name,
+                        "path": str(skill_md),
+                        "reason": "; ".join(validation_errors),
+                    })
+                    continue
+
+                description = frontmatter["description"].strip()
 
                 skills[skill_name] = {
                     "path": str(skill_md),
@@ -172,17 +181,12 @@ def discover_skills(
 def _parse_skill(raw: str) -> tuple[dict, str] | None:
     """Parse a SKILL.md into (frontmatter dict, body markdown).
 
-    Requires a leading YAML frontmatter block delimited by ``---`` lines with a
-    non-empty ``description``. Returns None if the frontmatter is absent, invalid,
-    or lacks a description (such files are not valid skills per the spec).
+    Requires a leading YAML frontmatter block delimited by ``---`` lines.
+    Field-level specification validation is performed by :func:`validate_skill`.
     """
     frontmatter, body = _split_frontmatter(raw)
     if frontmatter is None:
         return None
-
-    description = frontmatter.get("description")
-    if not isinstance(description, str) or not description.strip():
-        return None  # description is required and must be a non-empty string
 
     return frontmatter, body.strip()
 
@@ -222,28 +226,48 @@ def _split_frontmatter(raw: str) -> tuple[dict | None, str]:
 
 
 def validate_skill(name: str, frontmatter: dict) -> list[str]:
-    """Return a list of spec-compliance warnings for a skill (empty if clean).
-
-    Non-fatal: discovery still loads skills with warnings so that slightly
-    non-conforming third-party skills remain usable. Used by ``/skills``.
-    """
-    warnings: list[str] = []
+    """Return Agent Skills specification violations (empty if valid)."""
+    errors: list[str] = []
 
     fm_name = frontmatter.get("name")
-    if fm_name is None:
-        warnings.append("missing 'name' field")
-    elif fm_name != name:
-        warnings.append(f"name '{fm_name}' does not match directory '{name}'")
+    if not isinstance(fm_name, str):
+        errors.append("'name' must be a string")
+    else:
+        if not _NAME_RE.fullmatch(fm_name) or len(fm_name) > 64:
+            errors.append("name must be 1-64 lowercase alphanumeric/hyphen chars")
+        if fm_name != name:
+            errors.append(f"name '{fm_name}' does not match directory '{name}'")
 
-    check_name = fm_name if isinstance(fm_name, str) else name
-    if not _NAME_RE.match(check_name) or len(check_name) > 64:
-        warnings.append("name must be 1-64 lowercase alphanumeric/hyphen chars")
+    desc = frontmatter.get("description")
+    if not isinstance(desc, str) or not desc.strip():
+        errors.append("'description' must be a non-empty string")
+    elif len(desc) > 1024:
+        errors.append("description exceeds 1024 characters")
 
-    desc = frontmatter.get("description", "")
-    if isinstance(desc, str) and len(desc) > 1024:
-        warnings.append("description exceeds 1024 characters")
+    compatibility = frontmatter.get("compatibility")
+    if compatibility is not None and (
+        not isinstance(compatibility, str)
+        or not compatibility
+        or len(compatibility) > 500
+    ):
+        errors.append("compatibility must be a non-empty string of at most 500 characters")
 
-    return warnings
+    metadata = frontmatter.get("metadata")
+    if metadata is not None and (
+        not isinstance(metadata, dict)
+        or any(not isinstance(k, str) or not isinstance(v, str) for k, v in metadata.items())
+    ):
+        errors.append("metadata must map strings to strings")
+
+    allowed_tools = frontmatter.get("allowed-tools")
+    if allowed_tools is not None and not isinstance(allowed_tools, str):
+        errors.append("allowed-tools must be a space-separated string")
+
+    license_value = frontmatter.get("license")
+    if license_value is not None and not isinstance(license_value, str):
+        errors.append("license must be a string")
+
+    return errors
 
 
 def build_skills_prompt_section(skills: dict[str, dict]) -> str:
@@ -258,9 +282,11 @@ def build_skills_prompt_section(skills: dict[str, dict]) -> str:
     lines = [
         "## Skills",
         "",
-        "The following specialized skills are available. When a user request matches",
-        "a skill's domain, use the **load_skill** tool with the skill name to load",
-        "its full instructions into context. A loaded skill may reference bundled",
+        "The following specialized skills are available. Before acting, check whether",
+        "the request matches a skill below; if it does, use **load_skill** before doing",
+        "the task and follow the loaded instructions. If the user asks to create or",
+        "modify a skill, load a skill-creation skill when one is available. A loaded skill",
+        "may reference bundled",
         "files (e.g. references/… or scripts/…) relative to its directory; read or",
         "run those with the ordinary file/exec tools when the instructions call for it.",
         "",

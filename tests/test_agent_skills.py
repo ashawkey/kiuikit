@@ -3,7 +3,7 @@ and per-session skill load-count tracking (kiui.agent.skills / tools)."""
 
 from pathlib import Path
 
-from kiui.agent.skills import discover_skills
+from kiui.agent.skills import build_skills_prompt_section, discover_skills
 from kiui.agent.tools import ToolExecutor
 
 
@@ -63,6 +63,31 @@ def test_discover_issues_optional(tmp_path):
     # Must not raise when issues arg is omitted.
     skills = discover_skills(tmp_path)
     assert "solo" in skills
+
+
+def test_discover_rejects_spec_invalid_frontmatter(tmp_path):
+    _write_skill(tmp_path, ".kia", "wrong-dir", _valid("different-name"))
+    _write_skill(
+        tmp_path,
+        ".kia",
+        "bad-metadata",
+        "---\nname: bad-metadata\ndescription: valid\nmetadata:\n  version: 1\n---\nbody\n",
+    )
+
+    issues = {}
+    skills = discover_skills(tmp_path, issues=issues)
+
+    assert "wrong-dir" not in skills
+    assert "bad-metadata" not in skills
+    assert len(issues["errors"]) == 2
+
+
+def test_skills_prompt_requires_loading_before_work_and_guides_creation():
+    section = build_skills_prompt_section({
+        "skill-creator": {"description": "Create skills when asked."},
+    })
+    assert "load_skill** before doing" in section
+    assert "asks to create or" in section
 
 
 # ----- load-count tracking -------------------------------------------------
