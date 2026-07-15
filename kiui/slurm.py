@@ -97,16 +97,14 @@ class JobInfo:
     def output_logs(self, rank: int = 0) -> Tuple[Optional[str], Dict[str, Optional[str]]]:
         """Resolve the real program output files for this job.
 
-        Slurm's StdOut (``job.out``) only captures the sbatch shell echoes
-        (Nodelist, MASTER_ADDR, preflight). The launcher tees each rank's
-        stdout+stderr into ``log_<PROCID>.txt`` and, under APS, also writes a
-        unified all-rank log named ``<jobname>_<jobid>_*.log`` in the same
-        directory.
+        Slurm's job-level StdOut often only captures the sbatch wrapper echoes.
+        The actual program output may be written by the srun step itself, where
+        sacct reports a separate step-level StdOut (for example ``<jobid>.0``).
 
         Returns ``(preferred_path, available)`` where ``available`` maps logical
         names ("rank", "aps", "batch", "batch_err") to concrete paths (or None).
-        ``preferred_path`` is the rank log if present and non-empty, else the APS
-        log, else ``job.out`` (covers jobs that have not reached ``srun`` yet).
+        ``preferred_path`` is the rank/step log if present and non-empty, else the
+        APS log, else ``job.out`` (covers jobs that have not reached ``srun`` yet).
         """
         stdout_path = self.stdout_path
         available: Dict[str, Optional[str]] = {"rank": None, "aps": None, "batch": None, "batch_err": None}
@@ -121,9 +119,42 @@ class JobInfo:
         if os.path.isfile(rank_log):
             available["rank"] = rank_log
 
-        # APS unified log: <jobname>_<jobid>_date_*.log . Match on jobid to be robust
-        # to job names that contain underscores/special chars. Pick the newest.
-        aps_matches = glob.glob(os.path.join(log_dir, f"*_{self.jid}_*.log"))
+        # srun can override --output, which appears only on the step rows in sacct
+        # (e.g. JobID 123.0), not in scontrol's job-level StdOut.
+        fields = "JobID,JobName%200,User,StdOut"
+        code, out, err = _run_cmd(["sacct", "-j", self.jid, "-o", fields, "-P", "--units=M"])
+        if code == 0 and out.strip():
+            lines = out.splitlines()
+            headers = lines[0].split("|")
+            for line in lines[1:]:
+                values = line.split("|")
+                if len(values) != len(headers):
+                    continue
+                row = dict(zip(headers, values))
+                step_id = row.get("JobID", "")
+                step_out = row.get("StdOut", "")
+                if "." not in step_id or step_id.endswith((".batch", ".extern")) or not step_out:
+                    continue
+                step_data = {
+                    **self.data,
+                    "StdOut": step_out,
+                    "User": row.get("User") or self.user or "",
+                    "JobName": row.get("JobName") or self.job_name or "",
+                }
+                step_path = JobInfo(self.jid, step_data, "sacct").stdout_path
+                if step_path and os.path.isfile(step_path):
+                    available["rank"] = step_path
+                    break
+
+        search_dirs = [log_dir]
+        if available["rank"]:
+            search_dirs.insert(0, os.path.dirname(available["rank"]))
+
+        # APS/unified logs commonly include the job id in the filename. Match on
+        # jobid to be robust to job names that contain underscores/special chars.
+        aps_matches = []
+        for d in dict.fromkeys(search_dirs):
+            aps_matches.extend(glob.glob(os.path.join(d, f"*{self.jid}*.log")))
         if aps_matches:
             available["aps"] = max(aps_matches, key=lambda p: os.path.getmtime(p))
 
@@ -545,17 +576,13 @@ def log_output(target: Optional[str] = None, num_lines: Optional[int] = 100, sho
         console.print(f"[bold red]Error:[/bold red] No log file found for job {info.jid}.")
         return
 
-    # Summarize what else is available so the user knows how to switch.
-    alts = []
-    if available["rank"] and chosen != available["rank"]:
-        alts.append(f"rank: -r {rank}")
-    if available["aps"] and chosen != available["aps"]:
-        alts.append("aps: --aps")
-    if available["batch"] and chosen != available["batch"]:
-        alts.append("batch: -b")
-    alt_str = f"\nOther logs: {', '.join(alts)}" if alts else ""
-
-    console.print(Panel(f"Reading logs for Job {info.jid} — {chosen_label}\nFile: {chosen}{alt_str}", border_style="blue"))
+    console.rule(f"[bold blue]Reading logs for Job {info.jid} — {chosen_label}[/bold blue]", style="blue")
+    console.print("[bold]Potential log paths:[/bold]")
+    for label, path in available.items():
+        if path:
+            marker = "[bold green]*[/bold green]" if path == chosen else " "
+            console.print(f" {marker} [cyan]{label}:[/cyan] {path}", soft_wrap=True)
+    console.rule(style="blue")
 
     # Construct command
     tail_cmd = ["tail"]
