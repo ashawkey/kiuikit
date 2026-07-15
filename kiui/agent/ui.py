@@ -67,9 +67,10 @@ class ThinkingIndicator:
     thread to update the elapsed-time counter every second.
     """
 
-    def __init__(self, console: Console, events: EventHub | None = None):
+    def __init__(self, console: Console, events: EventHub | None = None, status_suffix: str = ""):
         self._console = console
         self._events = events
+        self._status_suffix = status_suffix
         self._status: Status | None = None
         self._start_time: float = 0
         self._running = False
@@ -79,7 +80,7 @@ class ThinkingIndicator:
         self._start_time = time.monotonic()
         self._running = True
         self._status = Status(
-            "Working...",
+            self._label(0.0),
             spinner="dots",
             console=self._console,
             speed=1.5,
@@ -88,7 +89,7 @@ class ThinkingIndicator:
         self._thread = threading.Thread(target=self._tick, daemon=True)
         self._thread.start()
         if self._events is not None:
-            self._events.publish("thinking_start")
+            self._events.publish("thinking_start", suffix=self._status_suffix)
         return self
 
     def __exit__(self, *args) -> None:
@@ -100,6 +101,10 @@ class ThinkingIndicator:
         if self._events is not None:
             self._events.publish("thinking_stop")
 
+    def _label(self, elapsed: float) -> str:
+        base = f"Working... ({elapsed:.0f}s)" if elapsed else "Working..."
+        return f"{base} · {self._status_suffix}" if self._status_suffix else base
+
     def _tick(self) -> None:
         """Background loop that updates the elapsed-time label."""
         while self._running:
@@ -107,7 +112,7 @@ class ThinkingIndicator:
             if self._running and self._status is not None:
                 elapsed = time.monotonic() - self._start_time
                 try:
-                    self._status.update(f"Working... ({elapsed:.0f}s)")
+                    self._status.update(self._label(elapsed))
                 except Exception:
                     pass  # best-effort; don't crash the agent on a display glitch
 
@@ -232,15 +237,18 @@ class AgentConsole:
             capture_console.print(*objects, markup=markup)
         return capture.get().rstrip("\n")
 
-    def thinking(self) -> ThinkingIndicator:
+    def thinking(self, *, status_suffix: str = "") -> ThinkingIndicator:
         """Return a context manager that displays an animated thinking indicator.
+
+        ``status_suffix`` is appended after the elapsed-time counter (e.g. a
+        token/context summary) in both the terminal status bar and the web UI.
 
         Usage::
 
             with console.thinking():
                 response = client.chat.completions.create(...)
         """
-        return ThinkingIndicator(self._console, self.events)
+        return ThinkingIndicator(self._console, self.events, status_suffix=status_suffix)
 
     def stream_response(self, *, show_thinking: bool = False) -> ResponseStream:
         """Return a live-rendering sink for a streamed assistant turn.

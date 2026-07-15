@@ -117,7 +117,7 @@ function CommandPreview({ detail }: { detail: string }) {
   )
 }
 
-export function Thinking() {
+export function Thinking({ suffix = '' }: { suffix?: string }) {
   const [seconds, setSeconds] = useState(0)
   useEffect(() => {
     const start = Date.now()
@@ -128,7 +128,7 @@ export function Thinking() {
   }, [])
   return (
     <div className="working" aria-label="working">
-      <span /><span /><span /><em>Working… {seconds}s</em>
+      <span /><span /><span /><em>Working… {seconds}s{suffix ? ` · ${suffix}` : ''}</em>
     </div>
   )
 }

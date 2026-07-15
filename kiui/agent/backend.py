@@ -234,6 +234,17 @@ class LLMAgent:
         if usage.completion_tokens_details and usage.completion_tokens_details.reasoning_tokens:
             self.token_totals["reasoning"] += usage.completion_tokens_details.reasoning_tokens
 
+    def _status_suffix(self) -> str:
+        """Compact token/context summary shown in the 'Working...' status bar."""
+        ctx_chars = estimate_context_chars(self.context.messages)
+        ctx_tokens = self.token_estimator.chars_to_tokens(ctx_chars)
+        if self.context_length:
+            ctx_pct = ctx_tokens / self.context_length * 100
+            ctx = f"ctx ~{ctx_tokens:,}/{self.context_length:,} ({ctx_pct:.0f}%)"
+        else:
+            ctx = f"ctx ~{ctx_tokens:,}"
+        return f"{ctx} · {self.token_totals['total']:,} tokens used"
+
     def _interruptible_sleep(self, seconds: float):
         # Watch the keyboard during backoff so ESC/Ctrl+C cancels the wait
         # too (raises RequestInterrupted, which call_api lets propagate).
@@ -373,7 +384,7 @@ class LLMAgent:
 
     def _blocking_completion(self, kwargs: dict):
         """Non-streaming call: show a spinner, return ``(message, usage)``."""
-        with self.console.thinking():
+        with self.console.thinking(status_suffix=self._status_suffix()):
             response = run_interruptible(
                 lambda: self.client.chat.completions.create(**kwargs),
                 self.cancellation,
@@ -389,7 +400,7 @@ class LLMAgent:
         ESC / Ctrl+C / web-cancel can abandon it mid-response. On cancel we
         raise ``RequestInterrupted`` so the round rolls back cleanly.
         """
-        with self.console.thinking():
+        with self.console.thinking(status_suffix=self._status_suffix()):
             stream = run_interruptible(
                 lambda: self.client.chat.completions.create(**kwargs),
                 self.cancellation,

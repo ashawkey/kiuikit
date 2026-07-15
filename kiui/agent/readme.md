@@ -177,6 +177,8 @@ The agent automatically manages context window usage through three layers:
 2. **Context pruning** — old tool results from read/exec/web tools are trimmed (head+tail) at 30% usage, then hard-cleared at 50%.
 3. **LLM compaction** — when context exceeds 75%, the oldest messages are summarized via an LLM call and replaced with a compact summary.
 
+Live context/token usage is shown inline in the `Working... (Xs)` status bar (terminal and web UI), in addition to the full `/usage` breakdown.
+
 ## Rewind
 
 The `/rewind` command lets you roll back to any previous round:

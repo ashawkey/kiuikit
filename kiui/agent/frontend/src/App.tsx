@@ -48,6 +48,7 @@ function SessionPane({
   const [operationId, setOperationId] = useState<string | null>(null)
   const [prompt, setPrompt] = useState<Prompt | null>(null)
   const [thinking, setThinking] = useState(false)
+  const [thinkingSuffix, setThinkingSuffix] = useState('')
   const socket = useRef<WebSocket | null>(null)
   const lastSeq = useRef(0)
   const streamKey = useRef('')
@@ -113,6 +114,7 @@ function SessionPane({
         break
       case 'thinking_start':
         setThinking(true)
+        setThinkingSuffix(typeof data.suffix === 'string' ? data.suffix : '')
         break
       case 'thinking_stop':
         setThinking(false)
@@ -213,7 +215,7 @@ function SessionPane({
         <div className="timeline" aria-live="polite">
           {events.map((event) => <EventCard event={event} key={event.key} />)}
         </div>
-        {active && thinking ? <Thinking /> : null}
+        {active && thinking ? <Thinking suffix={thinkingSuffix} /> : null}
       </section>
       {active && prompt ? (
         <PromptDialog prompt={prompt} onAnswer={(answer) => send({ type: 'prompt_response', id: prompt.id, answer })} />

@@ -71,6 +71,13 @@ describe('interaction components', () => {
     }
   })
 
+  it('appends the token/context suffix while working', () => {
+    render(<Thinking suffix="ctx ~1,000/128,000 (1%) · 500 tokens used" />)
+    expect(
+      screen.getByText('Working… 0s · ctx ~1,000/128,000 (1%) · 500 tokens used'),
+    ).toBeInTheDocument()
+  })
+
   it('renders prompt choices as separate buttons', () => {
     const answer = vi.fn()
     render(
