@@ -1,53 +1,87 @@
-"""Model catalog: maps model identifiers to context-window sizes and
-thinking-budget styles so the agent can auto-configure itself."""
+"""Model capabilities and provider-specific reasoning configuration."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, Literal
+
+ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
+REASONING_EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh")
 
 
-@dataclass
+@dataclass(frozen=True)
 class ModelProfile:
     """Properties of a model family that affect API behaviour."""
 
     context_length: int = 128_000
-    thinking: str | None = None  # "openai" | "gemini" | "deepseek" | None
+    reasoning: str | None = None  # "openai" | "anthropic" | "gemini" | "deepseek"
 
 
 # Ordered most-specific → least-specific within each family.
 # Matching is case-insensitive substring; first hit wins.
 MODEL_CATALOG: list[tuple[str, ModelProfile]] = [
-    # --- OpenAI / o-series ---
-    ("gpt-5",    ModelProfile(context_length=1_000_000, thinking="openai")),
-    ("gpt-4o",   ModelProfile(context_length=128_000)),
-
-    # --- Google Gemini ---
-    ("gemini-3",   ModelProfile(context_length=1_000_000, thinking="gemini")),
-    ("gemini",     ModelProfile(context_length=1_000_000, thinking="gemini")),
-
-    # --- Anthropic Claude ---
-    ("claude",          ModelProfile(context_length=1_000_000)),
-
-    # --- DeepSeek ---
-    ("deepseek-v4-pro", ModelProfile(context_length=1_000_000, thinking="deepseek")),
-    ("deepseek-v4-flash",     ModelProfile(context_length=1_000_000, thinking="deepseek")),
-    ("deepseek",          ModelProfile(context_length=1_000_000, thinking="deepseek")),
+    ("gpt-5", ModelProfile(context_length=1_000_000, reasoning="openai")),
+    ("o1", ModelProfile(reasoning="openai")),
+    ("o3", ModelProfile(reasoning="openai")),
+    ("o4", ModelProfile(reasoning="openai")),
+    ("gpt-4o", ModelProfile(context_length=128_000)),
+    ("gemini", ModelProfile(context_length=1_000_000, reasoning="gemini")),
+    ("claude", ModelProfile(context_length=1_000_000, reasoning="anthropic")),
+    ("deepseek", ModelProfile(context_length=1_000_000, reasoning="deepseek")),
 ]
 
 DEFAULT_PROFILE = ModelProfile()
 
 
 def resolve_model_profile(model_id: str, model_alias: str = "") -> ModelProfile:
-    """Match a model identifier against the catalog.
-
-    Tries *model_id* first, then *model_alias* as a fallback.
-    Returns ``DEFAULT_PROFILE`` when nothing matches.
-    """
+    """Resolve a model ID, falling back to its configured alias."""
     for candidate in (model_id, model_alias):
-        if not candidate:
-            continue
         lower = candidate.lower()
         for pattern, profile in MODEL_CATALOG:
             if pattern in lower:
                 return profile
     return DEFAULT_PROFILE
+
+
+def reasoning_kwargs(style: str | None, effort: ReasoningEffort) -> dict[str, Any]:
+    """Translate normalized reasoning effort to OpenAI-compatible API fields."""
+    if style is None:
+        return {}
+    if style == "openai":
+        return {"reasoning_effort": effort}
+    if style == "anthropic":
+        # OpenAI-compatible Anthropic gateways commonly consume both the generic
+        # effort field and the native adaptive-thinking controls.
+        mapped = "max" if effort == "xhigh" else effort
+        if effort == "none":
+            return {"extra_body": {"thinking": {"type": "disabled"}}}
+        return {
+            "reasoning_effort": effort,
+            "extra_body": {
+                "thinking": {"type": "adaptive"},
+                "output_config": {"effort": mapped},
+            },
+        }
+    if style == "gemini":
+        # Gemini 3 uses qualitative thinking levels; it has no xhigh level.
+        mapped = {"none": "minimal", "xhigh": "high"}.get(effort, effort)
+        return {
+            "extra_body": {
+                "google": {
+                    "thinking_config": {
+                        "thinking_level": mapped,
+                        "include_thoughts": True,
+                    }
+                }
+            }
+        }
+    if style == "deepseek":
+        if effort == "none":
+            return {"extra_body": {"thinking": {"type": "disabled"}}}
+        # DeepSeek officially maps low/medium to high and xhigh to max.
+        mapped = "max" if effort == "xhigh" else "high"
+        return {
+            "reasoning_effort": mapped,
+            "extra_body": {"thinking": {"type": "enabled"}},
+        }
+    raise ValueError(f"Unknown reasoning style: {style}")

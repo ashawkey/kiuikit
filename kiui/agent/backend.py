@@ -39,7 +39,7 @@ from kiui.agent.context import (
     msg_chars,
 )
 from kiui.agent.rewind import ChangeTracker
-from kiui.agent.models import resolve_model_profile
+from kiui.agent.models import ReasoningEffort, REASONING_EFFORTS, reasoning_kwargs, resolve_model_profile
 from kiui.agent.interrupt import run_interruptible, RequestInterrupted
 from kiui.agent.io import (
     CancellationToken,
@@ -114,7 +114,7 @@ class LLMAgent:
         model_alias: str = "",
         verbose: bool = True,
         stream: bool = True,
-        thinking_budget: Literal["low", "medium", "high"] = "low",
+        reasoning_effort: ReasoningEffort = "high",
         context_length: int | None = None,
         permission_mode: PermissionMode = PermissionMode.DEFAULT,
         exec_mode: bool = False,
@@ -139,8 +139,8 @@ class LLMAgent:
         )
         self.verbose = verbose
         self.stream = stream
-        self.show_thinking = self.profile.thinking is not None
-        self.thinking_budget = thinking_budget
+        self.show_thinking = self.profile.reasoning is not None
+        self.reasoning_effort = reasoning_effort
         self.context_length = context_length if context_length is not None else self.profile.context_length
         self.token_estimator = TokenEstimator()
 
@@ -202,7 +202,11 @@ class LLMAgent:
         # subagent manager (only for top-level agents with a model_alias;
         # sub-agents get None so they cannot recursively spawn children)
         self.subagent_manager = (
-            SubagentManager(model_alias=model_alias, console=self.console)
+            SubagentManager(
+                model_alias=model_alias,
+                reasoning_effort=reasoning_effort,
+                console=self.console,
+            )
             if model_alias and not is_subagent
             else None
         )
@@ -236,7 +240,11 @@ class LLMAgent:
             "reasoning": 0,
         }
 
-        self.console.system(f"Created Agent with model: {model} (context: {self.context_length:,} tokens), permission: {permission_mode.value}")
+        self.console.system(
+            f"Created Agent with model: {model} (context: {self.context_length:,} tokens, "
+            f"reasoning: {self.profile.reasoning or 'none'}/{self.reasoning_effort}), "
+            f"permission: {permission_mode.value}"
+        )
         # self.console.system(f"System prompt: {self.system_prompt[:100]}...")
 
 
@@ -341,21 +349,7 @@ class LLMAgent:
         if self.tools:
             kwargs["tools"] = self.tools
         
-        # thinking budget (driven by model profile)
-        if self.profile.thinking == "openai":
-            kwargs["reasoning_effort"] = self.thinking_budget
-        elif self.profile.thinking == "gemini":
-            kwargs["extra_body"] = {
-                "google": {
-                    "thinking_config": {
-                        "thinking_budget": "low" if self.thinking_budget == "low" else "high",
-                        "include_thoughts": True,
-                    },
-                },
-            }
-        elif self.profile.thinking == "deepseek":
-            kwargs["reasoning_effort"] = "max"
-            kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
+        kwargs.update(reasoning_kwargs(self.profile.reasoning, self.reasoning_effort))
 
         # ---- retry loop with exponential backoff ----
         t_api = time.monotonic()
@@ -672,7 +666,7 @@ class LLMAgent:
 
     # ----- slash commands ---------------------------------------------------
 
-    COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "resume", "perm", "model", "context", "rewind", "skills", "goal", "system_prompt"}
+    COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "resume", "perm", "model", "reasoning", "context", "rewind", "skills", "goal", "system_prompt"}
 
     def _handle_command(self, raw: str) -> bool:
         """Handle a /command.  Returns True if the agent loop should stop."""
@@ -695,6 +689,8 @@ class LLMAgent:
             self._cmd_perm(raw)
         elif cmd == "model":
             self._cmd_model(raw)
+        elif cmd == "reasoning":
+            self._cmd_reasoning(raw)
         elif cmd == "context":
             self._cmd_context()
         elif cmd == "system_prompt":
@@ -719,6 +715,7 @@ class LLMAgent:
             "  [cyan]/compact[/cyan]     — Force context compaction via LLM summarization\n"
             "  [cyan]/usage[/cyan]       — Show token usage for this session\n"
             "  [cyan]/model[/cyan]       — Show or switch LLM model (/model <name>)\n"
+            "  [cyan]/reasoning[/cyan]   — Show or set reasoning effort (none|minimal|low|medium|high|xhigh)\n"
             "  [cyan]/skills[/cyan]      — List skills; /skills <name> to load one, /skills reload to re-scan\n"
             "  [cyan]/goal[/cyan]        — Set a goal the agent auto-iterates toward (/goal <text> | clear)\n"
             "  [cyan]/perm[/cyan]        — Show or change permission mode (/perm auto|default|strict)\n"
@@ -1217,6 +1214,20 @@ class LLMAgent:
         self.permissions.reset_session()
         self.console.system(f"Permission mode changed to: {new_mode.value}")
 
+    def _cmd_reasoning(self, raw: str):
+        parts = raw.split(maxsplit=1)
+        if len(parts) == 1:
+            self.console.system(
+                f"Reasoning: {self.profile.reasoning or 'unsupported'}, effort: {self.reasoning_effort}"
+            )
+            return
+        effort = parts[1].strip().lower()
+        if effort not in REASONING_EFFORTS:
+            self.console.error(f"Invalid reasoning effort '{effort}'. Choose: {', '.join(REASONING_EFFORTS)}")
+            return
+        self.reasoning_effort = effort
+        self.console.system(f"Reasoning effort set to {effort}.")
+
     def _cmd_model(self, raw: str):
         from kiui.config import conf
 
@@ -1252,14 +1263,18 @@ class LLMAgent:
         self._base_url = model_conf.get("base_url", "")
         self.client = OpenAI(api_key=self._api_key, base_url=self._base_url, max_retries=0)
         self.profile = resolve_model_profile(self.model, self.model_alias)
-        self.context_length = self.profile.context_length
+        self.context_length = model_conf.get("context_length", self.profile.context_length)
+        self.reasoning_effort = model_conf.get("reasoning_effort", self.reasoning_effort)
+        self.show_thinking = self.profile.reasoning is not None
 
         if self.subagent_manager:
             self.subagent_manager.model_alias = target
+            self.subagent_manager.reasoning_effort = self.reasoning_effort
 
         self.console.system(
             f"Switched to model: {self.model} "
-            f"(context: {self.context_length:,} tokens, thinking: {self.profile.thinking or 'none'})"
+            f"(context: {self.context_length:,} tokens, reasoning: "
+            f"{self.profile.reasoning or 'none'}/{self.reasoning_effort})"
         )
 
     def _cmd_skills(self, raw: str = "/skills"):

@@ -12,10 +12,12 @@ class SubagentManager:
     def __init__(
         self,
         model_alias: str,
+        reasoning_effort: str = "high",
         max_depth: int = 3,
         console: AgentConsole | None = None,
     ):
         self.model_alias = model_alias
+        self.reasoning_effort = reasoning_effort
         self.max_depth = max_depth
         self.console = console or AgentConsole()
         self._depth = int(os.environ.get("KIA_SPAWN_DEPTH", "0"))
@@ -61,6 +63,7 @@ class SubagentManager:
                 # Sub-agents share the parent console; a nested rich.Live would
                 # clash with the parent's, so they render responses statically.
                 stream=False,
+                reasoning_effort=model_conf.get("reasoning_effort", self.reasoning_effort),
                 permission_mode=PermissionMode.AUTO,
                 exec_mode=True,
                 is_subagent=True,

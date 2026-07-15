@@ -26,7 +26,7 @@ from kiui.config import conf, LOCAL_CONFIG_PATH
 from kiui.agent.ui import AgentConsole
 from kiui.agent.backend import LLMAgent
 from kiui.agent.permissions import PermissionMode
-from kiui.agent.models import resolve_model_profile
+from kiui.agent.models import ReasoningEffort, resolve_model_profile
 
 
 # ---------------------------------------------------------------------------
@@ -39,6 +39,7 @@ class Args:
     model: str = ""
     verbose: bool = False
     stream: bool = True  # stream the response token-by-token as it is generated
+    reasoning_effort: ReasoningEffort | None = None  # defaults to model config, then high
 
     perm: PermissionMode = PermissionMode.DEFAULT
     resume: str | None = None  # --resume [session_id]
@@ -116,6 +117,7 @@ def get_agent(args: Args) -> "tuple[LLMAgent | None, HubClient | None]":
         model_alias=args.model,
         verbose=args.verbose,
         stream=args.stream,
+        reasoning_effort=args.reasoning_effort or model_conf.get("reasoning_effort", "high"),
 
         permission_mode=args.perm,
         console=console,
@@ -234,7 +236,7 @@ def cmd_list():
             model_id,
             model_conf.get("base_url", "N/A"),
             ctx,
-            profile.thinking or "-",
+            f"{profile.reasoning or '-'} / {model_conf.get('reasoning_effort', 'high')}",
         )
 
     console.table(table)
