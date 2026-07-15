@@ -97,28 +97,20 @@ Use sub-agents when you want to delegate a self-contained task (e.g., research, 
 
 
 def _build_project_section(work_dir: str | None = None) -> str:
-    """Include project instruction files (AGENTS.md, CLAUDE.md) if present.
-
-    Both files use the same plain-markdown convention, so any that exist are
-    concatenated into the project instructions section. AGENTS.md comes first.
-    """
+    """Include AGENTS.md project instructions if present."""
     base = Path(work_dir) if work_dir else Path.cwd()
-
-    parts = []
-    for filename in ("AGENTS.md", "CLAUDE.md"):
-        instr_file = base / filename
-        if not instr_file.exists():
-            continue
-        try:
-            content = instr_file.read_text(encoding="utf-8").strip()
-        except Exception:
-            continue
-        if content:
-            parts.append(content)
-
-    if not parts:
+    instr_file = base / "AGENTS.md"
+    if not instr_file.exists():
         return ""
-    return "## Project Instructions\n" + "\n\n".join(parts)
+
+    try:
+        content = instr_file.read_text(encoding="utf-8").strip()
+    except Exception:
+        return ""
+
+    if not content:
+        return ""
+    return "## Project Instructions\n" + content
 
 
 def _build_memory_section(work_dir: str | None = None) -> str:
