@@ -83,7 +83,27 @@ def test_gitignore_matcher(repo):
     _assert_gitignore(m, repo)
 
 
-# ----- ls / glob / multi_edit tools ---------------------------------------
+# ----- file / ls / glob / multi_edit tools --------------------------------
+
+
+def test_read_file_logs_offset_and_limit(tmp_path):
+    class Console:
+        def __init__(self):
+            self.messages = []
+
+        def tool(self, message):
+            self.messages.append(message)
+
+    f = tmp_path / "m.py"
+    f.write_text("one\ntwo\nthree\n")
+    console = Console()
+    te = ToolExecutor(console=console, work_dir=str(tmp_path))
+
+    res = te._read_file(str(f), offset=2, limit=1)
+
+    assert res["success"]
+    assert console.messages == [f"read_file {f} (offset=2, limit=1)"]
+
 
 def test_ls_respects_gitignore(repo):
     te = ToolExecutor(work_dir=str(repo))

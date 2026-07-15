@@ -9,17 +9,19 @@ from __future__ import annotations
 
 import threading
 import time
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import questionary
 from rich.console import Console
 from rich.live import Live
+from rich.progress_bar import ProgressBar
 from rich.status import Status
 from rich.table import Table
+from rich.text import Text
 from rich.theme import Theme
 
 if TYPE_CHECKING:
-    from rich.text import Text
     from kiui.agent.io import EventHub, PromptBroker
 
 # Custom questionary style that blends with the CLI aesthetic
@@ -59,6 +61,54 @@ AGENT_THEME = Theme({
 })
 
 
+def _compact_tokens(value: int) -> str:
+    if value >= 1_000_000:
+        return f"{value / 1_000_000:.1f}M"
+    if value >= 1_000:
+        return f"{value / 1_000:.0f}K"
+    return str(value)
+
+
+@dataclass(frozen=True)
+class ContextStatus:
+    """Context-window usage displayed alongside the thinking spinner."""
+
+    tokens: int
+    limit: int
+    total_tokens_used: int
+
+    @property
+    def fraction(self) -> float:
+        if self.limit <= 0:
+            return 0.0
+        return min(max(self.tokens / self.limit, 0.0), 1.0)
+
+    def plain(self) -> str:
+        if self.limit <= 0:
+            return f"~{_compact_tokens(self.tokens)} · {_compact_tokens(self.total_tokens_used)} used"
+        return f"{self.fraction:.0%} · {_compact_tokens(self.total_tokens_used)} used"
+
+    def render(self) -> Table | Text:
+        if self.limit <= 0:
+            return Text(self.plain(), style="dim")
+
+        color = "red" if self.fraction >= 0.9 else "yellow" if self.fraction >= 0.75 else "cyan"
+        row = Table.grid(padding=(0, 1))
+        row.add_row(
+            ProgressBar(
+                total=self.limit,
+                completed=self.fraction * self.limit,
+                width=14,
+                style="color(238)",
+                complete_style=color,
+                finished_style=color,
+            ),
+            Text(f"{self.fraction:.0%}", style=color),
+            Text(f"· {_compact_tokens(self.total_tokens_used)} used", style="dim"),
+        )
+        return row
+
+
 class ThinkingIndicator:
     """Context manager that shows an animated "Working... (Xs)" line
     while the model is generating a response.
@@ -67,7 +117,12 @@ class ThinkingIndicator:
     thread to update the elapsed-time counter every second.
     """
 
-    def __init__(self, console: Console, events: EventHub | None = None, status_suffix: str = ""):
+    def __init__(
+        self,
+        console: Console,
+        events: EventHub | None = None,
+        status_suffix: str | ContextStatus = "",
+    ):
         self._console = console
         self._events = events
         self._status_suffix = status_suffix
@@ -89,7 +144,12 @@ class ThinkingIndicator:
         self._thread = threading.Thread(target=self._tick, daemon=True)
         self._thread.start()
         if self._events is not None:
-            self._events.publish("thinking_start", suffix=self._status_suffix)
+            suffix = (
+                self._status_suffix.plain()
+                if isinstance(self._status_suffix, ContextStatus)
+                else self._status_suffix
+            )
+            self._events.publish("thinking_start", suffix=suffix)
         return self
 
     def __exit__(self, *args) -> None:
@@ -101,9 +161,16 @@ class ThinkingIndicator:
         if self._events is not None:
             self._events.publish("thinking_stop")
 
-    def _label(self, elapsed: float) -> str:
+    def _label(self, elapsed: float) -> str | Table:
         base = f"Working... ({elapsed:.0f}s)" if elapsed else "Working..."
-        return f"{base} · {self._status_suffix}" if self._status_suffix else base
+        if not self._status_suffix:
+            return base
+        if isinstance(self._status_suffix, str):
+            return f"{base} · {self._status_suffix}"
+
+        row = Table.grid(padding=(0, 1))
+        row.add_row(Text(base), Text("·", style="dim"), self._status_suffix.render())
+        return row
 
     def _tick(self) -> None:
         """Background loop that updates the elapsed-time label."""
@@ -243,11 +310,12 @@ class AgentConsole:
             capture_console.print(*objects, markup=markup)
         return capture.get().rstrip("\n")
 
-    def thinking(self, *, status_suffix: str = "") -> ThinkingIndicator:
+    def thinking(self, *, status_suffix: str | ContextStatus = "") -> ThinkingIndicator:
         """Return a context manager that displays an animated thinking indicator.
 
-        ``status_suffix`` is appended after the elapsed-time counter (e.g. a
-        token/context summary) in both the terminal status bar and the web UI.
+        ``status_suffix`` is appended after the elapsed-time counter. A
+        :class:`ContextStatus` renders as a progress bar in the terminal and a
+        compact plain-text summary in the web UI.
 
         Usage::
 

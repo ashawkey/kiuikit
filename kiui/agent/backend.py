@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 from openai import OpenAI
 
-from kiui.agent.ui import AgentConsole
+from kiui.agent.ui import AgentConsole, ContextStatus
 from kiui.agent.terminal import TerminalInput
 from kiui.agent.utils import get_kia_dir
 from kiui.agent.prompts import build_system_prompt
@@ -258,16 +258,14 @@ class LLMAgent:
         if usage.completion_tokens_details and usage.completion_tokens_details.reasoning_tokens:
             self.token_totals["reasoning"] += usage.completion_tokens_details.reasoning_tokens
 
-    def _status_suffix(self) -> str:
-        """Compact token/context summary shown in the 'Working...' status bar."""
+    def _status_suffix(self) -> ContextStatus:
+        """Context-window progress shown in the 'Working...' status bar."""
         ctx_chars = estimate_context_chars(self.context.messages)
-        ctx_tokens = self.token_estimator.chars_to_tokens(ctx_chars)
-        if self.context_length:
-            ctx_pct = ctx_tokens / self.context_length * 100
-            ctx = f"ctx ~{ctx_tokens:,}/{self.context_length:,} ({ctx_pct:.0f}%)"
-        else:
-            ctx = f"ctx ~{ctx_tokens:,}"
-        return f"{ctx} · {self.token_totals['total']:,} tokens used"
+        return ContextStatus(
+            tokens=self.token_estimator.chars_to_tokens(ctx_chars),
+            limit=self.context_length,
+            total_tokens_used=self.token_totals["total"],
+        )
 
     def _interruptible_sleep(self, seconds: float):
         # Watch the keyboard during backoff so ESC/Ctrl+C cancels the wait

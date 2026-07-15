@@ -1,0 +1,34 @@
+"""Tests for Rich terminal UI helpers."""
+
+from rich.console import Console
+from rich.progress_bar import ProgressBar
+from rich.table import Table
+
+from kiui.agent.ui import ContextStatus, ThinkingIndicator
+
+
+def test_context_status_renders_progress_bar():
+    status = ContextStatus(tokens=58_784, limit=1_000_000, total_tokens_used=418_431)
+
+    assert status.fraction == 0.058784
+    assert status.plain() == "6% · 418K used"
+
+    rendered = status.render()
+    assert isinstance(rendered, Table)
+    assert any(isinstance(renderable, ProgressBar) for renderable in rendered.columns[0]._cells)
+
+
+def test_thinking_indicator_includes_context_progress():
+    console = Console()
+    status = ContextStatus(tokens=750, limit=1_000, total_tokens_used=2_000)
+
+    label = ThinkingIndicator(console, status_suffix=status)._label(2)
+
+    assert isinstance(label, Table)
+    with console.capture() as capture:
+        console.print(label)
+    text = capture.get()
+    assert "Working... (2s)" in text
+    assert "ctx" not in text
+    assert "75%" in text
+    assert "2K used" in text

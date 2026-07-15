@@ -536,7 +536,7 @@ class ToolExecutor:
 
     def _read_file(self, file: str, offset: int | None = None, limit: int | None = None) -> dict[str, Any]:
         """Read file contents with optional offset and limit."""
-        self.console.tool(f"read_file {file}")
+        self.console.tool(f"read_file {file} (offset={offset}, limit={limit})")
 
         file_path = Path(file)
         if not file_path.exists():
