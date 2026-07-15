@@ -263,13 +263,11 @@ html { scrollbar-gutter: stable; }
   scrollbar-width: none;
 }
 .sidebar::-webkit-scrollbar { display: none; }
-.sidebar-title {
+.sidebar-logo {
   flex: none;
-  color: var(--dim);
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  width: 1.75rem;
+  height: 1.75rem;
+  object-fit: contain;
 }
 .sidebar-empty { color: var(--muted); font-size: 0.85rem; line-height: 1.5; }
 .sidebar-empty code {
@@ -302,7 +300,6 @@ html { scrollbar-gutter: stable; }
 .session-host { font-size: 0.7rem; color: var(--dim); }
 
 @media (max-width: 640px) {
-  .sidebar-title { display: none; }
   .session-host { display: none; }
 }
 

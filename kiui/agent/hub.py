@@ -412,6 +412,11 @@ class Hub:
         async def index():
             return FileResponse(assets / "index.html")
 
+        @app.get("/icon.png")
+        @app.get("/favicon.ico")
+        async def favicon():
+            return FileResponse(assets / "icon.png", media_type="image/png")
+
         @app.get("/api/health")
         async def health():
             return {"ok": True}

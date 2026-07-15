@@ -93,10 +93,28 @@ def test_discover_rejects_missing_description(tmp_path):
 
 def test_skills_prompt_requires_loading_before_work_and_guides_creation():
     section = build_skills_prompt_section({
-        "skill-creator": {"description": "Create skills when asked."},
+        "skill-creator": {"description": "Create skills when asked.", "active": True},
     })
     assert "load_skill** before doing" in section
     assert "asks to create or" in section
+
+
+def test_prompt_only_advertises_kia_skills(tmp_path):
+    _write_skill(tmp_path, ".kia", "native", _valid("native", "kia skill"))
+    _write_skill(tmp_path, ".claude", "foreign", _valid("foreign", "claude skill"))
+
+    skills = discover_skills(tmp_path)
+    section = build_skills_prompt_section(skills)
+
+    assert set(skills) >= {"native", "foreign"}
+    assert skills["native"]["active"] is True
+    assert skills["foreign"]["active"] is False
+    assert "**native**" in section
+    assert "**foreign**" not in section
+
+    ex = ToolExecutor(work_dir=str(tmp_path), skills=skills)
+    result = ex._load_skill("foreign")
+    assert result["success"] and "content" in result
 
 
 # ----- load-count tracking -------------------------------------------------

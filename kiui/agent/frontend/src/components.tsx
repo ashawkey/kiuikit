@@ -14,7 +14,7 @@ export function SessionSidebar({
 }) {
   return (
     <nav className="sidebar" aria-label="Agent sessions">
-      <div className="sidebar-title">Agents</div>
+      <img className="sidebar-logo" src="/icon.png" alt="kia" />
       {sessions.length === 0 ? (
         <p className="sidebar-empty">No agents connected. Run <code>kia</code>.</p>
       ) : (

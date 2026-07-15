@@ -1301,16 +1301,17 @@ class LLMAgent:
             )
 
     def _report_skills_summary(self):
-        """Report discovered skill count and registry share of the system prompt."""
+        """Report discovered and advertised skill counts and prompt share."""
         from kiui.agent.skills import build_skills_prompt_section
 
         skills_section = build_skills_prompt_section(self.skills)
+        active_count = sum(info.get("active", True) for info in self.skills.values())
         total_tokens = self.token_estimator.chars_to_tokens(len(self.system_prompt))
         skill_tokens = self.token_estimator.chars_to_tokens(len(skills_section))
         percent = 100 * skill_tokens / total_tokens if total_tokens else 0
         self.console.system(
-            f"Loaded {len(self.skills)} skill(s); skill registry uses ~{skill_tokens:,} "
-            f"tokens ({percent:.1f}% of the ~{total_tokens:,}-token system prompt)."
+            f"Found {len(self.skills)} skill(s); advertising {active_count} from .kia uses "
+            f"~{skill_tokens:,} tokens ({percent:.1f}% of the ~{total_tokens:,}-token system prompt)."
         )
 
     def _list_skills(self):
@@ -1343,9 +1344,10 @@ class LLMAgent:
             desc = info.get("description", "")
             path = info.get("path", "")
             loaded = " [green](loaded)[/green]" if name in self.tool_executor._loaded_skills else ""
+            inactive = " [dim](manual only)[/dim]" if not info.get("active", True) else ""
             loads = self.tool_executor._skill_loads.get(name, 0)
             uses = f" [dim]· loaded {loads}×[/dim]" if loads else ""
-            self.console.print(f"  [cyan]{name}[/cyan]{loaded}{uses}")
+            self.console.print(f"  [cyan]{name}[/cyan]{loaded}{inactive}{uses}")
             self.console.print(f"    {desc}")
             self.console.print(f"    [dim]{path}[/dim]")
             for warning in validate_skill(name, info.get("frontmatter", {})):

@@ -12,11 +12,12 @@ not enforced: kia uses its own permission model, so a skill cannot narrow or
 widen tool access. The field is accepted (so cross-agent skills load cleanly)
 but has no effect.
 
-Skills load via progressive disclosure: only name+description are advertised in
-the system prompt; the full body is pulled into context on demand via the
-load_skill tool (or the manual /skills <name> command); bundled resource files are read
-only when the instructions call for them (using the ordinary read_file /
-exec_command tools).
+Skills load via progressive disclosure: only name+description from ``.kia``
+skills are advertised in the system prompt; the full body is pulled into context
+on demand via the load_skill tool (or the manual ``/skills <name>`` command).
+Skills in other recognized agent directories remain manually loadable but are
+not advertised. Bundled resource files are read only when the instructions call
+for them (using the ordinary read_file / exec_command tools).
 
 For compatibility with other agent tools that share this convention, skills are
 discovered from several well-known agent directories (see SKILL_DIRS), both under
@@ -82,9 +83,10 @@ def discover_skills(
     Searches ``<scope>/<agent-dir>/skills/`` for each agent dir in SKILL_DIRS,
     where *scope* is first the working directory (project skills) then the user's
     home directory (personal skills). Returns
-    ``{skill_name: {"path", "dir", "description", "body", "frontmatter"}}`` where
-    ``dir`` is the skill root (for resolving bundled resources) and ``body`` is the
-    markdown instructions with frontmatter stripped. When the same skill name
+    ``{skill_name: {"path", "dir", "description", "body", "frontmatter",
+    "active"}}`` where ``active`` is true only for skills discovered under
+    ``.kia``, ``dir`` is the skill root (for resolving bundled resources), and
+    ``body`` is the markdown instructions with frontmatter stripped. When the same skill name
     appears more than once, an earlier scope/directory wins (project over home,
     and .kia over .codex/.claude/.agents within a scope).
 
@@ -168,6 +170,7 @@ def discover_skills(
                     "body": body,
                     "frontmatter": frontmatter,
                     "warnings": validate_skill(skill_name, frontmatter),
+                    "active": agent_dir == ".kia",
                 }
 
     if issues is not None:
@@ -276,10 +279,14 @@ def validate_skill(name: str, frontmatter: dict) -> list[str]:
 def build_skills_prompt_section(skills: dict[str, dict]) -> str:
     """Build a concise skills registry section for the system prompt.
 
-    Advertises each skill's name + description (progressive disclosure stage 1)
-    and how to activate it via the load_skill tool.
+    Advertises each active (``.kia``) skill's name + description (progressive
+    disclosure stage 1) and how to activate it via the load_skill tool. Skills
+    from compatibility directories remain discoverable for manual loading.
     """
-    if not skills:
+    active_skills = {
+        name: info for name, info in skills.items() if info.get("active", True)
+    }
+    if not active_skills:
         return ""
 
     lines = [
@@ -295,7 +302,7 @@ def build_skills_prompt_section(skills: dict[str, dict]) -> str:
         "",
     ]
 
-    for name, info in skills.items():
+    for name, info in active_skills.items():
         desc = info.get("description", "")
         lines.append(f"- **{name}**: {desc}")
 
