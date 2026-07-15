@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import os
+import subprocess
 import time
 from pathlib import Path
 from typing import AsyncGenerator, Iterable
@@ -26,23 +27,40 @@ class AtFileCompleter(Completer):
     whitespace, beginning-of-line, etc.).  Directories are shown with a
     trailing ``/``.
 
-    When no directory separator is present in *partial* the search is
-    **recursive** and matches filenames fuzzily (substring →
-    character-sequence), so ``@d.txt`` can expand to ``@a/b/c/d.txt``.
-    When a directory separator *is* present the completer falls back to
-    exact-prefix matching inside the specified directory (classic Tab
-    completion).
+    Matching strategy mirrors production coding agents (Claude Code /
+    Codex CLI):
+
+    * **Candidate index built once, cached in memory.** Every keystroke
+      matches against the cached list instead of re-walking the disk, so
+      latency is independent of repo size after the first build.  The
+      candidate set is sourced from ``git`` (tracked + untracked, honoring
+      ``.gitignore``) which is both fast and skips the bulky/ignored dirs
+      that would otherwise dominate a raw filesystem walk.  Outside a git
+      repo we fall back to a pruned filesystem walk.
+    * **fzf-style fuzzy scorer.** A subsequence matcher rewards matches at
+      path/word boundaries and consecutive runs, and matches the basename
+      before the full path so ``@terminal`` surfaces
+      ``kiui/agent/terminal.py`` at the top even in a deep tree.
+
+    When a directory separator is present in *partial* the completer falls
+    back to exact-prefix listing inside the specified directory (classic
+    Tab completion within a known directory).
     """
 
     # Hard limit on completions shown
     MAX_COMPLETIONS = 30
 
-    # Upper bound on filesystem entries visited during a recursive scan.
-    # Bounds worst-case latency on huge repos so the UI never blocks for
-    # long on a single keystroke.
-    _MAX_SCAN_ENTRIES = 20000
+    # How long a built candidate index stays valid before a refresh.
+    # Short enough to pick up new files during a session, long enough to
+    # avoid rebuilding on every burst of keystrokes.
+    _INDEX_TTL = 5.0
 
-    # Directories skipped during recursive scans
+    # Cap on candidates held in memory. Guards pathological monorepos;
+    # git enumeration is cheap so this is rarely hit in practice.
+    _MAX_CANDIDATES = 200000
+
+    # Directories skipped during the filesystem-fallback walk (used only
+    # when not inside a git repo).
     _SKIP_DIRS: frozenset[str] = frozenset({
         ".git", ".hg", ".svn",
         "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".tox",
@@ -52,6 +70,9 @@ class AtFileCompleter(Completer):
 
     def __init__(self, work_dir: str | Path | None = None) -> None:
         self._work_dir = Path(work_dir or os.getcwd()).resolve()
+        # Cached candidate index: list of (rel_path, is_dir).
+        self._index: list[tuple[str, bool]] = []
+        self._index_built_at = 0.0
 
     # ------------------------------------------------------------------
     # Public entry-point
@@ -83,26 +104,29 @@ class AtFileCompleter(Completer):
         if " " in partial or "\t" in partial:
             return
 
-        base_dir, prefix = self._split(partial)
-        search_dir = self._work_dir / base_dir if base_dir else self._work_dir
-
-        try:
-            search_dir = search_dir.resolve()
-        except (OSError, RuntimeError):
-            return
-
-        if not search_dir.is_dir():
-            return
-
-        # Decide strategy: recursive-fuzzy vs direct-listing
+        # A directory separator means the user is navigating a known
+        # directory: classic prefix listing inside it.
         has_sep = "/" in partial or "\\" in partial
-
         if has_sep:
+            base_dir, prefix = self._split(partial)
+            search_dir = self._work_dir / base_dir if base_dir else self._work_dir
+            try:
+                search_dir = search_dir.resolve()
+            except (OSError, RuntimeError):
+                return
+            if not search_dir.is_dir():
+                return
             yield from self._direct_completions(search_dir, base_dir, prefix, partial)
-        elif prefix:
-            yield from self._fuzzy_completions(search_dir, base_dir, prefix, partial)
-        else:
-            yield from self._direct_completions(search_dir, base_dir, "", partial)
+            return
+
+        # No separator: fuzzy-match against the cached, repo-wide index.
+        # An empty query lists the top-level entries from the same index
+        # so ignored/hidden noise (.git, .venv, ...) stays out.
+        if not partial:
+            yield from self._toplevel_completions(partial)
+            return
+
+        yield from self._fuzzy_completions(partial)
 
     # ------------------------------------------------------------------
     # Completion strategies
@@ -124,28 +148,115 @@ class AtFileCompleter(Completer):
                 continue
             yield self._make_completion(name, base_dir, partial, entry.is_dir())
 
-    def _fuzzy_completions(self, search_dir, base_dir, prefix, partial):
-        """Recursive scan with fuzzy filename matching.
+    def _toplevel_completions(self, partial):
+        """List top-level entries (dirs first, then files) from the cached
+        index, so an empty ``@`` shows a clean listing without ignored or
+        hidden noise."""
+        seen: set[str] = set()
+        entries: list[tuple[str, bool]] = []
+        for rel, is_dir in self._get_index():
+            top = rel.split("/", 1)[0]
+            if top in seen:
+                continue
+            seen.add(top)
+            entries.append((top, is_dir or "/" in rel))
+        entries.sort(key=lambda e: (not e[1], e[0].lower()))
+        for name, is_dir in entries[: self.MAX_COMPLETIONS]:
+            yield self._make_completion(name, "", partial, is_dir)
 
-        Walks the tree manually with :func:`os.scandir`, pruning hidden
-        and well-known bulky directories *during* traversal so we never
-        descend into ``.git`` / ``node_modules`` / etc.  A visited-entry
-        budget (:data:`_MAX_SCAN_ENTRIES`) caps worst-case latency on very
-        large repositories, keeping the completer responsive on every
-        keystroke.
+    def _fuzzy_completions(self, partial):
+        """Fuzzy-match *partial* against the cached repo-wide index.
 
-        ``pathlib``'s ``**`` glob is deliberately avoided here: it eagerly
-        walks the entire subtree (including ignored dirs) before any
-        filtering, which stalls the UI on large repos.
+        The index is built once and reused across keystrokes (see
+        :meth:`_get_index`), so matching cost is independent of repo size.
+        Candidates are ranked with an fzf-style scorer that matches the
+        basename first (falling back to the full path), so a short query
+        finds a deeply-nested file.
         """
-        pl = prefix.lower()
+        pl = partial.lower()
         scored: list[tuple[int, str, bool]] = []  # (score, rel_path, is_dir)
-        visited = 0
-        work_dir = str(self._work_dir)
 
-        # DFS stack of directories to scan (start at the search root).
-        stack: list[str] = [str(search_dir)]
-        while stack and visited < self._MAX_SCAN_ENTRIES:
+        for rel, is_dir in self._get_index():
+            base = rel.rsplit("/", 1)[-1]
+            score = self._fuzzy_score(base.lower(), pl)
+            if score > 0:
+                score += 20  # prefer basename hits
+            else:
+                score = self._fuzzy_score(rel.lower(), pl)
+            if score <= 0:
+                continue
+            # Shallower paths and shorter names rank higher on ties.
+            score -= rel.count("/")
+            scored.append((score, rel, is_dir))
+
+        # Sort: higher score first, then dirs first, then shorter path, then alpha
+        scored.sort(key=lambda x: (-x[0], not x[2], len(x[1]), x[1].lower()))
+
+        for _score, rel, is_dir in scored[: self.MAX_COMPLETIONS]:
+            yield self._make_completion(rel, "", partial, is_dir)
+
+    # ------------------------------------------------------------------
+    # Candidate index (built once, cached)
+    # ------------------------------------------------------------------
+
+    def _get_index(self) -> list[tuple[str, bool]]:
+        """Return the cached (rel_path, is_dir) candidate list, rebuilding
+        it if the TTL has expired."""
+        now = time.monotonic()
+        if self._index and now - self._index_built_at < self._INDEX_TTL:
+            return self._index
+        self._index = self._build_index()
+        self._index_built_at = now
+        return self._index
+
+    def _build_index(self) -> list[tuple[str, bool]]:
+        index = self._git_index()
+        if index is None:
+            index = self._walk_index()
+        return index[: self._MAX_CANDIDATES]
+
+    def _git_index(self) -> list[tuple[str, bool]] | None:
+        """Enumerate candidates via git (tracked + untracked, honoring
+        ``.gitignore``).  Returns None when not inside a git repo or git
+        is unavailable.
+
+        Git lists files only, so parent directories are synthesized to
+        keep directory completions working.
+        """
+        try:
+            result = subprocess.run(
+                ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+                capture_output=True, text=True, cwd=str(self._work_dir), timeout=5,
+            )
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            return None
+        if result.returncode != 0:
+            return None
+
+        files: list[str] = []
+        dirs: set[str] = set()
+        for line in result.stdout.splitlines():
+            rel = line.strip()
+            if not rel:
+                continue
+            rel = rel.replace("\\", "/")
+            files.append(rel)
+            # Synthesize ancestor directories.
+            parts = rel.split("/")
+            for i in range(1, len(parts)):
+                dirs.add("/".join(parts[:i]))
+
+        index: list[tuple[str, bool]] = [(d, True) for d in dirs]
+        index.extend((f, False) for f in files)
+        return index
+
+    def _walk_index(self) -> list[tuple[str, bool]]:
+        """Filesystem fallback used outside a git repo: DFS walk pruning
+        hidden and well-known bulky directories."""
+        index: list[tuple[str, bool]] = []
+        work_dir = str(self._work_dir)
+        stack: list[str] = [work_dir]
+        while stack and len(index) < self._MAX_CANDIDATES:
             current = stack.pop()
             try:
                 it = os.scandir(current)
@@ -153,10 +264,6 @@ class AtFileCompleter(Completer):
                 continue
             with it:
                 for entry in it:
-                    visited += 1
-                    if visited >= self._MAX_SCAN_ENTRIES:
-                        break
-
                     name = entry.name
                     if name.startswith("."):
                         continue
@@ -164,24 +271,14 @@ class AtFileCompleter(Completer):
                         is_dir = entry.is_dir()
                     except OSError:
                         continue
-
                     if is_dir:
                         if name in self._SKIP_DIRS:
                             continue
                         stack.append(entry.path)
-
-                    score = self._score(name, pl)
-                    if score <= 0:
-                        continue
                     rel = os.path.relpath(entry.path, work_dir).replace(os.sep, "/")
-                    scored.append((score, rel, is_dir))
+                    index.append((rel, is_dir))
+        return index
 
-        # ---- sort & yield -------------------------------------------------
-        # Sort: higher score first, then dirs first, then shorter path, then alpha
-        scored.sort(key=lambda x: (-x[0], not x[2], len(x[1]), x[1].lower()))
-
-        for _score, rel, is_dir in scored[: self.MAX_COMPLETIONS]:
-            yield self._make_completion(rel, "", partial, is_dir)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -203,29 +300,40 @@ class AtFileCompleter(Completer):
         )
 
     @staticmethod
-    def _score(name: str, pattern: str) -> int:
-        """Score a filename against the user's pattern (higher = better)."""
-        nl = name.lower()
-        pl = pattern.lower()
+    def _fuzzy_score(text: str, pattern: str) -> int:
+        """fzf-style subsequence score of *pattern* against *text* (both
+        lowercase). Returns 0 when *pattern* is not a subsequence.
 
-        if nl == pl:
-            return 100  # exact match
-        if nl.startswith(pl):
-            return 80  # prefix match
-        if pl in nl:
-            return 60  # substring match
-        if AtFileCompleter._char_seq_match(nl, pl):
-            return 40  # character-sequence match
-        return 0  # no match
+        Rewards: exact/prefix match, matches at word/path boundaries
+        (after ``/ _ - .`` or a start), and consecutive runs. Penalizes
+        gaps. Higher is better.
+        """
+        if not pattern:
+            return 1
+        if text == pattern:
+            return 1000
+        if text.startswith(pattern):
+            return 500
 
-    @staticmethod
-    def _char_seq_match(name: str, pattern: str) -> bool:
-        """True when every char of *pattern* appears in *name* in order."""
-        idx = 0
-        for ch in name:
-            if idx < len(pattern) and ch == pattern[idx]:
-                idx += 1
-        return idx == len(pattern)
+        score = 0
+        pi = 0
+        prev_matched = False
+        boundary_chars = "/_-. "
+        for i, ch in enumerate(text):
+            if pi < len(pattern) and ch == pattern[pi]:
+                bonus = 1
+                if i == 0 or text[i - 1] in boundary_chars:
+                    bonus += 8  # boundary match (word/path segment start)
+                if prev_matched:
+                    bonus += 5  # consecutive run
+                score += bonus
+                pi += 1
+                prev_matched = True
+            else:
+                prev_matched = False
+        if pi != len(pattern):
+            return 0  # not a subsequence
+        return score
 
     @staticmethod
     def _split(path_str: str) -> tuple[str, str]:
