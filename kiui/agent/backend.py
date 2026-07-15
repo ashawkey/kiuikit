@@ -189,6 +189,8 @@ class LLMAgent:
         self.exec_mode = exec_mode
         self.work_dir = work_dir
         self.system_prompt = build_system_prompt(exec_mode=exec_mode, is_subagent=is_subagent, work_dir=work_dir, skills=self.skills)
+        if not is_subagent:
+            self._report_skills_summary()
         self.tools = get_tool_definitions(include_subagent=not is_subagent)
 
         self.permissions = PermissionController(
@@ -1288,10 +1290,28 @@ class LLMAgent:
             self.console.warn(
                 f"skill '{err['name']}' ignored ({err['reason']}): {err['path']}"
             )
-        for sh in issues.get("shadowed", []):
+        shadowed = issues.get("shadowed", [])
+        if shadowed:
+            names = sorted({sh["name"] for sh in shadowed})
+            preview = ", ".join(names[:5])
+            if len(names) > 5:
+                preview += f", … (+{len(names) - 5} more)"
             self.console.warn(
-                f"skill '{sh['name']}' at {sh['path']} is shadowed by {sh['shadowed_by']}"
+                f"{len(shadowed)} lower-precedence duplicate skill(s) ignored: {preview}"
             )
+
+    def _report_skills_summary(self):
+        """Report discovered skill count and registry share of the system prompt."""
+        from kiui.agent.skills import build_skills_prompt_section
+
+        skills_section = build_skills_prompt_section(self.skills)
+        total_tokens = self.token_estimator.chars_to_tokens(len(self.system_prompt))
+        skill_tokens = self.token_estimator.chars_to_tokens(len(skills_section))
+        percent = 100 * skill_tokens / total_tokens if total_tokens else 0
+        self.console.system(
+            f"Loaded {len(self.skills)} skill(s); skill registry uses ~{skill_tokens:,} "
+            f"tokens ({percent:.1f}% of the ~{total_tokens:,}-token system prompt)."
+        )
 
     def _list_skills(self):
         """List installed skills discovered from known agent dirs."""
@@ -1360,6 +1380,7 @@ class LLMAgent:
             skills=self.skills,
         )
         self.context.system_prompt["content"] = self.system_prompt
+        self._report_skills_summary()
 
         after = set(self.skills)
         added = sorted(after - before)

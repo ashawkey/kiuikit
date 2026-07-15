@@ -120,13 +120,11 @@ class ThinkingIndicator:
 class ResponseStream:
     """Live-rendering sink for a streamed assistant turn.
 
-    Terminal: accumulated visible content is re-rendered as Markdown in a
-    ``rich.Live`` region on each token; reasoning ("thinking") text streams
-    above it in a dim block when ``show_thinking`` is set. The Live region is
-    non-transient, so ``close()`` simply stops it and its final frame stays in
-    scrollback. We do NOT reprint the content statically: combining a transient
-    Live with ``vertical_overflow="visible"`` cannot reliably erase a response
-    taller than the terminal, so a reprint duplicated the overflowed lines.
+    Terminal: accumulated content is re-rendered as Markdown in a transient
+    ``rich.Live`` region on each token, then printed once statically on close.
+    The live region is cropped to the terminal height: letting it overflow into
+    scrollback causes repeated frames because Rich cannot clear lines that have
+    already scrolled away.
 
     Web: every fragment is published as ``assistant_delta`` / ``thinking_delta``
     events; on close the full reasoning and message are emitted once more as
@@ -150,14 +148,12 @@ class ResponseStream:
         self._closed = False
 
     def __enter__(self) -> "ResponseStream":
-        # Non-transient: the final frame is left in scrollback on stop(), so no
-        # static reprint is needed (and none happens) on close().
         self._live = Live(
             "",
             console=self._console,
             refresh_per_second=12,
-            transient=False,
-            vertical_overflow="visible",
+            transient=True,
+            vertical_overflow="crop",
         )
         self._live.start()
         return self
@@ -208,14 +204,20 @@ class ResponseStream:
         if self._live is not None:
             self._live.stop()
             self._live = None
-        # The non-transient Live leaves its final frame in scrollback, so the
-        # full turn survives without a static reprint. Only web clients need
-        # the consolidated events below.
+        self._print_final()
         if self._events is not None:
             if self._thinking:
                 self._events.publish("thinking", text=self._thinking)
             if self._content:
                 self._events.publish("assistant_message", text=self._content)
+
+    def _print_final(self) -> None:
+        if self._thinking:
+            from rich.text import Text as RichText
+            self._console.print(RichText(self._thinking, style="thinking"))
+        if self._content:
+            from rich.markdown import Markdown
+            self._console.print(Markdown(f"{_DOT} {self._content}"))
 
 
 class AgentConsole:

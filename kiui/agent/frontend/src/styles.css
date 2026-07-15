@@ -540,7 +540,15 @@ html { scrollbar-gutter: stable; }
   background: var(--overlay);
   backdrop-filter: blur(7px);
 }
-.prompt { width: min(100%, 560px); padding: 1.25rem; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
+.prompt {
+  width: min(100%, 960px);
+  max-height: calc(100dvh - 2rem);
+  padding: 1.25rem;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+}
 .prompt-kicker { margin: 0 0 0.6rem; color: var(--accent); font-size: 0.75rem; font-weight: 750; letter-spacing: 0.12em; text-transform: uppercase; }
 .prompt-message { color: var(--text); line-height: 1.5; white-space: pre-wrap; }
 .prompt-command {
@@ -548,8 +556,9 @@ html { scrollbar-gutter: stable; }
   padding: 0.6rem 0.75rem;
   border: 1px solid var(--line);
   border-radius: 9px;
+  max-height: min(45vh, 24rem);
   background: var(--code-bg);
-  overflow-x: auto;
+  overflow: auto;
 }
 .cmd-label {
   display: inline-block;

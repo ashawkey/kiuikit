@@ -152,23 +152,22 @@ def discover_skills(
                     continue
 
                 frontmatter, body = parsed
-                validation_errors = validate_skill(skill_name, frontmatter)
-                if validation_errors:
+                description = frontmatter.get("description")
+                if not isinstance(description, str) or not description.strip():
                     errors.append({
                         "name": skill_name,
                         "path": str(skill_md),
-                        "reason": "; ".join(validation_errors),
+                        "reason": "missing or non-string 'description'",
                     })
                     continue
-
-                description = frontmatter["description"].strip()
 
                 skills[skill_name] = {
                     "path": str(skill_md),
                     "dir": str(item),
-                    "description": description,
+                    "description": description.strip(),
                     "body": body,
                     "frontmatter": frontmatter,
+                    "warnings": validate_skill(skill_name, frontmatter),
                 }
 
     if issues is not None:
@@ -226,7 +225,11 @@ def _split_frontmatter(raw: str) -> tuple[dict | None, str]:
 
 
 def validate_skill(name: str, frontmatter: dict) -> list[str]:
-    """Return Agent Skills specification violations (empty if valid)."""
+    """Return non-fatal Agent Skills specification warnings (empty if valid).
+
+    Discovery intentionally accepts usable third-party skills that deviate from
+    the standard. The directory name is always the runtime identifier.
+    """
     errors: list[str] = []
 
     fm_name = frontmatter.get("name")

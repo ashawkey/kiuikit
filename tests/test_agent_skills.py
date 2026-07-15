@@ -65,21 +65,30 @@ def test_discover_issues_optional(tmp_path):
     assert "solo" in skills
 
 
-def test_discover_rejects_spec_invalid_frontmatter(tmp_path):
-    _write_skill(tmp_path, ".kia", "wrong-dir", _valid("different-name"))
+def test_discover_tolerates_spec_deviations(tmp_path):
+    _write_skill(tmp_path, ".kia", "wrong-dir", _valid("Display Name"))
     _write_skill(
         tmp_path,
         ".kia",
-        "bad-metadata",
-        "---\nname: bad-metadata\ndescription: valid\nmetadata:\n  version: 1\n---\nbody\n",
+        "long-description",
+        _valid("long-description", "x" * 1025),
     )
 
     issues = {}
     skills = discover_skills(tmp_path, issues=issues)
 
-    assert "wrong-dir" not in skills
-    assert "bad-metadata" not in skills
-    assert len(issues["errors"]) == 2
+    assert set(skills) >= {"wrong-dir", "long-description"}
+    assert issues["errors"] == []
+    assert skills["wrong-dir"]["warnings"]
+    assert skills["long-description"]["warnings"]
+
+
+def test_discover_rejects_missing_description(tmp_path):
+    _write_skill(tmp_path, ".kia", "broken", "---\nname: broken\n---\nbody\n")
+    issues = {}
+    skills = discover_skills(tmp_path, issues=issues)
+    assert "broken" not in skills
+    assert len(issues["errors"]) == 1
 
 
 def test_skills_prompt_requires_loading_before_work_and_guides_creation():
