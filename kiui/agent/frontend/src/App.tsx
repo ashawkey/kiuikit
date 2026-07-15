@@ -54,6 +54,11 @@ function SessionPane({
   const streamKey = useRef('')
   const localKey = useRef(0)
   const pinned = useRef(true)
+  // Per-pane scroll memory. Panes share the single window scrollbar (inactive
+  // ones are display:none), so we save this pane's offset when it hides and
+  // restore it when it shows again instead of always snapping to the tail.
+  const savedScroll = useRef(0)
+  const everShown = useRef(false)
 
   const showEvent = useCallback((type: string, text: string, data = {}, seq?: number) => {
     const key = seq ? `event-${seq}` : `local-${++localKey.current}`
@@ -184,6 +189,7 @@ function SessionPane({
   useEffect(() => {
     if (!active) return
     const onScroll = () => {
+      savedScroll.current = window.scrollY
       const distance =
         document.documentElement.scrollHeight - window.innerHeight - window.scrollY
       pinned.current = distance < 220
@@ -192,10 +198,16 @@ function SessionPane({
     return () => window.removeEventListener('scroll', onScroll)
   }, [active])
 
+  // On activation, restore this pane's remembered position; a brand-new pane
+  // (or one pinned to the tail when it was last hidden) starts at the bottom.
   useEffect(() => {
-    if (active) {
+    if (!active) return
+    if (!everShown.current || pinned.current) {
+      everShown.current = true
       pinned.current = true
       scrollToBottom()
+    } else {
+      requestAnimationFrame(() => window.scrollTo({ top: savedScroll.current }))
     }
   }, [active])
 
@@ -350,7 +362,7 @@ export default function App() {
       <div className="top-controls">
         <ScrollTopButton onClick={scrollToTop} />
         <ThemeToggle theme={theme} onToggle={toggleTheme} />
-        <button className="logout" type="button" onClick={logout}>Sign out</button>
+        <button className="logout" type="button" onClick={logout} aria-label="Sign out" title="Sign out">⏻</button>
       </div>
       <div className="layout">
         <SessionSidebar sessions={sessions} activeId={activeSession} onSelect={setActiveSession} />

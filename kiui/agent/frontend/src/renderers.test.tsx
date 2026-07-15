@@ -38,6 +38,21 @@ describe('content renderers', () => {
     expect(screen.queryByText(/removed/)).toBeNull()
   })
 
+  it('syntax-highlights diff lines by file extension', () => {
+    const { container } = render(
+      <DiffView data={{ path: 'demo.py', old_text: '', new_text: 'def f():\n', line_num: 1 }} />,
+    )
+    // Python `def` should tokenize as a keyword span; unknown extensions stay plain.
+    expect(container.querySelector('.diff-line .hljs-keyword')).toHaveTextContent('def')
+  })
+
+  it('leaves lines plain for unknown file types', () => {
+    const { container } = render(
+      <DiffView data={{ path: 'notes.unknownext', old_text: '', new_text: 'def f():\n', line_num: 1 }} />,
+    )
+    expect(container.querySelector('.diff-line .hljs-keyword')).toBeNull()
+  })
+
   it('renders a tool call as a compact code line without a label head', () => {
     const { container } = render(<EventCard event={makeEvent('tool_start', 'exec_command(ls)')} />)
     expect(container.querySelector('.event-head')).toBeNull()

@@ -516,6 +516,10 @@ class ToolExecutor:
         self._get_round_id = get_round_id  # callable → int
         self._skills = skills or {}
         self._loaded_skills: set[str] = set()
+        # Per-session usage counter: skill name → number of load_skill invocations
+        # (including redundant "already loaded" calls). Persisted with the session
+        # for telemetry and surfaced in /usage and the final summary.
+        self._skill_loads: dict[str, int] = {}
         # Last report_goal() call result: None, or {"met": bool, "reason": str}.
         # Consumed by LLMAgent after each goal-check round.
         self._goal_report: dict | None = None
@@ -1189,10 +1193,23 @@ class ToolExecutor:
             }
 
         if name in self._loaded_skills:
+            self._skill_loads[name] = self._skill_loads.get(name, 0) + 1
             return {"message": f"Skill '{name}' is already loaded.", "success": True}
 
         self._loaded_skills.add(name)
-        body = self._skills[name]["body"]
+        self._skill_loads[name] = self._skill_loads.get(name, 0) + 1
+        skill = self._skills[name]
+        body = skill["body"]
+        # Prepend the skill root so the model can resolve bundled resources
+        # (references/…, scripts/…, assets/…) referenced by relative paths.
+        skill_dir = skill.get("dir")
+        if skill_dir:
+            header = (
+                f"[Skill '{name}' loaded. Its directory is {skill_dir} — resolve any "
+                f"relative file references (references/…, scripts/…, assets/…) against "
+                f"that path using read_file / exec_command as the instructions require.]\n\n"
+            )
+            body = header + body
         return {"content": body, "success": True}
 
     # ── Memory tool ──────────────────────────────────────────

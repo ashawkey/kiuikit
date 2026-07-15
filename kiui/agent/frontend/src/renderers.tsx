@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 import type { DisplayEvent, EventData } from './types'
+import { highlightLine, languageForPath } from './highlight'
 
 // Matches ANSI/VT control sequences (CSI colour codes, cursor moves, OSC, etc.).
 const ANSI_PATTERN =
@@ -63,6 +64,7 @@ export function DiffView({ data }: { data: EventData }) {
   const oldText = data.old_text ?? ''
   const newText = data.new_text ?? ''
   const changes = diffLines(oldText, newText)
+  const language = languageForPath(data.path)
   // Full-file writes send a null line number and are numbered from line one.
   let oldLine = data.line_num ?? 1
   let newLine = data.line_num ?? 1
@@ -90,7 +92,7 @@ export function DiffView({ data }: { data: EventData }) {
                 <span className="diff-sign" aria-hidden="true">
                   {change.added ? '+' : change.removed ? '−' : ' '}
                 </span>
-                <code role="cell">{line || ' '}</code>
+                <code role="cell">{line ? highlightLine(line, language) : ' '}</code>
               </div>
             )
           })

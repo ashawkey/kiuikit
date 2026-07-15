@@ -125,12 +125,13 @@ The agent supports the following slash commands in the CLI:
 |---------|-------------|
 | `/help` | Show help message |
 | `/context` | Show a concise one-line-per-message context log |
+| `/system_prompt` | Print the current full system prompt |
 | `/compact` | Force context compaction via LLM summarization |
 | `/usage` | Show token usage for this session |
 | `/perm [auto\|default\|strict]` | Show or change permission mode |
 | `/model [name]` | Show or switch LLM model mid-session |
 | `/rewind [round]` | Roll back conversation and/or code to a previous round |
-| `/skills` | List installed skills from `.kia/skills/` |
+| `/skills` | List installed skills; `/skills reload` to re-scan; `/skills <name>` to load one |
 | `/goal [text\|clear]` | Set a goal the agent auto-iterates toward until met (see [Goals](#goals)) |
 | `/clear` | Clear conversation history and start a new session |
 | `/resume [session_id]` | Save the current session, then resume a previous one (bare `/resume` picks interactively) |
@@ -214,19 +215,47 @@ There is **no fixed iteration cap** — the loop runs until the goal is reported
 
 ## Skills
 
-Skills are modular prompt packs stored in `.kia/skills/<name>/SKILL.md`. Each skill provides domain-specific instructions the model can load on demand via the `load_skill` tool.
+Skills are modular prompt packs following the open [Agent Skills](https://agentskills.io) format, stored in `.kia/skills/<name>/SKILL.md`. Each skill provides domain-specific instructions the model can load on demand via the `load_skill` tool.
 
 ```
 .kia/skills/
   git-workflow/
     SKILL.md
-  python-testing/
-    SKILL.md
+  pdf-processing/
+    SKILL.md         # required: frontmatter + instructions
+    scripts/         # optional: executable code
+    references/      # optional: docs loaded on demand
+    assets/          # optional: templates / data files
 ```
 
-The `SKILL.md` should describe what the skill does and provide specialized instructions. When relevant, the model invokes `load_skill` to load the full prompt into context.
+Each `SKILL.md` begins with YAML frontmatter followed by markdown instructions:
 
-For compatibility with other agent tools that share this convention, skills are also discovered from `.codex/skills/`, `.claude/skills/`, and `.agents/skills/`. When the same skill name appears in more than one directory, `.kia` wins, then `.codex`, `.claude`, `.agents`.
+```markdown
+---
+name: pdf-processing
+description: Extract PDF text, fill forms, merge files. Use when handling PDFs.
+---
+Step-by-step instructions go here. Reference bundled files by relative path,
+e.g. `references/REFERENCE.md` or `scripts/extract.py`.
+```
+
+`name` and `description` are required (the `description` is what the model matches against to decide when to activate a skill). Optional fields `license`, `compatibility`, and `metadata` are also parsed. `allowed-tools` is accepted for cross-agent compatibility but **not enforced** — kia uses its own permission model. Skills load via **progressive disclosure**: only name+description are advertised in the system prompt; the full body loads when the model calls `load_skill` (or you run `/skills <name>`); bundled `scripts/`, `references/`, and `assets/` files are read/run on demand via the ordinary file and exec tools (the skill's directory path is provided when it is loaded so relative references resolve correctly).
+
+Skills are discovered from `.kia/skills/` under **both the project directory and your home directory** (`~/.kia/skills/`), so you can keep personal skills that follow you across projects. For cross-agent compatibility, `.codex/skills/`, `.claude/skills/`, and `.agents/skills/` are also scanned. Project skills take precedence over personal ones, and within a scope `.kia` wins, then `.codex`, `.claude`, `.agents`.
+
+Skill commands:
+
+| Command | Effect |
+|---------|--------|
+| `/skills` | List installed skills (with spec-compliance warnings) |
+| `/skills reload` | Re-scan skill dirs (picks up skills created/edited mid-session) |
+| `/skills <name>` | Manually load a skill into context, forcing one the model did not auto-select |
+
+Discovery is non-silent: skills whose `SKILL.md` cannot be read or parsed (bad YAML, missing `description`) and skills **shadowed** by a higher-precedence copy of the same name are reported as warnings at startup and on `/skills reload`, rather than vanishing quietly. Skill load activity is tracked per session — `/skills` shows a per-skill load count, `/usage` and the end-of-run summary list which skills were loaded, and the loaded-skill set is persisted so `--resume` does not re-load skills whose instructions are already in the replayed conversation.
+
+### Bundled skills
+
+kia ships a few common skills (currently `skill-creator`, which teaches the agent how to author new spec-compliant skills). On first run in a project, these are copied into `.kia/skills/` so they are available out of the box and remain fully editable. An existing skill of the same name is never overwritten, so your edits are preserved; delete a copy to have it reinstalled on the next run.
 
 ## Sessions
 

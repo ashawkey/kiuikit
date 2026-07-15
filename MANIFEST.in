@@ -1,4 +1,5 @@
 recursive-include kiui/assets *
 recursive-include kiui/gridencoder/src *
 recursive-include kiui/agent/frontend/dist *
+recursive-include kiui/agent/skills *
 include kiui/agent/frontend/README.md

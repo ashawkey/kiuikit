@@ -14,7 +14,7 @@ from kiui.agent.ui import AgentConsole
 from kiui.agent.terminal import TerminalInput
 from kiui.agent.utils import get_kia_dir
 from kiui.agent.prompts import build_system_prompt
-from kiui.agent.skills import discover_skills
+from kiui.agent.skills import discover_skills, install_bundled_skills
 from kiui.agent.tools import (
     MAX_GREP_MATCHES,
     ToolExecutor,
@@ -168,12 +168,26 @@ class LLMAgent:
             self.prompt_broker.set_terminal_adapter(terminal_ask_async)
 
         # discover skills from .kia/skills/
-        self.skills = discover_skills(work_dir)
+        # Top-level agents install kiui's bundled skills into the project's
+        # .kia/skills/ on first run (never overwriting existing/user-edited ones);
+        # sub-agents skip this and just reuse whatever is already there.
+        if not is_subagent:
+            newly = install_bundled_skills(work_dir)
+            if newly:
+                self.console.print(
+                    f"[dim]Installed bundled skill(s): {', '.join(newly)} → .kia/skills/[/dim]"
+                )
+        skill_issues: dict = {}
+        self.skills = discover_skills(work_dir, issues=skill_issues)
+        if not is_subagent:
+            self._report_skill_issues(skill_issues)
 
         # built-in system prompt and tools
         # A sub-agent must not spawn further sub-agents: spawning stays a
         # single, sequential level deep and always returns.
         self.is_subagent = is_subagent
+        self.exec_mode = exec_mode
+        self.work_dir = work_dir
         self.system_prompt = build_system_prompt(exec_mode=exec_mode, is_subagent=is_subagent, work_dir=work_dir, skills=self.skills)
         self.tools = get_tool_definitions(include_subagent=not is_subagent)
 
@@ -656,7 +670,7 @@ class LLMAgent:
 
     # ----- slash commands ---------------------------------------------------
 
-    COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "resume", "perm", "model", "context", "rewind", "skills", "goal"}
+    COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "resume", "perm", "model", "context", "rewind", "skills", "goal", "system_prompt"}
 
     def _handle_command(self, raw: str) -> bool:
         """Handle a /command.  Returns True if the agent loop should stop."""
@@ -681,10 +695,12 @@ class LLMAgent:
             self._cmd_model(raw)
         elif cmd == "context":
             self._cmd_context()
+        elif cmd == "system_prompt":
+            self._cmd_system_prompt()
         elif cmd == "rewind":
             self._cmd_rewind(raw)
         elif cmd == "skills":
-            self._cmd_skills()
+            self._cmd_skills(raw)
         elif cmd == "goal":
             self._cmd_goal(raw)
 
@@ -697,10 +713,11 @@ class LLMAgent:
             "  [cyan]!<cmd>[/cyan]       — Run a shell command directly (e.g. !ls, !git diff)\n"
             "  [cyan]/help[/cyan]        — Show this help message\n"
             "  [cyan]/context[/cyan]     — Show a concise one-line-per-message context log\n"
+            "  [cyan]/system_prompt[/cyan] — Print the current full system prompt\n"
             "  [cyan]/compact[/cyan]     — Force context compaction via LLM summarization\n"
             "  [cyan]/usage[/cyan]       — Show token usage for this session\n"
             "  [cyan]/model[/cyan]       — Show or switch LLM model (/model <name>)\n"
-            "  [cyan]/skills[/cyan]      — List installed skills from .kia/skills/\n"
+            "  [cyan]/skills[/cyan]      — List skills; /skills <name> to load one, /skills reload to re-scan\n"
             "  [cyan]/goal[/cyan]        — Set a goal the agent auto-iterates toward (/goal <text> | clear)\n"
             "  [cyan]/perm[/cyan]        — Show or change permission mode (/perm auto|default|strict)\n"
             "  [cyan]/rewind[/cyan]      — Roll back conversation and/or code to a previous round\n"
@@ -754,6 +771,14 @@ class LLMAgent:
             f"  Context window : ~{ctx_tokens} / {self.context_length} tokens [{ctx_pct:.0f}%]\n"
             f"  Messages       : {len(self.context.messages)}"
         )
+
+        skill_loads = self.tool_executor._skill_loads
+        if skill_loads:
+            summary = ", ".join(
+                f"{n} ({c}\u00d7)"
+                for n, c in sorted(skill_loads.items(), key=lambda kv: (-kv[1], kv[0]))
+            )
+            self.console.print(f"  Skills loaded  : {summary}")
 
     def _cmd_clear(self):
         # Save the current session before starting fresh
@@ -1100,6 +1125,11 @@ class LLMAgent:
         except Exception:
             pass
 
+    def _cmd_system_prompt(self):
+        self.console.print(
+            f"[bold blue]System prompt:[/bold blue]\n\n{self.context.system_prompt['content']}"
+        )
+
     def _cmd_context(self):
         msgs = self.context.messages
         if not msgs:
@@ -1230,7 +1260,40 @@ class LLMAgent:
             f"(context: {self.context_length:,} tokens, thinking: {self.profile.thinking or 'none'})"
         )
 
-    def _cmd_skills(self):
+    def _cmd_skills(self, raw: str = "/skills"):
+        """List, reload, or manually load skills.
+
+        Usage: ``/skills`` (list) | ``/skills reload`` | ``/skills <name>`` (load).
+        """
+        parts = raw.split()
+        arg = parts[1] if len(parts) > 1 else ""
+
+        if not arg:
+            self._list_skills()
+            return
+        if arg.lower() == "reload":
+            self._reload_skills()
+            return
+        # Any other argument is treated as a skill name to load.
+        self._load_skill_into_context(arg)
+
+    def _report_skill_issues(self, issues: dict):
+        """Warn about shadowed and malformed skills surfaced by discover_skills.
+
+        Non-fatal: discovery already dropped these entries. Shown once at init
+        and on every ``/skills reload`` so users notice name collisions or
+        broken SKILL.md files instead of them vanishing silently.
+        """
+        for err in issues.get("errors", []):
+            self.console.warn(
+                f"skill '{err['name']}' ignored ({err['reason']}): {err['path']}"
+            )
+        for sh in issues.get("shadowed", []):
+            self.console.warn(
+                f"skill '{sh['name']}' at {sh['path']} is shadowed by {sh['shadowed_by']}"
+            )
+
+    def _list_skills(self):
         """List installed skills discovered from known agent dirs."""
         if not self.skills:
             from kiui.agent.skills import SKILL_DIRS
@@ -1241,24 +1304,97 @@ class LLMAgent:
                 f"[bold blue]No skills installed.[/bold blue]\n"
                 f"\n"
                 f"  Skills are folders each containing a [cyan]SKILL.md[/cyan] file, searched in: [cyan]{searched}[/cyan]\n"
+                f"  (under both the project dir and your home dir)\n"
                 f"\n"
                 f"  [bold]Example:[/bold]\n"
                 f"    [cyan]{skills_dir / 'git-workflow' / 'SKILL.md'}[/cyan]\n"
                 f"\n"
-                f"  The SKILL.md should describe what the skill does and provide domain-specific instructions.\n"
-                f"  When a skill is relevant, the model can invoke [cyan]load_skill[/cyan] to load its full prompt."
+                f"  Each SKILL.md starts with YAML frontmatter (name + description required),\n"
+                f"  followed by markdown instructions:\n"
+                f"    [dim]---\\nname: git-workflow\\ndescription: ... when to use it ...\\n---\\n<instructions>[/dim]\n"
+                f"  When a skill is relevant, the model can invoke [cyan]load_skill[/cyan], or you can load\n"
+                f"  one manually with [cyan]/skills <name>[/cyan]."
             )
             return
 
         self.console.print(f"[bold blue]Installed skills ({len(self.skills)}):[/bold blue]\n")
+        from kiui.agent.skills import validate_skill
         for name, info in sorted(self.skills.items()):
             desc = info.get("description", "")
             path = info.get("path", "")
             loaded = " [green](loaded)[/green]" if name in self.tool_executor._loaded_skills else ""
-            self.console.print(f"  [cyan]{name}[/cyan]{loaded}")
+            loads = self.tool_executor._skill_loads.get(name, 0)
+            uses = f" [dim]· loaded {loads}×[/dim]" if loads else ""
+            self.console.print(f"  [cyan]{name}[/cyan]{loaded}{uses}")
             self.console.print(f"    {desc}")
             self.console.print(f"    [dim]{path}[/dim]")
+            for warning in validate_skill(name, info.get("frontmatter", {})):
+                self.console.print(f"    [yellow]! {warning}[/yellow]")
             self.console.print()
+        self.console.print(
+            "[dim]/skills <name> to load one manually · /skills reload to re-scan[/dim]"
+        )
+
+    def _reload_skills(self):
+        """Re-discover skills from disk and refresh the system prompt.
+
+        Picks up skills created or edited during the session (e.g. via
+        skill-creator). Already-loaded skill bodies remain in the conversation;
+        their loaded state is preserved when the skill still exists.
+        """
+        from kiui.agent.skills import discover_skills
+
+        before = set(self.skills)
+        issues: dict = {}
+        self.skills = discover_skills(self.work_dir, issues=issues)
+        self.tool_executor._skills = self.skills
+        # Drop loaded-state for skills that no longer exist.
+        self.tool_executor._loaded_skills &= set(self.skills)
+        self._report_skill_issues(issues)
+
+        # Rebuild the system prompt so the advertised skill list stays current.
+        self.system_prompt = build_system_prompt(
+            exec_mode=self.exec_mode,
+            is_subagent=self.is_subagent,
+            work_dir=self.work_dir,
+            skills=self.skills,
+        )
+        self.context.system_prompt["content"] = self.system_prompt
+
+        after = set(self.skills)
+        added = sorted(after - before)
+        removed = sorted(before - after)
+        summary = f"Reloaded skills ({len(self.skills)} installed)."
+        if added:
+            summary += f" Added: {', '.join(added)}."
+        if removed:
+            summary += f" Removed: {', '.join(removed)}."
+        self.console.system(summary)
+
+    def _load_skill_into_context(self, name: str):
+        """Manually load a skill's instructions into the conversation context.
+
+        Reuses the load_skill tool path so behavior matches model-invoked loads,
+        then injects the body as a user message so it takes effect on the next
+        turn. Lets the user force a skill the model did not auto-select.
+        """
+        result = self.tool_executor._load_skill(name)
+        if not result.get("success"):
+            self.console.warn(result.get("error", f"Could not load skill '{name}'."))
+            return
+
+        if "content" not in result:
+            # Already loaded earlier in this session; nothing new to inject.
+            self.console.system(result.get("message", f"Skill '{name}' is already loaded."))
+            return
+
+        self.context.add({
+            "role": "user",
+            "content": f"[Manually loaded skill '{name}']\n\n{result['content']}",
+        })
+        self.console.system(
+            f"Loaded skill '{name}' into context. It will guide the next response."
+        )
 
     # ----- session save / load ------------------------------------------------
 
@@ -1291,6 +1427,8 @@ class LLMAgent:
             "goal": self.goal,
             "goal_active": self.goal_active,
             "goal_iterations": self.goal_iterations,
+            "loaded_skills": sorted(self.tool_executor._loaded_skills),
+            "skill_loads": self.tool_executor._skill_loads,
             "messages": [self._serialize_message(m) for m in self.context.messages],
         }
 
@@ -1326,6 +1464,20 @@ class LLMAgent:
         saved_totals = data.get("token_totals")
         if saved_totals and isinstance(saved_totals, dict):
             self.token_totals.update(saved_totals)
+
+        # Restore skill usage so the model does not redundantly re-load skills
+        # whose bodies are already in the replayed conversation, and so telemetry
+        # (load counts) carries across --resume. Intersect with currently
+        # discovered skills in case a skill was removed since the save.
+        available = set(self.skills)
+        self.tool_executor._loaded_skills = {
+            n for n in data.get("loaded_skills", []) if n in available
+        }
+        saved_loads = data.get("skill_loads")
+        if isinstance(saved_loads, dict):
+            self.tool_executor._skill_loads = {
+                n: int(c) for n, c in saved_loads.items() if isinstance(c, int)
+            }
 
         # Restore the goal and auto-resume iteration; Ctrl+C stops it.
         self.goal = data.get("goal")
@@ -1577,3 +1729,10 @@ class LLMAgent:
             f"(input: {self.token_totals['prompt']}, cached input: {self.token_totals['cached_prompt']}, "
             f"output: {self.token_totals['completion']}, reasoning: {self.token_totals['reasoning']})"
         )
+        skill_loads = self.tool_executor._skill_loads
+        if skill_loads:
+            summary = ", ".join(
+                f"{n} ({c}\u00d7)"
+                for n, c in sorted(skill_loads.items(), key=lambda kv: (-kv[1], kv[0]))
+            )
+            self.console.system(f"Skills loaded: {summary}")

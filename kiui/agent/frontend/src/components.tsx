@@ -165,20 +165,28 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
   return (
     <main className="login-shell">
       <form className="login" onSubmit={submit}>
-        <input
-          type="password"
-          autoComplete="current-password"
-          enterKeyHint="go"
-          aria-label="Access token"
-          placeholder="Access token"
-          value={token}
-          disabled={busy}
-          onChange={(event) => setToken(event.target.value)}
-          required
-        />
-        <button className="login-submit" type="submit" disabled={busy || !token}>
-          {busy ? 'Submitting…' : 'Submit'}
-        </button>
+        <div className="login-row">
+          <input
+            type="password"
+            autoComplete="current-password"
+            enterKeyHint="go"
+            aria-label="Access token"
+            placeholder="Access token"
+            value={token}
+            disabled={busy}
+            onChange={(event) => setToken(event.target.value)}
+            required
+          />
+          <button
+            className="login-submit"
+            type="submit"
+            disabled={busy || !token}
+            aria-label={busy ? 'Submitting' : 'Submit'}
+            title="Submit"
+          >
+            {busy ? '…' : '↑'}
+          </button>
+        </div>
       </form>
       <p className="form-error" role="alert">{error}</p>
     </main>
@@ -264,6 +272,27 @@ export function Composer({
     el.style.height = `${el.scrollHeight}px`
   }, [text])
 
+  // Keep the timeline's bottom reserve in sync with the composer's real height,
+  // so a multi-line composer never hides the tail of the conversation and the
+  // last messages can always be scrolled clear of it.
+  useEffect(() => {
+    const el = shell.current
+    if (!el) return
+    const root = document.documentElement
+    const update = () => {
+      // Add a small gap so the last message doesn't sit flush against the bar.
+      root.style.setProperty('--composer-reserve', `${el.offsetHeight + 24}px`)
+    }
+    update()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => {
+      observer.disconnect()
+      root.style.removeProperty('--composer-reserve')
+    }
+  }, [])
+
   // Keep the composer above the on-screen keyboard on mobile: the visual
   // viewport shrinks when the keyboard opens, so lift the fixed bar by the
   // overlapped amount. A no-op on desktop (overlap is 0).
@@ -311,8 +340,26 @@ export function Composer({
           onChange={(event) => setText(event.target.value)}
           onKeyDown={keyDown}
         />
-        {operationId ? <button className="stop-button" type="button" onClick={onCancel}><span /> Stop</button> : null}
-        <button className="send-button" type="button" onClick={submit}>Send</button>
+        {operationId ? (
+          <button
+            className="stop-button"
+            type="button"
+            onClick={onCancel}
+            aria-label="Stop"
+            title="Stop"
+          >
+            <span />
+          </button>
+        ) : null}
+        <button
+          className="send-button"
+          type="button"
+          onClick={submit}
+          aria-label="Send"
+          title="Send"
+        >
+          ↑
+        </button>
       </div>
     </section>
   )

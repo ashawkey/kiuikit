@@ -1,107 +1,256 @@
 """Skill discovery, parsing, and registry formatting for kiui agent.
 
-A skill is a folder under <agent-dir>/skills/<name>/ containing a SKILL.md file.
-The SKILL.md describes what the skill does and provides domain-specific
-instructions the model can load on demand via the load_skill tool.
+Implements the open Agent Skills format (https://agentskills.io). A skill is a
+folder under ``<agent-dir>/skills/<name>/`` containing a ``SKILL.md`` file with
+YAML frontmatter (``name`` + ``description`` required, plus optional ``license``,
+``compatibility``, ``metadata``, ``allowed-tools``) followed by markdown
+instructions. Skills may bundle ``scripts/``, ``references/``, and ``assets/``
+directories referenced by relative paths from the skill root.
 
-For compatibility with other agent tools that share the same skill convention,
-skills are discovered from several well-known agent directories (see
-SKILL_DIRS). Earlier directories take precedence when skill names collide.
+All frontmatter fields are parsed for compatibility, but ``allowed-tools`` is
+not enforced: kia uses its own permission model, so a skill cannot narrow or
+widen tool access. The field is accepted (so cross-agent skills load cleanly)
+but has no effect.
+
+Skills load via progressive disclosure: only name+description are advertised in
+the system prompt; the full body is pulled into context on demand via the
+load_skill tool (or the manual /skills <name> command); bundled resource files are read
+only when the instructions call for them (using the ordinary read_file /
+exec_command tools).
+
+For compatibility with other agent tools that share this convention, skills are
+discovered from several well-known agent directories (see SKILL_DIRS), both under
+the working directory (project skills) and under the user's home (personal
+skills shared across projects). Project skills take precedence, and within each
+scope earlier directories win when skill names collide.
 """
 
 from __future__ import annotations
 
+import re
+import shutil
 from pathlib import Path
 
-# Agent directories (relative to the work dir) that may hold a skills/ folder.
+import yaml
+
+# Agent directories that may hold a skills/ folder, relative to a scope root.
 # Ordered by precedence: .kia first, then other common agent tool conventions.
 SKILL_DIRS = (".kia", ".codex", ".claude", ".agents")
 
+# Bundled skills shipped with kiui, copied into a project's .kia/skills/ on init
+# so common skills are available out of the box (and remain user-editable).
+BUNDLED_SKILLS_DIR = Path(__file__).parent / "skills"
 
-def discover_skills(work_dir: str | Path | None = None) -> dict[str, dict]:
-    """Scan known agent dirs' skills/ folders for skills defined by SKILL.md.
+# name: 1-64 chars, lowercase alphanumeric + single hyphens, no leading/trailing/
+# consecutive hyphens (per the Agent Skills spec).
+_NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
-    Searches ``<work_dir>/<agent-dir>/skills/`` for each agent dir in
-    SKILL_DIRS. Returns
-    ``{skill_name: {"path": str, "description": str, "body": str}}``.
-    The description is taken from a ``## Description`` section, or the first
-    non-blank, non-heading line of the file. When the same skill name appears
-    in multiple directories, the one from the earlier directory wins.
+
+def install_bundled_skills(work_dir: str | Path | None = None) -> list[str]:
+    """Copy kiui's bundled skills into ``<work_dir>/.kia/skills/`` if absent.
+
+    Runs once per project on agent init. Each bundled skill is copied only when
+    no skill of the same name already exists in ``.kia/skills/`` (any pre-existing
+    or user-edited copy is left untouched, so users can freely modify or delete
+    them). Returns the list of skill names that were newly installed.
     """
     base = Path(work_dir) if work_dir else Path.cwd()
+    if not BUNDLED_SKILLS_DIR.is_dir():
+        return []
+
+    dest_root = base / ".kia" / "skills"
+    installed: list[str] = []
+    for src in sorted(BUNDLED_SKILLS_DIR.iterdir()):
+        if not src.is_dir() or not (src / "SKILL.md").is_file():
+            continue
+        dest = dest_root / src.name
+        if dest.exists():
+            continue  # never overwrite an existing (possibly user-edited) skill
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(src, dest)
+        installed.append(src.name)
+
+    return installed
+
+
+def discover_skills(
+    work_dir: str | Path | None = None,
+    issues: dict | None = None,
+) -> dict[str, dict]:
+    """Scan known agent dirs' skills/ folders for skills defined by SKILL.md.
+
+    Searches ``<scope>/<agent-dir>/skills/`` for each agent dir in SKILL_DIRS,
+    where *scope* is first the working directory (project skills) then the user's
+    home directory (personal skills). Returns
+    ``{skill_name: {"path", "dir", "description", "body", "frontmatter"}}`` where
+    ``dir`` is the skill root (for resolving bundled resources) and ``body`` is the
+    markdown instructions with frontmatter stripped. When the same skill name
+    appears more than once, an earlier scope/directory wins (project over home,
+    and .kia over .codex/.claude/.agents within a scope).
+
+    When *issues* is a dict, it is populated (in place) with non-fatal discovery
+    problems so callers can surface them:
+
+    - ``issues["shadowed"]``: list of ``{"name", "path", "shadowed_by"}`` for
+      skills dropped because an earlier scope/dir already defined that name.
+    - ``issues["errors"]``: list of ``{"name", "path", "reason"}`` for SKILL.md
+      files that could not be read or parsed (unreadable, invalid YAML, or
+      missing required frontmatter/description).
+    """
+    base = Path(work_dir) if work_dir else Path.cwd()
+    home = Path.home()
+
+    shadowed: list[dict] = []
+    errors: list[dict] = []
+
+    # Project scope wins over the personal (home) scope. Skip the home scope when
+    # the project already is the home dir to avoid scanning the same paths twice.
+    scopes = [base] if base.resolve() == home.resolve() else [base, home]
 
     skills: dict[str, dict] = {}
-    for agent_dir in SKILL_DIRS:
-        skills_dir = base / agent_dir / "skills"
-        if not skills_dir.is_dir():
-            continue
-
-        for item in sorted(skills_dir.iterdir()):
-            if not item.is_dir():
-                continue  # skip loose files
-
-            skill_name = item.name
-            if skill_name in skills:
-                continue  # earlier agent dir takes precedence
-
-            skill_md = item / "SKILL.md"
-            if not skill_md.is_file():
-                continue  # folder without SKILL.md is not a skill
-
-            try:
-                body = skill_md.read_text(encoding="utf-8").strip()
-            except (OSError, UnicodeDecodeError):
+    for scope in scopes:
+        for agent_dir in SKILL_DIRS:
+            skills_dir = scope / agent_dir / "skills"
+            if not skills_dir.is_dir():
                 continue
 
-            if not body:
-                continue
+            for item in sorted(skills_dir.iterdir()):
+                if not item.is_dir():
+                    continue  # skip loose files
 
-            description = _extract_description(body)
+                skill_md = item / "SKILL.md"
+                if not skill_md.is_file():
+                    continue  # folder without SKILL.md is not a skill
 
-            skills[skill_name] = {
-                "path": str(skill_md),
-                "description": description,
-                "body": body,
-            }
+                skill_name = item.name
+                if skill_name in skills:
+                    # A higher-precedence scope/dir already defined this name.
+                    shadowed.append({
+                        "name": skill_name,
+                        "path": str(skill_md),
+                        "shadowed_by": skills[skill_name]["path"],
+                    })
+                    continue
+
+                try:
+                    raw = skill_md.read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError) as e:
+                    errors.append({
+                        "name": skill_name,
+                        "path": str(skill_md),
+                        "reason": f"could not read file: {e}",
+                    })
+                    continue
+
+                parsed = _parse_skill(raw)
+                if parsed is None:
+                    errors.append({
+                        "name": skill_name,
+                        "path": str(skill_md),
+                        "reason": "invalid or missing YAML frontmatter (needs a non-empty 'description')",
+                    })
+                    continue
+
+                frontmatter, body = parsed
+                description = frontmatter.get("description", "").strip()
+
+                skills[skill_name] = {
+                    "path": str(skill_md),
+                    "dir": str(item),
+                    "description": description,
+                    "body": body,
+                    "frontmatter": frontmatter,
+                }
+
+    if issues is not None:
+        issues["shadowed"] = shadowed
+        issues["errors"] = errors
 
     return skills
 
 
-def _extract_description(body: str) -> str:
-    """Extract a short description from the SKILL.md body.
+def _parse_skill(raw: str) -> tuple[dict, str] | None:
+    """Parse a SKILL.md into (frontmatter dict, body markdown).
 
-    Looks for ``## Description`` first; falls back to the first non-blank,
-    non-ATX-heading line (trimmed to 200 chars).
+    Requires a leading YAML frontmatter block delimited by ``---`` lines with a
+    non-empty ``description``. Returns None if the frontmatter is absent, invalid,
+    or lacks a description (such files are not valid skills per the spec).
     """
-    lines = body.splitlines()
+    frontmatter, body = _split_frontmatter(raw)
+    if frontmatter is None:
+        return None
 
-    # Look for ## Description section
-    in_description = False
-    for line in lines:
-        stripped = line.strip()
-        if stripped.lower().startswith("## description"):
-            in_description = True
-            continue
-        if in_description:
-            if stripped.startswith("#"):
-                break  # next heading ends the description
-            if stripped:
-                return stripped[:200]
+    description = frontmatter.get("description")
+    if not isinstance(description, str) or not description.strip():
+        return None  # description is required and must be a non-empty string
 
-    # Fallback: first non-blank, non-heading line
-    for line in lines:
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#"):
-            return stripped[:200]
+    return frontmatter, body.strip()
 
-    return "(no description)"
+
+def _split_frontmatter(raw: str) -> tuple[dict | None, str]:
+    """Split raw SKILL.md text into (frontmatter dict, body).
+
+    The frontmatter is a YAML block bounded by a leading ``---`` line and a
+    following ``---`` line. Returns (None, raw) when no valid frontmatter block
+    is present or the YAML does not parse to a mapping.
+    """
+    # Normalize newlines; allow an optional BOM / leading whitespace-only lines.
+    text = raw.lstrip("\ufeff")
+    lines = text.splitlines()
+
+    # First non-empty line must be the opening fence.
+    idx = 0
+    while idx < len(lines) and not lines[idx].strip():
+        idx += 1
+    if idx >= len(lines) or lines[idx].strip() != "---":
+        return None, raw
+
+    # Find the closing fence.
+    for end in range(idx + 1, len(lines)):
+        if lines[end].strip() == "---":
+            yaml_text = "\n".join(lines[idx + 1 : end])
+            body = "\n".join(lines[end + 1 :])
+            try:
+                data = yaml.safe_load(yaml_text)
+            except yaml.YAMLError:
+                return None, raw
+            if not isinstance(data, dict):
+                return None, raw
+            return data, body
+
+    return None, raw  # no closing fence
+
+
+def validate_skill(name: str, frontmatter: dict) -> list[str]:
+    """Return a list of spec-compliance warnings for a skill (empty if clean).
+
+    Non-fatal: discovery still loads skills with warnings so that slightly
+    non-conforming third-party skills remain usable. Used by ``/skills``.
+    """
+    warnings: list[str] = []
+
+    fm_name = frontmatter.get("name")
+    if fm_name is None:
+        warnings.append("missing 'name' field")
+    elif fm_name != name:
+        warnings.append(f"name '{fm_name}' does not match directory '{name}'")
+
+    check_name = fm_name if isinstance(fm_name, str) else name
+    if not _NAME_RE.match(check_name) or len(check_name) > 64:
+        warnings.append("name must be 1-64 lowercase alphanumeric/hyphen chars")
+
+    desc = frontmatter.get("description", "")
+    if isinstance(desc, str) and len(desc) > 1024:
+        warnings.append("description exceeds 1024 characters")
+
+    return warnings
 
 
 def build_skills_prompt_section(skills: dict[str, dict]) -> str:
     """Build a concise skills registry section for the system prompt.
 
-    Lists each skill name, description, and the load_skill invocation pattern
-    so the model knows what is available and how to activate each skill.
+    Advertises each skill's name + description (progressive disclosure stage 1)
+    and how to activate it via the load_skill tool.
     """
     if not skills:
         return ""
@@ -111,7 +260,9 @@ def build_skills_prompt_section(skills: dict[str, dict]) -> str:
         "",
         "The following specialized skills are available. When a user request matches",
         "a skill's domain, use the **load_skill** tool with the skill name to load",
-        "its full instructions into context.",
+        "its full instructions into context. A loaded skill may reference bundled",
+        "files (e.g. references/… or scripts/…) relative to its directory; read or",
+        "run those with the ordinary file/exec tools when the instructions call for it.",
         "",
     ]
 

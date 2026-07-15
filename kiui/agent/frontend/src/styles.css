@@ -29,6 +29,17 @@
   --diff-del-text: #ffc4d2;
   --overlay: rgba(0, 0, 0, 0.6);
 
+  /* ---- Syntax highlight tokens: Monokai ---- */
+  --hl-keyword: #f92672;
+  --hl-string: #e6db74;
+  --hl-number: #ae81ff;
+  --hl-comment: #75715e;
+  --hl-function: #a6e22e;
+  --hl-type: #66d9ef;
+  --hl-variable: #f8f8f2;
+  --hl-attr: #a6e22e;
+  --hl-meta: #75715e;
+
   /* ---- Static fallbacks for browsers without color-mix() ---- */
   --accent-weak: rgba(249, 38, 114, 0.16);
   --accent-faint: rgba(249, 38, 114, 0.08);
@@ -43,8 +54,15 @@
   --hairline: rgba(248, 248, 242, 0.08);
 
   /* ---- Layout (theme-agnostic) ---- */
-  --content: 820px;
+  /* On wide screens take ~70% of the viewport, capped so it never gets absurd
+     on ultrawide monitors. The 820px floor keeps mid-size screens comfortably
+     wide; on narrow screens `min(100%, …)` at the consumers keeps it fluid. */
+  --content: min(max(70vw, 820px), 1200px);
   --gutter: 1rem;
+
+  /* Bottom reserve under the timeline so the fixed composer never hides the
+     tail of the conversation. JS keeps this in sync with the composer height. */
+  --composer-reserve: 8.5rem;
 
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: var(--bg);
@@ -91,6 +109,17 @@
   --btn-subtle: rgba(31, 35, 40, 0.06);
   --pill-bg: rgba(255, 255, 255, 0.82);
   --hairline: rgba(175, 184, 193, 0.40);
+
+  /* ---- Syntax highlight tokens: GitHub light ---- */
+  --hl-keyword: #cf222e;
+  --hl-string: #0a3069;
+  --hl-number: #0550ae;
+  --hl-comment: #6e7781;
+  --hl-function: #8250df;
+  --hl-type: #953800;
+  --hl-variable: #1f2328;
+  --hl-attr: #0550ae;
+  --hl-meta: #6e7781;
 }
 
 @supports (color: color-mix(in srgb, black, white)) {
@@ -130,28 +159,40 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
   display: grid;
   align-content: center;
 }
-.login input {
-  width: 100%;
-  min-height: 3.1rem;
-  padding: 0 0.9rem;
-  color: var(--text);
+.login-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.35rem 0.35rem 0.5rem;
   background: var(--surface-soft);
   border: 1px solid var(--line-strong);
-  border-radius: 9px;
+  border-radius: 14px;
+}
+.login-row:focus-within { border-color: var(--muted); }
+.login input {
+  flex: 1;
+  min-width: 0;
+  min-height: 2.4rem;
+  padding: 0 0.5rem;
+  color: var(--text);
+  background: transparent;
+  border: 0;
   outline: 0;
 }
-.login input:focus { border-color: var(--muted); }
 .login input:disabled { opacity: 0.6; }
 .login-submit {
-  width: 100%;
-  min-height: 3.1rem;
-  margin-top: 0.6rem;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
   color: var(--accent-ink);
   background: var(--accent);
   border: 1px solid var(--accent);
-  border-radius: 9px;
-  font-size: 0.95rem;
-  font-weight: 650;
+  border-radius: 50%;
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1;
   cursor: pointer;
 }
 .login-submit:hover:not(:disabled) { filter: brightness(1.08); }
@@ -167,7 +208,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
 /* Reserve the scrollbar gutter always, so a session with a scrollbar and one
    without stay horizontally identical (composer + timeline share one center). */
 html { scrollbar-gutter: stable; }
-.app-shell { min-height: 100dvh; padding-bottom: 8.5rem; }
+.app-shell { min-height: 100dvh; padding-bottom: var(--composer-reserve); }
 .top-controls {
   position: fixed;
   z-index: 15;
@@ -193,10 +234,11 @@ html { scrollbar-gutter: stable; }
 .top-controls button:hover, .top-controls button:focus-visible { opacity: 1; color: var(--text); }
 .theme-toggle { line-height: 1; font-size: 0.95rem; }
 .scroll-top { line-height: 1; font-size: 0.95rem; }
+.logout { line-height: 1; font-size: 1rem; }
 .layout { display: block; }
 .workspace {
   width: min(100%, var(--content));
-  min-height: calc(100dvh - 8.5rem);
+  min-height: calc(100dvh - var(--composer-reserve));
   margin: 0 auto;
   padding: 1.25rem var(--gutter) 3rem;
 }
@@ -446,6 +488,40 @@ html { scrollbar-gutter: stable; }
 .diff-number { padding: 0 0.5rem; color: var(--dim); text-align: right; user-select: none; border-right: 1px solid var(--hairline); }
 .diff-sign { text-align: center; user-select: none; }
 .diff-line code { padding-right: 1rem; white-space: pre; font: inherit; }
+
+/* highlight.js token classes (lowlight). Colors come from theme-scoped
+   --hl-* vars so light and dark both read well; added/removed line tints sit
+   underneath. Anything unmapped inherits the line's default text color. */
+.diff-line .hljs-keyword,
+.diff-line .hljs-built_in,
+.diff-line .hljs-literal { color: var(--hl-keyword); }
+.diff-line .hljs-string,
+.diff-line .hljs-regexp,
+.diff-line .hljs-char.escape_,
+.diff-line .hljs-symbol { color: var(--hl-string); }
+.diff-line .hljs-number { color: var(--hl-number); }
+.diff-line .hljs-comment,
+.diff-line .hljs-quote { color: var(--hl-comment); font-style: italic; }
+.diff-line .hljs-title,
+.diff-line .hljs-title.function_,
+.diff-line .hljs-section { color: var(--hl-function); }
+.diff-line .hljs-type,
+.diff-line .hljs-class .hljs-title,
+.diff-line .hljs-title.class_,
+.diff-line .hljs-params { color: var(--hl-type); }
+.diff-line .hljs-attr,
+.diff-line .hljs-attribute,
+.diff-line .hljs-property,
+.diff-line .hljs-selector-tag,
+.diff-line .hljs-selector-class,
+.diff-line .hljs-name { color: var(--hl-attr); }
+.diff-line .hljs-variable,
+.diff-line .hljs-template-variable { color: var(--hl-variable); }
+.diff-line .hljs-meta,
+.diff-line .hljs-comment.hljs-doctag { color: var(--hl-meta); }
+.diff-line .hljs-bullet,
+.diff-line .hljs-link { color: var(--hl-keyword); }
+
 .diff-summary { padding: 0.5rem 0.85rem; border-top: 1px solid var(--line); }
 
 .working { display: flex; align-items: center; gap: 0.27rem; width: fit-content; margin-top: 1rem; color: var(--muted); font-size: 0.85rem; }
@@ -541,16 +617,19 @@ html { scrollbar-gutter: stable; }
 .composer textarea::placeholder { color: var(--dim); }
 .send-button, .stop-button {
   flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
   height: 2.4rem;
-  padding: 0 0.9rem;
-  border-radius: 11px;
-  font-size: 0.78rem;
+  border-radius: 50%;
+  font-size: 1.1rem;
   font-weight: 700;
+  line-height: 1;
   cursor: pointer;
 }
 .send-button { color: var(--accent-ink); background: var(--accent); border: 0; }
 .stop-button { color: var(--danger); background: var(--danger-faint); border: 1px solid var(--danger-weak); }
-.stop-button span { display: inline-block; width: 0.45rem; height: 0.45rem; margin-right: 0.3rem; border-radius: 2px; background: currentColor; }
+.stop-button span { display: block; width: 0.7rem; height: 0.7rem; border-radius: 2px; background: currentColor; }
 .queue-chip { position: absolute; bottom: calc(100% + 0.55rem); left: 0.8rem; padding: 0.35rem 0.65rem; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); font-size: 0.75rem; }
 
 @keyframes rise { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
