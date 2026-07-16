@@ -144,12 +144,16 @@ class ThinkingIndicator:
         self._thread = threading.Thread(target=self._tick, daemon=True)
         self._thread.start()
         if self._events is not None:
-            suffix = (
-                self._status_suffix.plain()
-                if isinstance(self._status_suffix, ContextStatus)
-                else self._status_suffix
-            )
-            self._events.publish("thinking_start", suffix=suffix)
+            if isinstance(self._status_suffix, ContextStatus):
+                self._events.publish(
+                    "thinking_start",
+                    suffix=self._status_suffix.plain(),
+                    context_tokens=self._status_suffix.tokens,
+                    context_limit=self._status_suffix.limit,
+                    total_tokens_used=self._status_suffix.total_tokens_used,
+                )
+            else:
+                self._events.publish("thinking_start", suffix=self._status_suffix)
         return self
 
     def __exit__(self, *args) -> None:

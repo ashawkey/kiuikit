@@ -91,12 +91,12 @@ class UserSubmission:
 
 
 class InputBroker:
-    """FIFO queue shared by terminal and authenticated web clients."""
+    """Single pending web submission shared with the terminal input loop."""
 
-    def __init__(self, events: EventHub, max_pending: int = 20):
+    def __init__(self, events: EventHub):
         self.events = events
-        self.max_pending = max_pending
-        self._queue: queue.Queue[UserSubmission] = queue.Queue(max_pending)
+        self._lock = threading.Lock()
+        self._submission: UserSubmission | None = None
 
     def submit(self, text: str, source: str = "web") -> UserSubmission:
         text = text.strip()
@@ -105,21 +105,24 @@ class InputBroker:
         if len(text.encode("utf-8")) > 128 * 1024:
             raise ValueError("Message is too large.")
         item = UserSubmission(text=text, source=source, id=uuid.uuid4().hex)
-        try:
-            self._queue.put_nowait(item)
-        except queue.Full as exc:
-            raise ValueError("The message queue is full.") from exc
-        self.events.publish("queue_changed", pending=self._queue.qsize())
+        with self._lock:
+            if self._submission is not None:
+                raise ValueError("Agent is not ready for another message.")
+            self._submission = item
         return item
 
     def get_nowait(self) -> UserSubmission:
-        item = self._queue.get(block=False)
-        self.events.publish("queue_changed", pending=self._queue.qsize())
-        return item
+        with self._lock:
+            if self._submission is None:
+                raise queue.Empty
+            item = self._submission
+            self._submission = None
+            return item
 
     @property
     def pending(self) -> int:
-        return self._queue.qsize()
+        with self._lock:
+            return int(self._submission is not None)
 
 
 @dataclass

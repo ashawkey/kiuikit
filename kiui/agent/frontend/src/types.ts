@@ -8,7 +8,9 @@ export type EventData = {
   success?: boolean
   streaming?: boolean
   id?: string
-  pending?: number
+  context_tokens?: number
+  context_limit?: number
+  total_tokens_used?: number
   [key: string]: unknown
 }
 
@@ -28,7 +30,6 @@ export type StateMessage = {
   latest_seq: number
   oldest_seq: number
   replay_truncated: boolean
-  pending: number
   operation_id: string | null
   prompt: Prompt | null
 }
@@ -58,7 +59,6 @@ export type AgentEvent = {
   sessions?: SessionSummary[]
   stream_id?: string
   latest_seq?: number
-  pending?: number
   operation_id?: string | null
   prompt?: Prompt | null
 }

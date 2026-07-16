@@ -126,7 +126,6 @@ class RemoteSession:
         self.events = EventHub()
         # Derived UI state, tracked from the event stream (mirrors what the
         # single-agent server pulls from its brokers).
-        self.pending = 0
         self.prompt: dict | None = None
         self.operation_id: str | None = None
         self.agent_ws = None             # starlette WebSocket to the agent
@@ -140,7 +139,6 @@ class RemoteSession:
     def reset(self) -> None:
         """Start a fresh event stream (new stream_id) on agent (re)connect."""
         self.events = EventHub()
-        self.pending = 0
         self.prompt = None
         self.operation_id = None
 
@@ -173,9 +171,7 @@ class RemoteSession:
         """Consume one agent event: update derived state and re-publish it."""
         etype = event.get("type", "")
         data = event.get("data", {}) or {}
-        if etype == "queue_changed":
-            self.pending = int(data.get("pending", 0) or 0)
-        elif etype == "prompt_open":
+        if etype == "prompt_open":
             self.prompt = {
                 "id": data.get("id", ""),
                 "kind": data.get("kind", "text"),
@@ -644,7 +640,6 @@ class Hub:
                 "session": session_id,
                 "stream_id": s.events.stream_id,
                 "latest_seq": s.events.latest_seq,
-                "pending": s.pending,
                 "operation_id": s.operation_id,
                 "prompt": s.prompt,
                 "oldest_seq": s.events.oldest_seq,

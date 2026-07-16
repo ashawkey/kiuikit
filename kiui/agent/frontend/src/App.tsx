@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { Composer, Login, PromptDialog, ScrollTopButton, SessionSidebar, Thinking, ThemeToggle } from './components'
 import { EventCard } from './renderers'
@@ -20,12 +20,6 @@ function appendEvent(events: DisplayEvent[], event: DisplayEvent) {
   return [...events, event]
 }
 
-function scrollToBottom() {
-  requestAnimationFrame(() => {
-    window.scrollTo({ top: document.documentElement.scrollHeight })
-  })
-}
-
 /**
  * One agent session. Every session gets a pane that stays mounted with its own
  * always-open websocket, so switching tabs only toggles visibility — no
@@ -36,29 +30,42 @@ function SessionPane({
   sessionId,
   active,
   draft,
+  restoreScroll,
   onDraftChange,
 }: {
   sessionId: string
   active: boolean
   draft: string
+  restoreScroll: number | undefined
   onDraftChange: (text: string) => void
 }) {
   const [events, setEvents] = useState<DisplayEvent[]>([])
-  const [pending, setPending] = useState(0)
   const [operationId, setOperationId] = useState<string | null>(null)
   const [prompt, setPrompt] = useState<Prompt | null>(null)
   const [thinking, setThinking] = useState(false)
-  const [thinkingSuffix, setThinkingSuffix] = useState('')
+  const [thinkingStatus, setThinkingStatus] = useState({
+    suffix: '',
+    contextTokens: 0,
+    contextLimit: 0,
+    totalTokensUsed: 0,
+  })
   const socket = useRef<WebSocket | null>(null)
   const lastSeq = useRef(0)
   const streamKey = useRef('')
   const localKey = useRef(0)
   const pinned = useRef(true)
-  // Per-pane scroll memory. Panes share the single window scrollbar (inactive
-  // ones are display:none), so we save this pane's offset when it hides and
-  // restore it when it shows again instead of always snapping to the tail.
-  const savedScroll = useRef(0)
-  const everShown = useRef(false)
+  const activeRef = useRef(active)
+  activeRef.current = active
+  // Window scrolling is asynchronous. Guard every scheduled scroll with this
+  // pane's current visibility so a callback from a pane that was just hidden
+  // cannot move the newly selected session.
+  const scrollToTail = useCallback(() => {
+    requestAnimationFrame(() => {
+      if (activeRef.current) {
+        window.scrollTo({ top: document.documentElement.scrollHeight })
+      }
+    })
+  }, [])
 
   const showEvent = useCallback((type: string, text: string, data = {}, seq?: number) => {
     const key = seq ? `event-${seq}` : `local-${++localKey.current}`
@@ -74,7 +81,6 @@ function SessionPane({
         setEvents([])
       }
       streamKey.current = key
-      setPending(state.pending)
       setOperationId(state.operation_id)
       setPrompt(state.prompt)
       if (state.replay_truncated) {
@@ -114,12 +120,14 @@ function SessionPane({
       case 'operation_end':
         setOperationId(null)
         break
-      case 'queue_changed':
-        setPending(typeof data.pending === 'number' ? data.pending : 0)
-        break
       case 'thinking_start':
         setThinking(true)
-        setThinkingSuffix(typeof data.suffix === 'string' ? data.suffix : '')
+        setThinkingStatus({
+          suffix: typeof data.suffix === 'string' ? data.suffix : '',
+          contextTokens: typeof data.context_tokens === 'number' ? data.context_tokens : 0,
+          contextLimit: typeof data.context_limit === 'number' ? data.context_limit : 0,
+          totalTokensUsed: typeof data.total_tokens_used === 'number' ? data.total_tokens_used : 0,
+        })
         break
       case 'thinking_stop':
         setThinking(false)
@@ -184,36 +192,37 @@ function SessionPane({
     }
   }, [sessionId, handleMessage])
 
-  // Only the visible pane tracks scroll position and follows the tail, so a
-  // background session receiving events never yanks the active view.
+  // Track whether new output should keep following the tail. App owns the
+  // actual per-session offsets because it can capture before switching panes.
   useEffect(() => {
     if (!active) return
     const onScroll = () => {
-      savedScroll.current = window.scrollY
+      if (!activeRef.current) return
       const distance =
         document.documentElement.scrollHeight - window.innerHeight - window.scrollY
       pinned.current = distance < 220
     }
+    onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [active])
 
-  // On activation, restore this pane's remembered position; a brand-new pane
-  // (or one pinned to the tail when it was last hidden) starts at the bottom.
-  useEffect(() => {
+  // App captures the outgoing position before changing tabs, while its pane is
+  // still visible and the browser has not clamped the window scroll offset.
+  useLayoutEffect(() => {
     if (!active) return
-    if (!everShown.current || pinned.current) {
-      everShown.current = true
-      pinned.current = true
-      scrollToBottom()
+    if (restoreScroll === undefined) {
+      scrollToTail()
     } else {
-      requestAnimationFrame(() => window.scrollTo({ top: savedScroll.current }))
+      window.scrollTo({ top: restoreScroll })
     }
-  }, [active])
+  }, [active, restoreScroll, scrollToTail])
 
+  // Follow new output only. Including `active` here would schedule a second
+  // tail scroll on tab activation and overwrite the restoration above.
   useEffect(() => {
-    if (active && pinned.current) scrollToBottom()
-  }, [events, thinking, active])
+    if (activeRef.current && pinned.current) scrollToTail()
+  }, [events, thinking, scrollToTail])
 
   const send = useCallback((action: ClientAction) => {
     if (socket.current?.readyState === WebSocket.OPEN) {
@@ -227,21 +236,20 @@ function SessionPane({
         <div className="timeline" aria-live="polite">
           {events.map((event) => <EventCard event={event} key={event.key} />)}
         </div>
-        {active && thinking ? <Thinking suffix={thinkingSuffix} /> : null}
+        {active && thinking ? <Thinking {...thinkingStatus} /> : null}
       </section>
       {active && prompt ? (
         <PromptDialog prompt={prompt} onAnswer={(answer) => send({ type: 'prompt_response', id: prompt.id, answer })} />
       ) : null}
       {active ? (
         <Composer
-          pending={pending}
           operationId={operationId}
           draft={draft}
           onDraftChange={onDraftChange}
           onSend={(text) => {
             send({ type: 'submit', text })
             pinned.current = true
-            scrollToBottom()
+            scrollToTail()
           }}
           onCancel={() => send({ type: 'cancel', operation_id: operationId })}
         />
@@ -261,6 +269,7 @@ export default function App() {
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const controlSocket = useRef<WebSocket | null>(null)
   const csrf = useRef('')
+  const scrollPositions = useRef(new Map<string, number>())
 
   // Control channel: session list + auth confirmation.
   useEffect(() => {
@@ -329,6 +338,11 @@ export default function App() {
     setDrafts((current) => ({ ...current, [sessionId]: text }))
   }, [])
 
+  const selectSession = useCallback((sessionId: string) => {
+    if (activeSession) scrollPositions.current.set(activeSession, window.scrollY)
+    setActiveSession(sessionId)
+  }, [activeSession])
+
   const scrollToTop = useCallback(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
@@ -349,6 +363,7 @@ export default function App() {
     setSessions([])
     setActiveSession(null)
     setDrafts({})
+    scrollPositions.current.clear()
     setAuthenticated(false)
   }, [])
 
@@ -365,7 +380,7 @@ export default function App() {
         <button className="logout" type="button" onClick={logout} aria-label="Sign out" title="Sign out">⏻</button>
       </div>
       <div className="layout">
-        <SessionSidebar sessions={sessions} activeId={activeSession} onSelect={setActiveSession} />
+        <SessionSidebar sessions={sessions} activeId={activeSession} onSelect={selectSession} />
         <div className="panes">
           {sessions.length === 0 ? (
             <section className="workspace">
@@ -378,6 +393,7 @@ export default function App() {
               sessionId={session.id}
               active={session.id === activeSession}
               draft={drafts[session.id] ?? ''}
+              restoreScroll={scrollPositions.current.get(session.id)}
               onDraftChange={(text) => setDraft(session.id, text)}
             />
           ))}

@@ -10,7 +10,6 @@ function ControlledComposer({ onSend }: { onSend: (text: string) => void }) {
   const [draft, setDraft] = useState('')
   return (
     <Composer
-      pending={0}
       operationId={null}
       draft={draft}
       onDraftChange={setDraft}
@@ -63,19 +62,22 @@ describe('interaction components', () => {
     vi.useFakeTimers()
     try {
       render(<Thinking />)
-      expect(screen.getByText('Working… 0s')).toBeInTheDocument()
+      expect(screen.getByText('Working... (0s)')).toBeInTheDocument()
       act(() => { vi.advanceTimersByTime(2000) })
-      expect(screen.getByText('Working… 2s')).toBeInTheDocument()
+      expect(screen.getByText('Working... (2s)')).toBeInTheDocument()
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('appends the token/context suffix while working', () => {
-    render(<Thinking suffix="ctx ~1,000/128,000 (1%) · 500 tokens used" />)
-    expect(
-      screen.getByText('Working… 0s · ctx ~1,000/128,000 (1%) · 500 tokens used'),
-    ).toBeInTheDocument()
+  it('shows terminal-style context progress while working', () => {
+    const { container } = render(
+      <Thinking contextTokens={1_000} contextLimit={128_000} totalTokensUsed={500} />,
+    )
+    expect(screen.getByText('Working... (0s)')).toBeInTheDocument()
+    expect(screen.getByText('1%')).toBeInTheDocument()
+    expect(screen.getByText('500 used')).toBeInTheDocument()
+    expect(container.querySelector('.context-progress > i')).toHaveStyle({ width: '0.78125%' })
   })
 
   it('renders prompt choices as separate buttons', () => {

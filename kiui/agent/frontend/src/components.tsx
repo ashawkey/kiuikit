@@ -117,8 +117,28 @@ function CommandPreview({ detail }: { detail: string }) {
   )
 }
 
-export function Thinking({ suffix = '' }: { suffix?: string }) {
+function compactTokens(value: number) {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
+  if (value >= 1_000) return `${Math.round(value / 1_000)}K`
+  return String(value)
+}
+
+export function Thinking({
+  suffix = '',
+  contextTokens = 0,
+  contextLimit = 0,
+  totalTokensUsed = 0,
+}: {
+  suffix?: string
+  contextTokens?: number
+  contextLimit?: number
+  totalTokensUsed?: number
+}) {
   const [seconds, setSeconds] = useState(0)
+  const fraction = contextLimit > 0
+    ? Math.min(Math.max(contextTokens / contextLimit, 0), 1)
+    : 0
+  const contextLevel = fraction >= 0.9 ? 'danger' : fraction >= 0.75 ? 'warning' : 'info'
   useEffect(() => {
     const start = Date.now()
     const id = window.setInterval(() => {
@@ -128,7 +148,17 @@ export function Thinking({ suffix = '' }: { suffix?: string }) {
   }, [])
   return (
     <div className="working" aria-label="working">
-      <span /><span /><span /><em>Working… {seconds}s{suffix ? ` · ${suffix}` : ''}</em>
+      <span /><span /><span />
+      <em>Working... ({seconds}s)</em>
+      {contextLimit > 0 ? (
+        <>
+          <i className={`context-progress ${contextLevel}`} aria-hidden="true">
+            <i style={{ width: `${fraction * 100}%` }} />
+          </i>
+          <strong className={contextLevel}>{Math.round(fraction * 100)}%</strong>
+          <small>{compactTokens(totalTokensUsed)} used</small>
+        </>
+      ) : suffix ? <small>{suffix}</small> : null}
     </div>
   )
 }
@@ -244,14 +274,12 @@ export function PromptDialog({
 }
 
 export function Composer({
-  pending,
   operationId,
   draft,
   onDraftChange,
   onSend,
   onCancel,
 }: {
-  pending: number
   operationId: string | null
   draft: string
   onDraftChange: (text: string) => void
@@ -293,28 +321,9 @@ export function Composer({
     }
   }, [])
 
-  // Keep the composer above the on-screen keyboard on mobile: the visual
-  // viewport shrinks when the keyboard opens, so lift the fixed bar by the
-  // overlapped amount. A no-op on desktop (overlap is 0).
-  useEffect(() => {
-    const vv = window.visualViewport
-    if (!vv) return
-    const update = () => {
-      const overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
-      shell.current?.style.setProperty('bottom', `${overlap}px`)
-    }
-    update()
-    vv.addEventListener('resize', update)
-    vv.addEventListener('scroll', update)
-    return () => {
-      vv.removeEventListener('resize', update)
-      vv.removeEventListener('scroll', update)
-    }
-  }, [])
-
   function submit() {
     const value = text.trim()
-    if (!value) return
+    if (!value || operationId) return
     onSend(value)
     setText('')
     field.current?.focus()
@@ -330,13 +339,13 @@ export function Composer({
   return (
     <section className="composer-shell" ref={shell}>
       <div className="composer">
-        {pending ? <div className="queue-chip">{pending} message{pending === 1 ? '' : 's'} queued</div> : null}
         <textarea
           ref={field}
           rows={1}
           maxLength={32768}
-          placeholder="Type Anything..."
+          placeholder={operationId ? 'Agent is working...' : 'Type Anything...'}
           value={text}
+          disabled={Boolean(operationId)}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={keyDown}
         />
@@ -355,6 +364,7 @@ export function Composer({
           className="send-button"
           type="button"
           onClick={submit}
+          disabled={Boolean(operationId)}
           aria-label="Send"
           title="Send"
         >

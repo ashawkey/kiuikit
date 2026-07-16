@@ -4,6 +4,7 @@ from rich.console import Console
 from rich.progress_bar import ProgressBar
 from rich.table import Table
 
+from kiui.agent.io import EventHub
 from kiui.agent.ui import ContextStatus, ThinkingIndicator
 
 
@@ -16,6 +17,23 @@ def test_context_status_renders_progress_bar():
     rendered = status.render()
     assert isinstance(rendered, Table)
     assert any(isinstance(renderable, ProgressBar) for renderable in rendered.columns[0]._cells)
+
+
+def test_thinking_indicator_publishes_structured_context_status():
+    events = EventHub()
+    status = ContextStatus(tokens=750, limit=1_000, total_tokens_used=2_000)
+    indicator = ThinkingIndicator(Console(), events, status_suffix=status)
+
+    with indicator:
+        pass
+
+    event = next(event for event in events.after(0) if event.type == "thinking_start")
+    assert event.data == {
+        "suffix": "75% · 2K used",
+        "context_tokens": 750,
+        "context_limit": 1_000,
+        "total_tokens_used": 2_000,
+    }
 
 
 def test_thinking_indicator_includes_context_progress():

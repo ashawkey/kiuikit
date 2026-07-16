@@ -199,6 +199,9 @@ class HubClient:
         """
         kind = action.get("type")
         if kind == "submit":
+            if self.cancellation.operation_id is not None:
+                self.events.publish("error", text="Message not sent: agent is working.")
+                return
             try:
                 self.inputs.submit(str(action.get("text", "")), "web")
             except ValueError as exc:

@@ -36,17 +36,15 @@ def test_event_hub_clips_oversized_text_fields():
     assert event.data["count"] == 3  # non-str fields untouched
 
 
-def test_input_broker_is_fifo_and_bounded():
+def test_input_broker_accepts_only_one_pending_submission():
     hub = EventHub()
-    broker = InputBroker(hub, max_pending=2)
+    broker = InputBroker(hub)
     first = broker.submit("first")
-    second = broker.submit("second")
 
-    with pytest.raises(ValueError, match="queue is full"):
-        broker.submit("third")
+    with pytest.raises(ValueError, match="not ready"):
+        broker.submit("second")
 
     assert broker.get_nowait() == first
-    assert broker.get_nowait() == second
 
 
 def test_prompt_broker_first_valid_answer_wins():

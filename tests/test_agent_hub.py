@@ -307,8 +307,6 @@ def test_client_slot_released_after_disconnect():
 
 def test_remote_session_ingest_tracks_derived_state():
     session = RemoteSession("s", {})
-    session.ingest({"type": "queue_changed", "data": {"pending": 3}})
-    assert session.pending == 3
     session.ingest({"type": "operation_start", "data": {"id": "op1"}})
     assert session.operation_id == "op1"
     session.ingest({"type": "operation_end", "data": {"id": "op1"}})
@@ -319,7 +317,7 @@ def test_remote_session_ingest_tracks_derived_state():
     session.ingest({"type": "prompt_resolved", "data": {"id": "p"}})
     assert session.prompt is None
     # Every ingested event is re-published for browser replay.
-    assert session.events.latest_seq == 5
+    assert session.events.latest_seq == 4
 
 
 # -- action feedback / discovery -------------------------------------------
@@ -328,7 +326,7 @@ def test_apply_reports_broker_failures():
     from kiui.agent.hubclient import HubClient
 
     events = EventHub()
-    inputs = InputBroker(events, max_pending=1)
+    inputs = InputBroker(events)
     prompts = PromptBroker(events)
     cancellation = CancellationToken(events)
     client = HubClient(
@@ -336,11 +334,19 @@ def test_apply_reports_broker_failures():
         host="127.0.0.1", port=1, secret="", session_id="x", meta={},
     )
 
-    inputs.submit("first", "web")  # occupy the single queue slot
+    inputs.submit("first", "web")  # occupy the single input slot
     before = events.latest_seq
-    client._apply({"type": "submit", "text": "overflow"})  # queue full -> rejected
+    client._apply({"type": "submit", "text": "overflow"})  # busy -> rejected
     errors = [e for e in events.after(before) if e.type == "error"]
     assert errors and "not sent" in errors[0].data["text"].lower()
+
+    inputs.get_nowait()
+    operation_id = cancellation.begin("working")
+    before = events.latest_seq
+    client._apply({"type": "submit", "text": "while busy"})
+    errors = [e for e in events.after(before) if e.type == "error"]
+    assert errors and "working" in errors[0].data["text"].lower()
+    cancellation.finish(operation_id)
 
     before = events.latest_seq
     client._apply({"type": "prompt_response", "id": "missing", "answer": "x"})

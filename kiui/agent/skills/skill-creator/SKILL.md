@@ -1,10 +1,6 @@
 ---
 name: skill-creator
 description: Create, structure, and validate new Agent Skills (SKILL.md packs). Use this when the user wants to author a new skill, package reusable domain knowledge or a repeatable workflow, add bundled scripts/references/assets, or fix an existing skill so it follows the Agent Skills format.
-license: Apache-2.0
-metadata:
-  author: kiuikit
-  version: "1.0"
 ---
 
 # Skill Creator
