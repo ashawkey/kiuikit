@@ -57,6 +57,26 @@ class _Console:
         pass
 
 
+def test_execute_initializes_session_id(monkeypatch):
+    console = _Console()
+    console.system = lambda *args, **kwargs: None
+    console.rule = lambda: None
+    messages = []
+    agent = NS(
+        console=console,
+        _session_id=None,
+        context=NS(add=messages.append),
+        _operation=lambda label: nullcontext(),
+        get_response=lambda: "done",
+        _print_token_summary=lambda: None,
+    )
+    monkeypatch.setattr(backend.time, "strftime", lambda pattern: "test-session")
+
+    assert LLMAgent.execute(agent, "review files") == "done"
+    assert agent._session_id == "test-session"
+    assert messages == [{"role": "user", "content": "review files"}]
+
+
 def test_direct_bash_routes_through_safety_guard(tmp_path):
     console = _Console()
     executed = []

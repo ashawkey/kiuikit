@@ -1795,6 +1795,9 @@ class LLMAgent:
         self.console.system(f"Executing query: {query}")
         t0 = time.time()
 
+        if self._session_id is None:
+            self._session_id = time.strftime("%Y%m%d_%H%M%S")
+
         # Strip @ prefix from file-path references
         query = _strip_at_marks(query)
 
