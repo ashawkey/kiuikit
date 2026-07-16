@@ -19,3 +19,4 @@ temp/
 .kia/
 .kiui.yaml
 graphify-out/
+plan_*.md

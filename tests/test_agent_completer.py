@@ -7,10 +7,15 @@ available, pruned filesystem walk otherwise).
 
 import os
 import shutil
+from types import SimpleNamespace
 
 import pytest
+from prompt_toolkit.buffer import Buffer, CompletionState
+from prompt_toolkit.completion import Completion
+from prompt_toolkit.document import Document
+from prompt_toolkit.keys import Keys
 
-from kiui.agent.terminal import AtFileCompleter
+from kiui.agent.terminal import AtFileCompleter, TerminalInput
 
 
 class _Doc:
@@ -25,6 +30,41 @@ def _complete(comp: AtFileCompleter, text: str) -> list[str]:
 def _touch(path: str) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     open(path, "w").close()
+
+
+def _press_enter(buffer: Buffer) -> None:
+    terminal = object.__new__(TerminalInput)
+    bindings = terminal._create_keybindings()
+    handler = next(b.handler for b in bindings.bindings if b.keys == (Keys.ControlM,))
+    handler(SimpleNamespace(current_buffer=buffer))
+
+
+def test_enter_applies_selected_completion():
+    document = Document("@term")
+    completions = [
+        Completion("@other.py", start_position=-5),
+        Completion("@kiui/agent/terminal.py", start_position=-5),
+    ]
+    buffer = Buffer(document=document)
+    buffer.complete_state = CompletionState(document, completions, complete_index=1)
+    buffer.go_to_completion(1)
+
+    _press_enter(buffer)
+
+    assert buffer.text == "@kiui/agent/terminal.py"
+    assert buffer.complete_state is None
+
+
+def test_enter_applies_first_completion_when_none_selected():
+    document = Document("@term")
+    completion = Completion("@kiui/agent/terminal.py", start_position=-5)
+    buffer = Buffer(document=document)
+    buffer.complete_state = CompletionState(document, [completion])
+
+    _press_enter(buffer)
+
+    assert buffer.text == "@kiui/agent/terminal.py"
+    assert buffer.complete_state is None
 
 
 def test_fuzzy_finds_nested_file(tmp_path):

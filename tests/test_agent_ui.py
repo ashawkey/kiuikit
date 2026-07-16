@@ -5,7 +5,7 @@ from rich.progress_bar import ProgressBar
 from rich.table import Table
 
 from kiui.agent.io import EventHub
-from kiui.agent.ui import ContextStatus, ThinkingIndicator
+from kiui.agent.ui import AgentConsole, ContextStatus, ThinkingIndicator
 
 
 def test_context_status_renders_progress_bar():
@@ -34,6 +34,14 @@ def test_thinking_indicator_publishes_structured_context_status():
         "context_limit": 1_000,
         "total_tokens_used": 2_000,
     }
+
+
+def test_console_reset_timeline_emits_web_reset():
+    events = EventHub()
+
+    AgentConsole(events=events).reset_timeline()
+
+    assert events.after(0)[0].type == "timeline_reset"
 
 
 def test_thinking_indicator_includes_context_progress():

@@ -418,14 +418,15 @@ class TerminalInput:
         @kb.add("enter")
         def _(event):
             buf = event.current_buffer
-            # If the completion menu is open, dismiss it without
-            # submitting.  Tab already applies the highlighted
-            # completion to the buffer as the user cycles, so by the
-            # time Enter is pressed the correct text is already there.
-            # This lets the user press Enter to confirm a file path
-            # and then press Enter again to send the message.
             if buf.complete_state is not None:
-                buf.complete_state = None  # dismiss the menu
+                state = buf.complete_state
+                completion = state.current_completion
+                if completion is None and state.completions:
+                    completion = state.completions[0]
+                if completion is not None:
+                    buf.apply_completion(completion)
+                else:
+                    buf.complete_state = None
             else:
                 buf.validate_and_handle()
 

@@ -1166,7 +1166,12 @@ class LLMAgent:
             self.context.messages, self.round_id = self.changes.rollback_conversation(
                 self.context.messages, actual_target
             )
-            self.console.system(f"Conversation rolled back to round {self.round_id} ({len(self.context.messages)} messages).")
+            replay_messages = len(self.context.messages)
+            self.console.reset_timeline()
+            self._replay_context()
+            self.console.system(
+                f"Conversation rolled back to round {self.round_id} ({replay_messages} messages)."
+            )
         else:
             self.console.system("Conversation preserved.")
 

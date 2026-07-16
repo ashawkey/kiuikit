@@ -132,6 +132,10 @@ function SessionPane({
       case 'thinking_stop':
         setThinking(false)
         break
+      case 'timeline_reset':
+        setThinking(false)
+        setEvents([])
+        break
       case 'assistant_delta':
       case 'thinking_delta':
         setThinking(false)

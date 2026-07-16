@@ -331,6 +331,12 @@ class AgentConsole:
         self._console.rule(style="dim color(240)")
         self._emit("rule")
 
+    def reset_timeline(self):
+        """Clear rendered history before replaying authoritative context."""
+        if self._console.is_terminal:
+            print("\033[3J\033[2J\033[H", end="", file=self._console.file, flush=True)
+        self._emit("timeline_reset")
+
     # -- block helper -------------------------------------------------------
 
     def _block(self, msg: str, style: str, *, prefix: str, markup: bool = False):
