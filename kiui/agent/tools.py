@@ -8,6 +8,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from collections import deque
@@ -21,8 +22,6 @@ from kiui.agent.io import CancellationToken
 
 def _terminate_process(proc: subprocess.Popen) -> None:
     """Kill *proc* and its child process tree (best-effort)."""
-    if proc.poll() is not None:
-        return
     try:
         if sys.platform == "win32":
             subprocess.run(
@@ -30,17 +29,22 @@ def _terminate_process(proc: subprocess.Popen) -> None:
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
         else:
-            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+            # start_new_session=True makes the child PID its process-group ID;
+            # that group can outlive the leader when a command backgrounds work.
+            os.killpg(proc.pid, signal.SIGTERM)
     except Exception:
-        try:
-            proc.kill()
-        except Exception:
-            pass
+        if proc.poll() is None:
+            try:
+                proc.kill()
+            except Exception:
+                pass
 
-MAX_READ_LINES = 2000
-MAX_READ_BYTES = 50_000
-MAX_EXEC_OUTPUT_BYTES = 50_000
-MAX_STREAMING_BUFFER = 1_000_000  # 1 MB rolling buffer during streaming execution
+MAX_READ_LINES = 1000
+MAX_READ_BYTES = 24_000
+MAX_EXEC_OUTPUT_CHARS = 24_000
+MAX_STREAMING_BUFFER_CHARS = 1_000_000
+MAX_EXEC_ARTIFACT_BYTES = 100 * 1024 * 1024
+EXEC_READER_JOIN_TIMEOUT = 5
 MAX_WEB_FETCH_CHARS = 20_000
 MAX_GLOB_RESULTS = 500
 MAX_GREP_MATCHES = 200
@@ -191,7 +195,7 @@ def get_tool_definitions(include_subagent: bool = True) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "read_file",
-                "description": "Read the contents of a file. Defaults to first 2000 lines / 50KB. Use offset/limit for larger files.",
+                "description": "Read the contents of a file. Defaults to the first 1000 lines. Large results are compacted; use grep_files first and offset/limit for focused reads.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -275,7 +279,7 @@ def get_tool_definitions(include_subagent: bool = True) -> list[dict[str, Any]]:
                 "description": (
                     "List the contents of a directory (non-recursive). Shows entry names, "
                     "type (file/dir) and size. Respects .gitignore and skips noise dirs by default. "
-                    "Prefer this over exec_command with ls for browsing directories."
+                    "Large listings are compacted; use glob_files with a narrow pattern when possible. "
                 ),
                 "parameters": {
                     "type": "object",
@@ -292,9 +296,8 @@ def get_tool_definitions(include_subagent: bool = True) -> list[dict[str, Any]]:
             "function": {
                 "name": "exec_command",
                 "description": (
-                    "Execute a shell command and return stdout, stderr, and exit code. "
-                    "The command runs until completion. "
-                    "Output is streamed to the console in real-time and the last 50KB is returned."
+                    "Run a shell command and stream its output. Returns stdout, stderr, and exit code; "
+                    "large output is compacted with full capture available in an artifact."
                 ),
                 "parameters": {
                     "type": "object",
@@ -767,46 +770,88 @@ class ToolExecutor:
         """Execute a shell command, streaming output in real-time.
 
         Uses subprocess.Popen with reader threads so output is displayed as it
-        arrives.  A rolling buffer (MAX_STREAMING_BUFFER) bounds memory usage
-        for very long-running processes; the returned result keeps at most the
-        last MAX_EXEC_OUTPUT_BYTES of each stream.
+        arrives. Rolling character buffers bound memory use for long-running
+        processes; the returned result keeps trailing output from both streams,
+        reserving up to half its character budget for stderr.
         """
         self.console.tool(f"exec_command: {command}")
 
         cwd = cwd or self._work_dir
+        artifact_file = tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", prefix="kia-exec-", suffix=".txt", delete=False
+        )
+        artifact_path = artifact_file.name
 
         if sys.platform == "win32":
             # Use PowerShell (with user profile) as the modern default on Windows.
             # -NoLogo suppresses the copyright banner; profile is loaded by default.
             shell_cmd = ["powershell", "-NoLogo", "-Command", command]
-            proc = subprocess.Popen(
-                shell_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                cwd=cwd or None,
-                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
-            )
+            try:
+                proc = subprocess.Popen(
+                    shell_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    cwd=cwd or None,
+                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+                )
+            except Exception:
+                artifact_file.close()
+                Path(artifact_path).unlink(missing_ok=True)
+                raise
         else:
             shell_cmd = ["/bin/bash", "-lc", command]
-            proc = subprocess.Popen(
-                shell_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                cwd=cwd or None, start_new_session=True,
-            )
+            try:
+                proc = subprocess.Popen(
+                    shell_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    cwd=cwd or None, start_new_session=True,
+                )
+            except Exception:
+                artifact_file.close()
+                Path(artifact_path).unlink(missing_ok=True)
+                raise
 
         stdout_lines: deque[str] = deque()
         stderr_lines: deque[str] = deque()
         stdout_size = [0]
         stderr_size = [0]
+        artifact_lock = threading.Lock()
+        artifact_size_bytes = [0]
+        total_output_chars = [0]
+        artifact_truncated = [False]
+        artifact_write_error: list[str] = []
+        capture_stopped = threading.Event()
 
         def _drain(stream, lines_buf, size_ref, prefix=""):
-            for raw in iter(stream.readline, b""):
-                line = _decode_bytes(raw)
-                lines_buf.append(line)
-                size_ref[0] += len(line)
-                while size_ref[0] > MAX_STREAMING_BUFFER and len(lines_buf) > 1:
-                    size_ref[0] -= len(lines_buf.popleft())
-                display = line.rstrip("\n\r")
-                if display:
-                    self.console.print(f"  {prefix}{display}", style="dim")
-            stream.close()
+            try:
+                for raw in iter(stream.readline, b""):
+                    if capture_stopped.is_set():
+                        continue
+                    line = _decode_bytes(raw)
+                    lines_buf.append(line)
+                    size_ref[0] += len(line)
+                    while size_ref[0] > MAX_STREAMING_BUFFER_CHARS and len(lines_buf) > 1:
+                        size_ref[0] -= len(lines_buf.popleft())
+                    captured_line = f"{prefix}{line}"
+                    encoded = captured_line.encode("utf-8")
+                    with artifact_lock:
+                        if capture_stopped.is_set():
+                            continue
+                        total_output_chars[0] += len(captured_line)
+                        remaining = MAX_EXEC_ARTIFACT_BYTES - artifact_size_bytes[0]
+                        if len(encoded) > remaining:
+                            artifact_truncated[0] = True
+                        if remaining > 0 and not artifact_write_error:
+                            chunk = encoded[:remaining].decode("utf-8", errors="ignore")
+                            try:
+                                artifact_file.write(chunk)
+                            except OSError as e:
+                                artifact_write_error.append(str(e))
+                                artifact_truncated[0] = True
+                            else:
+                                artifact_size_bytes[0] += len(chunk.encode("utf-8"))
+                    display = line.rstrip("\n\r")
+                    if display:
+                        self.console.print(f"  {prefix}{display}", style="dim")
+            finally:
+                stream.close()
 
         t_out = threading.Thread(
             target=_drain, args=(proc.stdout, stdout_lines, stdout_size), daemon=True,
@@ -836,25 +881,47 @@ class ToolExecutor:
         try:
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
-            proc.kill()
+            _terminate_process(proc)
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
 
-        t_out.join(timeout=10)
-        t_err.join(timeout=10)
-        if t_out.is_alive() or t_err.is_alive():
-            self.console.warn("exec_command: reader threads did not finish within 10 s — output may be truncated")
+        # A background descendant can retain the pipes after the shell exits.
+        # Stop capture before closing the shared artifact, then let any lingering
+        # daemon drainers discard bytes rather than touching closed state.
+        t_out.join(timeout=EXEC_READER_JOIN_TIMEOUT)
+        t_err.join(timeout=EXEC_READER_JOIN_TIMEOUT)
+        readers_incomplete = t_out.is_alive() or t_err.is_alive()
+        if readers_incomplete:
+            with artifact_lock:
+                capture_stopped.set()
+                artifact_truncated[0] = True
+            self.console.warn("Output readers did not finish; terminating remaining process tree.")
+            _terminate_process(proc)
+            t_out.join(timeout=EXEC_READER_JOIN_TIMEOUT)
+            t_err.join(timeout=EXEC_READER_JOIN_TIMEOUT)
+
+        with artifact_lock:
+            try:
+                artifact_file.flush()
+            except OSError as e:
+                if not artifact_write_error:
+                    artifact_write_error.append(str(e))
+                artifact_truncated[0] = True
+            finally:
+                artifact_file.close()
 
         stdout = "".join(stdout_lines)
         stderr = "".join(stderr_lines)
 
         total_len = len(stdout) + len(stderr)
-        truncated = total_len > MAX_EXEC_OUTPUT_BYTES
+        truncated = total_len > MAX_EXEC_OUTPUT_CHARS
         if truncated:
-            if len(stdout) > MAX_EXEC_OUTPUT_BYTES:
-                stdout = stdout[-MAX_EXEC_OUTPUT_BYTES:]
-                stderr = ""
-            else:
-                remaining = MAX_EXEC_OUTPUT_BYTES - len(stdout)
-                stderr = stderr[-remaining:] if remaining > 0 else ""
+            stderr_budget = min(len(stderr), MAX_EXEC_OUTPUT_CHARS // 2)
+            stdout = stdout[-(MAX_EXEC_OUTPUT_CHARS - stderr_budget):]
+            stderr = stderr[-(MAX_EXEC_OUTPUT_CHARS - len(stdout)):]
 
         res: dict[str, Any] = {
             "stdout": stdout,
@@ -862,11 +929,19 @@ class ToolExecutor:
             "exit_code": proc.returncode if proc.returncode is not None else -1,
             "success": not interrupted and proc.returncode == 0,
             "streamed": True,
+            "_artifact_path": artifact_path,
+            "original_output_chars": total_output_chars[0],
+            "artifact_size_bytes": artifact_size_bytes[0],
+            "artifact_truncated": artifact_truncated[0],
         }
         if truncated:
             res["truncation_notice"] = (
-                f"[output truncated: showing last {len(stdout) + len(stderr)} of {total_len} bytes]"
+                f"[output truncated: showing {len(stdout) + len(stderr)} of {total_len} characters]"
             )
+        if artifact_write_error:
+            res["artifact_capture_error"] = artifact_write_error[0]
+        if readers_incomplete:
+            res["artifact_capture_incomplete"] = True
         if interrupted:
             res["interrupted"] = True
             res["error"] = "Command was interrupted by user."
@@ -1358,10 +1433,17 @@ def format_tool_summary(result_text: str, max_lines: int = TOOL_SUMMARY_MAX_LINE
 def format_tool_result(result: dict[str, Any]) -> str:
     """Format a tool result dict into a string for the conversation."""
     if not result.get("success", False):
-        error_msg = result.get("error", "")
-        if not error_msg:
-            error_msg = (result.get("stderr") or result.get("stdout") or "Unknown error").strip()
-        return f"Error: {error_msg}"
+        stdout = result.get("stdout", "")
+        stderr = result.get("stderr", "")
+        error = result.get("error", "")
+        if stdout or stderr:
+            parts = [stdout.rstrip("\n")]
+            if stderr:
+                parts.append(f"[stderr]: {stderr.rstrip()}")
+            if error:
+                parts.append(f"Error: {error}")
+            return "\n".join(part for part in parts if part)
+        return f"Error: {error or 'Unknown error'}"
 
     if "content" in result:
         return result["content"]

@@ -57,7 +57,9 @@ You are running as an autonomous sub-agent. There is NO user to interact with.
     # 4. Tool usage guidance
     sections.append("""## Tool Usage
 - Always check tool results before proceeding.
-- Prefer glob_files / grep_files over exec_command for file discovery and search.""")
+- Prefer glob_files / grep_files over exec_command for file discovery and search.
+- Keep tool output focused: use narrow patterns, read_file offset/limit, and quiet or filtered commands.
+- When a tool result says it was compacted, do not rerun the broad call. Use the suggested grep/read operation on the captured output or original source.""")
 
     # 5. Task execution
     sections.append("""## Task Execution

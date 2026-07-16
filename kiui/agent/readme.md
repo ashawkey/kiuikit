@@ -11,7 +11,7 @@ A lightweight, terminal-based AI agent that can browse the web, read/write files
 - **Streaming**: Responses render token-by-token in both the terminal and Web UI, with reasoning/thinking stream shown automatically for compatible models.
 - **Sub-agents**: Can spawn sub-agents to handle complex sub-tasks in-process.
 - **Skills**: Load domain-specific instructions via customizable skill packs (`.kia/skills/`).
-- **Context Management**: Automatic pruning and LLM-based compaction to stay within context windows.
+- **Context Management**: Proactive tool-output filtering, automatic pruning, and LLM-based compaction keep context focused.
 - **Rewind**: Roll back conversation and/or code changes to any previous round.
 - **Permissions**: Three confirmation modes (auto / default / strict), workspace path checks, and defense-in-depth detection of common destructive shell commands.
 - **Model Switching**: Hot-swap between configured models mid-session.
@@ -176,9 +176,11 @@ Shell detection is heuristic, not a security boundary: arbitrary shell syntax ca
 
 The agent automatically manages context window usage through three layers:
 
-1. **Tool result truncation** — individual large results are capped relative to context window size.
+1. **Proactive tool-result compaction** — before a result enters conversation history, oversized output is reduced with a tool-aware pipeline. Shell results use semantic reducers for pytest, git, Python package tools, and compiler diagnostics before falling back to ANSI/progress cleanup, repeated-line collapse, and diagnostic-preserving edge samples. File reads retain contiguous prefixes, while search/list results use weighted edge samples. Full command output is teed during execution and saved privately under `.kia/tool-results/<session>/`, retained for up to seven days within a 100 MB project cap. Compact results include estimated token savings, reducer provenance, confidence tier, and a focused recovery path.
 2. **Context pruning** — old tool results from read/exec/web tools are trimmed (head+tail) at 30% usage, then hard-cleared at 50%.
 3. **LLM compaction** — when context exceeds 75%, the oldest messages are summarized via an LLM call and replaced with a compact summary.
+
+Deterministic ingress compaction is preferred over automatically spawning a summarization sub-agent: it has no extra latency or model cost, cannot hallucinate away exact errors, and still preserves searchable access to the captured output.
 
 Live context/token usage is shown inline in the `Working... (Xs)` status bar (terminal and web UI), in addition to the full `/usage` breakdown.
 

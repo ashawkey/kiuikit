@@ -6,7 +6,7 @@ import re
 import time
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from openai import OpenAI
 
@@ -23,10 +23,17 @@ from kiui.agent.tools import (
     get_tool_definitions,
 )
 from kiui.agent.subagent import SubagentManager
+from kiui.agent.tool_results import (
+    discard_tool_result_artifact,
+    persist_tool_result_artifact,
+    read_tool_result_text,
+)
 from kiui.agent.permissions import PermissionController, PermissionMode
 from kiui.agent.streaming import consume_stream
 from kiui.agent.context import (
-    truncate_tool_result,
+    compact_tool_result_envelope,
+    tool_result_char_budget,
+    ToolResultEnvelope,
     prune_context,
     needs_compaction,
     compact_context,
@@ -238,6 +245,11 @@ class LLMAgent:
             "cached_prompt": 0,
             "completion": 0,
             "reasoning": 0,
+        }
+        self.tool_compaction_totals = {
+            "calls": 0,
+            "original_chars": 0,
+            "retained_chars": 0,
         }
 
         self.console.system(
@@ -525,9 +537,52 @@ class LLMAgent:
             else:
                 self.console.tool_result(format_tool_summary(result_text), success=success)
 
-            # Layer 1: generic truncation relative to context window
-            if self.context_length > 0:
-                result_text = truncate_tool_result(result_text, self.context_length, self.token_estimator.chars_per_token)
+            envelope = ToolResultEnvelope(function_name, function_args, result, result_text)
+            budget = tool_result_char_budget(
+                self.context_length,
+                self.token_estimator.chars_per_token,
+                function_name,
+            )
+            if envelope.original_chars > budget:
+                try:
+                    compaction_text = read_tool_result_text(result, result_text)
+                except OSError as e:
+                    compaction_text = result_text
+                    self.console.warn(f"Could not read captured tool output: {e}")
+
+                try:
+                    artifact_path = persist_tool_result_artifact(
+                        function_name,
+                        compaction_text,
+                        result,
+                        tool_call.id,
+                        self.work_dir,
+                        self._session_id,
+                        self.round_id,
+                    )
+                except (OSError, ValueError) as e:
+                    artifact_path = None
+                    self.console.warn(f"Could not save compacted tool output: {e}")
+
+                compacted = compact_tool_result_envelope(
+                    ToolResultEnvelope(function_name, function_args, result, compaction_text),
+                    self.context_length,
+                    self.token_estimator.chars_per_token,
+                    artifact_path=artifact_path,
+                )
+                result_text = compacted.text
+                self.tool_compaction_totals["calls"] += 1
+                self.tool_compaction_totals["original_chars"] += compacted.original_chars
+                self.tool_compaction_totals["retained_chars"] += compacted.retained_chars
+                notice = f"; full captured output: {artifact_path}" if artifact_path else ""
+                self.console.system(
+                    f"Compacted {function_name} result with {compacted.reducer} "
+                    f"({compacted.tier}){notice}"
+                )
+            else:
+                cleanup_error = discard_tool_result_artifact(result)
+                if cleanup_error:
+                    self.console.warn(f"Could not remove temporary tool output: {cleanup_error}")
 
             tool_message = {
                 "role": "tool",
@@ -549,8 +604,6 @@ class LLMAgent:
             self.console.debug(f"All {len(tool_calls)} tool calls completed in {total_elapsed:.1f}s")
 
         return interrupted
-
-    # -- per-tool result display helpers ------------------------------------
 
     def _display_read_result(self, result: dict[str, Any], success: bool) -> None:
         """Compact read_file result: show path, line count, success."""
@@ -661,6 +714,9 @@ class LLMAgent:
             self.console.tool_result(f"exit code {exit_code}", success=success)
         else:
             self.console.tool_result(format_tool_summary(result_text), success=success)
+        cleanup_error = discard_tool_result_artifact(result)
+        if cleanup_error:
+            self.console.warn(f"Could not remove temporary tool output: {cleanup_error}")
 
     # ----- slash commands ---------------------------------------------------
 
@@ -766,7 +822,8 @@ class LLMAgent:
             f"  Prompt tokens  : {self.token_totals['prompt']}  (cached: {self.token_totals['cached_prompt']})\n"
             f"  Output tokens  : {self.token_totals['completion']}  (reasoning: {self.token_totals['reasoning']})\n"
             f"  Context window : ~{ctx_tokens} / {self.context_length} tokens [{ctx_pct:.0f}%]\n"
-            f"  Messages       : {len(self.context.messages)}"
+            f"  Messages       : {len(self.context.messages)}\n"
+            f"  Tool compaction: {self._tool_compaction_summary()}"
         )
 
         skill_loads = self.tool_executor._skill_loads
@@ -1459,6 +1516,7 @@ class LLMAgent:
             "model": self.model,
             "round_id": self.round_id,
             "token_totals": self.token_totals,
+            "tool_compaction_totals": self.tool_compaction_totals,
             "system_prompt": self.context.system_prompt,
             "goal": self.goal,
             "goal_active": self.goal_active,
@@ -1500,6 +1558,9 @@ class LLMAgent:
         saved_totals = data.get("token_totals")
         if saved_totals and isinstance(saved_totals, dict):
             self.token_totals.update(saved_totals)
+        saved_compaction = data.get("tool_compaction_totals")
+        if saved_compaction and isinstance(saved_compaction, dict):
+            self.tool_compaction_totals.update(saved_compaction)
 
         # Restore skill usage so the model does not redundantly re-load skills
         # whose bodies are already in the replayed conversation, and so telemetry
@@ -1631,7 +1692,7 @@ class LLMAgent:
         self.console.system("`Enter` to send. `Escape` then `Enter` for a newline.")
         self.console.system("Current working directory: " + os.getcwd())
 
-        # Auto-save session id: reuse resumed session or generate a new one
+        # Auto-save session id: reuse resumed session or generate a new one.
         self._session_id = resumed_session_id or time.strftime("%Y%m%d_%H%M%S")
 
         # Initialize change tracker for code+conversation rollback
@@ -1759,12 +1820,28 @@ class LLMAgent:
         self._print_token_summary()
         return response
 
+    def _tool_compaction_summary(self) -> str:
+        totals = self.tool_compaction_totals
+        original = totals["original_chars"]
+        retained = totals["retained_chars"]
+        if not totals["calls"] or not original:
+            return "none"
+        saved = max(0, round((1 - retained / original) * 100))
+        original_tokens = self.token_estimator.chars_to_tokens(original)
+        retained_tokens = self.token_estimator.chars_to_tokens(retained)
+        return (
+            f"{totals['calls']} result(s), ~{original_tokens:,}→{retained_tokens:,} "
+            f"tokens (-{saved}%)"
+        )
+
     def _print_token_summary(self):
         self.console.system(
             f"Total tokens used: {self.token_totals['total']} "
             f"(input: {self.token_totals['prompt']}, cached input: {self.token_totals['cached_prompt']}, "
             f"output: {self.token_totals['completion']}, reasoning: {self.token_totals['reasoning']})"
         )
+        if self.tool_compaction_totals["calls"]:
+            self.console.system(f"Tool compaction: {self._tool_compaction_summary()}")
         skill_loads = self.tool_executor._skill_loads
         if skill_loads:
             summary = ", ".join(
