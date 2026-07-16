@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING
 
 import questionary
 from rich.console import Console
-from rich.live import Live
 from rich.progress_bar import ProgressBar
 from rich.status import Status
 from rich.table import Table
@@ -189,20 +188,13 @@ class ThinkingIndicator:
 
 
 class ResponseStream:
-    """Live-rendering sink for a streamed assistant turn.
+    """Buffered terminal sink for a streamed assistant turn.
 
-    Terminal: accumulated visible content is re-rendered as Markdown in a
-    ``rich.Live`` region on each token; reasoning ("thinking") text streams
-    above it in a dim block when ``show_thinking`` is set. The Live region is
-    non-transient, so ``close()`` simply stops it and its final frame stays in
-    scrollback. We do NOT reprint the content statically: combining a transient
-    Live with ``vertical_overflow="visible"`` cannot reliably erase a response
-    taller than the terminal, so a reprint duplicated the overflowed lines.
-
-    Web: every fragment is published as ``assistant_delta`` / ``thinking_delta``
-    events; on close the full reasoning and message are emitted once more as
-    ``thinking`` / ``assistant_message`` so late-joining clients get the whole
-    turn.
+    Rich Live cannot safely update content taller than the terminal: old frames
+    enter scrollback and cannot be erased, repeating the response. Terminal
+    output is therefore buffered and rendered once on close. Web clients still
+    receive fragment events in real time, followed by consolidated events for
+    late-joining clients.
     """
 
     def __init__(
@@ -218,54 +210,27 @@ class ResponseStream:
         self._content = ""
         self._thinking = ""
         self._content_visible = False
-        self._live: Live | None = None
         self._closed = False
+        self._lock = threading.Lock()
 
     def __enter__(self) -> "ResponseStream":
-        # Non-transient: the final frame is left in scrollback on stop(), so no
-        # static reprint is needed (and none happens) on close().
-        self._live = Live(
-            "",
-            console=self._console,
-            refresh_per_second=12,
-            transient=False,
-            vertical_overflow="visible",
-        )
-        self._live.start()
         return self
 
-    def __exit__(self, *args) -> None:
-        self.close()
-
-    def _renderable(self):
-        from rich.console import Group
-        from rich.markdown import Markdown
-        from rich.text import Text as RichText
-
-        parts = []
-        if self._thinking:
-            parts.append(RichText(self._thinking, style="thinking"))
-        if self._content_visible:
-            parts.append(Markdown(f"{_DOT} {self._content}"))
-        return Group(*parts) if parts else RichText("")
-
-    def _refresh(self) -> None:
-        if self._live is not None:
-            try:
-                self._live.update(self._renderable())
-            except Exception:
-                pass  # display glitches must never abort the response
+    def __exit__(self, exc_type, *args) -> None:
+        self.close(render_terminal=exc_type is None)
 
     def on_content(self, text: str) -> None:
-        self._content += text
-        if not self._content_visible:
-            if not self._content.strip():
+        with self._lock:
+            if self._closed:
                 return
-            self._content_visible = True
-            text = self._content
-        self._refresh()
-        if self._events is not None:
-            self._events.publish("assistant_delta", text=text)
+            self._content += text
+            if not self._content_visible:
+                if not self._content.strip():
+                    return
+                self._content_visible = True
+                text = self._content
+            if self._events is not None:
+                self._events.publish("assistant_delta", text=text)
 
     def on_thinking(self, text: str) -> None:
         # show_thinking gates reasoning output uniformly across terminal and
@@ -273,26 +238,31 @@ class ResponseStream:
         # thinking block.
         if not self._show_thinking:
             return
-        self._thinking += text
-        self._refresh()
-        if self._events is not None:
-            self._events.publish("thinking_delta", text=text)
+        with self._lock:
+            if self._closed:
+                return
+            self._thinking += text
+            if self._events is not None:
+                self._events.publish("thinking_delta", text=text)
 
-    def close(self) -> None:
-        if self._closed:
-            return
-        self._closed = True
-        if self._live is not None:
-            self._live.stop()
-            self._live = None
-        # The non-transient Live leaves its final frame in scrollback, so the
-        # full turn survives without a static reprint. Only web clients need
-        # the consolidated events below.
+    def close(self, *, render_terminal: bool = True) -> None:
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+            thinking = self._thinking
+            content = self._content if self._content_visible else ""
+        if render_terminal:
+            if thinking:
+                self._console.print(Text(thinking, style="thinking"))
+            if content:
+                from rich.markdown import Markdown
+                self._console.print(Markdown(f"{_DOT} {content}"))
         if self._events is not None:
-            if self._thinking:
-                self._events.publish("thinking", text=self._thinking)
-            if self._content_visible:
-                self._events.publish("assistant_message", text=self._content)
+            if thinking:
+                self._events.publish("thinking", text=thinking)
+            if content:
+                self._events.publish("assistant_message", text=content)
 
 
 class AgentConsole:
@@ -329,7 +299,7 @@ class AgentConsole:
         return ThinkingIndicator(self._console, self.events, status_suffix=status_suffix)
 
     def stream_response(self, *, show_thinking: bool = False) -> ResponseStream:
-        """Return a live-rendering sink for a streamed assistant turn.
+        """Return a buffered terminal sink for a streamed assistant turn.
 
         Usage::
 

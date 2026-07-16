@@ -67,7 +67,7 @@ The agent includes **12 built-in tools** — no external tool files needed:
 
 ## Permissions
 
-Three-tier permission system, configurable via `--perm`. A **hard safety guard** runs before mode-based checks and always blocks inherently dangerous operations (e.g. `rm -rf /`, `mkfs`, writing outside the working directory).
+Three-tier permission system, configurable via `--perm`. A **hard safety guard** runs before mode-based checks and always blocks recognized dangerous operations (e.g. `rm -rf /`, `mkfs`, or writing directly to block devices). File tools may access paths outside the working directory.
 
 | Mode | Behavior |
 |------|----------|

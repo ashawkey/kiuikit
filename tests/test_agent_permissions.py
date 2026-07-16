@@ -1,9 +1,4 @@
-"""Tests for kiui.agent.permissions: SafetyGuard and PermissionController.
-
-Focus on the path-containment override flow, which must actually honor the
-user's choice (a prior bug ignored the prompt result because a non-empty
-tuple is always truthy).
-"""
+"""Tests for kiui.agent.permissions safety and permission modes."""
 
 import pytest
 
@@ -14,46 +9,132 @@ from kiui.agent.permissions import (
 )
 
 
-# ----- SafetyGuard: dangerous commands -------------------------------------
+@pytest.mark.parametrize(
+    "command",
+    [
+        ":(){ :|:& };:",
+        "mkfs.ext4 /dev/sda1",
+        "/sbin/mkfs.xfs /dev/nvme0n1p1",
+        "wipefs -a /dev/sda",
+        "sudo -n /sbin/reboot",
+        "VAR=x env FOO=y /bin/rm -r /etc",
+        "echo ok\nrm -rf /etc",
+        "rm --recursive /etc/*",
+        "chmod -R 000 /",
+        "find /usr -delete",
+        "dd if=image of=/dev/nvme0n1",
+        "cat image > /dev/vda",
+        "tee /dev/mapper/vg-root < image",
+        "bash -c 'rm -rf /etc'",
+        "python3 -c \"import os; os.system('rm -rf /')\"",
+        "echo $(rm -rf /etc)",
+        "eval 'rm -rf /etc'",
+        "busybox rm -rf /etc",
+        "if true; then rm -rf /etc; fi",
+        "echo ok > /tmp/log; rm -rf /etc",
+        "timeout 5 rm -rf /etc",
+        "rm -rf /etc/nginx",
+        "rm -rf /{etc,usr}",
+        "git reset --hard",
+        "git clean -fdx",
+        "git restore .",
+        "systemctl reboot",
+        "zpool destroy tank",
+    ],
+)
+def test_safety_blocks_dangerous_commands(command):
+    allowed, reason = SafetyGuard().check("exec_command", {"command": command})
+    assert not allowed and reason.startswith("Blocked:")
 
-def test_safety_blocks_fork_bomb():
-    guard = SafetyGuard()
-    allowed, reason = guard.check("exec_command", {"command": ":(){ :|:& };:"})
-    assert not allowed and reason
 
-
-def test_safety_allows_normal_command():
-    guard = SafetyGuard()
-    allowed, reason = guard.check("exec_command", {"command": "ls -la"})
+@pytest.mark.parametrize(
+    "command",
+    [
+        "ls -la",
+        "echo 'reboot tomorrow'",
+        "rm -rf ./build",
+        "find ./build -delete",
+        "chmod -R u+rw ./build",
+        "python script.py",
+        "python3 -c 'print(1)'",
+        "python -c 'import shutil; shutil.rmtree(\"/etc\")'",
+        "node -e 'console.log(1)'",
+        "bash -c 'echo ok'",
+        "sh script.sh",
+        "echo $(date)",
+        "eval 'echo ok'",
+        "xargs echo < files",
+        "xargs rm -rf < files",
+        "find . -exec rm -rf {} +",
+        "rm -rf $TARGET",
+        "$CMD --all",
+        "echo ok > /tmp/log",
+        "if true; then echo ok; fi",
+    ],
+)
+def test_safety_allows_normal_commands(command):
+    allowed, reason = SafetyGuard().check("exec_command", {"command": command})
     assert allowed and reason == ""
 
 
-# ----- SafetyGuard: path containment ---------------------------------------
-
-def test_check_path_inside_workdir(tmp_path):
-    guard = SafetyGuard(work_dir=tmp_path)
-    allowed, _ = guard.check_path(str(tmp_path / "sub" / "file.txt"))
-    assert allowed
-
-
-def test_check_path_outside_workdir(tmp_path):
-    guard = SafetyGuard(work_dir=tmp_path)
-    allowed, reason = guard.check_path("/etc/passwd")
+def test_safety_blocks_recursive_delete_of_work_dir(tmp_path):
+    allowed, reason = SafetyGuard(work_dir=tmp_path).check(
+        "exec_command", {"command": f"rm -rf {tmp_path}"}
+    )
     assert not allowed and reason
 
 
-# ----- PermissionController: out-of-scope override -------------------------
+def test_safety_allows_recursive_delete_in_unprotected_top_level_tree(tmp_path):
+    allowed, reason = SafetyGuard().check(
+        "exec_command", {"command": f"rm -rf {tmp_path / 'cache'}"}
+    )
+    assert allowed and reason == ""
+
+
+def test_safety_blocks_symlink_to_critical_path(tmp_path):
+    link = tmp_path / "system"
+    link.symlink_to("/etc")
+    allowed, reason = SafetyGuard(work_dir=tmp_path).check(
+        "exec_command", {"command": "rm -rf system"}
+    )
+    assert not allowed and reason
+
+
+def test_safety_blocks_relative_critical_delete_from_cwd(tmp_path):
+    allowed, reason = SafetyGuard(work_dir=tmp_path).check(
+        "exec_command", {"command": "rm -rf .", "cwd": "/etc"}
+    )
+    assert not allowed and reason
+
+
+def test_safety_blocks_file_tool_write_to_block_device():
+    allowed, reason = SafetyGuard().check(
+        "write_file", {"file": "/dev/sda", "content": "data"}
+    )
+    assert not allowed and reason
+
+
+@pytest.mark.parametrize("path", ["/", "/etc", "~"])
+def test_safety_blocks_remove_file_on_critical_paths(path):
+    allowed, reason = SafetyGuard().check("remove_file", {"file": path})
+    assert not allowed and reason
+
+
+def test_safety_blocks_remove_block_device():
+    allowed, reason = SafetyGuard().check("remove_file", {"file": "/dev/sda"})
+    assert not allowed and reason
+
+
+def test_safety_allows_remove_file_elsewhere(tmp_path):
+    allowed, reason = SafetyGuard().check(
+        "remove_file", {"file": str(tmp_path / "cache")}
+    )
+    assert allowed and reason == ""
+
 
 class _FakeConsole:
-    """Minimal console stub that answers select() based on offered choices.
-
-    ``path_answer`` handles the out-of-scope override prompt; ``risky_answer``
-    handles the subsequent risky-tool confirmation prompt.
-    """
-
-    def __init__(self, path_answer="Deny", risky_answer="Yes"):
-        self._path_answer = path_answer
-        self._risky_answer = risky_answer
+    def __init__(self, answer="Yes"):
+        self.answer = answer
         self.prompt_broker = None
 
     def print(self, *a, **k):
@@ -63,42 +144,29 @@ class _FakeConsole:
         pass
 
     def select(self, *a, **k):
-        choices = k.get("choices") or (a[1] if len(a) > 1 else [])
-        if "Deny" in choices:  # path-override prompt
-            return self._path_answer
-        return self._risky_answer
+        return self.answer
 
     def ask_text(self, *a, **k):
         return ""
 
 
-def test_out_of_scope_write_denied_when_user_declines(tmp_path):
+def test_outside_write_uses_normal_default_permission():
     ctrl = PermissionController(
         mode=PermissionMode.DEFAULT,
-        console=_FakeConsole(path_answer="Deny"),
-        work_dir=tmp_path,
+        console=_FakeConsole(answer="Yes"),
     )
-    allowed, reason = ctrl.check("write_file", {"file": "/etc/evil.conf", "content": "x"})
-    assert not allowed and reason
-
-
-def test_out_of_scope_write_allowed_when_user_confirms(tmp_path):
-    # After overriding the path warning, DEFAULT mode still prompts for the
-    # risky write itself; approve that too.
-    ctrl = PermissionController(
-        mode=PermissionMode.DEFAULT,
-        console=_FakeConsole(path_answer="Allow this call", risky_answer="Yes"),
-        work_dir=tmp_path,
+    allowed, reason = ctrl.check(
+        "write_file", {"file": "/etc/example.conf", "content": "x"}
     )
-    allowed, _ = ctrl.check("write_file", {"file": "/etc/evil.conf", "content": "x"})
-    assert allowed
+    assert allowed and reason == ""
 
 
-def test_out_of_scope_write_blocked_in_auto_mode(tmp_path):
+def test_outside_write_allowed_in_auto_mode():
     ctrl = PermissionController(
         mode=PermissionMode.AUTO,
-        console=_FakeConsole(path_answer="Allow this call"),
-        work_dir=tmp_path,
+        console=_FakeConsole(),
     )
-    allowed, reason = ctrl.check("write_file", {"file": "/etc/evil.conf", "content": "x"})
-    assert not allowed and reason
+    allowed, reason = ctrl.check(
+        "write_file", {"file": "/etc/example.conf", "content": "x"}
+    )
+    assert allowed and reason == ""

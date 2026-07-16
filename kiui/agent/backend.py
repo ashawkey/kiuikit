@@ -412,40 +412,38 @@ class LLMAgent:
         return response.choices[0].message, response.usage
 
     def _stream_completion(self, kwargs: dict):
-        """Streaming call: render tokens live, return ``(message, usage)``.
+        """Streaming call: buffer terminal output, return ``(message, usage)``.
 
-        The blocking network request that opens the stream is watched for a
-        cancel key (spinner phase). Once chunks flow, a live-rendering sink
-        replaces the spinner and stream consumption runs on a worker thread.
-        Cancellation closes the stream before returning so the worker stops
-        consuming data and cannot continue writing to the closed sink.
+        The blocking network request and stream consumption remain
+        interruptible. Fragments are sent to web clients immediately, while
+        terminal Markdown is rendered once after the response is complete.
         """
-        with self.console.thinking(status_suffix=self._status_suffix()):
-            stream = run_interruptible(
-                lambda: self.client.chat.completions.create(**kwargs),
-                self.cancellation,
-            )
-
         result: dict[str, Any] = {}
 
         with self.console.stream_response(show_thinking=self.show_thinking) as sink:
-            def consume():
-                message, usage = consume_stream(
-                    stream,
-                    on_content=sink.on_content,
-                    on_thinking=sink.on_thinking,
-                    should_stop=lambda: (
-                        self.cancellation is not None and self.cancellation.cancelled
-                    ),
+            with self.console.thinking(status_suffix=self._status_suffix()):
+                stream = run_interruptible(
+                    lambda: self.client.chat.completions.create(**kwargs),
+                    self.cancellation,
                 )
-                result["message"] = message
-                result["usage"] = usage
 
-            try:
-                run_interruptible(consume, self.cancellation)
-            except RequestInterrupted:
-                stream.close()
-                raise
+                def consume():
+                    message, usage = consume_stream(
+                        stream,
+                        on_content=sink.on_content,
+                        on_thinking=sink.on_thinking,
+                        should_stop=lambda: (
+                            self.cancellation is not None and self.cancellation.cancelled
+                        ),
+                    )
+                    result["message"] = message
+                    result["usage"] = usage
+
+                try:
+                    run_interruptible(consume, self.cancellation)
+                except RequestInterrupted:
+                    stream.close()
+                    raise
 
         message = result["message"]
         usage = result["usage"]
@@ -666,9 +664,8 @@ class LLMAgent:
                 raise
 
             if message.content:
-                # In streaming mode the content was already rendered live by
-                # the ResponseStream sink (and the assistant_message event
-                # emitted on close), so avoid printing it twice.
+                # The stream sink renders buffered Markdown and emits the final
+                # event on close, so avoid printing it twice here.
                 if not self.stream:
                     self.console.response(message.content)
 
@@ -1249,11 +1246,9 @@ class LLMAgent:
         if len(parts) < 2:
             mode = self.permissions.mode.value
             allowed = ", ".join(sorted(self.permissions.session_allowed_tools)) or "(none)"
-            work_dir = self.permissions.safety.work_dir
             self.console.print(
                 f"[bold blue]Permission mode:[/bold blue] [cyan]{mode}[/cyan]\n"
                 f"  Session-allowed tools: {allowed}\n"
-                f"  Safety guard work dir: {work_dir}\n"
                 f"  Usage: [cyan]/perm auto|default|strict[/cyan]"
             )
             return

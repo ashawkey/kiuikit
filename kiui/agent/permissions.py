@@ -5,23 +5,21 @@ Three modes:
   - default: risky tools prompt the user for confirmation
   - strict:  every tool prompts for confirmation
 
-A safety layer (`SafetyGuard`) runs *before* mode-based checks.  Its shell
+A safety layer (`SafetyGuard`) runs *before* mode-based checks. Its shell
 patterns reject common destructive commands (rm -rf /, mkfs, device writes,
 fork bombs, …) as defense-in-depth, but they are not a sandbox and cannot
 recognize every equivalent shell expression.
-
-Files outside the working directory trigger a warning prompt in interactive
-modes (default/strict) so the user can choose to proceed.  In auto mode
-they are still blocked since there is no user to ask.
 """
 
 from __future__ import annotations
 
+import glob
 import os
 import re
+import shlex
+import stat
 import sys
 from enum import Enum
-from pathlib import Path
 from typing import Any, ClassVar
 
 from kiui.agent.ui import AgentConsole
@@ -65,206 +63,373 @@ class SafetyGuard:
     cannot recognize. Use OS-level sandboxing when untrusted commands require
     containment.
 
-    Path-containment checks are available via :meth:`check_path`; the caller
-    decides whether to block, override, or prompt for those failures.
     """
 
-    # -- Unix dangerous command patterns ------------------------------------
-
-    _DANGEROUS_UNIX_PATTERNS: ClassVar[list[tuple[re.Pattern[str], str]]] = [
-        (re.compile(r"(?:sudo\s+)?mkfs(?:\.\w+)?\s"),
-         "filesystem format (mkfs)"),
-        (re.compile(r"(?:sudo\s+)?dd\s+.*\bof=/dev/"),
-         "dd write to block device"),
-        (re.compile(r">\s*/dev/[sh]d"),
-         "redirect to block device"),
-        (re.compile(r":\(\)\s*\{"),
-         "fork bomb"),
-        (re.compile(r"(?:sudo\s+)?(?:shutdown|reboot|halt|poweroff)\b"),
-         "system shutdown/reboot"),
+    _DESTRUCTIVE_COMMANDS: ClassVar[dict[str, str]] = {
+        "blkdiscard": "discard block device",
+        "cfdisk": "partition table editor",
+        "fdisk": "partition table editor",
+        "halt": "system shutdown/reboot",
+        "mke2fs": "filesystem format",
+        "mkdosfs": "filesystem format",
+        "mkfs": "filesystem format",
+        "mkfs.btrfs": "filesystem format",
+        "mkfs.ext2": "filesystem format",
+        "mkfs.ext3": "filesystem format",
+        "mkfs.ext4": "filesystem format",
+        "mkfs.fat": "filesystem format",
+        "mkfs.xfs": "filesystem format",
+        "lvremove": "remove logical volume",
+        "mkswap": "swap format",
+        "newfs": "filesystem format",
+        "pvremove": "remove physical volume",
+        "parted": "partition table editor",
+        "poweroff": "system shutdown/reboot",
+        "reboot": "system shutdown/reboot",
+        "sfdisk": "partition table editor",
+        "shutdown": "system shutdown/reboot",
+        "vgremove": "remove volume group",
+        "wipefs": "erase filesystem signatures",
+    }
+    _DANGEROUS_CODE_PATTERNS: ClassVar[list[tuple[re.Pattern[str], str]]] = [
+        (re.compile(
+            r"\brm\b(?=[^\r\n;]*?(?:--recursive|-[^\s]*[rR]))"
+            r"[^\r\n;]*?\s(?:/(?:bin|boot|dev|etc|lib|lib64|opt|proc|root|run|"
+            r"sbin|snap|sys|usr)(?:/[^\s'\"]*)?|/(?=[\s'\")};]|$)|~(?:/[^\s'\"]*)?)",
+        ), "recursive rm on critical path"),
+        (re.compile(
+            r"(?<![\w.-])(?:mkfs(?:\.\w+)?|mke2fs|mkdosfs|newfs|mkswap|"
+            r"wipefs|blkdiscard)\b",
+        ), "filesystem or block-device destruction"),
+        (re.compile(r"\bof=/dev/\S+"), "write to block device"),
     ]
-
-    # -- Windows dangerous command patterns ---------------------------------
+    _WRAPPER_COMMANDS = frozenset({
+        "command", "doas", "env", "ionice", "nice", "nohup", "setsid",
+        "stdbuf", "sudo", "time",
+    })
+    _WRAPPER_VALUE_OPTIONS = {
+        "sudo": frozenset({
+            "-C", "--close-from", "-D", "--chdir", "-g", "--group",
+            "-h", "--host", "-p", "--prompt", "-R", "--chroot",
+            "-T", "--command-timeout", "-u", "--user",
+        }),
+        "doas": frozenset({"-C", "-u"}),
+        "env": frozenset({"-C", "--chdir", "-S", "--split-string", "-u", "--unset"}),
+        "ionice": frozenset({"-c", "--class", "-n", "--classdata", "-p", "--pid", "-P", "--pgid", "-u", "--uid"}),
+        "nice": frozenset({"-n", "--adjustment"}),
+        "stdbuf": frozenset({"-i", "--input", "-o", "--output", "-e", "--error"}),
+        "time": frozenset({"-f", "--format", "-o", "--output"}),
+    }
+    _CONTROL_TOKENS = frozenset({
+        ";", "&", "&&", "|", "||", "(", ")", "{", "}", "\n",
+    })
+    _SHELL_PREFIXES = frozenset({
+        "!", "do", "elif", "else", "if", "then", "time", "until", "while",
+    })
+    _REDIRECT_TOKENS = frozenset({"<", ">", "<<", ">>", "<<<", "<>"})
+    _DEVICE_PATH_RE = re.compile(
+        r"^/dev/(?:"
+        r"(?:sd|hd|vd|xvd)[a-z](?:\d+)?|"
+        r"nvme\d+n\d+(?:p\d+)?|"
+        r"mmcblk\d+(?:p\d+)?|"
+        r"loop\d+|md\d+|dm-\d+|mapper/.+|disk/.+"
+        r")$"
+    )
+    _ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 
     _DANGEROUS_WIN_PATTERNS: ClassVar[list[tuple[re.Pattern[str], str]]] = [
-        (re.compile(r"\bformat\s+[a-zA-Z]:", re.IGNORECASE),
+        (re.compile(r"(?:^|[;&|\r\n]\s*)(?:format|format\.com)\s+[a-z]:", re.IGNORECASE),
          "format drive"),
-        (re.compile(r"\bdiskpart\b", re.IGNORECASE),
+        (re.compile(r"(?:^|[;&|\r\n]\s*)diskpart\b", re.IGNORECASE),
          "diskpart command"),
+        (re.compile(r"(?:^|[;&|\r\n]\s*)(?:clear|initialize)-disk\b", re.IGNORECASE),
+         "disk erase/initialization"),
+        (re.compile(r"(?:^|[;&|\r\n]\s*)(?:stop|restart)-computer\b", re.IGNORECASE),
+         "system shutdown/reboot"),
+        (re.compile(
+            r"(?:^|[;&|\r\n]\s*)(?:remove-item|rd|rmdir)\b[^\r\n;&|]*"
+            r"(?:[a-z]:\\(?:\s|$)|[a-z]:\\\*).*"
+            r"(?:-recurse|-r\b|/s\b)",
+            re.IGNORECASE,
+        ), "recursive deletion of drive root"),
     ]
 
-    # Paths that should never be the target of recursive forced deletion.
+    # Paths that should never be recursively mutated or directly removed.
     _CRITICAL_UNIX_PATHS = frozenset({
         "/", "/bin", "/boot", "/dev", "/etc", "/home", "/lib", "/lib64",
         "/media", "/mnt", "/opt", "/proc", "/root", "/run", "/sbin",
         "/snap", "/srv", "/sys", "/tmp", "/usr", "/var",
     })
+    _PROTECTED_UNIX_TREES = frozenset({
+        "/bin", "/boot", "/dev", "/etc", "/lib", "/lib64", "/opt",
+        "/proc", "/root", "/run", "/sbin", "/snap", "/sys", "/usr",
+    })
 
-    # Regex that splits on unquoted shell operators (; & | && ||)
-    # while skipping over single- and double-quoted strings.
-    _SHELL_SPLIT_RE: ClassVar[re.Pattern[str]] = re.compile(
-        r"""'[^']*'|"[^"]*"|([;&|]+)""", re.VERBOSE
-    )
-
-    def __init__(self, work_dir: str | Path | None = None):
-        self._work_dir = Path(work_dir or os.getcwd()).resolve()
-
-    @property
-    def work_dir(self) -> Path:
-        return self._work_dir
-
-    @classmethod
-    def _split_command(cls, command: str) -> list[str]:
-        """Split a shell command on unquoted ; & | operators."""
-        segments: list[str] = []
-        last = 0
-        for m in cls._SHELL_SPLIT_RE.finditer(command):
-            if m.group(1) is not None:
-                segments.append(command[last:m.start()])
-                last = m.end()
-        segments.append(command[last:])
-        return segments
+    def __init__(self, work_dir: str | None = None):
+        self._work_dir = os.path.abspath(work_dir or os.getcwd())
 
     def check(self, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
         """Return ``(allowed, reason)``.  *reason* is non-empty when blocked.
 
         Only performs *hard* checks that should never be skipped:
         destructive shell commands, critical rm/chmod patterns, etc.
-
-        Path-containment checks (out-of-scope file edits) are handled
-        separately via :meth:`check_path` so the user can override them.
         """
         if tool_name == "exec_command":
-            return self._check_command(arguments.get("command", ""))
-        return True, ""
-
-    def check_path(self, path: str) -> tuple[bool, str]:
-        """Check whether *path* is contained within the working directory.
-
-        Returns ``(True, "")`` when safe, or ``(False, reason)`` when the
-        path resolves outside the allowed work directory.
-
-        Unlike rejected patterns from :meth:`check`, denials from this method
-        are not automatically fatal — the caller can surface them as a
-        user-overridable prompt.
-        """
-        return self._check_path(path)
-
-    # -- path containment ---------------------------------------------------
-
-    def _check_path(self, path: str) -> tuple[bool, str]:
-        if not path:
-            return False, "Empty file path."
-        try:
-            p = Path(path).expanduser()
-            if not p.is_absolute():
-                p = self._work_dir / p
-            resolved = p.resolve()
-        except (OSError, ValueError) as e:
-            return False, f"Invalid path: {e}"
-        try:
-            resolved.relative_to(self._work_dir)
-        except ValueError:
-            return False, (
-                f"Path '{path}' resolves outside the allowed working "
-                f"directory ({self._work_dir})."
+            return self._check_command(
+                arguments.get("command", ""), arguments.get("cwd")
             )
+        if tool_name in ("write_file", "edit_file", "multi_edit"):
+            path = arguments.get("file", "")
+            if path and self._is_device_path(path):
+                return False, f"Blocked: write to block device ({path})."
+        if tool_name == "remove_file":
+            return self._check_remove(arguments.get("file", ""))
         return True, ""
 
     # -- command analysis ---------------------------------------------------
 
-    def _check_command(self, command: str) -> tuple[bool, str]:
-        patterns = (
-            self._DANGEROUS_WIN_PATTERNS
-            if sys.platform == "win32"
-            else self._DANGEROUS_UNIX_PATTERNS
-        )
-        for pat, desc in patterns:
-            if pat.search(command):
+    def _check_command(self, command: str, cwd: str | None = None) -> tuple[bool, str]:
+        if sys.platform == "win32":
+            for pattern, desc in self._DANGEROUS_WIN_PATTERNS:
+                if pattern.search(command):
+                    return False, f"Blocked: {desc}."
+            return True, ""
+
+        if re.search(r":\s*\(\s*\)\s*\{", command):
+            return False, "Blocked: fork bomb."
+        for pattern, desc in self._DANGEROUS_CODE_PATTERNS:
+            if pattern.search(command):
                 return False, f"Blocked: {desc}."
 
-        if sys.platform != "win32":
-            reason = self._check_rm(command)
-            if reason:
-                return False, f"Blocked: {reason}."
-            reason = self._check_recursive_perm(command)
+        try:
+            tokens = self._tokenize(command)
+        except ValueError as e:
+            return False, f"Blocked: cannot safely parse shell command ({e})."
+
+        for idx, token in enumerate(tokens[:-1]):
+            if ">" in token and self._is_device_path(tokens[idx + 1]):
+                return False, "Blocked: redirect to block device."
+
+        segments = self._command_segments(tokens)
+        for segment in segments:
+            reason = self._check_segment(segment, cwd)
             if reason:
                 return False, f"Blocked: {reason}."
 
         return True, ""
 
-    def _check_rm(self, command: str) -> str | None:
-        """Detect dangerous ``rm -rf`` targeting critical system paths."""
-        home = os.path.expanduser("~")
-        for seg in self._split_command(command):
-            tokens = seg.split()
-            if not tokens:
-                continue
-            idx = 0
-            while idx < len(tokens) and tokens[idx] in ("sudo", "doas"):
+    @staticmethod
+    def _tokenize(command: str) -> list[str]:
+        lexer = shlex.shlex(
+            command, posix=True, punctuation_chars=";&|()<>{}\n"
+        )
+        lexer.whitespace = " \t\r"
+        lexer.whitespace_split = True
+        lexer.commenters = ""
+        return list(lexer)
+
+    @classmethod
+    def _command_segments(cls, tokens: list[str]) -> list[list[str]]:
+        segments: list[list[str]] = []
+        current: list[str] = []
+        for token in tokens:
+            if token in cls._CONTROL_TOKENS:
+                if current:
+                    segments.append(current)
+                    current = []
+            else:
+                current.append(token)
+        if current:
+            segments.append(current)
+        return segments
+
+    def _check_segment(self, tokens: list[str], cwd: str | None) -> str | None:
+        idx = 0
+        while idx < len(tokens):
+            token = tokens[idx]
+            name = os.path.basename(token).lower()
+
+            if token in self._SHELL_PREFIXES or self._ASSIGNMENT_RE.match(token):
                 idx += 1
-            if idx >= len(tokens) or tokens[idx] != "rm":
+                continue
+            if token.isdigit() and idx + 1 < len(tokens) and tokens[idx + 1] in self._REDIRECT_TOKENS:
+                idx += 1
+                continue
+            if token in self._REDIRECT_TOKENS:
+                idx += 2
                 continue
 
-            has_r = has_f = False
-            targets: list[str] = []
-            for tok in tokens[idx + 1:]:
-                if tok.startswith("-"):
-                    if tok == "--recursive":
-                        has_r = True
-                    elif tok == "--force":
-                        has_f = True
-                    elif tok == "--no-preserve-root":
-                        return "rm --no-preserve-root"
-                    elif not tok.startswith("--"):
-                        if "r" in tok:
-                            has_r = True
-                        if "f" in tok:
-                            has_f = True
-                else:
-                    targets.append(tok)
-
-            if not (has_r and has_f):
+            if name in self._WRAPPER_COMMANDS:
+                idx = self._skip_wrapper(tokens, idx, name)
                 continue
 
+            args = tokens[idx + 1:]
+            reason = self._check_invocation(name, args, cwd)
+            if reason:
+                return reason
+            return None
+        return None
+
+    def _skip_wrapper(self, tokens: list[str], idx: int, name: str) -> int:
+        idx += 1
+        value_options = self._WRAPPER_VALUE_OPTIONS.get(name, frozenset())
+        while idx < len(tokens):
+            token = tokens[idx]
+            if token == "--":
+                return idx + 1
+            if name == "env" and self._ASSIGNMENT_RE.match(token):
+                idx += 1
+                continue
+            option = token.split("=", 1)[0]
+            if option in value_options:
+                idx += 1 if "=" in token else 2
+                continue
+            if token.startswith("-"):
+                idx += 1
+                continue
+            return idx
+        return idx
+
+    def _check_invocation(
+        self, name: str, args: list[str], cwd: str | None
+    ) -> str | None:
+        if name in self._DESTRUCTIVE_COMMANDS:
+            return self._DESTRUCTIVE_COMMANDS[name]
+        if name.startswith("mkfs."):
+            return "filesystem format"
+
+        if name == "rm":
+            return self._check_rm(args, cwd)
+        if name == "git":
+            return self._check_git(args)
+        if name in ("chmod", "chown"):
+            return self._check_recursive_perm(name, args, cwd)
+        if name in ("busybox", "toybox") and args:
+            return self._check_invocation(os.path.basename(args[0]), args[1:], cwd)
+        if name == "find":
+            if "-delete" in args:
+                for target in self._find_targets(args):
+                    if self._is_critical_path(target, cwd):
+                        return f"find -delete on critical path ({target})"
+        if name in ("systemctl", "loginctl") and any(
+            arg in ("halt", "poweroff", "reboot") for arg in args
+        ):
+            return "system shutdown/reboot"
+        if name == "cryptsetup" and any("luksformat" in arg.lower() for arg in args):
+            return "encrypted volume format"
+        if name == "zpool" and "destroy" in args:
+            return "destroy storage pool"
+        if name == "zfs" and "destroy" in args:
+            return "destroy filesystem"
+
+        for token in args:
+            if token.startswith("of=") and self._is_device_path(token[3:]):
+                return "write to block device"
+        if name in ("cp", "mv", "tee", "truncate", "shred"):
+            if any(self._is_device_path(token) for token in args):
+                return "write to block device"
+
+        return None
+
+    def _check_rm(self, args: list[str], cwd: str | None) -> str | None:
+        recursive = False
+        targets: list[str] = []
+        options_done = False
+        for token in args:
+            if not options_done and token == "--":
+                options_done = True
+            elif not options_done and token.startswith("-"):
+                if token == "--no-preserve-root":
+                    return "rm --no-preserve-root"
+                if token == "--recursive" or (
+                    not token.startswith("--") and "r" in token.lower()
+                ):
+                    recursive = True
+            else:
+                targets.append(token)
+
+        if recursive:
             for target in targets:
-                norm = os.path.normpath(os.path.expanduser(target))
-                if norm in self._CRITICAL_UNIX_PATHS:
-                    return f"rm -rf on critical system path ({norm})"
-                if norm == home:
-                    return "rm -rf on home directory"
-
+                if self._is_critical_path(target, cwd):
+                    return f"recursive rm on critical path ({target})"
         return None
 
-    def _check_recursive_perm(self, command: str) -> str | None:
-        """Detect recursive chmod/chown on the root filesystem."""
-        for seg in self._split_command(command):
-            tokens = seg.split()
-            if not tokens:
-                continue
-            idx = 0
-            while idx < len(tokens) and tokens[idx] in ("sudo", "doas"):
-                idx += 1
-            if idx >= len(tokens) or tokens[idx] not in ("chmod", "chown"):
-                continue
-
-            cmd_name = tokens[idx]
-            has_R = False
-            targets: list[str] = []
-            for tok in tokens[idx + 1:]:
-                if tok.startswith("-"):
-                    if "R" in tok or tok == "--recursive":
-                        has_R = True
-                else:
-                    targets.append(tok)
-
-            if has_R:
-                for t in targets:
-                    norm = os.path.normpath(os.path.expanduser(t))
-                    if norm == "/":
-                        return f"recursive {cmd_name} on root directory"
-
+    @staticmethod
+    def _check_git(args: list[str]) -> str | None:
+        if "clean" in args and any(
+            token.startswith("-") and "f" in token[1:] for token in args
+        ):
+            return "git clean can destroy untracked files"
+        if "reset" in args and "--hard" in args:
+            return "git reset --hard can destroy uncommitted changes"
+        if any(command in args for command in ("checkout", "restore")) and any(
+            target in (".", ":/") for target in args
+        ):
+            return "git operation can overwrite the working tree"
         return None
+
+    def _check_recursive_perm(
+        self, name: str, args: list[str], cwd: str | None
+    ) -> str | None:
+        recursive = any(
+            token == "--recursive"
+            or (token.startswith("-") and not token.startswith("--") and "R" in token)
+            for token in args
+        )
+        if recursive and any(self._is_critical_path(token, cwd) for token in args):
+            return f"recursive {name} on critical path"
+        return None
+
+    @staticmethod
+    def _find_targets(args: list[str]) -> list[str]:
+        targets: list[str] = []
+        for token in args:
+            if token.startswith("-") or token in ("!", "(", ")"):
+                break
+            targets.append(token)
+        return targets or ["."]
+
+    def _is_critical_path(self, path: str, cwd: str | None = None) -> bool:
+        pattern = os.path.expandvars(os.path.expanduser(path))
+        if not os.path.isabs(pattern):
+            pattern = os.path.join(cwd or self._work_dir, pattern)
+        literal = pattern.rstrip("*?[]{}") or "/"
+        norm = os.path.normpath(os.path.realpath(os.path.abspath(literal)))
+        home = os.path.normpath(os.path.realpath(os.path.expanduser("~")))
+        work_dir = os.path.normpath(os.path.realpath(self._work_dir))
+        if work_dir == norm or work_dir.startswith(norm + os.sep):
+            return True
+        if self._is_resolved_critical(norm, home):
+            return True
+        return any(
+            self._is_resolved_critical(os.path.normpath(os.path.realpath(match)), home)
+            for match in glob.glob(pattern)
+        )
+
+    def _is_resolved_critical(self, path: str, home: str) -> bool:
+        return (
+            path in self._CRITICAL_UNIX_PATHS
+            or path == home
+            or os.path.ismount(path)
+            or any(path.startswith(root + os.sep) for root in self._PROTECTED_UNIX_TREES)
+        )
+
+    def _is_device_path(self, path: str) -> bool:
+        path = os.path.expandvars(os.path.expanduser(path))
+        if not os.path.isabs(path):
+            path = os.path.join(self._work_dir, path)
+        path = os.path.normpath(path)
+        if self._DEVICE_PATH_RE.match(path):
+            return True
+        try:
+            return stat.S_ISBLK(os.stat(path).st_mode)
+        except OSError:
+            return False
+
+    def _check_remove(self, path: str) -> tuple[bool, str]:
+        if path and self._is_critical_path(path):
+            return False, f"Blocked: removal of critical path ({path})."
+        return True, ""
 
 
 # ---------------------------------------------------------------------------
@@ -287,8 +452,6 @@ class PermissionController:
 
     ``SafetyGuard`` first rejects recognized destructive shell patterns as a
     defense-in-depth measure regardless of mode. It is not a shell sandbox.
-    Out-of-scope file paths trigger a user prompt in interactive modes
-    so the user can override the guard when needed.
 
     Responses at the prompt:
       y  — allow this call
@@ -300,7 +463,7 @@ class PermissionController:
         self,
         mode: PermissionMode = PermissionMode.DEFAULT,
         console: AgentConsole | None = None,
-        work_dir: str | Path | None = None,
+        work_dir: str | None = None,
     ):
         self.mode = mode
         self.console = console or AgentConsole()
@@ -323,22 +486,6 @@ class PermissionController:
         safe, reason = self.check_safety(tool_name, arguments)
         if not safe:
             return False, reason
-
-        # Path-containment check — hard block in AUTO mode (no user),
-        # user-overridable in DEFAULT/STRICT modes
-        if tool_name in ("write_file", "edit_file", "multi_edit", "remove_file"):
-            safe, reason = self.safety.check_path(arguments.get("file", ""))
-            if not safe:
-                if self.mode == PermissionMode.AUTO:
-                    self.console.print(
-                        f"[bold red]🛡  Safety guard:[/bold red] [red]{reason}[/red]"
-                    )
-                    return False, reason
-                allowed, override_reason = self._prompt_path_override(
-                    tool_name, arguments, reason
-                )
-                if not allowed:
-                    return False, override_reason
 
         if self.mode == PermissionMode.AUTO:
             return True, ""
@@ -407,40 +554,6 @@ class PermissionController:
         else:
             self.console.print("   [red]✗ Denied.[/red]")
         return False, reason
-
-    def _prompt_path_override(
-        self, tool_name: str, arguments: dict[str, Any], safety_reason: str
-    ) -> tuple[bool, str]:
-        """Prompt the user when a file path is outside the working directory.
-
-        Returns ``(True, "")`` if the user chooses to proceed despite the
-        warning, or ``(False, reason)`` if they decline.
-        """
-        summary = _summarize_call(tool_name, arguments)
-        self.console.local(
-            f"\n[bold yellow]⚠  Out-of-scope file access[/bold yellow]"
-            f"\n   [cyan]{summary}[/cyan]"
-            f"\n   [yellow]{safety_reason}[/yellow]",
-            highlight=False,
-        )
-        try:
-            choices = ["Allow this call", "Deny"]
-            prompt = (
-                f"File is outside working directory. Allow?\n{safety_reason}"
-                if self.console.prompt_broker is not None
-                else "File is outside working directory. Allow?"
-            )
-            answer = self.console.select(prompt, choices=choices)
-        except (EOFError, KeyboardInterrupt):
-            self.console.print("   [red]Denied (interrupted).[/red]")
-            return False, ""
-
-        if answer is None or answer.lower() not in ("allow this call", "allow", "yes"):
-            self.console.print("   [red]✗ Denied — path outside working directory.[/red]")
-            return False, safety_reason
-
-        self.console.print("   [yellow]⚠ Allowed — proceeding with out-of-scope file access.[/yellow]")
-        return True, ""
 
     def _ask_denial_reason(self) -> str:
         """Prompt the user for an optional reason after denying a tool call."""

@@ -1,6 +1,9 @@
 """Tests for streamed chat-completion accumulation."""
 
 from types import SimpleNamespace as NS
+from unittest.mock import Mock
+
+from rich.markdown import Markdown
 
 from kiui.agent.io import EventHub
 from kiui.agent.streaming import consume_stream
@@ -125,3 +128,38 @@ def test_response_stream_finalizes_reasoning_when_shown():
     # A finalizing thinking event lets late-joining clients rebuild the block.
     assert ("thinking", "let me think") in events
     assert ("assistant_message", "answer") in events
+
+
+def test_response_stream_renders_terminal_markdown_once_on_close():
+    console = Mock()
+    sink = AgentConsole().stream_response()
+    sink._console = console
+
+    with sink:
+        sink.on_content("# Head")
+        sink.on_content("ing")
+        console.print.assert_not_called()
+
+    console.print.assert_called_once()
+    rendered = console.print.call_args.args[0]
+    assert isinstance(rendered, Markdown)
+    assert rendered.markup == "• # Heading"
+
+    sink.close()
+    sink.on_content(" ignored")
+    console.print.assert_called_once()
+
+
+def test_response_stream_does_not_render_failed_attempt():
+    console = Mock()
+    sink = AgentConsole().stream_response()
+    sink._console = console
+
+    try:
+        with sink:
+            sink.on_content("partial response")
+            raise RuntimeError("stream failed")
+    except RuntimeError:
+        pass
+
+    console.print.assert_not_called()
