@@ -461,7 +461,7 @@ class PermissionController:
 
     def __init__(
         self,
-        mode: PermissionMode = PermissionMode.DEFAULT,
+        mode: PermissionMode = PermissionMode.AUTO,
         console: AgentConsole | None = None,
         work_dir: str | None = None,
     ):

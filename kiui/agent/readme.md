@@ -68,7 +68,7 @@ kia --model <model_alias> --verbose --perm strict --resume [session_id]
 | `--verbose` | Enable verbose debug output |
 | `--stream` / `--no-stream` | Stream the response token-by-token as it is generated (default: on) |
 
-| `--perm MODE` | `auto`, `default`, or `strict` |
+| `--perm MODE` | `auto` (default), `default`, or `strict` |
 | `--resume [SESSION_ID]` | Resume a session (bare `--resume` lists saved sessions interactively) |
 | `--list` | List available models with context-window info and exit |
 | `--hub` | Run the shared web hub daemon (owns the public port) |

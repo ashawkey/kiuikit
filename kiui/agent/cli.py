@@ -41,7 +41,7 @@ class Args:
     stream: bool = True  # stream the response token-by-token as it is generated
     reasoning_effort: ReasoningEffort | None = None  # defaults to model config, then high
 
-    perm: PermissionMode = PermissionMode.DEFAULT
+    perm: PermissionMode = PermissionMode.AUTO
     resume: str | None = None  # --resume [session_id]
     list: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # --list: show available models and exit
     hub: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # --hub: run the shared web hub daemon

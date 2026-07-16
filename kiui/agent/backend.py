@@ -123,7 +123,7 @@ class LLMAgent:
         stream: bool = True,
         reasoning_effort: ReasoningEffort = "high",
         context_length: int | None = None,
-        permission_mode: PermissionMode = PermissionMode.DEFAULT,
+        permission_mode: PermissionMode = PermissionMode.AUTO,
         exec_mode: bool = False,
         is_subagent: bool = False,
         work_dir: str | None = None,
