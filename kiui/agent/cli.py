@@ -105,7 +105,7 @@ def get_agent(args: Args) -> "tuple[LLMAgent | None, HubClient | None]":
             cancellation,
             host=info.get("host", "127.0.0.1"),
             port=int(info.get("port", args.web_port)),
-            secret=info.get("secret", ""),
+            token=info.get("token", ""),
             session_id=uuid.uuid4().hex,
             meta=meta,
         )

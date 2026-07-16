@@ -36,7 +36,7 @@ class HubClient:
         *,
         host: str,
         port: int,
-        secret: str,
+        token: str,
         session_id: str,
         meta: dict,
     ):
@@ -46,7 +46,7 @@ class HubClient:
         self.cancellation = cancellation
         self.host = host
         self.port = port
-        self.secret = secret
+        self.token = token
         self.session_id = session_id
         self.meta = meta
         self._stopped = threading.Event()
@@ -120,7 +120,7 @@ class HubClient:
     async def _session(self, ws) -> None:
         await ws.send(json.dumps({
             "type": "register",
-            "secret": self.secret,
+            "token": self.token,
             "session_id": self.session_id,
             "meta": self.meta,
         }))

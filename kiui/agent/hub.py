@@ -13,8 +13,8 @@ Two client surfaces:
   ``session=<id>`` query param, as a per-session event stream. This half of
   the server generalizes a single authenticated event stream to a registry of
   per-session streams.
-* **Agents** connect to ``/internal/agent`` (loopback only, shared-secret
-  authed), register a session, stream their :class:`~kiui.agent.io.EventHub`
+* **Agents** connect to ``/internal/agent`` (loopback only, token-authed),
+  register a session, stream their :class:`~kiui.agent.io.EventHub`
   events, and receive browser actions to inject into their local brokers.
 
 Note: no ``from __future__ import annotations`` here — FastAPI must evaluate
@@ -58,7 +58,7 @@ DISCOVERY_INFO_RETRIES = 10
 DISCOVERY_INFO_RETRY_DELAY = 0.05
 
 # Discovery file: written by the hub, read by terminal agents so they can find
-# the hub's port and the shared internal secret without config edits.
+# the hub's port and the shared access token without config edits.
 HUB_INFO_PATH = Path.home() / ".kia" / "hub.json"
 
 
@@ -205,13 +205,11 @@ class Hub:
         *,
         port: int = 8765,
         token: str | None = None,
-        secret: str | None = None,
         console=None,
     ):
         self.host = LOOPBACK_HOST
         self.port = port
         self.token = token or secrets.token_urlsafe(32)
-        self.secret = secret or secrets.token_urlsafe(32)
         self.console = console
 
         # Agent session registry.
@@ -479,7 +477,7 @@ class Hub:
                 raise HTTPException(status_code=403, detail="Forbidden.")
             return {"sessions": self._session_list()}
 
-        # -- agent-facing internal endpoint (loopback + secret) -------------
+        # -- agent-facing internal endpoint (loopback + token) -------------
 
         @app.websocket("/internal/agent")
         async def agent_endpoint(websocket: WebSocket):
@@ -500,8 +498,8 @@ class Hub:
                 await websocket.close(code=4400)
                 return
             if not hmac.compare_digest(
-                str(raw.get("secret", "")).encode("utf-8"),
-                self.secret.encode("utf-8"),
+                str(raw.get("token", "")).encode("utf-8"),
+                self.token.encode("utf-8"),
             ):
                 await websocket.close(code=4403)
                 return
@@ -740,7 +738,7 @@ class Hub:
             json.dumps({
                 "host": self.host,
                 "port": self.port,
-                "secret": self.secret,
+                "token": self.token,
                 "pid": os.getpid(),
                 "started": time.time(),
             }),

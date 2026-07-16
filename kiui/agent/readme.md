@@ -95,7 +95,7 @@ cd ~/projA && kia
 cd ~/projB && kia
 ```
 
-The hub writes its connection info (host, port, internal secret) to
+The hub writes its connection info (host, port, access token) to
 `~/.kia/hub.json`; agents read it to find the hub, so no extra config is
 needed. Use `kia_web_token` in the config (or the token printed on hub start)
 to sign in.
