@@ -775,9 +775,9 @@ class ToolExecutor:
         processes; the returned result keeps trailing output from both streams,
         reserving up to half its character budget for stderr.
         """
-        self.console.tool(f"exec_command: {command}")
-
         cwd = cwd or self._work_dir
+        self.console.tool(f"exec_command: {command} (cwd={cwd or os.getcwd()})")
+
         artifact_file = tempfile.NamedTemporaryFile(
             mode="w", encoding="utf-8", prefix="kia-exec-", suffix=".txt", delete=False
         )
