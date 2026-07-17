@@ -109,22 +109,21 @@ class ContextStatus:
 
 
 class ThinkingIndicator:
-    """Context manager that shows an animated "Working... (Xs)" line
-    while the model is generating a response.
-
-    Uses Rich's ``Status`` with a bouncing-ball spinner in a background
-    thread to update the elapsed-time counter every second.
-    """
+    """Animated model activity or indeterminate operation progress."""
 
     def __init__(
         self,
         console: Console,
         events: EventHub | None = None,
         status_suffix: str | ContextStatus = "",
+        label: str = "Working",
+        progress: bool = False,
     ):
         self._console = console
         self._events = events
         self._status_suffix = status_suffix
+        self._label_text = label
+        self._progress = progress
         self._status: Status | None = None
         self._start_time: float = 0
         self._running = False
@@ -150,9 +149,16 @@ class ThinkingIndicator:
                     context_tokens=self._status_suffix.tokens,
                     context_limit=self._status_suffix.limit,
                     total_tokens_used=self._status_suffix.total_tokens_used,
+                    label=self._label_text,
+                    progress=self._progress,
                 )
             else:
-                self._events.publish("thinking_start", suffix=self._status_suffix)
+                self._events.publish(
+                    "thinking_start",
+                    suffix=self._status_suffix,
+                    label=self._label_text,
+                    progress=self._progress,
+                )
         return self
 
     def __exit__(self, *args) -> None:
@@ -165,7 +171,24 @@ class ThinkingIndicator:
             self._events.publish("thinking_stop")
 
     def _label(self, elapsed: float) -> str | Table:
-        base = f"Working... ({elapsed:.0f}s)" if elapsed else "Working..."
+        base = (
+            f"{self._label_text}... ({elapsed:.0f}s)"
+            if elapsed
+            else f"{self._label_text}..."
+        )
+        if self._progress:
+            row = Table.grid(padding=(0, 1))
+            cells = [
+                Text(base),
+                ProgressBar(total=None, pulse=True, width=14, pulse_style="cyan"),
+            ]
+            if self._status_suffix:
+                cells.extend([
+                    Text("·", style="dim"),
+                    Text(str(self._status_suffix), style="dim"),
+                ])
+            row.add_row(*cells)
+            return row
         if not self._status_suffix:
             return base
         if isinstance(self._status_suffix, str):
@@ -284,19 +307,31 @@ class AgentConsole:
             capture_console.print(*objects, markup=markup)
         return capture.get().rstrip("\n")
 
-    def thinking(self, *, status_suffix: str | ContextStatus = "") -> ThinkingIndicator:
+    def thinking(
+        self,
+        *,
+        status_suffix: str | ContextStatus = "",
+        label: str = "Working",
+        progress: bool = False,
+    ) -> ThinkingIndicator:
         """Return a context manager that displays an animated thinking indicator.
 
-        ``status_suffix`` is appended after the elapsed-time counter. A
-        :class:`ContextStatus` renders as a progress bar in the terminal and a
-        compact plain-text summary in the web UI.
+        ``status_suffix`` is appended after the elapsed-time counter. Set
+        ``progress`` for an indeterminate bar. A :class:`ContextStatus` renders
+        context usage as a progress bar in the terminal and plain text on web.
 
         Usage::
 
             with console.thinking():
                 response = client.chat.completions.create(...)
         """
-        return ThinkingIndicator(self._console, self.events, status_suffix=status_suffix)
+        return ThinkingIndicator(
+            self._console,
+            self.events,
+            status_suffix=status_suffix,
+            label=label,
+            progress=progress,
+        )
 
     def stream_response(self, *, show_thinking: bool = False) -> ResponseStream:
         """Return a buffered terminal sink for a streamed assistant turn.

@@ -70,6 +70,19 @@ describe('interaction components', () => {
     }
   })
 
+  it('shows indeterminate compaction progress', () => {
+    const { container } = render(
+      <Thinking
+        label="Compacting"
+        progress
+        suffix="436 messages, ~305,603 tokens"
+      />,
+    )
+    expect(screen.getByText('Compacting... (0s)')).toBeInTheDocument()
+    expect(screen.getByText('436 messages, ~305,603 tokens')).toBeInTheDocument()
+    expect(container.querySelector('.indeterminate-progress > i')).toBeInTheDocument()
+  })
+
   it('shows terminal-style context progress while working', () => {
     const { container } = render(
       <Thinking contextTokens={1_000} contextLimit={128_000} totalTokensUsed={500} />,

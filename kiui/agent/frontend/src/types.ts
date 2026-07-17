@@ -11,6 +11,8 @@ export type EventData = {
   context_tokens?: number
   context_limit?: number
   total_tokens_used?: number
+  label?: string
+  progress?: boolean
   [key: string]: unknown
 }
 

@@ -128,11 +128,15 @@ export function Thinking({
   contextTokens = 0,
   contextLimit = 0,
   totalTokensUsed = 0,
+  label = 'Working',
+  progress = false,
 }: {
   suffix?: string
   contextTokens?: number
   contextLimit?: number
   totalTokensUsed?: number
+  label?: string
+  progress?: boolean
 }) {
   const [seconds, setSeconds] = useState(0)
   const fraction = contextLimit > 0
@@ -149,7 +153,8 @@ export function Thinking({
   return (
     <div className="working" aria-label="working">
       <span /><span /><span />
-      <em>Working... ({seconds}s)</em>
+      <em>{label}... ({seconds}s)</em>
+      {progress ? <i className="indeterminate-progress" aria-hidden="true"><i /></i> : null}
       {contextLimit > 0 ? (
         <>
           <i className={`context-progress ${contextLevel}`} aria-hidden="true">

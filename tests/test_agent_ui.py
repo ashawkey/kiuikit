@@ -33,7 +33,28 @@ def test_thinking_indicator_publishes_structured_context_status():
         "context_tokens": 750,
         "context_limit": 1_000,
         "total_tokens_used": 2_000,
+        "label": "Working",
+        "progress": False,
     }
+
+
+def test_thinking_indicator_renders_indeterminate_progress():
+    console = Console()
+    indicator = ThinkingIndicator(
+        console,
+        status_suffix="436 messages, ~305,603 tokens",
+        label="Compacting",
+        progress=True,
+    )
+
+    label = indicator._label(2)
+
+    assert isinstance(label, Table)
+    assert any(isinstance(renderable, ProgressBar) for renderable in label.columns[1]._cells)
+    with console.capture() as capture:
+        console.print(label)
+    assert "Compacting... (2s)" in capture.get()
+    assert "436 messages, ~305,603 tokens" in capture.get()
 
 
 def test_console_reset_timeline_emits_web_reset():

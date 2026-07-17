@@ -310,19 +310,21 @@ class LLMAgent:
                 before_chars = estimate_context_chars(self.context.messages)
                 before_msgs = len(self.context.messages)
                 before_tokens = self.token_estimator.chars_to_tokens(before_chars)
-                self.console.system(
-                    f"Context window pressure — compacting via LLM summarization "
-                    f"({before_msgs} messages, ~{before_tokens:,} tokens)..."
-                )
+                self.console.system("Context window pressure — compacting via LLM summarization")
                 t_compact = time.monotonic()
-                self.context.replace_messages(
-                    compact_context(
-                        self.context.messages, self.client, self.model,
-                        console=self.console,
-                        context_length=self.context_length,
-                        chars_per_token=cpt,
+                with self.console.thinking(
+                    label="Compacting",
+                    progress=True,
+                    status_suffix=f"{before_msgs} messages, ~{before_tokens:,} tokens",
+                ):
+                    self.context.replace_messages(
+                        compact_context(
+                            self.context.messages, self.client, self.model,
+                            console=self.console,
+                            context_length=self.context_length,
+                            chars_per_token=cpt,
+                        )
                     )
-                )
                 compact_elapsed = time.monotonic() - t_compact
                 after_chars = estimate_context_chars(self.context.messages)
                 after_msgs = len(self.context.messages)
@@ -785,18 +787,19 @@ class LLMAgent:
         before_chars = estimate_context_chars(self.context.messages)
         before_msgs = len(self.context.messages)
         before_tokens = self.token_estimator.chars_to_tokens(before_chars)
-        self.console.system(
-            f"Compacting conversation "
-            f"({before_msgs} messages, ~{before_tokens:,} tokens)..."
-        )
-        self.context.replace_messages(
-            compact_context(
-                self.context.messages, self.client, self.model,
-                console=self.console,
-                context_length=self.context_length,
-                chars_per_token=self.token_estimator.chars_per_token,
+        with self.console.thinking(
+            label="Compacting",
+            progress=True,
+            status_suffix=f"{before_msgs} messages, ~{before_tokens:,} tokens",
+        ):
+            self.context.replace_messages(
+                compact_context(
+                    self.context.messages, self.client, self.model,
+                    console=self.console,
+                    context_length=self.context_length,
+                    chars_per_token=self.token_estimator.chars_per_token,
+                )
             )
-        )
         after_chars = estimate_context_chars(self.context.messages)
         after_msgs = len(self.context.messages)
         after_tokens = self.token_estimator.chars_to_tokens(after_chars)
