@@ -1388,12 +1388,12 @@ class LLMAgent:
         )
 
     def _list_skills(self):
-        """List installed skills discovered from known agent dirs."""
+        """List installed project and personal kia skills."""
         if not self.skills:
             from kiui.agent.skills import SKILL_DIRS
             base = Path(self.tool_executor._work_dir) if self.tool_executor._work_dir else Path.cwd()
             skills_dir = base / SKILL_DIRS[0] / "skills"
-            searched = ", ".join(f"{d}/skills/" for d in SKILL_DIRS)
+            searched = f"{SKILL_DIRS[0]}/skills/"
             self.console.print(
                 f"[bold blue]No skills installed.[/bold blue]\n"
                 f"\n"

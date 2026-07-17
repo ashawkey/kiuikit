@@ -12,18 +12,16 @@ not enforced: kia uses its own permission model, so a skill cannot narrow or
 widen tool access. The field is accepted (so cross-agent skills load cleanly)
 but has no effect.
 
-Skills load via progressive disclosure: only name+description from ``.kia``
-skills are advertised in the system prompt; the full body is pulled into context
-on demand via the load_skill tool (or the manual ``/skills <name>`` command).
-Skills in other recognized agent directories remain manually loadable but are
-not advertised. Bundled resource files are read only when the instructions call
-for them (using the ordinary read_file / exec_command tools).
+Skills load via progressive disclosure: only name+description is advertised in
+the system prompt; the full body is pulled into context on demand via the
+load_skill tool (or the manual ``/skills <name>`` command). Bundled resource
+files are read only when the instructions call for them (using the ordinary
+read_file / exec_command tools).
 
-For compatibility with other agent tools that share this convention, skills are
-discovered from several well-known agent directories (see SKILL_DIRS), both under
-the working directory (project skills) and under the user's home (personal
-skills shared across projects). Project skills take precedence, and within each
-scope earlier directories win when skill names collide.
+Skills are discovered only from ``.kia/skills`` under the working directory
+(project skills) and the user's home (personal skills shared across projects).
+Project skills take precedence when names collide. Skills for other agents can
+still be used by giving kia their paths explicitly.
 """
 
 from __future__ import annotations
@@ -34,9 +32,7 @@ from pathlib import Path
 
 import yaml
 
-# Agent directories that may hold a skills/ folder, relative to a scope root.
-# Ordered by precedence: .kia first, then other common agent tool conventions.
-SKILL_DIRS = (".kia", ".codex", ".claude", ".agents")
+SKILL_DIRS = (".kia",)
 
 # Bundled skills shipped with kiui, copied into a project's .kia/skills/ on init
 # so common skills are available out of the box (and remain user-editable).
@@ -78,17 +74,13 @@ def discover_skills(
     work_dir: str | Path | None = None,
     issues: dict | None = None,
 ) -> dict[str, dict]:
-    """Scan known agent dirs' skills/ folders for skills defined by SKILL.md.
+    """Scan project and personal ``.kia/skills`` folders for SKILL.md files.
 
-    Searches ``<scope>/<agent-dir>/skills/`` for each agent dir in SKILL_DIRS,
-    where *scope* is first the working directory (project skills) then the user's
-    home directory (personal skills). Returns
+    The project directory is searched before the user's home directory. Returns
     ``{skill_name: {"path", "dir", "description", "body", "frontmatter",
-    "active"}}`` where ``active`` is true only for skills discovered under
-    ``.kia``, ``dir`` is the skill root (for resolving bundled resources), and
-    ``body`` is the markdown instructions with frontmatter stripped. When the same skill name
-    appears more than once, an earlier scope/directory wins (project over home,
-    and .kia over .codex/.claude/.agents within a scope).
+    "active"}}`` where ``dir`` is the skill root (for resolving bundled
+    resources), ``body`` is the markdown instructions with frontmatter stripped,
+    and ``active`` is always true. Project skills win name collisions.
 
     When *issues* is a dict, it is populated (in place) with non-fatal discovery
     problems so callers can surface them:
@@ -170,7 +162,7 @@ def discover_skills(
                     "body": body,
                     "frontmatter": frontmatter,
                     "warnings": validate_skill(skill_name, frontmatter),
-                    "active": agent_dir == ".kia",
+                    "active": True,
                 }
 
     if issues is not None:
@@ -279,9 +271,8 @@ def validate_skill(name: str, frontmatter: dict) -> list[str]:
 def build_skills_prompt_section(skills: dict[str, dict]) -> str:
     """Build a concise skills registry section for the system prompt.
 
-    Advertises each active (``.kia``) skill's name + description (progressive
-    disclosure stage 1) and how to activate it via the load_skill tool. Skills
-    from compatibility directories remain discoverable for manual loading.
+    Advertises each skill's name + description (progressive disclosure stage 1)
+    and how to activate it via the load_skill tool.
     """
     active_skills = {
         name: info for name, info in skills.items() if info.get("active", True)

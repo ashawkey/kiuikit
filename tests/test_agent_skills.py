@@ -20,20 +20,32 @@ def _valid(name: str, desc: str = "does a thing, use when relevant") -> str:
 
 # ----- discovery issue reporting -------------------------------------------
 
-def test_discover_reports_shadowing(tmp_path):
-    _write_skill(tmp_path, ".kia", "dup", _valid("dup", "kia copy"))
-    _write_skill(tmp_path, ".claude", "dup", _valid("dup", "claude copy"))
+def test_discover_ignores_external_agent_dirs(tmp_path):
+    _write_skill(tmp_path, ".kia", "native", _valid("native", "kia skill"))
+    _write_skill(tmp_path, ".claude", "foreign", _valid("foreign", "claude skill"))
 
     issues = {}
     skills = discover_skills(tmp_path, issues=issues)
 
-    assert "dup" in skills
-    assert skills["dup"]["description"] == "kia copy"  # .kia wins over .claude
+    assert "native" in skills
+    assert "foreign" not in skills
+    assert not any(issue["name"] == "foreign" for issue in issues["shadowed"])
+    assert not any(issue["name"] == "foreign" for issue in issues["errors"])
+
+
+def test_project_skill_shadows_personal_skill(tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    _write_skill(project, ".kia", "dup", _valid("dup", "project copy"))
+    _write_skill(home, ".kia", "dup", _valid("dup", "personal copy"))
+
+    issues = {}
+    skills = discover_skills(project, issues=issues)
+
+    assert skills["dup"]["description"] == "project copy"
     assert len(issues["shadowed"]) == 1
-    sh = issues["shadowed"][0]
-    assert sh["name"] == "dup"
-    assert ".claude" in sh["path"]
-    assert ".kia" in sh["shadowed_by"]
+    assert issues["shadowed"][0]["name"] == "dup"
 
 
 def test_discover_reports_malformed(tmp_path):
@@ -99,22 +111,15 @@ def test_skills_prompt_requires_loading_before_work_and_guides_creation():
     assert "asks to create or" in section
 
 
-def test_prompt_only_advertises_kia_skills(tmp_path):
+def test_prompt_advertises_discovered_kia_skills(tmp_path):
     _write_skill(tmp_path, ".kia", "native", _valid("native", "kia skill"))
-    _write_skill(tmp_path, ".claude", "foreign", _valid("foreign", "claude skill"))
 
     skills = discover_skills(tmp_path)
     section = build_skills_prompt_section(skills)
 
-    assert set(skills) >= {"native", "foreign"}
+    assert "native" in skills
     assert skills["native"]["active"] is True
-    assert skills["foreign"]["active"] is False
     assert "**native**" in section
-    assert "**foreign**" not in section
-
-    ex = ToolExecutor(work_dir=str(tmp_path), skills=skills)
-    result = ex._load_skill("foreign")
-    assert result["success"] and "content" in result
 
 
 # ----- load-count tracking -------------------------------------------------

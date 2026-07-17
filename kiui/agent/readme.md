@@ -243,7 +243,7 @@ e.g. `references/REFERENCE.md` or `scripts/extract.py`.
 
 `name` and `description` are required (the `description` is what the model matches against to decide when to activate a skill). Optional fields `license`, `compatibility`, and `metadata` are also parsed. `allowed-tools` is accepted for cross-agent compatibility but **not enforced** — kia uses its own permission model. Skills load via **progressive disclosure**: only name+description are advertised in the system prompt; the full body loads when the model calls `load_skill` (or you run `/skills <name>`); bundled `scripts/`, `references/`, and `assets/` files are read/run on demand via the ordinary file and exec tools (the skill's directory path is provided when it is loaded so relative references resolve correctly).
 
-Skills are discovered from `.kia/skills/` under **both the project directory and your home directory** (`~/.kia/skills/`), so you can keep personal skills that follow you across projects. For cross-agent compatibility, `.codex/skills/`, `.claude/skills/`, and `.agents/skills/` are also scanned. Project skills take precedence over personal ones, and within a scope `.kia` wins, then `.codex`, `.claude`, `.agents`.
+Skills are discovered from `.kia/skills/` under **both the project directory and your home directory** (`~/.kia/skills/`), so you can keep personal skills that follow you across projects. Project skills take precedence over personal ones. Other agents' skill directories are not scanned; when needed, give kia a skill path explicitly so it can read the instructions.
 
 Skill commands:
 

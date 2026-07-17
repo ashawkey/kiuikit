@@ -28,8 +28,7 @@ Use it whenever the user wants to:
 ```
 
 Create the skill under `.kia/skills/<skill-name>/` (kia's own dir) unless the
-user asks for a different location. `.codex/skills/`, `.claude/skills/`, and
-`.agents/skills/` are also discovered for cross-agent compatibility.
+user asks for a different location.
 
 ## SKILL.md format
 
