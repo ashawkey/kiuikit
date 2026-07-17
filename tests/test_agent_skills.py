@@ -135,6 +135,30 @@ def test_load_skill_counts(tmp_path):
     assert ex._skill_loads["alpha"] == 2
 
 
+def test_load_skill_header_only_lists_present_resources(tmp_path):
+    skill_dir = _write_skill(tmp_path, ".kia", "alpha", _valid("alpha"))
+    (skill_dir / "references").mkdir()
+    (skill_dir / "assets").mkdir()
+
+    ex = ToolExecutor(work_dir=str(tmp_path), skills=discover_skills(tmp_path))
+    content = ex._load_skill("alpha")["content"]
+
+    assert f"Its directory is {skill_dir}" in content
+    assert "references/…" in content
+    assert "assets/…" in content
+    assert "scripts/…" not in content
+
+
+def test_load_skill_header_omits_directory_without_resources(tmp_path):
+    _write_skill(tmp_path, ".kia", "alpha", _valid("alpha"))
+    ex = ToolExecutor(work_dir=str(tmp_path), skills=discover_skills(tmp_path))
+
+    content = ex._load_skill("alpha")["content"]
+
+    assert content.startswith("[Skill 'alpha' loaded.]\n\n")
+    assert "Its directory" not in content
+
+
 def test_load_missing_skill_not_counted(tmp_path):
     skills = discover_skills(tmp_path)  # none defined here (project scope empty)
     ex = ToolExecutor(work_dir=str(tmp_path), skills={})

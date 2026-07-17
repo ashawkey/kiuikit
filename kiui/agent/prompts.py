@@ -2,6 +2,7 @@
 
 import os
 import platform
+import socket
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -30,19 +31,13 @@ def build_system_prompt(exec_mode: bool = False, is_subagent: bool = False, work
     # 1b. Exec / sub-agent mode
     if exec_mode:
         sections.append("""## Autonomous Mode
-You are running as an autonomous sub-agent. There is NO user to interact with.
-- Do NOT ask questions or request confirmation — no one will respond.
-- Make reasonable decisions on your own and proceed to completion.
-- If something is ambiguous, choose the most likely interpretation and move on.
-- Finish the task fully, then output a concise summary of what you did.""")
+You are running as an autonomous sub-agent with no user available to respond.
+- Do not ask questions or request confirmation.
+- Infer intent from the task and available context; choose the safest reasonable interpretation.
+- If blocked, report the blocker instead of using a risky workaround.
+- Complete and verify the task, then return a concise summary.""")
 
-    # 2. Tool call style
-    sections.append("""## Tool Call Style
-- Do not narrate routine, low-risk tool calls — just call the tool.
-- Narrate only for multi-step work, complex problems, or sensitive actions (e.g., deletions).
-- Keep narration brief and value-dense.""")
-
-    # 3. Safety
+    # 2. Safety
     if not exec_mode:
         sections.append("""## Safety
 - Prioritize safety and human oversight over task completion.
@@ -54,26 +49,27 @@ You are running as an autonomous sub-agent. There is NO user to interact with.
 - Avoid destructive or irreversible actions unless the task explicitly requires them.
 - Prefer safe, reversible operations.""")
 
-    # 4. Tool usage guidance
+    # 3. Tool usage guidance
     sections.append("""## Tool Usage
 - Always check tool results before proceeding.
-- Prefer glob_files / grep_files over exec_command for file discovery and search.
-- Keep tool output focused: use narrow patterns, read_file offset/limit, and quiet or filtered commands.
-- When a tool result says it was compacted, do not rerun the broad call. Use the suggested grep/read operation on the captured output or original source.""")
+- Do not narrate routine, low-risk tool calls — just call the tool. Narrate only for multi-step work, complex problems, or sensitive actions (e.g., deletions).
+- Prefer ls / glob_files / grep_files over exec_command for file discovery and search.
+- Keep output focused with narrow paths/patterns, read_file offset/limit, and quiet or filtered commands.
+- If output is compacted, follow its recovery guidance instead of repeating the same broad call.""")
 
-    # 5. Task execution
+    # 4. Task execution
     sections.append("""## Task Execution
-- Keep going until the task is completely resolved before yielding back to the user.
-- Fix problems at the root cause rather than applying surface-level patches.
-- Avoid unneeded complexity. Keep changes minimal and consistent with existing style.
-- Do not attempt to fix unrelated bugs or broken tests.""")
+- Inspect the relevant context before acting; do not guess about code or file contents.
+- Keep going until the request is resolved or a concrete blocker is identified.
+- Fix root causes rather than symptoms.
+- Keep changes minimal and consistent with existing style. Preserve user changes.
+- Do not fix unrelated issues or already broken tests.""")
 
     # 6. Sub-agents (top-level agents only; sub-agents cannot spawn children)
     if not is_subagent:
         sections.append("""## Sub-Agents
-You can spawn a sub-agent to delegate work:
-- **spawn_subagent**: runs a task in a separate process and returns the result when done.
-Use sub-agents when you want to delegate a self-contained task (e.g., research, summarization).""")
+**spawn_subagent** runs a self-contained task and returns its result.
+Delegate only when it materially helps with independent research or analysis. Give a focused task, do not delegate simple work.""")
 
     # 7. Skills
     if skills is None:
@@ -163,13 +159,17 @@ def _build_memory_section(work_dir: str | None = None) -> str:
 def _build_context_section(work_dir: str | None = None) -> str:
     """Build context section with current environment information."""
     cwd = work_dir or str(Path.cwd())
+    hostname = socket.gethostname()
+    ip = socket.gethostbyname(hostname)
     git_info = _get_git_context(cwd)
     return f"""## Current Context
 - Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 - Working Directory: {cwd}
 - Operating System: {platform.system()} {platform.release()}
 - Python: {platform.python_version()}
-- User: {os.getenv("USER") or os.getenv("USERNAME", "unknown")}{git_info}"""
+- User: {os.getenv("USER") or os.getenv("USERNAME", "unknown")}
+- Host: {hostname}
+- IP: {ip}{git_info}"""
 
 
 def _get_git_context(cwd: str) -> str:

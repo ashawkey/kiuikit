@@ -1275,16 +1275,22 @@ class ToolExecutor:
         self._skill_loads[name] = self._skill_loads.get(name, 0) + 1
         skill = self._skills[name]
         body = skill["body"]
-        # Prepend the skill root so the model can resolve bundled resources
-        # (references/…, scripts/…, assets/…) referenced by relative paths.
         skill_dir = skill.get("dir")
-        if skill_dir:
+        resources = [
+            directory
+            for directory in ("references", "scripts", "assets")
+            if skill_dir and (Path(skill_dir) / directory).is_dir()
+        ]
+        if resources:
+            resource_list = ", ".join(f"{directory}/…" for directory in resources)
             header = (
-                f"[Skill '{name}' loaded. Its directory is {skill_dir} — resolve any "
-                f"relative file references (references/…, scripts/…, assets/…) against "
-                f"that path using read_file / exec_command as the instructions require.]\n\n"
+                f"[Skill '{name}' loaded. Its directory is {skill_dir} — resolve relative "
+                f"files in {resource_list} against that path using read_file / exec_command "
+                f"as the instructions require.]\n\n"
             )
-            body = header + body
+        else:
+            header = f"[Skill '{name}' loaded.]\n\n"
+        body = header + body
         return {"content": body, "success": True}
 
     # ── Memory tool ──────────────────────────────────────────
