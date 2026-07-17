@@ -110,8 +110,8 @@ def _strip_at_marks(query: str) -> str:
 
 
 class LLMAgent:
-    MAX_RETRIES = 10
     INITIAL_BACKOFF = 1.0   # seconds
+    MAX_BACKOFF = 64.0      # seconds
 
     def __init__(
         self, 
@@ -292,7 +292,7 @@ class LLMAgent:
     def call_api(self):
         """Call the API using current context, with automatic retry on any error.
 
-        All errors are retried with exponential backoff up to MAX_RETRIES times.
+        All errors are retried indefinitely with capped exponential backoff.
         """
 
         # context management: prune old tool results, then compact if needed
@@ -365,7 +365,9 @@ class LLMAgent:
 
         # ---- retry loop with exponential backoff ----
         t_api = time.monotonic()
-        for attempt in range(self.MAX_RETRIES + 1):
+        retry_count = 0
+        wait_time = self.INITIAL_BACKOFF
+        while True:
             try:
                 if self.stream:
                     message, usage = self._stream_completion(kwargs)
@@ -375,12 +377,12 @@ class LLMAgent:
             except RequestInterrupted:
                 raise  # user cancelled — never retry, let get_response roll back
             except Exception as e:
-                if attempt < self.MAX_RETRIES:
-                    wait_time = self.INITIAL_BACKOFF * (2 ** attempt)
-                    self.console.system(f"[Retry {attempt + 1}/{self.MAX_RETRIES}] {e} — retrying in {wait_time:.1f}s…")
-                    self._interruptible_sleep(wait_time)
-                else:
-                    raise RuntimeError(f"Max retries ({self.MAX_RETRIES}) exceeded. Last error: {e}") from e
+                retry_count += 1
+                self.console.system(
+                    f"[Retry {retry_count}] {e} — retrying in {wait_time:.1f}s…"
+                )
+                self._interruptible_sleep(wait_time)
+                wait_time = min(wait_time * 2, self.MAX_BACKOFF)
         api_elapsed = time.monotonic() - t_api
 
         self._accumulate_usage(usage)
@@ -513,6 +515,9 @@ class LLMAgent:
                 if denial_reason:
                     msg += f"\nReason: {denial_reason}"
                 result = {"error": msg, "success": False}
+            elif function_name == "exec_command":
+                with self.console.thinking(label="Running exec_command"):
+                    result = self.tool_executor.execute(function_name, function_args)
             else:
                 result = self.tool_executor.execute(function_name, function_args)
             exec_elapsed = time.monotonic() - t_exec
@@ -704,13 +709,16 @@ class LLMAgent:
         if not allowed:
             self.console.tool_result(reason, success=False)
             return
+        t_exec = time.monotonic()
         with self._operation("shell command"):
-            result = self.tool_executor.execute("exec_command", arguments)
+            with self.console.thinking(label="Running exec_command"):
+                result = self.tool_executor.execute("exec_command", arguments)
+        exec_elapsed = time.monotonic() - t_exec
         result_text = format_tool_result(result)
         success = result.get("success", False)
         if result.get("streamed", True):
             exit_code = result.get("exit_code", "?")
-            self.console.tool_result(f"exit code {exit_code}", success=success)
+            self.console.tool_result(f"exit code {exit_code} ({exec_elapsed:.1f}s)", success=success)
         else:
             self.console.tool_result(format_tool_summary(result_text), success=success)
         cleanup_error = discard_tool_result_artifact(result)
@@ -1378,13 +1386,11 @@ class LLMAgent:
         from kiui.agent.skills import build_skills_prompt_section
 
         skills_section = build_skills_prompt_section(self.skills)
-        active_count = sum(info.get("active", True) for info in self.skills.values())
         total_tokens = self.token_estimator.chars_to_tokens(len(self.system_prompt))
         skill_tokens = self.token_estimator.chars_to_tokens(len(skills_section))
         percent = 100 * skill_tokens / total_tokens if total_tokens else 0
         self.console.system(
-            f"Found {len(self.skills)} skill(s); advertising {active_count} from .kia uses "
-            f"~{skill_tokens:,} tokens ({percent:.1f}% of the ~{total_tokens:,}-token system prompt)."
+            f"Found {len(self.skills)} skill(s); using ~{skill_tokens:,} tokens ({percent:.1f}% of the ~{total_tokens:,}-token system prompt)."
         )
 
     def _list_skills(self):
