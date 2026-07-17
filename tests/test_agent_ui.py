@@ -1,5 +1,7 @@
 """Tests for Rich terminal UI helpers."""
 
+from io import StringIO
+
 from rich.console import Console
 from rich.progress_bar import ProgressBar
 from rich.table import Table
@@ -33,7 +35,28 @@ def test_thinking_indicator_publishes_structured_context_status():
         "context_tokens": 750,
         "context_limit": 1_000,
         "total_tokens_used": 2_000,
+        "label": "Working",
+        "progress": False,
     }
+
+
+def test_thinking_indicator_renders_indeterminate_progress():
+    console = Console()
+    indicator = ThinkingIndicator(
+        console,
+        status_suffix="436 messages, ~305,603 tokens",
+        label="Compacting",
+        progress=True,
+    )
+
+    label = indicator._label(2)
+
+    assert isinstance(label, Table)
+    assert any(isinstance(renderable, ProgressBar) for renderable in label.columns[1]._cells)
+    with console.capture() as capture:
+        console.print(label)
+    assert "Compacting... (2s)" in capture.get()
+    assert "436 messages, ~305,603 tokens" in capture.get()
 
 
 def test_console_reset_timeline_emits_web_reset():
@@ -42,6 +65,18 @@ def test_console_reset_timeline_emits_web_reset():
     AgentConsole(events=events).reset_timeline()
 
     assert events.after(0)[0].type == "timeline_reset"
+
+
+def test_response_renders_markdown_from_first_line():
+    output = StringIO()
+    console = AgentConsole()
+    console._console = Console(file=output, width=60, force_terminal=True)
+
+    console.response("```python\nprint(1)\n```")
+
+    rendered = output.getvalue()
+    assert "```python" not in rendered
+    assert "print" in rendered
 
 
 def test_thinking_indicator_includes_context_progress():

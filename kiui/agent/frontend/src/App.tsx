@@ -48,6 +48,8 @@ function SessionPane({
     contextTokens: 0,
     contextLimit: 0,
     totalTokensUsed: 0,
+    label: 'Working',
+    progress: false,
   })
   const socket = useRef<WebSocket | null>(null)
   const lastSeq = useRef(0)
@@ -127,6 +129,8 @@ function SessionPane({
           contextTokens: typeof data.context_tokens === 'number' ? data.context_tokens : 0,
           contextLimit: typeof data.context_limit === 'number' ? data.context_limit : 0,
           totalTokensUsed: typeof data.total_tokens_used === 'number' ? data.total_tokens_used : 0,
+          label: typeof data.label === 'string' ? data.label : 'Working',
+          progress: data.progress === true,
         })
         break
       case 'thinking_stop':

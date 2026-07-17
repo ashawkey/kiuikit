@@ -530,6 +530,8 @@ html { scrollbar-gutter: stable; }
 .working small { color: var(--dim); font-size: inherit; }
 .context-progress { position: relative; width: 6rem; height: 0.5rem; overflow: hidden; border-radius: 999px; background: var(--line-strong); }
 .context-progress i { position: absolute; inset: 0 auto 0 0; background: currentColor; }
+.indeterminate-progress { position: relative; width: 6rem; height: 0.5rem; overflow: hidden; border-radius: 999px; background: var(--line-strong); }
+.indeterminate-progress i { position: absolute; inset: 0; width: 40%; border-radius: inherit; background: var(--info); animation: indeterminate 1.2s infinite ease-in-out; }
 .context-progress.info, .working strong.info { color: var(--info); }
 .context-progress.warning, .working strong.warning { color: var(--warning); }
 .context-progress.danger, .working strong.danger { color: var(--danger); }
@@ -645,6 +647,8 @@ html { scrollbar-gutter: stable; }
 .stop-button { color: var(--danger); background: var(--danger-faint); border: 1px solid var(--danger-weak); }
 .stop-button span { display: block; width: 0.7rem; height: 0.7rem; border-radius: 2px; background: currentColor; }
 @keyframes rise { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+@keyframes indeterminate { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+
 @keyframes pulse { 0%, 65%, 100% { transform: translateY(0); opacity: 0.35; } 35% { transform: translateY(-3px); opacity: 1; } }
 
 @media (min-width: 680px) { .prompt-backdrop { place-items: center; } }
