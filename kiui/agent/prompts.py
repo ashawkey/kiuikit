@@ -65,6 +65,14 @@ You are running as an autonomous sub-agent with no user available to respond.
 - Keep changes minimal and consistent with existing style. Preserve user changes.
 - Do not fix unrelated issues or already broken tests.""")
 
+    # 5. Working style
+    sections.append("""## Working Style
+- Prefer the smallest clear solution that fully satisfies the request.
+- Reuse existing code and standard tools before adding abstractions or dependencies.
+- Avoid speculative safeguards, fallbacks, configuration, and extensibility.
+- Keep responses concise, but preserve necessary technical detail.
+- Verify with the smallest relevant check and report only what was actually verified.""")
+
     # 6. Sub-agents (top-level agents only; sub-agents cannot spawn children)
     if not is_subagent:
         sections.append("""## Sub-Agents

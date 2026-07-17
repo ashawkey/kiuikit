@@ -2,6 +2,7 @@
 gitignore-aware glob/grep (kiui.agent.tools / kiui.agent.gitignore)."""
 
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -209,6 +210,37 @@ def test_failed_exec_format_keeps_stdout_and_stderr():
         "exit_code": 1,
     })
     assert "large stdout" in text and "brief stderr" in text
+
+
+def test_exec_command_streams_carriage_return_updates(tmp_path):
+    class RecordingConsole(_SilentConsole):
+        def __init__(self):
+            self.printed = threading.Event()
+            self.output = []
+
+        def print(self, text, **kwargs):
+            self.output.append(text)
+            self.printed.set()
+
+    console = RecordingConsole()
+    te = ToolExecutor(console=console, work_dir=str(tmp_path))
+    result = {}
+    worker = threading.Thread(
+        target=lambda: result.update(te._exec_command(
+            "python -c \"import sys,time; sys.stderr.write('progress\\r'); "
+            "sys.stderr.flush(); time.sleep(1.5); sys.stderr.write('done\\n')\""
+        ))
+    )
+    worker.start()
+    try:
+        assert console.printed.wait(timeout=1)
+        assert worker.is_alive()
+        assert any("[stderr] progress" in line for line in console.output)
+        worker.join(timeout=3)
+        assert not worker.is_alive()
+    finally:
+        if artifact := result.get("_artifact_path"):
+            Path(artifact).unlink(missing_ok=True)
 
 
 def test_exec_command_truncation_reserves_space_for_stderr(tmp_path):

@@ -1,6 +1,6 @@
 ---
 name: lean
-description: Produces concise, high-signal answers and minimal, maintainable code without sacrificing correctness. Use when the user asks to be terse, brief, concise, token-efficient, simple, minimal, YAGNI, or to avoid over-engineering; also use for focused coding, refactoring, bug-fixing, and code-review tasks where lean output and the smallest correct change are desired.
+description: Enforces unusually terse, token-efficient responses and strict YAGNI implementation. Use only when the user explicitly asks to be terse, brief, concise, minimal, token-efficient, simple, YAGNI, or to avoid over-engineering.
 ---
 
 # Lean Mode

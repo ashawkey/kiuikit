@@ -1,5 +1,6 @@
 """Built-in tool definitions and executor for kiui agent."""
 
+import codecs
 import json
 import locale
 import os
@@ -820,36 +821,48 @@ class ToolExecutor:
         capture_stopped = threading.Event()
 
         def _drain(stream, lines_buf, size_ref, prefix=""):
-            try:
-                for raw in iter(stream.readline, b""):
+            decoder = codecs.getincrementaldecoder(locale.getpreferredencoding())(errors="replace")
+
+            def consume(text: str) -> None:
+                if not text or capture_stopped.is_set():
+                    return
+                lines_buf.append(text)
+                size_ref[0] += len(text)
+                while size_ref[0] > MAX_STREAMING_BUFFER_CHARS and len(lines_buf) > 1:
+                    size_ref[0] -= len(lines_buf.popleft())
+                captured = f"{prefix}{text}"
+                encoded = captured.encode("utf-8")
+                with artifact_lock:
                     if capture_stopped.is_set():
-                        continue
-                    line = _decode_bytes(raw)
-                    lines_buf.append(line)
-                    size_ref[0] += len(line)
-                    while size_ref[0] > MAX_STREAMING_BUFFER_CHARS and len(lines_buf) > 1:
-                        size_ref[0] -= len(lines_buf.popleft())
-                    captured_line = f"{prefix}{line}"
-                    encoded = captured_line.encode("utf-8")
-                    with artifact_lock:
-                        if capture_stopped.is_set():
-                            continue
-                        total_output_chars[0] += len(captured_line)
-                        remaining = MAX_EXEC_ARTIFACT_BYTES - artifact_size_bytes[0]
-                        if len(encoded) > remaining:
+                        return
+                    total_output_chars[0] += len(captured)
+                    remaining = MAX_EXEC_ARTIFACT_BYTES - artifact_size_bytes[0]
+                    if len(encoded) > remaining:
+                        artifact_truncated[0] = True
+                    if remaining > 0 and not artifact_write_error:
+                        chunk = encoded[:remaining].decode("utf-8", errors="ignore")
+                        try:
+                            artifact_file.write(chunk)
+                        except OSError as e:
+                            artifact_write_error.append(str(e))
                             artifact_truncated[0] = True
-                        if remaining > 0 and not artifact_write_error:
-                            chunk = encoded[:remaining].decode("utf-8", errors="ignore")
-                            try:
-                                artifact_file.write(chunk)
-                            except OSError as e:
-                                artifact_write_error.append(str(e))
-                                artifact_truncated[0] = True
-                            else:
-                                artifact_size_bytes[0] += len(chunk.encode("utf-8"))
-                    display = line.rstrip("\n\r")
+                        else:
+                            artifact_size_bytes[0] += len(chunk.encode("utf-8"))
+                for display in re.split(r"[\r\n]+", text):
                     if display:
                         self.console.print(f"  {prefix}{display}", style="dim")
+
+            pending = ""
+            try:
+                while raw := stream.read1(4096):
+                    pending += decoder.decode(raw)
+                    start = 0
+                    for match in re.finditer(r"\r\n|\r|\n", pending):
+                        consume(pending[start:match.end()])
+                        start = match.end()
+                    pending = pending[start:]
+                pending += decoder.decode(b"", final=True)
+                consume(pending)
             finally:
                 stream.close()
 
