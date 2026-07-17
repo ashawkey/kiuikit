@@ -4,6 +4,7 @@ from types import SimpleNamespace as NS
 from unittest.mock import Mock
 
 from rich.markdown import Markdown
+from rich.table import Table
 
 from kiui.agent.io import EventHub
 from kiui.agent.streaming import consume_stream
@@ -142,8 +143,11 @@ def test_response_stream_renders_terminal_markdown_once_on_close():
 
     console.print.assert_called_once()
     rendered = console.print.call_args.args[0]
-    assert isinstance(rendered, Markdown)
-    assert rendered.markup == "• # Heading"
+    assert isinstance(rendered, Table)
+    assert rendered.columns[0]._cells[0].plain == "• "
+    markdown = rendered.columns[1]._cells[0]
+    assert isinstance(markdown, Markdown)
+    assert markdown.markup == "# Heading"
 
     sink.close()
     sink.on_content(" ignored")

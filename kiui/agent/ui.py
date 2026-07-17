@@ -68,6 +68,16 @@ def _compact_tokens(value: int) -> str:
     return str(value)
 
 
+def _print_markdown_response(console: Console, content: str) -> None:
+    from rich.markdown import Markdown
+
+    row = Table.grid(padding=0, expand=True)
+    row.add_column(width=2, no_wrap=True)
+    row.add_column(ratio=1)
+    row.add_row(Text(f"{_DOT} "), Markdown(content))
+    console.print(row)
+
+
 @dataclass(frozen=True)
 class ContextStatus:
     """Context-window usage displayed alongside the thinking spinner."""
@@ -279,8 +289,7 @@ class ResponseStream:
             if thinking:
                 self._console.print(Text(thinking, style="thinking"))
             if content:
-                from rich.markdown import Markdown
-                self._console.print(Markdown(f"{_DOT} {content}"))
+                _print_markdown_response(self._console, content)
         if self._events is not None:
             if thinking:
                 self._events.publish("thinking", text=thinking)
@@ -612,8 +621,7 @@ class AgentConsole:
             )
 
     def response(self, msg: str):
-        from rich.markdown import Markdown
-        self._console.print(Markdown(f"{_DOT} {msg}"))
+        _print_markdown_response(self._console, msg)
         self._emit("assistant_message", text=msg)
 
     def user_input(

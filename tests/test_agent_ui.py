@@ -1,5 +1,7 @@
 """Tests for Rich terminal UI helpers."""
 
+from io import StringIO
+
 from rich.console import Console
 from rich.progress_bar import ProgressBar
 from rich.table import Table
@@ -63,6 +65,18 @@ def test_console_reset_timeline_emits_web_reset():
     AgentConsole(events=events).reset_timeline()
 
     assert events.after(0)[0].type == "timeline_reset"
+
+
+def test_response_renders_markdown_from_first_line():
+    output = StringIO()
+    console = AgentConsole()
+    console._console = Console(file=output, width=60, force_terminal=True)
+
+    console.response("```python\nprint(1)\n```")
+
+    rendered = output.getvalue()
+    assert "```python" not in rendered
+    assert "print" in rendered
 
 
 def test_thinking_indicator_includes_context_progress():
