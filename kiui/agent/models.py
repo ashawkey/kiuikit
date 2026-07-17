@@ -14,7 +14,7 @@ class ModelProfile:
     """Properties of a model family that affect API behaviour."""
 
     context_length: int = 128_000
-    reasoning: str | None = None  # "openai" | "anthropic" | "gemini" | "deepseek"
+    reasoning: str | None = None  # "openai" | "anthropic" | "gemini" | "deepseek" | "kimi"
 
 
 # Ordered most-specific → least-specific within each family.
@@ -25,6 +25,7 @@ MODEL_CATALOG: list[tuple[str, ModelProfile]] = [
     ("claude", ModelProfile(context_length=1_000_000, reasoning="anthropic")),
     ("deepseek", ModelProfile(context_length=1_000_000, reasoning="deepseek")),
     ("glm", ModelProfile(context_length=1_000_000, reasoning="deepseek")),
+    ("kimi-k3", ModelProfile(context_length=1_000_000, reasoning="kimi")),
 ]
 
 DEFAULT_PROFILE = ModelProfile()
@@ -81,4 +82,8 @@ def reasoning_kwargs(style: str | None, effort: ReasoningEffort) -> dict[str, An
             "reasoning_effort": mapped,
             "extra_body": {"thinking": {"type": "enabled"}},
         }
+    if style == "kimi":
+        # Kimi K3 always reasons (thinking cannot be disabled) and currently
+        # only accepts reasoning_effort="max"; all effort levels map to it.
+        return {"reasoning_effort": "max"}
     raise ValueError(f"Unknown reasoning style: {style}")
