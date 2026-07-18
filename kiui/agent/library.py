@@ -22,13 +22,16 @@ class LibraryError(RuntimeError):
 
 
 def _git(*args: str, cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess:
-    result = subprocess.run(
-        ["git", *args],
-        cwd=cwd,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=cwd,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except FileNotFoundError as exc:
+        raise LibraryError("Git is not installed or is not available on PATH") from exc
     if check and result.returncode:
         detail = result.stderr.strip() or result.stdout.strip()
         raise LibraryError(f"git {' '.join(args)} failed: {detail}")
@@ -37,7 +40,10 @@ def _git(*args: str, cwd: Path | None = None, check: bool = True) -> subprocess.
 
 def _validate_repo(repo: str) -> str:
     if not isinstance(repo, str) or not repo.strip():
-        raise LibraryError("missing 'kia_lib' GitHub repository in .kiui.yaml")
+        raise LibraryError(
+            "kia_lib is not configured; add a GitHub repository URL to .kiui.yaml, "
+            "for example: kia_lib: git@github.com:user/kia-skills.git"
+        )
     return repo.strip()
 
 
@@ -74,11 +80,26 @@ def _checkout(repo: str) -> Iterator[Path]:
     library_root.mkdir(parents=True, exist_ok=True)
 
     with FileLock(str(library_root / f"{key}.lock")):
-        if not root.exists():
-            _git("clone", "--quiet", repo, str(root))
-        elif not (root / ".git").is_dir():
-            raise LibraryError(f"invalid library cache: {root}")
-        _sync_checkout(root)
+        creating = not root.exists()
+        try:
+            if creating:
+                _git("clone", "--quiet", repo, str(root))
+            elif not (root / ".git").is_dir():
+                raise LibraryError(f"invalid library cache: {root}")
+            _sync_checkout(root)
+        except LibraryError as exc:
+            if creating and root.exists():
+                shutil.rmtree(root)
+            if str(exc).startswith((
+                "Git is not installed",
+                "invalid library cache",
+                "repository has no main branch",
+            )):
+                raise
+            raise LibraryError(
+                "cannot access the kia_lib repository using the current Git "
+                f"credentials: {exc}"
+            ) from exc
         yield root
 
 
@@ -113,7 +134,7 @@ def list_local_skills(
     if not skills_dir.is_dir():
         return skills, errors
 
-    for item in sorted(skills_dir.iterdir()):
+    for item in sorted(skills_dir.iterdir(), key=lambda path: path.name):
         if not item.is_dir():
             continue
         try:
@@ -132,7 +153,7 @@ def list_skills(repo: str) -> tuple[dict[str, dict], list[dict]]:
         if not skills_dir.is_dir():
             return skills, errors
 
-        for item in sorted(skills_dir.iterdir()):
+        for item in sorted(skills_dir.iterdir(), key=lambda path: path.name):
             if not item.is_dir() or item.is_symlink():
                 continue
             try:
@@ -184,6 +205,23 @@ def _same_tree(left: Path, right: Path) -> bool:
     if any(not filecmp.cmp(left / name, right / name, shallow=False) for name in comparison.common_files):
         return False
     return all(_same_tree(left / name, right / name) for name in comparison.common_dirs)
+
+
+def remove_skill(repo: str, name: str) -> str:
+    """Remove a skill from the library and return the new commit hash."""
+    if not valid_skill_name(name):
+        raise LibraryError(f"invalid skill name: {name!r}")
+
+    with _checkout(repo) as checkout:
+        dest = checkout / "skills" / name
+        if not dest.exists() and not dest.is_symlink():
+            raise LibraryError(f"skill not found in library: {name}")
+
+        _git("rm", "--quiet", "-r", "--", f"skills/{name}", cwd=checkout)
+        _git("commit", "--quiet", "-m", f"skill: remove {name}", cwd=checkout)
+        commit = _git("rev-parse", "HEAD", cwd=checkout).stdout.strip()
+        _git("push", "--quiet", "origin", "main", cwd=checkout)
+        return commit
 
 
 def upload_skill(

@@ -272,6 +272,7 @@ kib list                         # list remote names and descriptions
 kib list --local                 # list skills in ./.kia/skills
 kib install <name>               # install into ./.kia/skills/<name>
 kib upload <name>                # upload from ./.kia/skills/<name>
+kib remove <name>                # remove a remote skill
 kib upload <name> --force        # update an existing remote skill
 ```
 

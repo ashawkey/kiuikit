@@ -7,9 +7,11 @@ import pytest
 
 from kiui.agent.library import (
     LibraryError,
+    _validate_repo,
     install_skill,
     list_local_skills,
     list_skills,
+    remove_skill,
     upload_skill,
 )
 
@@ -48,6 +50,17 @@ def _seed_remote(remote: Path, tmp_path: Path, name: str = "alpha") -> None:
     upload_skill(str(remote), name, project)
 
 
+def test_missing_repo_error_explains_configuration():
+    with pytest.raises(LibraryError, match="kia_lib is not configured.*kia_lib:"):
+        _validate_repo("")
+
+
+def test_inaccessible_repo_error_is_clear(tmp_path):
+    missing = tmp_path / "does-not-exist.git"
+    with pytest.raises(LibraryError, match="cannot access the kia_lib repository"):
+        list_skills(str(missing))
+
+
 def test_cache_is_persistent_and_separated_by_repo(tmp_path):
     first = _remote(tmp_path / "first")
     second = _remote(tmp_path / "second")
@@ -60,6 +73,32 @@ def test_cache_is_persistent_and_separated_by_repo(tmp_path):
 
     list_skills(str(second))
     assert len([path for path in cache_root.iterdir() if path.is_dir()]) == 2
+
+
+def test_remote_list_is_sorted_and_marks_local_skills(monkeypatch, capsys):
+    from kiui.agent import library_cli
+
+    monkeypatch.setattr(library_cli, "_repo", lambda: "git@example.com:skills.git")
+    monkeypatch.setattr(
+        library_cli,
+        "list_skills",
+        lambda repo: (
+            {
+                "zeta": {"description": "Last"},
+                "alpha": {"description": "First"},
+            },
+            [],
+        ),
+    )
+    monkeypatch.setattr(
+        library_cli,
+        "list_local_skills",
+        lambda: ({"zeta": {"description": "Local"}}, []),
+    )
+
+    assert library_cli.main(["list"]) == 0
+    output = capsys.readouterr().out
+    assert output.index("• alpha") < output.index("• zeta (installed)")
 
 
 def test_list_local_skills_only_scans_current_project(tmp_path):
@@ -96,6 +135,24 @@ def test_upload_list_and_install_skill(tmp_path):
     assert skills["alpha"]["description"] == "Alpha description"
     assert errors == []
     assert (dest / "references" / "notes.md").read_text() == "notes"
+
+
+def test_remove_skill(tmp_path):
+    remote = _remote(tmp_path)
+    _seed_remote(remote, tmp_path)
+
+    commit = remove_skill(str(remote), "alpha")
+    skills, errors = list_skills(str(remote))
+
+    assert len(commit) == 40
+    assert skills == {}
+    assert errors == []
+
+
+def test_remove_missing_skill_fails(tmp_path):
+    remote = _remote(tmp_path)
+    with pytest.raises(LibraryError, match="not found"):
+        remove_skill(str(remote), "alpha")
 
 
 def test_install_refuses_existing_skill(tmp_path):
