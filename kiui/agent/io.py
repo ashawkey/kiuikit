@@ -181,6 +181,7 @@ class PromptBroker:
         self._terminal_asker: (
             Callable[[ActivePrompt], Awaitable[str | None]] | None
         ) = None
+        self.cancellation: CancellationToken | None = None
 
     def set_terminal_adapter(
         self,
@@ -213,6 +214,8 @@ class PromptBroker:
             # instead of failing the caller.
             while self._active is not None:
                 self._cond.wait()
+            if self.cancellation is not None and self.cancellation.cancelled:
+                return None
             self._active = prompt
         self.events.publish(
             "prompt_open",
@@ -292,8 +295,11 @@ class PromptBroker:
 class CancellationToken:
     """Operation-scoped cancellation shared by terminal and web controls."""
 
-    def __init__(self, events: EventHub):
+    def __init__(self, events: EventHub, prompts: PromptBroker | None = None):
         self.events = events
+        self.prompts = prompts
+        if prompts is not None:
+            prompts.cancellation = self
         self._event = threading.Event()
         self._lock = threading.Lock()
         self._operation_id: str | None = None
@@ -331,6 +337,10 @@ class CancellationToken:
                 return False
             active = self._operation_id
             self._event.set()
+        if self.prompts is not None:
+            prompt = self.prompts.active
+            if prompt is not None:
+                self.prompts.cancel(prompt.id, source="operation")
         self.events.publish("operation_cancelled", id=active)
         return True
 

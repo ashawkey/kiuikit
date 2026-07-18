@@ -3,9 +3,11 @@
 from types import SimpleNamespace as NS
 from unittest.mock import Mock
 
+import pytest
 from rich.markdown import Markdown
 from rich.table import Table
 
+from kiui.agent.interrupt import RequestInterrupted
 from kiui.agent.io import EventHub
 from kiui.agent.streaming import consume_stream
 from kiui.agent.ui import AgentConsole
@@ -92,9 +94,8 @@ def test_consume_stream_stops_early_on_should_stop():
         _chunk(_delta(content="b")),
         _chunk(_delta(content="c")),
     ]
-    message, _ = consume_stream(stream, on_content=parts.append, should_stop=gate)
-    # First chunk consumed (gate False), then gate True aborts before the rest.
-    assert message.content == "a"
+    with pytest.raises(RequestInterrupted):
+        consume_stream(stream, on_content=parts.append, should_stop=gate)
     assert parts == ["a"]
 
 

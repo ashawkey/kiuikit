@@ -548,28 +548,29 @@ def test_tool_artifact_names_do_not_overwrite_existing_files(tmp_path):
 
 
 def test_stream_is_closed_when_consumption_is_cancelled(monkeypatch):
-    stream = NS(close_calls=0)
+    class Stream(list):
+        close_calls = 0
 
-    def close():
-        stream.close_calls += 1
+        def close(self):
+            self.close_calls += 1
 
-    stream.close = close
-    calls = 0
+    stream = Stream()
+    client = NS(
+        close=lambda: None,
+        chat=NS(completions=NS(create=lambda **kwargs: stream)),
+    )
 
-    def interruptible(fn, cancellation):
-        nonlocal calls
-        calls += 1
-        if calls == 1:
-            return stream
+    def interruptible(fn, cancellation, on_cancel=None):
+        fn()
         raise RequestInterrupted()
 
     monkeypatch.setattr("kiui.agent.backend.run_interruptible", interruptible)
     agent = NS(
         console=_Console(),
-        client=NS(chat=NS(completions=NS(create=lambda **kwargs: stream))),
         cancellation=None,
         show_thinking=False,
         _status_suffix=lambda: "",
+        _request_client=lambda: client,
     )
 
     with pytest.raises(RequestInterrupted):

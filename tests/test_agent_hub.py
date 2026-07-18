@@ -17,7 +17,7 @@ from kiui.agent.io import CancellationToken, EventHub, InputBroker, PromptBroker
 
 
 def make_hub():
-    return Hub(token="correct-token", secret="internal-secret")
+    return Hub(token="correct-token")
 
 
 def receive_type(sock, event_type, limit=10):
@@ -331,7 +331,7 @@ def test_apply_reports_broker_failures():
     cancellation = CancellationToken(events)
     client = HubClient(
         events, inputs, prompts, cancellation,
-        host="127.0.0.1", port=1, secret="", session_id="x", meta={},
+        host="127.0.0.1", port=1, token="", session_id="x", meta={},
     )
 
     inputs.submit("first", "web")  # occupy the single input slot
@@ -363,11 +363,11 @@ def test_discover_hub_ignores_stale_file(tmp_path, monkeypatch):
     assert hubmod.discover_hub() is None  # no file
 
     dead = free_port()  # bound then released -> nothing listening
-    info_path.write_text(json.dumps({"host": "127.0.0.1", "port": dead, "secret": "s"}))
+    info_path.write_text(json.dumps({"host": "127.0.0.1", "port": dead, "token": "s"}))
     assert hubmod.discover_hub() is None  # stale: unreachable
 
     port = free_port()
-    hub = Hub(port=port, token="t", secret="s")
+    hub = Hub(port=port, token="t")
     hub.start()  # writes the (monkeypatched) info file
     try:
         got = hubmod.discover_hub()
@@ -379,7 +379,7 @@ def test_discover_hub_ignores_stale_file(tmp_path, monkeypatch):
 def test_discover_hub_retries_info_after_port_becomes_reachable(monkeypatch):
     import kiui.agent.hub as hubmod
 
-    info = {"host": "127.0.0.1", "port": 8765, "secret": "s"}
+    info = {"host": "127.0.0.1", "port": 8765, "token": "s"}
     reads = iter([None, info])
     monkeypatch.setattr(hubmod, "read_hub_info", lambda: next(reads))
     monkeypatch.setattr(hubmod, "_hub_reachable", lambda *args, **kwargs: True)
@@ -392,7 +392,7 @@ def test_hub_rejects_double_start(tmp_path, monkeypatch):
     import kiui.agent.hub as hubmod
 
     monkeypatch.setattr(hubmod, "HUB_INFO_PATH", tmp_path / "hub.json")
-    hub = Hub(port=free_port(), token="t", secret="s")
+    hub = Hub(port=free_port(), token="t")
     hub.start()
     try:
         with pytest.raises(RuntimeError, match="already started"):
@@ -413,7 +413,7 @@ def test_hubclient_uses_server_assigned_session_id():
         CancellationToken(events),
         host="127.0.0.1",
         port=1,
-        secret="s",
+        token="s",
         session_id="",
         meta={},
     )
@@ -448,7 +448,7 @@ def test_agent_link_end_to_end():
     import asyncio
 
     port = free_port()
-    hub = Hub(port=port, token="correct-token", secret="internal-secret")
+    hub = Hub(port=port, token="correct-token")
     hub.start()
 
     events = EventHub()
@@ -461,7 +461,7 @@ def test_agent_link_end_to_end():
 
     client = HubClient(
         events, inputs, prompts, cancellation,
-        host="127.0.0.1", port=port, secret="internal-secret",
+        host="127.0.0.1", port=port, token="correct-token",
         session_id="live", meta={"title": "t", "cwd": "/c", "model": "m", "host": "h"},
     )
     try:
@@ -506,7 +506,7 @@ def test_two_sessions_stream_concurrently():
 
     port = free_port()
     base = f"http://127.0.0.1:{port}"
-    hub = Hub(port=port, token="correct-token", secret="internal-secret")
+    hub = Hub(port=port, token="correct-token")
     hub.start()
 
     def make_agent(sid):
@@ -516,7 +516,7 @@ def test_two_sessions_stream_concurrently():
         cancellation = CancellationToken(events)
         client = HubClient(
             events, inputs, prompts, cancellation,
-            host="127.0.0.1", port=port, secret="internal-secret",
+            host="127.0.0.1", port=port, token="correct-token",
             session_id=sid, meta={"title": sid, "cwd": "/", "model": "m", "host": "h"},
         )
         client.start()
@@ -574,19 +574,47 @@ def test_two_sessions_stream_concurrently():
         hub.stop()
 
 
-def test_agent_link_rejects_wrong_secret():
+def test_agent_reconnect_rejects_old_socket_events():
+    import asyncio
+
+    class Socket:
+        def __init__(self, messages):
+            self.messages = iter(messages)
+            self.closed = []
+
+        async def receive_json(self):
+            return next(self.messages)
+
+        async def close(self, **kwargs):
+            self.closed.append(kwargs)
+
+    hub = make_hub()
+    session = hub.register("same", {})
+    old = Socket([{
+        "type": "event",
+        "event": {"type": "system", "data": {"text": "stale"}},
+    }])
+    new = Socket([])
+    session.agent_ws = new
+    asyncio.run(hub._serve_agent(old, session))
+
+    assert old.closed
+    assert session.events.latest_seq == 0
+
+
+def test_agent_link_rejects_wrong_token():
     websockets = pytest.importorskip("websockets")
     import asyncio
 
     port = free_port()
-    hub = Hub(port=port, token="correct-token", secret="internal-secret")
+    hub = Hub(port=port, token="correct-token")
     hub.start()
 
     async def attempt():
         uri = f"ws://127.0.0.1:{port}/internal/agent"
         async with websockets.connect(uri) as ws:
             await ws.send(json.dumps({
-                "type": "register", "secret": "WRONG",
+                "type": "register", "token": "WRONG",
                 "session_id": "x", "meta": {},
             }))
             await ws.recv()  # should close before a 'registered' ack

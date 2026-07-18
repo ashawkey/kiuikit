@@ -8,6 +8,7 @@ snapshots or fragile ignore rules.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,7 +21,7 @@ from kiui.agent.ui import AgentConsole
 class ChangeRecord:
     """One file modification that can be undone."""
     round_id: int
-    path: str          # relative to work_dir
+    path: str          # work-dir-relative when possible, otherwise absolute
     op: str            # "write" | "edit" | "remove"
     # For write / edit: original content (None = file didn't exist)
     original_content: str | None = None
@@ -81,9 +82,19 @@ class ChangeTracker:
     # Track individual file operations  (call BEFORE the tool acts)
     # ------------------------------------------------------------------
 
+    def _record_path(self, path: str | Path) -> tuple[Path, str]:
+        candidate = Path(path)
+        abs_path = candidate if candidate.is_absolute() else self.work_dir / candidate
+        abs_path = Path(os.path.abspath(abs_path))
+        try:
+            stored = str(abs_path.relative_to(self.work_dir))
+        except ValueError:
+            stored = str(abs_path)
+        return abs_path, stored
+
     def track_write(self, round_id: int, path: str, content: str = ""):
         """Capture *path* content before it is overwritten / created."""
-        abs_path = self.work_dir / path
+        abs_path, stored_path = self._record_path(path)
         original = None
         if abs_path.exists() and abs_path.is_file():
             try:
@@ -91,7 +102,7 @@ class ChangeTracker:
             except (OSError, UnicodeDecodeError):
                 original = None
         self._log.append(ChangeRecord(
-            round_id=round_id, path=path, op="write",
+            round_id=round_id, path=stored_path, op="write",
             original_content=original,
             new_content=content,
         ))
@@ -102,8 +113,9 @@ class ChangeTracker:
         Callers pass the actual applied result (which may differ from a naive
         ``str.replace`` due to tolerant matching or multi-edit).
         """
+        _, stored_path = self._record_path(path)
         self._log.append(ChangeRecord(
-            round_id=round_id, path=path, op="edit",
+            round_id=round_id, path=stored_path, op="edit",
             original_content=original_content,
             new_content=new_content,
         ))
@@ -111,7 +123,7 @@ class ChangeTracker:
 
     def track_remove(self, round_id: int, path: str):
         """Back up *path* before it is deleted."""
-        abs_path = self.work_dir / path
+        abs_path, stored_path = self._record_path(path)
         backup_path = None
         was_dir = False
 
@@ -135,7 +147,7 @@ class ChangeTracker:
                     return
 
         self._log.append(ChangeRecord(
-            round_id=round_id, path=path, op="remove",
+            round_id=round_id, path=stored_path, op="remove",
             backup_path=backup_path, was_dir=was_dir,
         ))
 

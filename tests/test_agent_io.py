@@ -269,6 +269,27 @@ def test_operation_context_always_finishes():
     ]
 
 
+def test_cancellation_releases_active_prompt():
+    events = EventHub()
+    prompts = PromptBroker(events)
+    cancellation = CancellationToken(events, prompts)
+    operation_id = cancellation.begin("tool")
+    result = []
+    thread = threading.Thread(
+        target=lambda: result.append(prompts.ask("confirm", "Run tool?"))
+    )
+    thread.start()
+    for _ in range(100):
+        if prompts.active is not None:
+            break
+        time.sleep(0.01)
+
+    assert cancellation.cancel(operation_id)
+    thread.join(timeout=2)
+    assert not thread.is_alive()
+    assert result == [None]
+
+
 def test_change_tracker_close_persists_resumable_log(tmp_path, monkeypatch):
     from kiui.agent.rewind import ChangeTracker
 

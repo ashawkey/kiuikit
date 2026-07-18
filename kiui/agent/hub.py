@@ -508,7 +508,10 @@ class Hub:
             if not isinstance(meta, dict):
                 meta = {}
             session = self.register(session_id, meta)
+            previous_ws = session.agent_ws
             session.agent_ws = websocket
+            if previous_ws is not None and previous_ws is not websocket:
+                await previous_ws.close(code=4000, reason="Replaced by reconnect")
             await websocket.send_json({"type": "registered", "session_id": session_id})
             try:
                 await self._serve_agent(websocket, session)
@@ -569,6 +572,9 @@ class Hub:
             message = await websocket.receive_json()
             if not isinstance(message, dict):
                 continue
+            if session.agent_ws is not websocket:
+                await websocket.close(code=4000, reason="Stale agent connection")
+                return
             if message.get("type") == "event":
                 event = message.get("event")
                 if isinstance(event, dict):

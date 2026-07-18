@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Iterable
 
+from kiui.agent.interrupt import RequestInterrupted
 from openai.types.chat.chat_completion_message import ChatCompletionMessage
 from openai.types.chat.chat_completion_message_tool_call import (
     ChatCompletionMessageToolCall,
@@ -80,8 +81,7 @@ def consume_stream(
     """Fold a streamed chat completion into ``(message, usage)``.
 
     Callbacks fire synchronously as chunks arrive. If *should_stop* returns
-    True the stream is abandoned and whatever has accumulated so far is
-    returned, letting the caller treat cancellation as a partial response.
+    true, cancellation is raised so a partial response cannot enter context.
     """
     content_parts: list[str] = []
     reasoning_parts: list[str] = []
@@ -91,7 +91,7 @@ def consume_stream(
 
     for chunk in stream:
         if should_stop is not None and should_stop():
-            break
+            raise RequestInterrupted()
 
         # The final usage-only chunk (stream_options.include_usage) has no
         # choices; capture it and continue.
@@ -124,6 +124,9 @@ def consume_stream(
                     acc = _ToolCallAccumulator()
                     tool_calls[tc_delta.index] = acc
                 acc.update(tc_delta)
+
+    if should_stop is not None and should_stop():
+        raise RequestInterrupted()
 
     content = "".join(content_parts)
     reasoning = "".join(reasoning_parts)

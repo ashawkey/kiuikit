@@ -87,7 +87,7 @@ def get_agent(args: Args) -> "tuple[LLMAgent | None, HubClient | None]":
         events = EventHub()
         inputs = InputBroker(events)
         prompts = PromptBroker(events)
-        cancellation = CancellationToken(events)
+        cancellation = CancellationToken(events, prompts)
         console = AgentConsole(events=events)
 
         cwd = os.getcwd()

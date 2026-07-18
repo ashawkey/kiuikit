@@ -3,6 +3,7 @@
 import os
 from typing import Any
 
+from kiui.agent.io import CancellationToken
 from kiui.agent.ui import AgentConsole
 
 
@@ -15,11 +16,13 @@ class SubagentManager:
         reasoning_effort: str = "high",
         max_depth: int = 3,
         console: AgentConsole | None = None,
+        parent_cancellation: CancellationToken | None = None,
     ):
         self.model_alias = model_alias
         self.reasoning_effort = reasoning_effort
         self.max_depth = max_depth
         self.console = console or AgentConsole()
+        self.parent_cancellation = parent_cancellation
         self._depth = int(os.environ.get("KIA_SPAWN_DEPTH", "0"))
 
     def spawn(
@@ -69,10 +72,19 @@ class SubagentManager:
                 is_subagent=True,
                 work_dir=work_dir,
                 console=self.console,
+                events=self.parent_cancellation.events if self.parent_cancellation else None,
+                cancellation=self.parent_cancellation,
             )
-            response = agent.execute(task)
+            response = agent.execute(task, manage_operation=False)
 
             self.console.system(f"── sub-agent '{label}' finished ──")
+
+            if agent._last_interrupted:
+                return {
+                    "error": "Sub-agent interrupted by user.",
+                    "success": False,
+                    "interrupted": True,
+                }
 
             summary = response[:2000] if response else ""
             return {

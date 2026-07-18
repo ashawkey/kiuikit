@@ -4,11 +4,10 @@ Covers the "agent is busy" phase — while we wait for the LLM (or sleep
 during retry backoff).  The user can press **ESC** or **Ctrl+C** to cancel
 the in-flight request and return to the prompt.
 
-How it works: the blocking call runs in a daemon worker thread while the
-main thread watches the keyboard.  On a cancel key we raise
-``RequestInterrupted`` and abandon the worker.  Abandoning means the HTTP
-request keeps running until the server replies and is then discarded — fine
-for an interactive CLI (the OpenAI client owns its own connection pool).
+How it works: the blocking call runs in a worker thread while the main thread
+watches the keyboard. Cancellation runs an optional callback (for example,
+closing an HTTP client), briefly waits for cleanup, then raises
+``RequestInterrupted``.
 
 The user-input phase (Ctrl+C clears prompt / double-tap quits) is handled
 separately by prompt_toolkit key bindings in ``terminal.py``.
@@ -129,7 +128,9 @@ class CancelWatcher:
 
 
 def run_interruptible(
-    fn: Callable[[], T], cancellation: CancellationToken | None = None
+    fn: Callable[[], T],
+    cancellation: CancellationToken | None = None,
+    on_cancel: Callable[[], None] | None = None,
 ) -> T:
     """Run blocking *fn* while watching for ESC / Ctrl+C.
 
@@ -152,7 +153,8 @@ def run_interruptible(
         finally:
             done.set()
 
-    threading.Thread(target=worker, daemon=True).start()
+    worker_thread = threading.Thread(target=worker, daemon=True)
+    worker_thread.start()
 
     stop = threading.Event()
     cancelled = {"flag": False}
@@ -180,12 +182,16 @@ def run_interruptible(
         if w is not None:
             w.join(timeout=0.3)  # let posix restore terminal mode before we return
 
-    # Worker results win over a simultaneous cancel.
-    if "value" in result:
-        return result["value"]  # type: ignore[return-value]
+    if cancelled["flag"]:
+        if on_cancel is not None:
+            try:
+                on_cancel()
+            except Exception:
+                pass
+        worker_thread.join(timeout=0.5)
+        raise RequestInterrupted()
+
+    worker_thread.join()
     if "error" in result:
         raise result["error"]  # type: ignore[misc]
-    if cancelled["flag"]:
-        raise RequestInterrupted()
-    # Shouldn't happen, but don't hang the caller.
-    raise RequestInterrupted()
+    return result["value"]  # type: ignore[return-value]

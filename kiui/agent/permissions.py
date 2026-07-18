@@ -175,9 +175,12 @@ class SafetyGuard:
         destructive shell commands, critical rm/chmod patterns, etc.
         """
         if tool_name == "exec_command":
-            return self._check_command(
-                arguments.get("command", ""), arguments.get("cwd")
-            )
+            cwd = arguments.get("cwd")
+            if cwd:
+                cwd = os.path.expanduser(cwd)
+                if not os.path.isabs(cwd):
+                    cwd = os.path.join(self._work_dir, cwd)
+            return self._check_command(arguments.get("command", ""), cwd)
         if tool_name in ("write_file", "edit_file", "multi_edit"):
             path = arguments.get("file", "")
             if path and self._is_device_path(path):

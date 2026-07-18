@@ -877,14 +877,12 @@ def history(user: Optional[str] = None, days: int = 3, all_users: bool = False):
     table.add_column("End")
     table.add_column("Elapsed")
 
-    for line in lines:
-        parts = line.strip().split("|")
-        # Ensure we have enough parts. 
-        # JobID|JobName|Partition|User|State|ExitCode|Start|End|Elapsed
-        if len(parts) < 9:
-            continue
-            
-        jobid, name, partition, username, state, exitcode, start, end, elapsed = parts[:9]
+    rows = [line.strip().split("|")[:9] for line in lines]
+    rows = [row for row in rows if len(row) == 9]
+    rows.sort(key=lambda row: (row[7] in ("", "Unknown"), row[7]))
+
+    for row in rows:
+        jobid, name, partition, username, state, exitcode, start, end, elapsed = row
 
         # Colorize state
         state_first = state.split()[0]

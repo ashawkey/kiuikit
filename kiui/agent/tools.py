@@ -1,6 +1,7 @@
 """Built-in tool definitions and executor for kiui agent."""
 
 import codecs
+import ipaddress
 import json
 import locale
 import os
@@ -10,6 +11,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import socket
 import threading
 import time
 from collections import deque
@@ -47,6 +49,8 @@ MAX_STREAMING_BUFFER_CHARS = 1_000_000
 MAX_EXEC_ARTIFACT_BYTES = 100 * 1024 * 1024
 EXEC_READER_JOIN_TIMEOUT = 5
 MAX_WEB_FETCH_CHARS = 20_000
+MAX_WEB_FETCH_BYTES = 2 * 1024 * 1024
+MAX_WEB_REDIRECTS = 5
 MAX_GLOB_RESULTS = 500
 MAX_GREP_MATCHES = 200
 
@@ -54,6 +58,38 @@ _SKIP_DIRS = frozenset({
     ".git", "node_modules", "__pycache__", ".venv", "venv",
     ".tox", "dist", "build", ".mypy_cache", ".pytest_cache",
 })
+_IPV6_TRANSITION_NETWORKS = (
+    ipaddress.ip_network("64:ff9b::/96"),
+    ipaddress.ip_network("64:ff9b:1::/48"),
+    ipaddress.ip_network("2001::/32"),  # Teredo
+    ipaddress.ip_network("2002::/16"),  # 6to4
+)
+
+
+def _resolve_public_addresses(host: str, port: int) -> tuple[str, ...]:
+    """Resolve *host* and reject any result that is not globally routable."""
+    addresses: list[str] = []
+    for family, _, _, _, sockaddr in socket.getaddrinfo(
+        host, port, type=socket.SOCK_STREAM
+    ):
+        if family not in (socket.AF_INET, socket.AF_INET6):
+            continue
+        address = ipaddress.ip_address(sockaddr[0].split("%", 1)[0])
+        if (
+            not address.is_global
+            or address.is_multicast
+            or (
+                isinstance(address, ipaddress.IPv6Address)
+                and any(address in network for network in _IPV6_TRANSITION_NETWORKS)
+            )
+        ):
+            raise ValueError(f"destination resolves to non-public address {address}")
+        value = str(address)
+        if value not in addresses:
+            addresses.append(value)
+    if not addresses:
+        raise ValueError("destination has no public IP address")
+    return tuple(addresses)
 
 
 def _decode_bytes(b: bytes | None) -> str:
@@ -515,7 +551,7 @@ class ToolExecutor:
         self.console = console or AgentConsole()
         self.cancellation = cancellation
         self.subagent_manager = subagent_manager
-        self._work_dir = work_dir
+        self._work_dir = str(Path(work_dir).absolute()) if work_dir else str(Path.cwd())
         self._change_tracker = change_tracker
         self._get_round_id = get_round_id  # callable → int
         self._skills = skills or {}
@@ -528,11 +564,24 @@ class ToolExecutor:
         # Consumed by LLMAgent after each goal-check round.
         self._goal_report: dict | None = None
 
+    def _resolve_path(self, path: str | os.PathLike[str]) -> Path:
+        """Resolve a caller path lexically against the executor's work directory."""
+        candidate = Path(path).expanduser()
+        if not candidate.is_absolute():
+            candidate = Path(self._work_dir) / candidate
+        return Path(os.path.abspath(candidate))
+
     def execute(self, function_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Dispatch and execute a tool call. Returns dict with success key."""
         method_name = self._DISPATCH_MAP.get(function_name)
         if not method_name:
             return {"error": f"Unknown tool: {function_name}", "success": False}
+        if self.cancellation is not None and self.cancellation.cancelled:
+            return {
+                "error": "Tool call skipped: the user interrupted the turn.",
+                "success": False,
+                "interrupted": True,
+            }
         try:
             return getattr(self, method_name)(**arguments)
         except Exception as e:
@@ -542,7 +591,7 @@ class ToolExecutor:
         """Read file contents with optional offset and limit."""
         self.console.tool(f"read_file {file} (offset={offset}, limit={limit})")
 
-        file_path = Path(file)
+        file_path = self._resolve_path(file)
         if not file_path.exists():
             return {"error": f"File not found: {file}", "success": False}
         if not file_path.is_file():
@@ -583,10 +632,10 @@ class ToolExecutor:
         """Write content to file, creating parent directories."""
         self.console.tool(f"write_file {file}")
 
+        file_path = self._resolve_path(file)
         if self._change_tracker and self._get_round_id:
-            self._change_tracker.track_write(self._get_round_id(), file, content)
+            self._change_tracker.track_write(self._get_round_id(), str(file_path), content)
 
-        file_path = Path(file)
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(content)
@@ -607,7 +656,7 @@ class ToolExecutor:
         """Make a surgical edit to a file (whitespace-tolerant matching)."""
         self.console.tool(f"edit_file {file}")
 
-        file_path = Path(file)
+        file_path = self._resolve_path(file)
         if not file_path.exists():
             return {"error": f"File not found: {file}", "success": False}
         if not file_path.is_file():
@@ -624,7 +673,7 @@ class ToolExecutor:
 
         original = content.replace("\r\n", "\n").replace("\r", "\n")
         if self._change_tracker and self._get_round_id:
-            self._change_tracker.track_edit_result(self._get_round_id(), file, original, new_content)
+            self._change_tracker.track_edit_result(self._get_round_id(), str(file_path), original, new_content)
 
         file_path.write_text(new_content, encoding="utf-8")
 
@@ -652,7 +701,7 @@ class ToolExecutor:
 
         self.console.tool(f"multi_edit {file} ({len(edits)} edits)")
 
-        file_path = Path(file)
+        file_path = self._resolve_path(file)
         if not file_path.exists():
             return {"error": f"File not found: {file}", "success": False}
         if not file_path.is_file():
@@ -698,7 +747,7 @@ class ToolExecutor:
             })
 
         if self._change_tracker and self._get_round_id:
-            self._change_tracker.track_edit_result(self._get_round_id(), file, original, working)
+            self._change_tracker.track_edit_result(self._get_round_id(), str(file_path), original, working)
 
         file_path.write_text(working, encoding="utf-8")
 
@@ -715,7 +764,7 @@ class ToolExecutor:
         """List a directory's immediate contents (gitignore-aware)."""
         self.console.tool(f"ls {path or '.'}" + (" (all)" if all else ""))
 
-        base = Path(path) if path else Path(self._work_dir or Path.cwd())
+        base = self._resolve_path(path or ".")
         if not base.exists():
             return {"error": f"Path not found: {path}", "success": False}
         if not base.is_dir():
@@ -775,8 +824,8 @@ class ToolExecutor:
         processes; the returned result keeps trailing output from both streams,
         reserving up to half its character budget for stderr.
         """
-        cwd = cwd or self._work_dir
-        self.console.tool(f"exec_command: {command} (cwd={cwd or os.getcwd()})")
+        cwd = str(self._resolve_path(cwd or "."))
+        self.console.tool(f"exec_command: {command} (cwd={cwd})")
 
         artifact_file = tempfile.NamedTemporaryFile(
             mode="w", encoding="utf-8", prefix="kia-exec-", suffix=".txt", delete=False
@@ -965,7 +1014,7 @@ class ToolExecutor:
         """Find files matching a glob pattern (gitignore-aware)."""
         self.console.tool(f"glob_files {pattern} (recursive={recursive})")
 
-        base = Path(base_dir or self._work_dir or Path.cwd())
+        base = self._resolve_path(base_dir or ".")
         if not base.is_dir():
             return {"error": f"Not a directory: {base}", "success": False}
 
@@ -1029,7 +1078,7 @@ class ToolExecutor:
             parts.append("(case-insensitive)")
         self.console.tool(" ".join(parts))
 
-        base = Path(path) if path else Path(self._work_dir or Path.cwd())
+        base = self._resolve_path(path or ".")
 
         if shutil.which("rg"):
             return self._grep_ripgrep(pattern, base, file_glob, case_insensitive)
@@ -1193,24 +1242,85 @@ class ToolExecutor:
             return {"error": f"Search failed: {e}", "success": False}
 
     def _web_fetch(self, url: str) -> dict[str, Any]:
-        """Fetch URL content and convert to readable text."""
+        """Fetch public HTTP(S) content with bounded redirects and bytes."""
         self.console.tool(f"web_fetch: {url}")
         try:
+            import httpcore
             import httpx
             from bs4 import BeautifulSoup
         except ImportError:
             return {"error": "web_fetch requires httpx and beautifulsoup4: pip install httpx beautifulsoup4", "success": False}
 
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        current = httpx.URL(url)
+        final_url = current
+        body = b""
         try:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            }
-            response = httpx.get(url, headers=headers, timeout=30.0, follow_redirects=True)
-            response.raise_for_status()
+            for redirect_count in range(MAX_WEB_REDIRECTS + 1):
+                if current.scheme not in ("http", "https") or not current.host:
+                    raise ValueError("only absolute HTTP(S) URLs are allowed")
+                if current.userinfo:
+                    raise ValueError("URL credentials are not allowed")
+
+                port = current.port or (443 if current.scheme == "https" else 80)
+                addresses = _resolve_public_addresses(current.host, port)
+
+                class PinnedBackend(httpcore.SyncBackend):
+                    def connect_tcp(self, host, port, **kwargs):
+                        last_error = None
+                        for address in addresses:
+                            try:
+                                return super().connect_tcp(address, port, **kwargs)
+                            except Exception as exc:
+                                last_error = exc
+                        assert last_error is not None
+                        raise last_error
+
+                pool = httpcore.ConnectionPool(
+                    ssl_context=httpx.create_ssl_context(trust_env=False),
+                    network_backend=PinnedBackend(),
+                )
+                transport = httpx.HTTPTransport()
+                transport._pool = pool
+                try:
+                    with httpx.Client(transport=transport, trust_env=False) as client:
+                        with client.stream(
+                            "GET", current, headers=headers, timeout=30.0
+                        ) as response:
+                            if response.status_code in (301, 302, 303, 307, 308):
+                                location = response.headers.get("location")
+                                if not location:
+                                    raise ValueError("redirect response has no Location header")
+                                if redirect_count == MAX_WEB_REDIRECTS:
+                                    raise ValueError("too many redirects")
+                                current = current.join(location)
+                                continue
+                            response.raise_for_status()
+                            chunks = []
+                            size = 0
+                            for chunk in response.iter_bytes():
+                                size += len(chunk)
+                                if size > MAX_WEB_FETCH_BYTES:
+                                    raise ValueError(
+                                        f"response exceeds {MAX_WEB_FETCH_BYTES} bytes"
+                                    )
+                                chunks.append(chunk)
+                            body = b"".join(chunks)
+                            final_url = current
+                            encoding = response.encoding or "utf-8"
+                            break
+                finally:
+                    transport.close()
+            else:  # pragma: no cover - loop always breaks or raises
+                raise ValueError("too many redirects")
         except Exception as e:
             return {"error": f"Failed to fetch URL: {e}", "success": False}
 
-        soup = BeautifulSoup(response.text, "html.parser")
+        text_body = body.decode(encoding, errors="replace")
+        soup = BeautifulSoup(text_body, "html.parser")
         for tag in soup(["script", "style"]):
             tag.decompose()
 
@@ -1228,18 +1338,18 @@ class ToolExecutor:
         if truncated:
             content += f"\n[output truncated: showing first {MAX_WEB_FETCH_CHARS} of {len(text)} chars]"
 
-        return {"content": content, "url": url, "success": True}
+        return {"content": content, "url": str(final_url), "success": True}
 
     def _remove_file(self, file: str) -> dict[str, Any]:
         """Remove a file or directory."""
         self.console.tool(f"remove_file {file}")
 
-        if self._change_tracker and self._get_round_id:
-            self._change_tracker.track_remove(self._get_round_id(), file)
-
-        target = Path(file)
+        target = self._resolve_path(file)
         if not target.exists():
             return {"error": f"Path not found: {file}", "success": False}
+
+        if self._change_tracker and self._get_round_id:
+            self._change_tracker.track_remove(self._get_round_id(), str(target))
 
         if target.is_dir():
             shutil.rmtree(target)
@@ -1259,7 +1369,7 @@ class ToolExecutor:
         if not task:
             return {"error": "task is required.", "success": False}
 
-        return self.subagent_manager.spawn(task=task)
+        return self.subagent_manager.spawn(task=task, cwd=self._work_dir)
 
     # ── Skill tool ────────────────────────────────────────────
 

@@ -3,6 +3,7 @@ import json
 import os
 import queue
 import re
+import threading
 import time
 from contextlib import nullcontext
 from pathlib import Path
@@ -155,6 +156,9 @@ class LLMAgent:
         self.input_broker = input_broker
         self.prompt_broker = prompt_broker
         self.cancellation = cancellation
+        if self.cancellation is not None and self.prompt_broker is not None:
+            self.cancellation.prompts = self.prompt_broker
+            self.prompt_broker.cancellation = self.cancellation
         self.console = console or AgentConsole(events=events)
 
         if self.prompt_broker is not None:
@@ -194,8 +198,8 @@ class LLMAgent:
         # single, sequential level deep and always returns.
         self.is_subagent = is_subagent
         self.exec_mode = exec_mode
-        self.work_dir = work_dir
-        self.system_prompt = build_system_prompt(exec_mode=exec_mode, is_subagent=is_subagent, work_dir=work_dir, skills=self.skills)
+        self.work_dir = str(Path(work_dir).absolute()) if work_dir else str(Path.cwd())
+        self.system_prompt = build_system_prompt(exec_mode=exec_mode, is_subagent=is_subagent, work_dir=self.work_dir, skills=self.skills)
         if not is_subagent:
             self._report_skills_summary()
         self.tools = get_tool_definitions(include_subagent=not is_subagent)
@@ -203,7 +207,7 @@ class LLMAgent:
         self.permissions = PermissionController(
             mode=permission_mode,
             console=self.console,
-            work_dir=work_dir,
+            work_dir=self.work_dir,
         )
 
         # subagent manager (only for top-level agents with a model_alias;
@@ -213,6 +217,7 @@ class LLMAgent:
                 model_alias=model_alias,
                 reasoning_effort=reasoning_effort,
                 console=self.console,
+                parent_cancellation=cancellation,
             )
             if model_alias and not is_subagent
             else None
@@ -221,7 +226,7 @@ class LLMAgent:
         self.tool_executor = ToolExecutor(
             console=self.console,
             subagent_manager=self.subagent_manager,
-            work_dir=work_dir,
+            work_dir=self.work_dir,
             skills=self.skills,
             cancellation=cancellation,
         )
@@ -280,9 +285,10 @@ class LLMAgent:
         )
 
     def _interruptible_sleep(self, seconds: float):
-        # Watch the keyboard during backoff so ESC/Ctrl+C cancels the wait
-        # too (raises RequestInterrupted, which call_api lets propagate).
-        run_interruptible(lambda: time.sleep(seconds), self.cancellation)
+        stop = threading.Event()
+        run_interruptible(
+            lambda: stop.wait(seconds), self.cancellation, on_cancel=stop.set
+        )
 
     def _operation(self, label: str):
         if self.cancellation is None:
@@ -312,19 +318,28 @@ class LLMAgent:
                 before_tokens = self.token_estimator.chars_to_tokens(before_chars)
                 self.console.system("Context window pressure — compacting via LLM summarization")
                 t_compact = time.monotonic()
-                with self.console.thinking(
-                    label="Compacting",
-                    progress=True,
-                    status_suffix=f"{before_msgs} messages, ~{before_tokens:,} tokens",
-                ):
-                    self.context.replace_messages(
-                        compact_context(
-                            self.context.messages, self.client, self.model,
-                            console=self.console,
-                            context_length=self.context_length,
-                            chars_per_token=cpt,
+                compact_client = self._request_client()
+                try:
+                    with self.console.thinking(
+                        label="Compacting",
+                        progress=True,
+                        status_suffix=f"{before_msgs} messages, ~{before_tokens:,} tokens",
+                    ):
+                        compacted = run_interruptible(
+                            lambda: compact_context(
+                                self.context.messages, compact_client, self.model,
+                                console=self.console,
+                                context_length=self.context_length,
+                                chars_per_token=cpt,
+                            ),
+                            self.cancellation,
+                            on_cancel=compact_client.close,
                         )
-                    )
+                finally:
+                    compact_client.close()
+                if self.cancellation is not None and self.cancellation.cancelled:
+                    raise RequestInterrupted()
+                self.context.replace_messages(compacted)
                 compact_elapsed = time.monotonic() - t_compact
                 after_chars = estimate_context_chars(self.context.messages)
                 after_msgs = len(self.context.messages)
@@ -385,6 +400,9 @@ class LLMAgent:
                 wait_time = min(wait_time * 2, self.MAX_BACKOFF)
         api_elapsed = time.monotonic() - t_api
 
+        if self.cancellation is not None and self.cancellation.cancelled:
+            raise RequestInterrupted()
+
         self._accumulate_usage(usage)
         self.token_estimator.calibrate(
             estimate_context_chars(messages), usage.prompt_tokens
@@ -406,13 +424,25 @@ class LLMAgent:
 
 
 
+    def _request_client(self):
+        return OpenAI(
+            api_key=self._api_key,
+            base_url=self._base_url,
+            max_retries=0,
+        )
+
     def _blocking_completion(self, kwargs: dict):
         """Non-streaming call: show a spinner, return ``(message, usage)``."""
-        with self.console.thinking(status_suffix=self._status_suffix()):
-            response = run_interruptible(
-                lambda: self.client.chat.completions.create(**kwargs),
-                self.cancellation,
-            )
+        client = self._request_client()
+        try:
+            with self.console.thinking(status_suffix=self._status_suffix()):
+                response = run_interruptible(
+                    lambda: client.chat.completions.create(**kwargs),
+                    self.cancellation,
+                    on_cancel=client.close,
+                )
+        finally:
+            client.close()
         return response.choices[0].message, response.usage
 
     def _stream_completion(self, kwargs: dict):
@@ -422,35 +452,31 @@ class LLMAgent:
         interruptible. Fragments are sent to web clients immediately, while
         terminal Markdown is rendered once after the response is complete.
         """
-        result: dict[str, Any] = {}
+        client = self._request_client()
 
         with self.console.stream_response(show_thinking=self.show_thinking) as sink:
             with self.console.thinking(status_suffix=self._status_suffix()):
-                stream = run_interruptible(
-                    lambda: self.client.chat.completions.create(**kwargs),
-                    self.cancellation,
-                )
-
-                def consume():
-                    message, usage = consume_stream(
-                        stream,
-                        on_content=sink.on_content,
-                        on_thinking=sink.on_thinking,
-                        should_stop=lambda: (
-                            self.cancellation is not None and self.cancellation.cancelled
-                        ),
-                    )
-                    result["message"] = message
-                    result["usage"] = usage
+                def request():
+                    stream = client.chat.completions.create(**kwargs)
+                    try:
+                        return consume_stream(
+                            stream,
+                            on_content=sink.on_content,
+                            on_thinking=sink.on_thinking,
+                            should_stop=lambda: (
+                                self.cancellation is not None
+                                and self.cancellation.cancelled
+                            ),
+                        )
+                    finally:
+                        stream.close()
 
                 try:
-                    run_interruptible(consume, self.cancellation)
-                except RequestInterrupted:
-                    stream.close()
-                    raise
-
-        message = result["message"]
-        usage = result["usage"]
+                    message, usage = run_interruptible(
+                        request, self.cancellation, on_cancel=client.close
+                    )
+                finally:
+                    client.close()
         if usage is None:
             # Some proxies omit the usage chunk; fall back to an estimate so
             # accounting/calibration still works.
@@ -489,8 +515,10 @@ class LLMAgent:
         for i, tool_call in enumerate(tool_calls):
             function_name = tool_call.function.name
 
-            # A user cancel during an earlier tool aborts the whole round; fill
-            # the remaining calls with a skipped result to keep the context valid.
+            # A user cancel aborts the whole round; fill remaining calls with
+            # skipped results to keep assistant/tool pairing valid.
+            if self.cancellation is not None and self.cancellation.cancelled:
+                interrupted = True
             if interrupted:
                 self.context.add({
                     "role": "tool",
@@ -508,9 +536,24 @@ class LLMAgent:
             if self.verbose:
                 self.console.debug(f"Tool call {i+1}/{len(tool_calls)}: {function_name}({function_args})")
 
+            if self.cancellation is not None and self.cancellation.cancelled:
+                interrupted = True
+                self.context.add({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": "Tool call skipped: the user interrupted the turn.",
+                })
+                continue
+
             allowed, denial_reason = self.permissions.check(function_name, function_args)
             t_exec = time.monotonic()
-            if not allowed:
+            if self.cancellation is not None and self.cancellation.cancelled:
+                result = {
+                    "error": "Tool call skipped: the user interrupted the turn.",
+                    "success": False,
+                    "interrupted": True,
+                }
+            elif not allowed:
                 msg = f"Tool call denied: {function_name}"
                 if denial_reason:
                     msg += f"\nReason: {denial_reason}"
@@ -1800,7 +1843,7 @@ class LLMAgent:
                 self.changes.close()
             self._print_token_summary()
         
-    def execute(self, query: str):
+    def execute(self, query: str, *, manage_operation: bool = True):
         self.console.system(f"Executing query: {query}")
         t0 = time.time()
 
@@ -1824,7 +1867,8 @@ class LLMAgent:
 
         self.console.rule()
 
-        with self._operation("agent response"):
+        operation = self._operation("agent response") if manage_operation else nullcontext()
+        with operation:
             response = self.get_response()
 
         t1 = time.time()

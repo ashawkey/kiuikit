@@ -17,6 +17,7 @@ from kiui.agent.tools import (
     format_tool_result,
 )
 from kiui.agent.gitignore import build_gitignore_matcher
+from kiui.agent.permissions import SafetyGuard
 
 
 class _SilentConsole:
@@ -107,6 +108,54 @@ def test_gitignore_matcher(repo):
 
 
 # ----- file / ls / glob / multi_edit tools --------------------------------
+
+
+def test_relative_paths_resolve_against_work_dir(tmp_path, monkeypatch):
+    process_cwd = tmp_path / "cwd"
+    work_dir = tmp_path / "work"
+    process_cwd.mkdir()
+    work_dir.mkdir()
+    monkeypatch.chdir(process_cwd)
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(work_dir))
+
+    assert te._write_file("nested/a.txt", "one")["success"]
+    assert (work_dir / "nested/a.txt").read_text() == "one"
+    assert not (process_cwd / "nested/a.txt").exists()
+    assert te._edit_file("nested/a.txt", "one", "two")["success"]
+    assert te._multi_edit(
+        "nested/a.txt", [{"old_text": "two", "new_text": "three"}]
+    )["success"]
+    assert te._read_file("nested/a.txt")["content"] == "three"
+    assert "a.txt" in te._ls("nested")["content"]
+    assert te._glob_files("*.txt", base_dir="nested")["count"] == 1
+    assert te._grep_files("three", path="nested")["count"] == 1
+    assert te._exec_command("pwd", cwd="nested")["stdout"].strip() == str(
+        work_dir / "nested"
+    )
+    guard = SafetyGuard(work_dir="/tmp/job")
+    safe, _ = guard.check(
+        "exec_command", {"command": "rm -rf .", "cwd": "../../etc"}
+    )
+    assert not safe
+    safe, _ = guard.check(
+        "exec_command", {"command": "chmod -R 000 .", "cwd": "~"}
+    )
+    assert not safe
+    assert te._remove_file("nested/a.txt")["success"]
+    assert not (work_dir / "nested/a.txt").exists()
+
+
+def test_web_fetch_rejects_non_public_destinations():
+    te = ToolExecutor(console=_SilentConsole())
+    for url in (
+        "file:///etc/passwd",
+        "http://127.0.0.1/",
+        "http://2130706433/",
+        "http://[::1]/",
+        "http://169.254.169.254/latest/meta-data/",
+    ):
+        result = te._web_fetch(url)
+        assert not result["success"], url
 
 
 def test_read_file_logs_offset_and_limit(tmp_path):
