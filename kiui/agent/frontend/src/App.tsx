@@ -50,6 +50,7 @@ function SessionPane({
     totalTokensUsed: 0,
     label: 'Working',
     progress: false,
+    startedAt: undefined as number | undefined,
   })
   const socket = useRef<WebSocket | null>(null)
   const lastSeq = useRef(0)
@@ -130,6 +131,7 @@ function SessionPane({
           contextLimit: typeof data.context_limit === 'number' ? data.context_limit : 0,
           totalTokensUsed: typeof data.total_tokens_used === 'number' ? data.total_tokens_used : 0,
           label: typeof data.label === 'string' ? data.label : 'Working',
+          startedAt: typeof data.started_at === 'number' ? data.started_at * 1000 : Date.now(),
           progress: data.progress === true,
         })
         break

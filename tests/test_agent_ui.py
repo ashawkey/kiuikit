@@ -30,11 +30,14 @@ def test_thinking_indicator_publishes_structured_context_status():
         pass
 
     event = next(event for event in events.after(0) if event.type == "thinking_start")
+    started_at = event.data["started_at"]
+    assert isinstance(started_at, float)
     assert event.data == {
         "suffix": "75% · 2K used",
         "context_tokens": 750,
         "context_limit": 1_000,
         "total_tokens_used": 2_000,
+        "started_at": started_at,
         "label": "Working",
         "progress": False,
     }

@@ -136,11 +136,13 @@ class ThinkingIndicator:
         self._progress = progress
         self._status: Status | None = None
         self._start_time: float = 0
+        self._started_at: float = 0
         self._running = False
         self._thread: threading.Thread | None = None
 
     def __enter__(self) -> "ThinkingIndicator":
         self._start_time = time.monotonic()
+        self._started_at = time.time()
         self._running = True
         self._status = Status(
             self._label(0.0),
@@ -159,6 +161,7 @@ class ThinkingIndicator:
                     context_tokens=self._status_suffix.tokens,
                     context_limit=self._status_suffix.limit,
                     total_tokens_used=self._status_suffix.total_tokens_used,
+                    started_at=self._started_at,
                     label=self._label_text,
                     progress=self._progress,
                 )
@@ -166,6 +169,7 @@ class ThinkingIndicator:
                 self._events.publish(
                     "thinking_start",
                     suffix=self._status_suffix,
+                    started_at=self._started_at,
                     label=self._label_text,
                     progress=self._progress,
                 )

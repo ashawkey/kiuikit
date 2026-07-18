@@ -73,7 +73,6 @@ class _ToolCallAccumulator:
 
 def consume_stream(
     stream: Iterable[Any],
-    *,
     on_content: Callable[[str], None] | None = None,
     on_thinking: Callable[[str], None] | None = None,
     should_stop: Callable[[], bool] | None = None,

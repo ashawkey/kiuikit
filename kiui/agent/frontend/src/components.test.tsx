@@ -70,6 +70,18 @@ describe('interaction components', () => {
     }
   })
 
+  it('preserves elapsed time when remounted', () => {
+    vi.useFakeTimers()
+    try {
+      const startedAt = Date.now()
+      act(() => { vi.advanceTimersByTime(5000) })
+      render(<Thinking startedAt={startedAt} />)
+      expect(screen.getByText('Working... (5s)')).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('shows indeterminate compaction progress', () => {
     const { container } = render(
       <Thinking

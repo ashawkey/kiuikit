@@ -48,7 +48,7 @@ kia --resume
 
 ## Built-in tools
 
-The agent includes **12 built-in tools** — no external tool files needed:
+The agent includes built-in tools — no external tool files needed:
 
 | Tool | Description |
 |------|-------------|
@@ -63,7 +63,6 @@ The agent includes **12 built-in tools** — no external tool files needed:
 | `remove_file` | Remove a file or directory |
 | `spawn_subagent` | Spawn a sub-agent for delegated tasks |
 | `load_skill` | Load specialized skill instructions |
-| `save_memory` | Persist important project-level insights |
 
 ## Permissions
 

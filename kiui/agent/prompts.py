@@ -91,12 +91,7 @@ Delegate only when it materially helps with independent research or analysis. Gi
     if project:
         sections.append(project)
 
-    # 9. Project memory (agent-generated, loaded from .kia/memory.md)
-    memory = _build_memory_section(work_dir)
-    if memory:
-        sections.append(memory)
-
-    # 10. Context
+    # 9. Context
     sections.append(_build_context_section(work_dir))
 
     return "\n\n".join(sections)
@@ -118,50 +113,6 @@ def _build_project_section(work_dir: str | None = None) -> str:
         return ""
     return "## Project Instructions\n" + content
 
-
-def _build_memory_section(work_dir: str | None = None) -> str:
-    """Build the project memory section for the system prompt.
-
-    Reads the memory index from .kia/memory/MEMORY.md (hierarchical storage).
-    Each entry is a markdown link [title](file.md) followed by a summary.
-    The agent can read_file individual memory files under .kia/memory/ for details.
-    """
-    base = Path(work_dir) if work_dir else Path.cwd()
-    memory_dir = base / ".kia" / "memory"
-    index_file = memory_dir / "MEMORY.md"
-
-    # Load existing memory index entries
-    entries: list[str] = []
-    if index_file.exists():
-        try:
-            raw = index_file.read_text(encoding="utf-8").strip()
-            if raw:
-                entries = [line.strip() for line in raw.splitlines() if line.strip()]
-        except Exception:
-            pass
-
-    if entries:
-        formatted = "\n".join(f"- {e}" for e in entries)
-        return (
-            "## Project Memory\n"
-            "The following memories were saved in previous sessions. Each entry links to a detailed "
-            f"memory file under `.kia/memory/`. Use **read_file** to retrieve the full details of any entry when needed.\n\n"
-            f"{formatted}\n\n"
-            "Only use **save_memory** for genuinely important insights (e.g., a critical project-wide "
-            "convention, a non-obvious architectural rule, or a recurring pitfall to avoid), "
-            "or when the user explicitly asks you to remember something. "
-            "Do NOT save trivial, obvious, or one-off observations."
-        )
-    else:
-        return (
-            "## Project Memory\n"
-            "Memories are stored hierarchically under `.kia/memory/`: `MEMORY.md` is the index, "
-            "and individual `.md` files hold the full details. "
-            "Only use **save_memory** for genuinely important insights (e.g., a critical project-wide "
-            "convention, a non-obvious architectural rule, or a recurring pitfall to avoid), "
-            "or when the user explicitly asks you to remember something. "
-            "Do NOT save trivial, obvious, or one-off observations."
-        )
 
 
 def _build_context_section(work_dir: str | None = None) -> str:

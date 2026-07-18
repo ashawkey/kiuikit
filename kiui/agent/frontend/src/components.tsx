@@ -130,6 +130,7 @@ export function Thinking({
   totalTokensUsed = 0,
   label = 'Working',
   progress = false,
+  startedAt,
 }: {
   suffix?: string
   contextTokens?: number
@@ -137,19 +138,21 @@ export function Thinking({
   totalTokensUsed?: number
   label?: string
   progress?: boolean
+  startedAt?: number
 }) {
-  const [seconds, setSeconds] = useState(0)
+  const mountedAt = useRef(Date.now())
+  const start = startedAt ?? mountedAt.current
+  const elapsed = () => Math.max(0, Math.floor((Date.now() - start) / 1000))
+  const [seconds, setSeconds] = useState(elapsed)
   const fraction = contextLimit > 0
     ? Math.min(Math.max(contextTokens / contextLimit, 0), 1)
     : 0
   const contextLevel = fraction >= 0.9 ? 'danger' : fraction >= 0.75 ? 'warning' : 'info'
   useEffect(() => {
-    const start = Date.now()
-    const id = window.setInterval(() => {
-      setSeconds(Math.floor((Date.now() - start) / 1000))
-    }, 1000)
+    setSeconds(elapsed())
+    const id = window.setInterval(() => setSeconds(elapsed()), 1000)
     return () => window.clearInterval(id)
-  }, [])
+  }, [start])
   return (
     <div className="working" aria-label="working">
       <span /><span /><span />
