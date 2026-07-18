@@ -5,7 +5,13 @@ import subprocess
 
 import pytest
 
-from kiui.agent.library import LibraryError, install_skill, list_skills, upload_skill
+from kiui.agent.library import (
+    LibraryError,
+    install_skill,
+    list_local_skills,
+    list_skills,
+    upload_skill,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -54,6 +60,19 @@ def test_cache_is_persistent_and_separated_by_repo(tmp_path):
 
     list_skills(str(second))
     assert len([path for path in cache_root.iterdir() if path.is_dir()]) == 2
+
+
+def test_list_local_skills_only_scans_current_project(tmp_path):
+    project = tmp_path / "project"
+    _skill(project, "alpha", "Local alpha")
+    malformed = project / ".kia" / "skills" / "broken"
+    malformed.mkdir()
+    (malformed / "SKILL.md").write_text("invalid", encoding="utf-8")
+
+    skills, errors = list_local_skills(project)
+
+    assert skills["alpha"]["description"] == "Local alpha"
+    assert [error["name"] for error in errors] == ["broken"]
 
 
 def test_empty_library_lists_no_skills(tmp_path):

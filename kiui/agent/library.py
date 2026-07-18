@@ -102,6 +102,27 @@ def _load_strict(skill_dir: Path) -> dict:
     return info
 
 
+def list_local_skills(
+    work_dir: str | Path | None = None,
+) -> tuple[dict[str, dict], list[dict]]:
+    """Return skills installed in the current project's ``.kia`` directory."""
+    base = Path(work_dir) if work_dir is not None else Path.cwd()
+    skills_dir = base / ".kia" / "skills"
+    skills: dict[str, dict] = {}
+    errors: list[dict] = []
+    if not skills_dir.is_dir():
+        return skills, errors
+
+    for item in sorted(skills_dir.iterdir()):
+        if not item.is_dir():
+            continue
+        try:
+            skills[item.name] = read_skill(item)
+        except (OSError, UnicodeDecodeError, ValueError) as exc:
+            errors.append({"name": item.name, "reason": str(exc)})
+    return skills, errors
+
+
 def list_skills(repo: str) -> tuple[dict[str, dict], list[dict]]:
     """Return valid marketplace skills and malformed-entry diagnostics."""
     with _checkout(repo) as checkout:

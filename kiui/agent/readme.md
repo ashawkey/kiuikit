@@ -269,6 +269,7 @@ kia_lib: git@github.com:username/kia-skills.git
 
 ```bash
 kib list                         # list remote names and descriptions
+kib list --local                 # list skills in ./.kia/skills
 kib install <name>               # install into ./.kia/skills/<name>
 kib upload <name>                # upload from ./.kia/skills/<name>
 kib upload <name> --force        # update an existing remote skill

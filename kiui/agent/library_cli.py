@@ -9,7 +9,13 @@ from rich.console import Console
 from rich.table import Table
 
 from kiui.config import conf
-from kiui.agent.library import LibraryError, install_skill, list_skills, upload_skill
+from kiui.agent.library import (
+    LibraryError,
+    install_skill,
+    list_local_skills,
+    list_skills,
+    upload_skill,
+)
 
 
 def _repo() -> str:
@@ -26,7 +32,10 @@ def build_parser() -> argparse.ArgumentParser:
         description="Manage skills in a personal GitHub-backed library.",
     )
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("list", help="list skills available in the library")
+    list_command = commands.add_parser("list", help="list available skills")
+    list_command.add_argument(
+        "--local", action="store_true", help="list skills installed in this project"
+    )
 
     install = commands.add_parser("install", help="install a library skill into this project")
     install.add_argument("name")
@@ -42,10 +51,17 @@ def main(argv: list[str] | None = None) -> int:
     console = Console()
 
     try:
-        repo = _repo()
+        if args.command == "list" and args.local:
+            skills, errors = list_local_skills()
+            title = "Local Kia Skills"
+        else:
+            repo = _repo()
+
         if args.command == "list":
-            skills, errors = list_skills(repo)
-            table = Table(title="Kia Skill Library")
+            if not args.local:
+                skills, errors = list_skills(repo)
+                title = "Kia Skill Library"
+            table = Table(title=title)
             table.add_column("Name", style="cyan", no_wrap=True)
             table.add_column("Description")
             for name, info in skills.items():
