@@ -38,6 +38,7 @@ openai:
     base_url: https://api.openai.com/v1
 
 kia_web_token: web-secret # optional Web UI access token
+kia_lib: git@github.com:username/kia-skills.git # optional personal skill library
 ```
 
 ## Usage
@@ -254,6 +255,32 @@ Skill commands:
 | `/skills <name>` | Manually load a skill into context, forcing one the model did not auto-select |
 
 Discovery is non-silent: skills whose `SKILL.md` cannot be read or parsed (bad YAML, missing `description`) and skills **shadowed** by a higher-precedence copy of the same name are reported as warnings at startup and on `/skills reload`, rather than vanishing quietly. Skill load activity is tracked per session — `/skills` shows a per-skill load count, `/usage` and the end-of-run summary list which skills were loaded, and the loaded-skill set is persisted so `--resume` does not re-load skills whose instructions are already in the replayed conversation.
+
+### Personal skill library
+
+`kib` manages a GitHub-backed library of skills that can be shared between
+projects. Configure an accessible repository URL in `.kiui.yaml`; authentication
+is delegated to your current Git/SSH environment. The repository uses the
+`main` branch and stores skills under `skills/<name>/`.
+
+```yaml
+kia_lib: git@github.com:username/kia-skills.git
+```
+
+```bash
+kib list                         # list remote names and descriptions
+kib install <name>               # install into ./.kia/skills/<name>
+kib upload <name>                # upload from ./.kia/skills/<name>
+kib upload <name> --force        # update an existing remote skill
+```
+
+Remote skills are not loaded or advertised to the agent until installed.
+The repository is cached under `~/.kia/library/`; each configured URL has an
+isolated checkout, so changing `kia_lib` selects a different cache. Existing
+local skills are never overwritten. Bundled skills shipped with kia cannot be
+uploaded. Upload validates the skill, rejects symlinks, creates a normal commit,
+and never force-pushes. An empty repository
+is initialized on the first upload.
 
 ### Bundled skills
 

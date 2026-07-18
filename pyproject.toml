@@ -80,6 +80,7 @@ kivi = "kiui.video:main"
 kiss = "kiui.sys:main"
 ks = "kiui.slurm:main"
 kia = "kiui.agent.cli:main"
+kib = "kiui.agent.library_cli:main"
 
 [tool.setuptools]
 include-package-data = true

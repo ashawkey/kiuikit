@@ -70,6 +70,45 @@ def install_bundled_skills(work_dir: str | Path | None = None) -> list[str]:
     return installed
 
 
+def valid_skill_name(name: str) -> bool:
+    """Return whether *name* is a valid Agent Skills identifier."""
+    return len(name) <= 64 and _NAME_RE.fullmatch(name) is not None
+
+
+def read_skill(skill_dir: str | Path, strict: bool = False) -> dict:
+    """Read one skill directory and return its parsed metadata.
+
+    When *strict* is true, specification warnings are rejected. This is used at
+    library boundaries while local discovery remains permissive for compatible
+    third-party skills.
+    """
+    item = Path(skill_dir)
+    skill_md = item / "SKILL.md"
+    raw = skill_md.read_text(encoding="utf-8")
+    parsed = _parse_skill(raw)
+    if parsed is None:
+        raise ValueError("invalid or missing YAML frontmatter")
+
+    frontmatter, body = parsed
+    description = frontmatter.get("description")
+    if not isinstance(description, str) or not description.strip():
+        raise ValueError("missing or non-string 'description'")
+
+    warnings = validate_skill(item.name, frontmatter)
+    if strict and warnings:
+        raise ValueError("; ".join(warnings))
+
+    return {
+        "path": str(skill_md),
+        "dir": str(item),
+        "description": description.strip(),
+        "body": body,
+        "frontmatter": frontmatter,
+        "warnings": warnings,
+        "active": True,
+    }
+
+
 def discover_skills(
     work_dir: str | Path | None = None,
     issues: dict | None = None,
@@ -127,43 +166,14 @@ def discover_skills(
                     continue
 
                 try:
-                    raw = skill_md.read_text(encoding="utf-8")
-                except (OSError, UnicodeDecodeError) as e:
+                    skills[skill_name] = read_skill(item)
+                except (OSError, UnicodeDecodeError, ValueError) as e:
                     errors.append({
                         "name": skill_name,
                         "path": str(skill_md),
-                        "reason": f"could not read file: {e}",
+                        "reason": str(e),
                     })
                     continue
-
-                parsed = _parse_skill(raw)
-                if parsed is None:
-                    errors.append({
-                        "name": skill_name,
-                        "path": str(skill_md),
-                        "reason": "invalid or missing YAML frontmatter",
-                    })
-                    continue
-
-                frontmatter, body = parsed
-                description = frontmatter.get("description")
-                if not isinstance(description, str) or not description.strip():
-                    errors.append({
-                        "name": skill_name,
-                        "path": str(skill_md),
-                        "reason": "missing or non-string 'description'",
-                    })
-                    continue
-
-                skills[skill_name] = {
-                    "path": str(skill_md),
-                    "dir": str(item),
-                    "description": description.strip(),
-                    "body": body,
-                    "frontmatter": frontmatter,
-                    "warnings": validate_skill(skill_name, frontmatter),
-                    "active": True,
-                }
 
     if issues is not None:
         issues["shadowed"] = shadowed
@@ -231,7 +241,7 @@ def validate_skill(name: str, frontmatter: dict) -> list[str]:
     if not isinstance(fm_name, str):
         errors.append("'name' must be a string")
     else:
-        if not _NAME_RE.fullmatch(fm_name) or len(fm_name) > 64:
+        if not valid_skill_name(fm_name):
             errors.append("name must be 1-64 lowercase alphanumeric/hyphen chars")
         if fm_name != name:
             errors.append(f"name '{fm_name}' does not match directory '{name}'")
