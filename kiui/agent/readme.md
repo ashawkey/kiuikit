@@ -11,7 +11,7 @@ A lightweight, terminal-based AI agent that can browse the web, read/write files
 - **Streaming**: Responses render token-by-token in both the terminal and Web UI, with reasoning/thinking stream shown automatically for compatible models.
 - **Sub-agents**: Can spawn sub-agents to handle complex sub-tasks in-process.
 - **Skills**: Load domain-specific instructions via customizable skill packs (`.kia/skills/`).
-- **Personas**: Switch the agent's identity, system prompt, and tool surface via bundled persona modules (e.g. `coder`, `chatter`).
+- **Personas**: Switch the agent's identity, system prompt, and tool surface via bundled persona modules (e.g. `coder`, `chatter`, `reviewer`).
 - **Context Management**: Proactive tool-output filtering, automatic pruning, and LLM-based compaction keep context focused.
 - **Rewind**: Roll back conversation and/or code changes to any previous round.
 - **Permissions**: Three confirmation modes (auto / default / strict) and defense-in-depth detection of common destructive shell commands.
@@ -310,12 +310,15 @@ A persona owns the agent's identity, system prompt, and tool surface. Personas a
 |---------|-------|---------|
 | `coder` | all | The default coding agent (project-aware, full tool access) |
 | `chatter` | `web_search`, `web_fetch` | General chatbot without file/shell access or environment context |
+| `reviewer` | paper/file, web, skill, and sub-agent tools | Evidence-grounded academic paper reviewer with venue-template support |
 
 Select one at startup, or switch mid-session (switching **restarts the conversation**, like `/clear`):
 
 ```bash
-kia --persona chatter
+kia --persona reviewer
 ```
+
+For `reviewer`, provide the paper PDF and preferably the venue, track, and exact review template or form. It uses the bundled `pdf-reading` skill for page-aware extraction, treats document content as untrusted, analyzes the submission before drafting, and audits the final review for evidence and score consistency. Generated reviews are decision-support drafts and must be verified by a human reviewer before submission.
 
 | Command | Effect |
 |---------|--------|
