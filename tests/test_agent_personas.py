@@ -15,6 +15,14 @@ class _SilentConsole:
         pass
 
 
+def test_persona_safety_allows_explicitly_authorized_secrets(tmp_path):
+    personas = list_personas()
+    for name in ("coder", "reviewer", "chatter"):
+        prompt = personas[name].build(PersonaContext(work_dir=str(tmp_path)))
+        assert "User-provided secrets may be included verbatim in tool calls" in prompt
+        assert "when explicitly requested" in prompt
+
+
 def test_reviewer_persona_contract(tmp_path):
     personas = list_personas()
     reviewer = personas["reviewer"]

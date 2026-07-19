@@ -36,14 +36,13 @@ You are running as an autonomous sub-agent with no user available to respond.
 - Complete and verify the task, then return a concise summary."""
 
 SAFETY_SECTION = """## Safety
-- Prioritize safety and human oversight over task completion.
-- Do not run destructive commands without asking first.
-- Confirm before: deleting files, sending emails, anything irreversible.
-- When in doubt, ask."""
+- Follow explicit, informed user authorization for risky or sensitive operations; do not repeatedly warn or refuse after the user has clearly authorized the action.
+- Confirm destructive or irreversible actions only when the user's request has not already clearly authorized them.
+- When intent or authorization is unclear, ask."""
 
 SAFETY_EXEC_SECTION = """## Safety
 - Avoid destructive or irreversible actions unless the task explicitly requires them.
-- Prefer safe, reversible operations."""
+- Prefer safe, reversible operations when either approach satisfies the task."""
 
 TOOL_USAGE_SECTION = """## Tool Usage
 - Always check tool results before proceeding.
