@@ -16,6 +16,15 @@ import questionary
 
 console = Console()
 
+
+def _print_rows(headers: Sequence[str], rows: Sequence[Sequence[object]]) -> None:
+    """Print machine-friendly TSV without styling or alignment."""
+    print("\t".join(headers))
+    for row in rows:
+        values = [str(value).replace("\t", " ").replace("\r", " ").replace("\n", " ") for value in row]
+        print("\t".join(values))
+
+
 def _run_cmd(cmd: Sequence[str], timeout: float = 30.0) -> Tuple[int, str, str]:
     try:
         p = subprocess.run(
@@ -260,12 +269,20 @@ def get_job_info(target: str) -> List[JobInfo]:
          
     return results
 
-def job_details(target: str):
+def job_details(target: str, computer: bool = False):
     """
     Show detailed information for a job ID or job name.
     """
     infos = get_job_info(target)
     if not infos:
+        return
+
+    if computer:
+        rows = []
+        for info in infos:
+            keys = sorted(info.data) if info.source == "scontrol" else info.data
+            rows.extend((info.jid, info.source, key, info.data[key]) for key in keys)
+        _print_rows(("JobID", "Source", "Field", "Value"), rows)
         return
 
     for info in infos:
@@ -284,7 +301,7 @@ def job_details(target: str):
         console.print(Panel(grid, title=f"Job Details ({info.source}): {info.jid}", border_style="blue"))
 
 
-def node_details(target: str):
+def node_details(target: str, computer: bool = False):
     """
     Show detailed information for a node using `scontrol show node` and `squeue`.
     """
@@ -323,18 +340,27 @@ def node_details(target: str):
         if "gpu" in metrics['CfgTRES']:
              gpu_str = metrics['CfgTRES']
 
-    # Create Summary Panel
-    grid = Table.grid(expand=True)
-    grid.add_column(style="bold cyan", max_width=20)
-    grid.add_column()
-    grid.add_row("State:", metrics['State'])
-    grid.add_row("CPU (Alloc/Total):", cpu_str)
-    grid.add_row("Memory (Alloc/Total):", mem_str)
-    grid.add_row("Gres:", gpu_str)
-    if metrics['AllocTRES'] != "N/A":
-        grid.add_row("Alloc TRES:", metrics['AllocTRES'])
+    plain_rows = [
+        (target, "State", metrics["State"]),
+        (target, "CPUAlloc", metrics["CPUAlloc"]),
+        (target, "CPUTot", metrics["CPUTot"]),
+        (target, "AllocMemory", to_gb(metrics["AllocMem"])),
+        (target, "TotalMemory", to_gb(metrics["RealMemory"])),
+        (target, "Gres", gpu_str),
+        (target, "AllocTRES", metrics["AllocTRES"]),
+    ]
+    if not computer:
+        grid = Table.grid(expand=True)
+        grid.add_column(style="bold cyan", max_width=20)
+        grid.add_column()
+        grid.add_row("State:", metrics['State'])
+        grid.add_row("CPU (Alloc/Total):", cpu_str)
+        grid.add_row("Memory (Alloc/Total):", mem_str)
+        grid.add_row("Gres:", gpu_str)
+        if metrics['AllocTRES'] != "N/A":
+            grid.add_row("Alloc TRES:", metrics['AllocTRES'])
 
-    console.print(Panel(grid, title=f"Node Details: [bold]{target}[/bold]", border_style="blue"))
+        console.print(Panel(grid, title=f"Node Details: [bold]{target}[/bold]", border_style="blue"))
 
     # 2. Get Running Jobs
     # Use %200j to prevent truncation
@@ -342,23 +368,40 @@ def node_details(target: str):
     code_q, out_q, err_q = _run_cmd(cmd_q)
     
     if code_q == 0 and out_q.strip():
-        table = Table(box=box.SIMPLE, show_header=True, header_style="bold cyan", expand=True)
-        table.add_column("JobID")
-        table.add_column("User", style="yellow")
-        table.add_column("Name", overflow="fold")
-        table.add_column("State")
-        table.add_column("Time")
-        
+        job_rows = []
         for line in out_q.splitlines():
             parts = line.strip().split("|")
             if len(parts) >= 5:
-                table.add_row(*[p.strip() for p in parts])
-        
-        console.print(Panel(table, title=f"Jobs on {target}", border_style="green"))
+                job_rows.append([p.strip() for p in parts[:5]])
+        if computer:
+            for jobid, user, name, state, time_str in job_rows:
+                plain_rows.extend([
+                    (target, f"Job.{jobid}.User", user),
+                    (target, f"Job.{jobid}.Name", name),
+                    (target, f"Job.{jobid}.State", state),
+                    (target, f"Job.{jobid}.Time", time_str),
+                ])
+        else:
+            table = Table(box=box.SIMPLE, show_header=True, header_style="bold cyan", expand=True)
+            table.add_column("JobID")
+            table.add_column("User", style="yellow")
+            table.add_column("Name", overflow="fold")
+            table.add_column("State")
+            table.add_column("Time")
+
+            for row in job_rows:
+                table.add_row(*row)
+
+            console.print(Panel(table, title=f"Jobs on {target}", border_style="green"))
     elif code_q == 0:
-        console.print(Panel(f"No jobs running on {target}.", border_style="dim"))
+        if not computer:
+            console.print(Panel(f"No jobs running on {target}.", border_style="dim"))
     else:
         console.print(f"[red]Error fetching jobs: {err_q}[/red]")
+
+    if computer:
+        _print_rows(("Node", "Field", "Value"), plain_rows)
+
 
 def _get_unique_node_summary() -> Tuple[int, Dict[str, int]]:
     """Get unique node counts by state using sinfo -N (one line per node)."""
@@ -393,7 +436,7 @@ def _get_unique_node_summary() -> Tuple[int, Dict[str, int]]:
     return len(node_state), state_counts
 
 
-def info():
+def info(computer: bool = False):
     """
     Wrapper for `sinfo` to show partition and node status.
     """
@@ -417,13 +460,15 @@ def info():
     if lines and "PARTITION" in lines[0]:
         lines = lines[1:]
 
+    plain_rows = []
     for line in lines:
         parts = line.split("|")
         if len(parts) < 6:
             continue
         
         partition, avail, timelimit, nodes_str, state, nodelist = [p.strip() for p in parts]
-        
+        plain_rows.append((partition, avail, timelimit, nodes_str, state, nodelist))
+
         state_clean = state.replace("*", "")
         
         if "idle" in state_clean:
@@ -450,6 +495,10 @@ def info():
             nodelist
         )
 
+    if computer:
+        _print_rows(("Partition", "Avail", "TimeLimit", "Nodes", "State", "NodeList"), plain_rows)
+        return
+
     # Unique node summary (deduplicated across partitions)
     total_nodes, state_counts = _get_unique_node_summary()
 
@@ -471,7 +520,7 @@ def info():
     console.print(Panel(table, title=title, border_style="blue"))
 
 
-def log_output(target: Optional[str] = None, num_lines: Optional[int] = 100, show_all: bool = False, show_stderr: bool = False, user: Optional[str] = None, rank: int = 0, batch: bool = False, aps: bool = False, follow: bool = False):
+def log_output(target: Optional[str] = None, num_lines: Optional[int] = 100, show_all: bool = False, show_stderr: bool = False, user: Optional[str] = None, rank: int = 0, batch: bool = False, aps: bool = False, follow: bool = False, computer: bool = False):
     """
     Show logs for a job.
 
@@ -576,13 +625,14 @@ def log_output(target: Optional[str] = None, num_lines: Optional[int] = 100, sho
         console.print(f"[bold red]Error:[/bold red] No log file found for job {info.jid}.")
         return
 
-    console.rule(f"[bold blue]Reading logs for Job {info.jid} — {chosen_label}[/bold blue]", style="blue")
-    console.print("[bold]Potential log paths:[/bold]")
-    for label, path in available.items():
-        if path:
-            marker = "[bold green]*[/bold green]" if path == chosen else " "
-            console.print(f" {marker} [cyan]{label}:[/cyan] {path}", soft_wrap=True)
-    console.rule(style="blue")
+    if not computer:
+        console.rule(f"[bold blue]Reading logs for Job {info.jid} — {chosen_label}[/bold blue]", style="blue")
+        console.print("[bold]Potential log paths:[/bold]")
+        for label, path in available.items():
+            if path:
+                marker = "[bold green]*[/bold green]" if path == chosen else " "
+                console.print(f" {marker} [cyan]{label}:[/cyan] {path}", soft_wrap=True)
+        console.rule(style="blue")
 
     # Construct command
     tail_cmd = ["tail"]
@@ -715,7 +765,7 @@ def cancel(
     _cancel_jobs(selected_job_ids, job_map)
 
 
-def queue(user: Optional[str] = None, all_users: bool = False):
+def queue(user: Optional[str] = None, all_users: bool = False, computer: bool = False):
     """
     Wrapper for `squeue` to show jobs.
     """
@@ -741,7 +791,19 @@ def queue(user: Optional[str] = None, all_users: bool = False):
         lines = lines[1:]
     
     if not lines:
-        console.print(Panel(f"No jobs found for {user if user else 'all users'}.", title=title, border_style="green"))
+        if computer:
+            _print_rows(("JobID", "Partition", "Name", "User", "State", "Time", "Nodes", "Reason", "SubmitTime"), ())
+        else:
+            console.print(Panel(f"No jobs found for {user if user else 'all users'}.", title=title, border_style="green"))
+        return
+
+    if computer:
+        rows = []
+        for line in lines:
+            parts = line.split("|")
+            if len(parts) >= 9:
+                rows.append([p.strip() for p in parts[:9]])
+        _print_rows(("JobID", "Partition", "Name", "User", "State", "Time", "Nodes", "Reason", "SubmitTime"), rows)
         return
 
     table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="bold cyan", expand=True)
@@ -826,7 +888,7 @@ def queue(user: Optional[str] = None, all_users: bool = False):
     # Print the table directly
     console.print(Panel(table, title=title, border_style="green"))
 
-def history(user: Optional[str] = None, days: int = 3, all_users: bool = False):
+def history(user: Optional[str] = None, days: int = 3, all_users: bool = False, computer: bool = False):
     """
     Wrapper for `sacct` to show job history.
     """
@@ -857,13 +919,26 @@ def history(user: Optional[str] = None, days: int = 3, all_users: bool = False):
     
     # Header check
     if not lines or "JobID" not in lines[0]:
-        console.print(Panel(f"No job history found in the last {days} days.", title=title, border_style="blue"))
+        if computer:
+            _print_rows(("JobID", "Name", "Partition", "User", "State", "ExitCode", "Start", "End", "Elapsed"), ())
+        else:
+            console.print(Panel(f"No job history found in the last {days} days.", title=title, border_style="blue"))
         return
 
     lines = lines[1:] # Skip header
 
     if not lines:
-        console.print(Panel(f"No job history found in the last {days} days.", title=title, border_style="blue"))
+        if computer:
+            _print_rows(("JobID", "Name", "Partition", "User", "State", "ExitCode", "Start", "End", "Elapsed"), ())
+        else:
+            console.print(Panel(f"No job history found in the last {days} days.", title=title, border_style="blue"))
+        return
+
+    rows = [line.strip().split("|")[:9] for line in lines]
+    rows = [row for row in rows if len(row) == 9]
+    rows.sort(key=lambda row: (row[7] in ("", "Unknown"), row[7]))
+    if computer:
+        _print_rows(("JobID", "Name", "Partition", "User", "State", "ExitCode", "Start", "End", "Elapsed"), rows)
         return
 
     table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="bold cyan", expand=True)
@@ -876,10 +951,6 @@ def history(user: Optional[str] = None, days: int = 3, all_users: bool = False):
     table.add_column("Start")
     table.add_column("End")
     table.add_column("Elapsed")
-
-    rows = [line.strip().split("|")[:9] for line in lines]
-    rows = [row for row in rows if len(row) == 9]
-    rows.sort(key=lambda row: (row[7] in ("", "Unknown"), row[7]))
 
     for row in rows:
         jobid, name, partition, username, state, exitcode, start, end, elapsed = row
@@ -922,7 +993,7 @@ def _parse_gpu_count(tres_per_node: str) -> int:
     return int(m.group(1)) if m else 0
 
 
-def usage(partition: Optional[str] = None, top_n: Optional[int] = None):
+def usage(partition: Optional[str] = None, top_n: Optional[int] = None, computer: bool = False):
     """
     Show cluster resource usage grouped by user, sorted by GPU count.
     """
@@ -962,10 +1033,13 @@ def usage(partition: Optional[str] = None, top_n: Optional[int] = None):
             users[user]["pending"] += 1
 
     if not users:
-        msg = "No jobs found."
-        if partition:
-            msg = f"No jobs found in partition '{partition}'."
-        console.print(f"[green]{msg}[/green]")
+        if computer:
+            _print_rows(("Rank", "User", "Running", "GPUs", "Nodes", "CPUs", "Pending"), ())
+        else:
+            msg = "No jobs found."
+            if partition:
+                msg = f"No jobs found in partition '{partition}'."
+            console.print(f"[green]{msg}[/green]")
         return
 
     sorted_users = sorted(users.items(), key=lambda x: (x[1]["gpus"], x[1]["nodes"]), reverse=True)
@@ -977,6 +1051,14 @@ def usage(partition: Optional[str] = None, top_n: Optional[int] = None):
     for _, d in users.items():
         for k in totals:
             totals[k] += d[k]
+
+    if computer:
+        rows = [
+            (rank, user, d["running"], d["gpus"], d["nodes"], d["cpus"], d["pending"])
+            for rank, (user, d) in enumerate(sorted_users, 1)
+        ]
+        _print_rows(("Rank", "User", "Running", "GPUs", "Nodes", "CPUs", "Pending"), rows)
+        return
 
     table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="bold cyan", expand=True)
     table.add_column("#", justify="right", style="dim", no_wrap=True)
@@ -1013,7 +1095,7 @@ def usage(partition: Optional[str] = None, top_n: Optional[int] = None):
     console.print(Panel(table, title=title, subtitle=subtitle, border_style="blue"))
 
 
-def pending(user: Optional[str] = None, top_n: int = 10):
+def pending(user: Optional[str] = None, top_n: int = 10, computer: bool = False):
     """
     Show top pending jobs sorted by priority for all users and the current user.
     """
@@ -1086,6 +1168,18 @@ def pending(user: Optional[str] = None, top_n: int = 10):
     total_all = len(rows_all)
     total_me = len(rows_me)
 
+    if computer:
+        rows = []
+        for scope, pending_rows in (("all", rows_all), (current_user, rows_me)):
+            for rank, row in enumerate(pending_rows[:top_n], 1):
+                priority, jobid, partition, name, username, time_str, nodes, reason, submit_time = row
+                rows.append((scope, rank, priority, jobid, partition, name, username, time_str, nodes, reason, submit_time))
+        _print_rows(
+            ("Scope", "Rank", "Priority", "JobID", "Partition", "Name", "User", "Time", "Nodes", "Reason", "SubmitTime"),
+            rows,
+        )
+        return
+
     # All users table
     title_all = f"Top Pending Jobs — All Users (showing {min(top_n, total_all)}/{total_all})"
     if total_all == 0:
@@ -1154,27 +1248,38 @@ def main():
     u_parser.add_argument("--top", "-n", type=int, default=None, help="Show only the top N users")
     u_parser.add_argument("--partition", "-p", type=str, default=None, help="Filter by partition")
 
+    command_parsers = (info_parser, job_parser, q_parser, h_parser, l_parser, c_parser, p_parser, u_parser)
+    for command_parser in command_parsers:
+        command_parser.add_argument(
+            "--computer", "-c", action="store_true",
+            help="Print plain tab-separated rows without ANSI styling or table formatting",
+        )
+
     args = parser.parse_args()
+
+    global console
+    if args.computer:
+        console = Console(no_color=True, force_terminal=False)
 
     if args.cmd in ["info", "i"]:
         if args.target:
-            node_details(args.target)
+            node_details(args.target, computer=args.computer)
         else:
-            info()
+            info(computer=args.computer)
     elif args.cmd in ["job", "j"]:
-        job_details(args.target)
+        job_details(args.target, computer=args.computer)
     elif args.cmd in ["queue", "q"]:
-        queue(user=args.user, all_users=args.all)
+        queue(user=args.user, all_users=args.all, computer=args.computer)
     elif args.cmd in ["history", "h"]:
-        history(user=args.user, days=args.days, all_users=args.all)
+        history(user=args.user, days=args.days, all_users=args.all, computer=args.computer)
     elif args.cmd in ["log", "l"]:
-        log_output(args.target, num_lines=args.lines, show_all=args.all, show_stderr=args.stderr, user=args.user, rank=args.rank, batch=args.batch, aps=args.aps, follow=args.follow)
+        log_output(args.target, num_lines=args.lines, show_all=args.all, show_stderr=args.stderr, user=args.user, rank=args.rank, batch=args.batch, aps=args.aps, follow=args.follow, computer=args.computer)
     elif args.cmd in ["cancel", "c"]:
         cancel(targets=args.targets or None, user=args.user, all_jobs=args.all, pending_only=args.pending)
     elif args.cmd in ["pending", "p"]:
-        pending(user=args.user, top_n=args.top)
+        pending(user=args.user, top_n=args.top, computer=args.computer)
     elif args.cmd in ["usage", "u"]:
-        usage(partition=args.partition, top_n=args.top)
+        usage(partition=args.partition, top_n=args.top, computer=args.computer)
     else:
         parser.print_help()
 
