@@ -126,6 +126,51 @@ def test_remote_list_is_sorted_and_marks_local_skills(monkeypatch, capsys):
     assert output.index("• alpha") < output.index("• zeta (installed)")
 
 
+def test_remote_list_filters_skill_names_by_pattern(monkeypatch, capsys):
+    from kiui.agent import library_cli
+
+    monkeypatch.setattr(library_cli, "_repo", lambda: "repo")
+    monkeypatch.setattr(
+        library_cli,
+        "list_skills",
+        lambda repo: (
+            {
+                "image-tools": {"description": "Images"},
+                "pdf-reading": {"description": "PDFs"},
+            },
+            [],
+        ),
+    )
+    monkeypatch.setattr(library_cli, "list_local_skills", lambda: ({}, []))
+
+    assert library_cli.main(["list", "image"]) == 0
+    output = capsys.readouterr().out
+    assert "• image-tools" in output
+    assert "pdf-reading" not in output
+
+
+def test_local_list_filters_skill_names_by_pattern(monkeypatch, capsys):
+    from kiui.agent import library_cli
+
+    monkeypatch.setattr(library_cli, "_configured_repo", lambda: None)
+    monkeypatch.setattr(
+        library_cli,
+        "list_local_skills",
+        lambda: (
+            {
+                "image-tools": {"description": "Images"},
+                "pdf-reading": {"description": "PDFs"},
+            },
+            [],
+        ),
+    )
+
+    assert library_cli.main(["list", "pdf", "--local"]) == 0
+    output = capsys.readouterr().out
+    assert "• pdf-reading" in output
+    assert "image-tools" not in output
+
+
 def test_local_list_marks_uploaded_skills(monkeypatch, capsys):
     from kiui.agent import library_cli
 
@@ -168,6 +213,61 @@ def test_local_list_survives_remote_failure(monkeypatch, capsys):
     output = capsys.readouterr()
     assert "• alpha" in output.out
     assert "could not check uploaded status" in output.err
+
+
+def test_cli_installs_multiple_skills(monkeypatch, capsys, tmp_path):
+    from kiui.agent import library_cli
+
+    calls = []
+    monkeypatch.setattr(library_cli, "_repo", lambda: "repo")
+    monkeypatch.setattr(
+        library_cli,
+        "install_skill",
+        lambda repo, name: calls.append((repo, name)) or tmp_path / name,
+    )
+
+    assert library_cli.main(["install", "alpha", "beta"]) == 0
+    assert calls == [("repo", "alpha"), ("repo", "beta")]
+    output = capsys.readouterr().out
+    assert "Installed alpha" in output
+    assert "Installed beta" in output
+
+
+def test_cli_removes_multiple_skills(monkeypatch, capsys):
+    from kiui.agent import library_cli
+
+    calls = []
+    monkeypatch.setattr(library_cli, "_repo", lambda: "repo")
+    monkeypatch.setattr(
+        library_cli,
+        "remove_skill",
+        lambda repo, name: calls.append((repo, name)) or "a" * 40,
+    )
+
+    assert library_cli.main(["remove", "alpha", "beta"]) == 0
+    assert calls == [("repo", "alpha"), ("repo", "beta")]
+    output = capsys.readouterr().out
+    assert "Removed alpha" in output
+    assert "Removed beta" in output
+
+
+def test_cli_uploads_multiple_skills_with_force(monkeypatch, capsys):
+    from kiui.agent import library_cli
+
+    calls = []
+    monkeypatch.setattr(library_cli, "_repo", lambda: "repo")
+
+    def upload(repo, name, force=False):
+        calls.append((repo, name, force))
+        return None if name == "beta" else "b" * 40
+
+    monkeypatch.setattr(library_cli, "upload_skill", upload)
+
+    assert library_cli.main(["upload", "alpha", "beta", "--force"]) == 0
+    assert calls == [("repo", "alpha", True), ("repo", "beta", True)]
+    output = capsys.readouterr().out
+    assert "Uploaded alpha" in output
+    assert "beta is already up to date" in output
 
 
 def test_list_local_skills_only_scans_current_project(tmp_path):

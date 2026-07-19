@@ -44,11 +44,11 @@ def test_bundled_skill_library_documents_kib_commands(tmp_path):
 
     skill = skills["skill-library"]
     assert "list available or installed library skills" in skill["description"]
-    assert "`kib list`" in skill["body"]
-    assert "`kib list --local`" in skill["body"]
-    assert "`kib install <name>`" in skill["body"]
-    assert "`kib upload <name>`" in skill["body"]
-    assert "`kib remove <name>`" in skill["body"]
+    assert "`kib list [pattern]`" in skill["body"]
+    assert "`kib list [pattern] --local`" in skill["body"]
+    assert "`kib install <name> [<name> ...]`" in skill["body"]
+    assert "`kib upload <name> [<name> ...]`" in skill["body"]
+    assert "`kib remove <name> [<name> ...]`" in skill["body"]
     assert "`/skills reload`" in skill["body"]
 
 

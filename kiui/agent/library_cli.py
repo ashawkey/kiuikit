@@ -43,18 +43,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     commands = parser.add_subparsers(dest="command", required=True)
     list_command = commands.add_parser("list", help="list available skills")
+    list_command.add_argument("pattern", nargs="?", help="filter skill names by substring")
     list_command.add_argument(
         "--local", action="store_true", help="list skills installed in this project"
     )
 
-    install = commands.add_parser("install", help="install a library skill into this project")
-    install.add_argument("name")
+    install = commands.add_parser("install", help="install library skills into this project")
+    install.add_argument("names", nargs="+", metavar="name")
 
-    remove = commands.add_parser("remove", help="remove a skill from the library")
-    remove.add_argument("name")
+    remove = commands.add_parser("remove", help="remove skills from the library")
+    remove.add_argument("names", nargs="+", metavar="name")
 
-    upload = commands.add_parser("upload", help="upload a project skill to the library")
-    upload.add_argument("name")
+    upload = commands.add_parser("upload", help="upload project skills to the library")
+    upload.add_argument("names", nargs="+", metavar="name")
     upload.add_argument("--force", action="store_true", help="replace an existing library skill")
     return parser
 
@@ -86,6 +87,9 @@ def main(argv: list[str] | None = None) -> int:
                         )
                 title = "Local Skills"
                 console.print(f"[bold]{title}[/bold]")
+            if args.pattern is not None:
+                skills = {name: info for name, info in skills.items() if args.pattern in name}
+                errors = [issue for issue in errors if args.pattern in issue["name"]]
             for name in sorted(skills):
                 info = skills[name]
                 label = Text(f"• {name}", style="magenta")
@@ -103,20 +107,23 @@ def main(argv: list[str] | None = None) -> int:
 
         repo = _repo()
         if args.command == "install":
-            dest = install_skill(repo, args.name)
-            console.print(f"Installed [cyan]{args.name}[/cyan] to {dest}")
+            for name in args.names:
+                dest = install_skill(repo, name)
+                console.print(f"Installed [cyan]{name}[/cyan] to {dest}")
             return 0
 
         if args.command == "remove":
-            commit = remove_skill(repo, args.name)
-            console.print(f"Removed [cyan]{args.name}[/cyan] ({commit[:12]})")
+            for name in args.names:
+                commit = remove_skill(repo, name)
+                console.print(f"Removed [cyan]{name}[/cyan] ({commit[:12]})")
             return 0
 
-        commit = upload_skill(repo, args.name, force=args.force)
-        if commit is None:
-            console.print(f"[cyan]{args.name}[/cyan] is already up to date.")
-        else:
-            console.print(f"Uploaded [cyan]{args.name}[/cyan] ({commit[:12]})")
+        for name in args.names:
+            commit = upload_skill(repo, name, force=args.force)
+            if commit is None:
+                console.print(f"[cyan]{name}[/cyan] is already up to date.")
+            else:
+                console.print(f"Uploaded [cyan]{name}[/cyan] ({commit[:12]})")
         return 0
     except LibraryError as exc:
         Console(stderr=True).print(f"[bold red]Error:[/bold red] {exc}")

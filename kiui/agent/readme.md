@@ -282,12 +282,12 @@ kia_lib: git@github.com:username/kia-skills.git
 ```
 
 ```bash
-kib list                         # list remote names and descriptions
-kib list --local                 # list local skills; remote status is best-effort
-kib install <name>               # install into ./.kia/skills/<name>
-kib upload <name>                # upload from ./.kia/skills/<name>
-kib remove <name>                # remove a remote skill
-kib upload <name> --force        # update an existing remote skill
+kib list [pattern]               # list remote skills, optionally filtering names
+kib list [pattern] --local       # list/filter local skills; remote status is best-effort
+kib install <name> [<name> ...]  # install one or more remote skills
+kib upload <name> [<name> ...]   # upload one or more local skills
+kib remove <name> [<name> ...]   # remove one or more remote skills
+kib upload <names...> --force    # update existing remote skills
 ```
 
 Remote skills are not loaded or advertised to the agent until installed.
