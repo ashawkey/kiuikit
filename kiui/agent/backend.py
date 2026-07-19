@@ -1839,9 +1839,17 @@ class LLMAgent:
                 except Exception:
                     pass  # never let save failure break the loop
         finally:
+            session_saved = False
+            try:
+                self.save_session(self._session_id)
+                session_saved = True
+            except Exception as e:
+                self.console.warn(f"Could not save session before exit: {e}")
             if self.changes is not None:
                 self.changes.close()
             self._print_token_summary()
+            if session_saved:
+                self.console.system(f"Resume with: kia --resume {self._session_id}")
         
     def execute(self, query: str, *, manage_operation: bool = True):
         self.console.system(f"Executing query: {query}")
