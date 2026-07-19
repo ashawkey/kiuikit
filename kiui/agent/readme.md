@@ -280,7 +280,7 @@ kia_lib: git@github.com:username/kia-skills.git
 
 ```bash
 kib list                         # list remote names and descriptions
-kib list --local                 # list local skills without accessing the remote
+kib list --local                 # list local skills; remote status is best-effort
 kib install <name>               # install into ./.kia/skills/<name>
 kib upload <name>                # upload from ./.kia/skills/<name>
 kib remove <name>                # remove a remote skill

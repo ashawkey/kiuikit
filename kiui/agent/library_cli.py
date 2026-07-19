@@ -21,15 +21,20 @@ from kiui.agent.library import (
 from kiui.agent.skills import BUNDLED_SKILLS_DIR
 
 
-def _repo() -> str:
+def _configured_repo() -> str | None:
     config = conf if isinstance(conf, dict) else {}
     repo = config.get("kia_lib")
-    if not isinstance(repo, str) or not repo.strip():
+    return repo.strip() if isinstance(repo, str) and repo.strip() else None
+
+
+def _repo() -> str:
+    repo = _configured_repo()
+    if repo is None:
         raise LibraryError(
             "kia_lib is not configured; add a GitHub repository URL to .kiui.yaml, "
             "for example: kia_lib: git@github.com:user/kia-skills.git"
         )
-    return repo.strip()
+    return repo
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -61,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         local_names: set[str] = set()
+        remote_names: set[str] = set()
 
         if args.command == "list":
             if not args.local:
@@ -71,6 +77,14 @@ def main(argv: list[str] | None = None) -> int:
                 console.print(f"[bold]{title}[/bold] ({repo})")
             else:
                 skills, errors = list_local_skills()
+                repo = _configured_repo()
+                if repo is not None:
+                    try:
+                        remote_names = set(list_skills(repo)[0])
+                    except LibraryError as exc:
+                        Console(stderr=True).print(
+                            f"[yellow]Warning:[/yellow] could not check uploaded status: {exc}"
+                        )
                 title = "Local Skills"
                 console.print(f"[bold]{title}[/bold]")
             for name in sorted(skills):
@@ -78,6 +92,8 @@ def main(argv: list[str] | None = None) -> int:
                 label = Text(f"• {name}", style="magenta")
                 if name in local_names:
                     label.append(" (installed)", style="green")
+                if name in remote_names:
+                    label.append(" (uploaded)", style="green")
                 if args.local and (BUNDLED_SKILLS_DIR / name / "SKILL.md").is_file():
                     label.append(" (built-in)", style="green")
                 console.print(label)

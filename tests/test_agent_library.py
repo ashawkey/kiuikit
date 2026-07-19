@@ -104,11 +104,7 @@ def test_remote_list_is_sorted_and_marks_local_skills(monkeypatch, capsys):
 def test_local_list_marks_built_in_skills_without_remote(tmp_path, monkeypatch, capsys):
     from kiui.agent import library_cli
 
-    monkeypatch.setattr(
-        library_cli,
-        "_repo",
-        lambda: pytest.fail("local listing must not access the remote configuration"),
-    )
+    monkeypatch.setattr(library_cli, "_configured_repo", lambda: None)
     bundled = tmp_path / "bundled"
     (bundled / "alpha").mkdir(parents=True)
     (bundled / "alpha" / "SKILL.md").touch()
@@ -129,6 +125,50 @@ def test_local_list_marks_built_in_skills_without_remote(tmp_path, monkeypatch, 
     output = capsys.readouterr().out
     assert "• alpha (built-in)" in output
     assert "• zeta\n" in output
+
+
+def test_local_list_marks_uploaded_skills(monkeypatch, capsys):
+    from kiui.agent import library_cli
+
+    monkeypatch.setattr(
+        library_cli, "_configured_repo", lambda: "git@example.com:skills.git"
+    )
+    monkeypatch.setattr(
+        library_cli,
+        "list_local_skills",
+        lambda: ({"alpha": {"description": "Local"}}, []),
+    )
+    monkeypatch.setattr(
+        library_cli,
+        "list_skills",
+        lambda repo: ({"alpha": {"description": "Remote"}}, []),
+    )
+
+    assert library_cli.main(["list", "--local"]) == 0
+    assert "• alpha (uploaded)" in capsys.readouterr().out
+
+
+def test_local_list_survives_remote_failure(monkeypatch, capsys):
+    from kiui.agent import library_cli
+
+    monkeypatch.setattr(
+        library_cli, "_configured_repo", lambda: "git@example.com:skills.git"
+    )
+    monkeypatch.setattr(
+        library_cli,
+        "list_local_skills",
+        lambda: ({"alpha": {"description": "Local"}}, []),
+    )
+    monkeypatch.setattr(
+        library_cli,
+        "list_skills",
+        lambda repo: (_ for _ in ()).throw(LibraryError("offline")),
+    )
+
+    assert library_cli.main(["list", "--local"]) == 0
+    output = capsys.readouterr()
+    assert "• alpha" in output.out
+    assert "could not check uploaded status" in output.err
 
 
 def test_list_local_skills_only_scans_current_project(tmp_path):
