@@ -39,6 +39,19 @@ def test_bundled_skills_load_from_package_and_shadow_stale_copies(tmp_path, monk
     assert issues["shadowed"][0]["path"] == str(project / ".kia" / "skills" / "alpha" / "SKILL.md")
 
 
+def test_bundled_skill_library_documents_kib_commands(tmp_path):
+    skills = discover_skills(tmp_path)
+
+    skill = skills["skill-library"]
+    assert "list available or installed library skills" in skill["description"]
+    assert "`kib list`" in skill["body"]
+    assert "`kib list --local`" in skill["body"]
+    assert "`kib install <name>`" in skill["body"]
+    assert "`kib upload <name>`" in skill["body"]
+    assert "`kib remove <name>`" in skill["body"]
+    assert "`/skills reload`" in skill["body"]
+
+
 def test_discover_bundled_skills_does_not_create_project_copy(tmp_path, monkeypatch):
     bundled = tmp_path / "package-skills"
     project = tmp_path / "project"
