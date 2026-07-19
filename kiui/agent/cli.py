@@ -37,6 +37,7 @@ from kiui.agent.models import ReasoningEffort, resolve_model_profile
 class Args:
     """Terminal-based AI agent with tool-use, web access, and shell execution."""
     model: str = ""
+    persona: str = ""  # persona to run as (see /persona; default: agent)
     verbose: bool = False
     stream: bool = True  # stream the response token-by-token as it is generated
     reasoning_effort: ReasoningEffort | None = None  # defaults to model config, then high
@@ -122,6 +123,7 @@ def get_agent(args: Args) -> "tuple[LLMAgent | None, HubClient | None]":
         reasoning_effort=args.reasoning_effort or model_conf.get("reasoning_effort", "high"),
 
         permission_mode=args.perm,
+        persona=args.persona,
         console=console,
         events=events,
         input_broker=inputs,

@@ -14,7 +14,8 @@ from openai import OpenAI
 from kiui.agent.ui import AgentConsole, ContextStatus
 from kiui.agent.terminal import TerminalInput
 from kiui.agent.utils import get_kia_dir
-from kiui.agent.prompts import build_system_prompt
+from kiui.agent.prompts import PersonaContext
+from kiui.agent.personas import DEFAULT_PERSONA, PersonaInfo, get_persona, list_personas
 from kiui.agent.skills import discover_skills, install_bundled_skills
 from kiui.agent.tools import (
     MAX_GREP_MATCHES,
@@ -30,7 +31,7 @@ from kiui.agent.tool_results import (
     read_tool_result_text,
 )
 from kiui.agent.permissions import PermissionController, PermissionMode
-from kiui.agent.streaming import consume_stream
+from kiui.agent.streaming import consume_stream, message_to_dict
 from kiui.agent.context import (
     compact_tool_result_envelope,
     tool_result_char_budget,
@@ -40,6 +41,7 @@ from kiui.agent.context import (
     compact_context,
     estimate_context_chars,
     TokenEstimator,
+    build_tool_name_index,
     get_role,
     get_text,
     get_tool_calls,
@@ -63,36 +65,40 @@ INPUT_POLL_INTERVAL = 0.05
 
 
 class ContextManager:
-    """Flat conversation history with context-management hooks."""
+    """Flat conversation history with context-management hooks.
+
+    All messages are plain dicts in the OpenAI wire format; SDK response
+    objects are normalized to dicts at ingress (see streaming.py).
+    """
 
     def __init__(self, system_prompt: str):
         self.system_prompt: dict[str, str] = {
             "role": "system",
             "content": system_prompt,
         }
-        self.messages: list[Any] = []
+        self.messages: list[dict[str, Any]] = []
 
-    def add(self, message: dict[str, Any] | Any) -> None:
+    def add(self, message: dict[str, Any]) -> None:
         self.messages.append(message)
 
-    def get(self, include_system: bool = True) -> list[Any]:
-        res: list[Any] = []
+    def get(self, include_system: bool = True) -> list[dict[str, Any]]:
+        res: list[dict[str, Any]] = []
         if include_system:
             res.append(self.system_prompt)
         res.extend(self.messages)
         return res
 
-    def replace_messages(self, new_messages: list[Any]) -> None:
+    def replace_messages(self, new_messages: list[dict[str, Any]]) -> None:
         """Replace all messages (used after compaction)."""
         if new_messages is self.messages:
             return
         self.messages = list(new_messages)
 
-    def checkpoint(self) -> list[Any]:
+    def checkpoint(self) -> list[dict[str, Any]]:
         """Return a shallow copy of messages for rollback on interruption."""
         return list(self.messages)
 
-    def rollback(self, snapshot: list[Any]) -> None:
+    def rollback(self, snapshot: list[dict[str, Any]]) -> None:
         """Restore messages to a previous checkpoint."""
         self.messages = snapshot
 
@@ -125,6 +131,7 @@ class LLMAgent:
         reasoning_effort: ReasoningEffort = "high",
         context_length: int | None = None,
         permission_mode: PermissionMode = PermissionMode.AUTO,
+        persona: str | None = None,
         exec_mode: bool = False,
         is_subagent: bool = False,
         work_dir: str | None = None,
@@ -193,16 +200,19 @@ class LLMAgent:
         if not is_subagent:
             self._report_skill_issues(skill_issues)
 
-        # built-in system prompt and tools
+        # persona owns the system prompt and the tool surface; the bundled
+        # "coder" persona is the default.
         # A sub-agent must not spawn further sub-agents: spawning stays a
         # single, sequential level deep and always returns.
         self.is_subagent = is_subagent
         self.exec_mode = exec_mode
         self.work_dir = str(Path(work_dir).absolute()) if work_dir else str(Path.cwd())
-        self.system_prompt = build_system_prompt(exec_mode=exec_mode, is_subagent=is_subagent, work_dir=self.work_dir, skills=self.skills)
-        if not is_subagent:
+        self.persona: PersonaInfo = get_persona(persona or DEFAULT_PERSONA)
+        self.system_prompt = self._build_system_prompt()
+        # The skills summary only makes sense when the persona can load skills.
+        if not is_subagent and (self.persona.tools is None or "load_skill" in self.persona.tools):
             self._report_skills_summary()
-        self.tools = get_tool_definitions(include_subagent=not is_subagent)
+        self.tools = get_tool_definitions(include_subagent=not is_subagent, allowed=self.persona.tools)
 
         self.permissions = PermissionController(
             mode=permission_mode,
@@ -229,6 +239,7 @@ class LLMAgent:
             work_dir=self.work_dir,
             skills=self.skills,
             cancellation=cancellation,
+            allowed_tools=self.persona.tools,
         )
 
         self.context = ContextManager(self.system_prompt)
@@ -260,10 +271,20 @@ class LLMAgent:
         self.console.system(
             f"Created Agent with model: {model} (context: {self.context_length:,} tokens, "
             f"reasoning: {self.profile.reasoning or 'none'}/{self.reasoning_effort}), "
-            f"permission: {permission_mode.value}"
+            f"permission: {permission_mode.value}, persona: {self.persona.name}"
         )
         # self.console.system(f"System prompt: {self.system_prompt[:100]}...")
 
+
+    def _build_system_prompt(self) -> str:
+        """Build the system prompt via the active persona."""
+        ctx = PersonaContext(
+            exec_mode=self.exec_mode,
+            is_subagent=self.is_subagent,
+            work_dir=self.work_dir,
+            skills=self.skills,
+        )
+        return self.persona.build(ctx)
 
     def _accumulate_usage(self, usage):
         """Add token counts from an API response to session totals."""
@@ -410,15 +431,16 @@ class LLMAgent:
         self.context.add(message)
 
         if self.verbose:
-            cached = getattr(usage.prompt_tokens_details, "cached_tokens", None) if usage.prompt_tokens_details else None
-            reasoning = getattr(usage.completion_tokens_details, "reasoning_tokens", None) if usage.completion_tokens_details else None
+            cached = usage.prompt_tokens_details.cached_tokens if usage.prompt_tokens_details else None
+            reasoning = usage.completion_tokens_details.reasoning_tokens if usage.completion_tokens_details else None
             self.console.debug(
                 f"API response in {api_elapsed:.1f}s — total_tokens: {usage.total_tokens} = "
                 f"output: {usage.completion_tokens} (reasoning: {reasoning or 'N/A'}) "
                 f"input: {usage.prompt_tokens} (cached: {cached or 'N/A'})"
             )
-            if message.tool_calls:
-                self.console.debug(f"Requested tool calls: {len(message.tool_calls)}")
+            tool_calls = get_tool_calls(message)
+            if tool_calls:
+                self.console.debug(f"Requested tool calls: {len(tool_calls)}")
 
         return message
 
@@ -443,7 +465,7 @@ class LLMAgent:
                 )
         finally:
             client.close()
-        return response.choices[0].message, response.usage
+        return message_to_dict(response.choices[0].message), response.usage
 
     def _stream_completion(self, kwargs: dict):
         """Streaming call: buffer terminal output, return ``(message, usage)``.
@@ -489,9 +511,9 @@ class LLMAgent:
 
         prompt_chars = estimate_context_chars(self.context.get())
         prompt_tokens = self.token_estimator.chars_to_tokens(prompt_chars)
-        completion_chars = len(message.content or "")
-        for tc in message.tool_calls or []:
-            completion_chars += len(tc.function.arguments or "")
+        completion_chars = len(message.get("content") or "")
+        for tc in message.get("tool_calls") or []:
+            completion_chars += len(tc["function"].get("arguments") or "")
         completion_tokens = self.token_estimator.chars_to_tokens(completion_chars)
         return CompletionUsage(
             prompt_tokens=prompt_tokens,
@@ -513,7 +535,7 @@ class LLMAgent:
         t_all = time.monotonic()
         interrupted = False
         for i, tool_call in enumerate(tool_calls):
-            function_name = tool_call.function.name
+            function_name = tool_call["function"]["name"]
 
             # A user cancel aborts the whole round; fill remaining calls with
             # skipped results to keep assistant/tool pairing valid.
@@ -522,13 +544,13 @@ class LLMAgent:
             if interrupted:
                 self.context.add({
                     "role": "tool",
-                    "tool_call_id": tool_call.id,
+                    "tool_call_id": tool_call["id"],
                     "content": "Tool call skipped: the user interrupted the turn.",
                 })
                 continue
 
             try:
-                function_args = json.loads(tool_call.function.arguments)
+                function_args = json.loads(tool_call["function"]["arguments"])
             except json.JSONDecodeError as e:
                 function_args = {}
                 self.console.error(f"Failed to parse tool args: {e}")
@@ -540,7 +562,7 @@ class LLMAgent:
                 interrupted = True
                 self.context.add({
                     "role": "tool",
-                    "tool_call_id": tool_call.id,
+                    "tool_call_id": tool_call["id"],
                     "content": "Tool call skipped: the user interrupted the turn.",
                 })
                 continue
@@ -603,7 +625,7 @@ class LLMAgent:
                         function_name,
                         compaction_text,
                         result,
-                        tool_call.id,
+                        tool_call["id"],
                         self.work_dir,
                         self._session_id,
                         self.round_id,
@@ -634,7 +656,7 @@ class LLMAgent:
 
             tool_message = {
                 "role": "tool",
-                "tool_call_id": tool_call.id,
+                "tool_call_id": tool_call["id"],
                 "content": result_text,
             }
             self.context.add(tool_message)
@@ -713,19 +735,20 @@ class LLMAgent:
             except Exception:
                 raise
 
-            if message.content:
+            content = message.get("content")
+            if content:
                 # The stream sink renders buffered Markdown and emits the final
                 # event on close, so avoid printing it twice here.
                 if not self.stream:
-                    self.console.response(message.content)
+                    self.console.response(content)
 
-            if not message.tool_calls:
+            if not message.get("tool_calls"):
                 if self.verbose:
                     turn_elapsed = time.monotonic() - t_turn_start
                     self.console.debug(f"Turn complete: {iteration} iteration(s) in {turn_elapsed:.1f}s")
-                return message.content if message.content else None
+                return content or None
 
-            interrupted = self.execute_tool_calls(message.tool_calls)
+            interrupted = self.execute_tool_calls(message["tool_calls"])
 
             if interrupted:
                 # The user cancelled a tool mid-round. Stop the agentic loop
@@ -770,7 +793,7 @@ class LLMAgent:
 
     # ----- slash commands ---------------------------------------------------
 
-    COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "resume", "perm", "model", "reasoning", "context", "rewind", "skills", "goal", "system_prompt"}
+    COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "resume", "perm", "model", "reasoning", "context", "rewind", "skills", "goal", "system_prompt", "persona"}
 
     def _handle_command(self, raw: str) -> bool:
         """Handle a /command.  Returns True if the agent loop should stop."""
@@ -803,6 +826,8 @@ class LLMAgent:
             self._cmd_rewind(raw)
         elif cmd == "skills":
             self._cmd_skills(raw)
+        elif cmd == "persona":
+            self._cmd_persona(raw)
         elif cmd == "goal":
             self._cmd_goal(raw)
 
@@ -821,6 +846,7 @@ class LLMAgent:
             "  [cyan]/model[/cyan]       — Show or switch LLM model (/model <name>)\n"
             "  [cyan]/reasoning[/cyan]   — Show or set reasoning effort (none|minimal|low|medium|high|xhigh)\n"
             "  [cyan]/skills[/cyan]      — List skills; /skills <name> to load one, /skills reload to re-scan\n"
+            "  [cyan]/persona[/cyan]     — List personas; /persona <name> to switch (restarts conversation)\n"
             "  [cyan]/goal[/cyan]        — Set a goal the agent auto-iterates toward (/goal <text> | clear)\n"
             "  [cyan]/perm[/cyan]        — Show or change permission mode (/perm auto|default|strict)\n"
             "  [cyan]/rewind[/cyan]      — Roll back conversation and/or code to a previous round\n"
@@ -886,7 +912,10 @@ class LLMAgent:
             self.console.print(f"  Skills loaded  : {summary}")
 
     def _cmd_clear(self):
-        # Save the current session before starting fresh
+        self._restart_session()
+
+    def _restart_session(self):
+        """Save the current session and start a fresh one (used by /clear and /persona)."""
         if self._session_id and self.context.messages:
             try:
                 self.save_session(self._session_id)
@@ -912,6 +941,62 @@ class LLMAgent:
         self.tool_executor._change_tracker = self.changes
         self.tool_executor._get_round_id = lambda: self.round_id
         self.console.system(f"Started new session '{self._session_id}'.")
+
+    # ----- /persona ----------------------------------------------------------
+
+    def _cmd_persona(self, raw: str = "/persona"):
+        """List personas, or switch to one (switching restarts the conversation).
+
+        Usage: ``/persona`` (list) | ``/persona <name>`` (switch + restart).
+        """
+        parts = raw.split(maxsplit=1)
+        if len(parts) < 2 or not parts[1].strip():
+            try:
+                personas = list_personas()
+            except ValueError as e:
+                self.console.error(str(e))
+                return
+            self.console.print(f"[bold blue]Installed personas ({len(personas)}):[/bold blue]\n")
+            for name, info in personas.items():
+                current = " [green](current)[/green]" if name == self.persona.name else ""
+                default = " [dim](default)[/dim]" if name == DEFAULT_PERSONA else ""
+                tools = "all tools" if info.tools is None else (
+                    f"tools: {', '.join(sorted(info.tools))}" if info.tools else "no tools"
+                )
+                self.console.print(f"  [cyan]{name}[/cyan]{default}{current}")
+                if info.description:
+                    self.console.print(f"    {info.description}")
+                self.console.print(f"    [dim]{tools}[/dim]")
+            self.console.print(
+                "\n[dim]/persona <name> to switch (restarts the conversation)[/dim]"
+            )
+            return
+
+        target = parts[1].strip()
+        if target == self.persona.name:
+            self.console.system(f"Already using persona '{target}'.")
+            return
+        try:
+            persona = get_persona(target)
+        except ValueError as e:
+            self.console.error(str(e))
+            return
+
+        self._switch_persona(persona)
+
+    def _switch_persona(self, persona: PersonaInfo):
+        """Apply a new persona (prompt + tool surface) and restart the conversation.
+
+        A persona switch is a full restart: the new prompt and tool whitelist
+        would otherwise conflict with the existing history (old tool calls the
+        new persona no longer offers, context sections it no longer shows).
+        """
+        self.persona = persona
+        self.tools = get_tool_definitions(include_subagent=not self.is_subagent, allowed=persona.tools)
+        self.system_prompt = self._build_system_prompt()
+        self.context.system_prompt["content"] = self.system_prompt
+        self._restart_session()
+        self.console.system(f"Switched to persona: {persona.name}")
 
     # ----- /goal auto-iteration --------------------------------------------
 
@@ -984,7 +1069,7 @@ class LLMAgent:
             self.console.system("[goal] cleared (interrupted).")
             return
 
-        report = getattr(self.tool_executor, "_goal_report", None)
+        report = self.tool_executor.goal_report
         if report and report.get("met"):
             reason = report.get("reason", "")
             self.console.system(f"[goal] ✓ met after {self.goal_iterations} iteration(s)." + (f" {reason}" if reason else ""))
@@ -1005,18 +1090,9 @@ class LLMAgent:
     def _session_preview(messages: list) -> str:
         """Short preview from the last user message of a saved session."""
         for m in reversed(messages):
-            if not (isinstance(m, dict) and m.get("role") == "user"):
+            if get_role(m) != "user":
                 continue
-            content = m.get("content", "")
-            if isinstance(content, list):
-                text = " ".join(
-                    item.get("text", "")
-                    for item in content
-                    if isinstance(item, dict) and item.get("type") == "text"
-                )
-            else:
-                text = str(content)
-            text = text.replace("\n", " ").strip()
+            text = get_text(m).replace("\n", " ").strip()
             return text[:60] + ("..." if len(text) > 60 else "")
         return ""
 
@@ -1249,21 +1325,7 @@ class LLMAgent:
         total_chars = 0
         lines = [f"[bold blue]Context log ({len(msgs)} messages):[/bold blue]"]
 
-        def _tc_name(tc) -> str:
-            if isinstance(tc, dict):
-                return tc.get("function", {}).get("name", "?")
-            return getattr(getattr(tc, "function", None), "name", "?")
-
-        def _tc_id(tc) -> str | None:
-            return tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
-
-        tc_id_to_name: dict[str, str] = {}
-        for m in msgs:
-            if get_role(m) == "assistant":
-                for tc in get_tool_calls(m):
-                    tid = _tc_id(tc)
-                    if tid:
-                        tc_id_to_name[tid] = _tc_name(tc)
+        tc_id_to_name = build_tool_name_index(msgs)
 
         for idx, m in enumerate(msgs):
             role = get_role(m)
@@ -1281,7 +1343,7 @@ class LLMAgent:
             tcs = get_tool_calls(m) if role == "assistant" else []
             if tcs:
                 n_tc = len(tcs)
-                tc_names = ", ".join(_tc_name(tc) for tc in tcs)
+                tc_names = ", ".join(tc.get("function", {}).get("name", "?") for tc in tcs)
                 extra = f"[yellow]{n_tc} call{'s' if n_tc > 1 else ''}[/yellow] ({tc_names})"
                 if preview:
                     lines.append(f"  [dim]#{idx:<3}[/dim] {role_tag} {size_tag}  {extra}  {preview}")
@@ -1497,12 +1559,7 @@ class LLMAgent:
         self._report_skill_issues(issues)
 
         # Rebuild the system prompt so the advertised skill list stays current.
-        self.system_prompt = build_system_prompt(
-            exec_mode=self.exec_mode,
-            is_subagent=self.is_subagent,
-            work_dir=self.work_dir,
-            skills=self.skills,
-        )
+        self.system_prompt = self._build_system_prompt()
         self.context.system_prompt["content"] = self.system_prompt
         self._report_skills_summary()
 
@@ -1550,15 +1607,6 @@ class LLMAgent:
         d.mkdir(parents=True, exist_ok=True)
         return d
 
-    @staticmethod
-    def _serialize_message(msg) -> dict:
-        """Convert a message (dict or OpenAI object) to a plain dict for JSON."""
-        if isinstance(msg, dict):
-            return msg
-        if hasattr(msg, "model_dump"):
-            return msg.model_dump(exclude_none=True)
-        return dict(msg)
-
     def save_session(self, name: str | None = None) -> Path:
         """Save the current session state to a JSON file. Returns the file path."""
         if not name:
@@ -1570,12 +1618,13 @@ class LLMAgent:
             "token_totals": self.token_totals,
             "tool_compaction_totals": self.tool_compaction_totals,
             "system_prompt": self.context.system_prompt,
+            "persona": self.persona.name,
             "goal": self.goal,
             "goal_active": self.goal_active,
             "goal_iterations": self.goal_iterations,
             "loaded_skills": sorted(self.tool_executor._loaded_skills),
             "skill_loads": self.tool_executor._skill_loads,
-            "messages": [self._serialize_message(m) for m in self.context.messages],
+            "messages": self.context.messages,
         }
 
         path = self._sessions_dir() / f"{name}.json"
@@ -1604,6 +1653,19 @@ class LLMAgent:
         saved_model = data.get("model", "")
         if saved_model != self.model:
             self.console.system(f"Note: session was saved with model '{saved_model}', current model is '{self.model}'")
+
+        # Re-apply the persona the session was saved under, so the prompt and
+        # tool surface match the replayed conversation.
+        saved_persona = data.get("persona")
+        if saved_persona and saved_persona != self.persona.name:
+            try:
+                self.persona = get_persona(saved_persona)
+            except ValueError:
+                self.console.warn(f"Session persona '{saved_persona}' not found; keeping '{self.persona.name}'.")
+            else:
+                self.tools = get_tool_definitions(include_subagent=not self.is_subagent, allowed=self.persona.tools)
+                self.system_prompt = self._build_system_prompt()
+                self.context.system_prompt["content"] = self.system_prompt
 
         self.context.replace_messages(data["messages"])
         self.round_id = data.get("round_id", 0)
@@ -1666,19 +1728,12 @@ class LLMAgent:
                 if text:
                     self.console.response(text)
                 for tc in get_tool_calls(msg):
-                    if isinstance(tc, dict):
-                        fn = tc.get("function", {})
-                        fname = fn.get("name", "?")
-                        try:
-                            fargs = json.loads(fn.get("arguments", "{}"))
-                        except (json.JSONDecodeError, TypeError):
-                            fargs = {}
-                    else:
-                        fname = getattr(getattr(tc, "function", None), "name", "?")
-                        try:
-                            fargs = json.loads(getattr(getattr(tc, "function", None), "arguments", "{}"))
-                        except (json.JSONDecodeError, TypeError):
-                            fargs = {}
+                    fn = tc.get("function", {})
+                    fname = fn.get("name", "?")
+                    try:
+                        fargs = json.loads(fn.get("arguments") or "{}")
+                    except json.JSONDecodeError:
+                        fargs = {}
                     self.console.tool(f"{fname}({json.dumps(fargs, ensure_ascii=False)})")
 
             elif role == "tool":
@@ -1822,7 +1877,7 @@ class LLMAgent:
                 self.console.rule()
 
                 # Reset any stale goal report before running the round.
-                self.tool_executor._goal_report = None
+                self.tool_executor.goal_report = None
 
                 with self._operation("agent response"):
                     self.get_response()

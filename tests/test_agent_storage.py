@@ -1,4 +1,7 @@
+import tempfile
 from pathlib import Path
+
+import pytest
 
 from kiui.agent.storage import (
     allocated_size,
@@ -7,6 +10,16 @@ from kiui.agent.storage import (
     format_size,
     storage_entries,
 )
+
+
+def _symlinks_supported() -> bool:
+    """Windows requires elevated privileges (or Developer Mode) for symlinks."""
+    with tempfile.TemporaryDirectory() as d:
+        try:
+            Path(d, "link").symlink_to(Path(d, "target"))
+            return True
+        except OSError:
+            return False
 
 
 def _write(path: Path, content: bytes = b"data") -> None:
@@ -50,6 +63,9 @@ def test_clean_storage_preserves_skills_and_unknown_entries(tmp_path):
     assert (tmp_path / ".kia" / "notes").exists()
 
 
+@pytest.mark.skipif(
+    not _symlinks_supported(), reason="symlinks not permitted on this system"
+)
 def test_clean_storage_unlinks_top_level_symlinks_without_following_them(tmp_path):
     outside = tmp_path / "outside"
     _write(outside / "keep.txt")

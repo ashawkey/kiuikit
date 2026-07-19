@@ -11,6 +11,7 @@ A lightweight, terminal-based AI agent that can browse the web, read/write files
 - **Streaming**: Responses render token-by-token in both the terminal and Web UI, with reasoning/thinking stream shown automatically for compatible models.
 - **Sub-agents**: Can spawn sub-agents to handle complex sub-tasks in-process.
 - **Skills**: Load domain-specific instructions via customizable skill packs (`.kia/skills/`).
+- **Personas**: Switch the agent's identity, system prompt, and tool surface via bundled persona modules (e.g. `agent`, `chatter`).
 - **Context Management**: Proactive tool-output filtering, automatic pruning, and LLM-based compaction keep context focused.
 - **Rewind**: Roll back conversation and/or code changes to any previous round.
 - **Permissions**: Three confirmation modes (auto / default / strict) and defense-in-depth detection of common destructive shell commands.
@@ -66,6 +67,7 @@ kia --model <model_alias> --verbose --perm strict --resume [session_id]
 | Flag | Description |
 |------|-------------|
 | `--model` | Model alias from config (default: first configured) |
+| `--persona` | Persona to run as (default: `coder`; see `/persona`) |
 | `--verbose` | Enable verbose debug output |
 | `--stream` / `--no-stream` | Stream the response token-by-token as it is generated (default: on) |
 
@@ -144,6 +146,7 @@ The agent supports the following slash commands in the CLI:
 | `/model [name]` | Show or switch LLM model mid-session |
 | `/rewind [round]` | Roll back conversation and/or code to a previous round |
 | `/skills` | List installed skills; `/skills reload` to re-scan; `/skills <name>` to load one |
+| `/persona` | List personas; `/persona <name>` to switch (restarts the conversation) |
 | `/goal [text\|clear]` | Set a goal the agent auto-iterates toward until met (see [Goals](#goals)) |
 | `/clear` | Clear conversation history and start a new session |
 | `/resume [session_id]` | Save the current session, then resume a previous one (bare `/resume` picks interactively) |
@@ -298,6 +301,30 @@ is initialized on the first upload.
 ### Bundled skills
 
 kia ships a few common skills (currently `skill-creator`, which teaches the agent how to author new spec-compliant skills). On first run in a project, these are copied into `.kia/skills/` so they are available out of the box and remain fully editable. An existing skill of the same name is never overwritten, so your edits are preserved; delete a copy to have it reinstalled on the next run.
+
+## Personas
+
+A persona owns the agent's identity, system prompt, and tool surface. Personas are Python modules bundled in `kiui/agent/personas/`:
+
+| Persona | Tools | Purpose |
+|---------|-------|---------|
+| `coder` | all | The default coding agent (project-aware, full tool access) |
+| `chatter` | `web_search`, `web_fetch` | General chatbot without file/shell access or environment context |
+
+Select one at startup, or switch mid-session (switching **restarts the conversation**, like `/clear`):
+
+```bash
+kia --persona chatter
+```
+
+| Command | Effect |
+|---------|--------|
+| `/persona` | List installed personas (with their tool surface) |
+| `/persona <name>` | Switch persona and restart the conversation |
+
+The active persona is saved with the session and re-applied on `--resume`.
+
+Each persona module defines `build_system_prompt(ctx)` — the complete system prompt, composed from the shared section blocks in `kiui/agent/prompts.py` — plus an optional `TOOLS` whitelist that is enforced both in the advertised tool definitions and in the tool executor itself. To add a persona, drop a new module into `kiui/agent/personas/` following the same contract.
 
 ## Sessions
 

@@ -149,29 +149,46 @@ def _skills_root(checkout: Path) -> Path:
 
 
 def _copy_tree(source: Path, dest: Path) -> None:
-    """Copy regular files without following source symlinks."""
-    nofollow = getattr(os, "O_NOFOLLOW", 0)
-    directory = getattr(os, "O_DIRECTORY", 0)
+    """Copy regular files without following source symlinks.
 
+    POSIX uses an fd-relative walk, which also resists symlink-swap races;
+    platforms without ``dir_fd`` (e.g. Windows) fall back to a path-based
+    walk that re-validates each file after opening it.
+    """
+    dest.mkdir()
+    if os.name == "posix":
+        _copy_tree_fd(source, dest)
+    else:
+        _copy_tree_paths(source, dest)
+
+
+def _check_copy_entry(entry: os.DirEntry, mode: int) -> None:
+    if entry.name == ".git":
+        raise LibraryError(f"skill contains Git metadata: {entry.name}")
+    if stat.S_ISLNK(mode):
+        raise LibraryError(f"skill contains a symlink: {entry.name}")
+    if not (stat.S_ISDIR(mode) or stat.S_ISREG(mode)):
+        raise LibraryError(f"skill contains a non-regular file: {entry.name}")
+
+
+def _copy_tree_fd(source: Path, dest: Path) -> None:
     def copy_dir(source_fd: int, target: Path) -> None:
         for entry in os.scandir(source_fd):
             relative = target / entry.name
-            if entry.name == ".git":
-                raise LibraryError(f"skill contains Git metadata: {entry.name}")
             mode = entry.stat(follow_symlinks=False).st_mode
-            if stat.S_ISLNK(mode):
-                raise LibraryError(f"skill contains a symlink: {entry.name}")
+            _check_copy_entry(entry, mode)
             if stat.S_ISDIR(mode):
                 relative.mkdir()
                 child_fd = os.open(
-                    entry.name, os.O_RDONLY | directory | nofollow, dir_fd=source_fd
+                    entry.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                    dir_fd=source_fd,
                 )
                 try:
                     copy_dir(child_fd, relative)
                 finally:
                     os.close(child_fd)
             elif stat.S_ISREG(mode):
-                source_file = os.open(entry.name, os.O_RDONLY | nofollow, dir_fd=source_fd)
+                source_file = os.open(entry.name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=source_fd)
                 try:
                     opened_mode = os.fstat(source_file).st_mode
                     if not stat.S_ISREG(opened_mode):
@@ -181,15 +198,33 @@ def _copy_tree(source: Path, dest: Path) -> None:
                     relative.chmod(stat.S_IMODE(opened_mode))
                 finally:
                     os.close(source_file)
-            else:
-                raise LibraryError(f"skill contains a non-regular file: {entry.name}")
 
-    dest.mkdir()
-    source_fd = os.open(source, os.O_RDONLY | directory | nofollow)
+    source_fd = os.open(source, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
         copy_dir(source_fd, dest)
     finally:
         os.close(source_fd)
+
+
+def _copy_tree_paths(source: Path, dest: Path) -> None:
+    def copy_dir(source_dir: Path, target: Path) -> None:
+        for entry in os.scandir(source_dir):
+            relative = target / entry.name
+            mode = entry.stat(follow_symlinks=False).st_mode
+            _check_copy_entry(entry, mode)
+            if stat.S_ISDIR(mode):
+                relative.mkdir()
+                copy_dir(Path(entry.path), relative)
+            elif stat.S_ISREG(mode):
+                with open(entry.path, "rb") as src:
+                    opened_mode = os.fstat(src.fileno()).st_mode
+                    if not stat.S_ISREG(opened_mode):
+                        raise LibraryError(f"skill contains a non-regular file: {entry.name}")
+                    with relative.open("xb") as dst:
+                        shutil.copyfileobj(src, dst)
+                relative.chmod(stat.S_IMODE(opened_mode))
+
+    copy_dir(source, dest)
 
 
 @contextmanager

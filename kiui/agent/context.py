@@ -146,22 +146,18 @@ class TokenEstimator:
 
 
 # ---------------------------------------------------------------------------
-# Message helpers (handle both dict messages and OpenAI ChatCompletionMessage)
+# Message helpers (context messages are plain dicts in the OpenAI wire
+# format; SDK response objects are normalized at ingress, see streaming.py)
 # ---------------------------------------------------------------------------
 
 
-def get_role(msg: Any) -> str:
-    if isinstance(msg, dict):
-        return msg.get("role", "")
-    return getattr(msg, "role", "")
+def get_role(msg: dict) -> str:
+    return msg.get("role", "")
 
 
-def get_text(msg: Any) -> str:
+def get_text(msg: dict) -> str:
     """Extract concatenated text content from a message."""
-    if isinstance(msg, dict):
-        content = msg.get("content", "")
-    else:
-        content = getattr(msg, "content", "") or ""
+    content = msg.get("content", "")
     if isinstance(content, str):
         return content
     if isinstance(content, list):
@@ -181,28 +177,20 @@ def set_text(msg: dict, text: str) -> dict:
     return {**msg, "content": text}
 
 
-def get_tool_calls(msg: Any) -> list:
-    if isinstance(msg, dict):
-        return msg.get("tool_calls") or []
-    return getattr(msg, "tool_calls", None) or []
+def get_tool_calls(msg: dict) -> list:
+    return msg.get("tool_calls") or []
 
 
-def get_tool_call_id(msg: Any) -> str | None:
-    if isinstance(msg, dict):
-        return msg.get("tool_call_id")
-    return getattr(msg, "tool_call_id", None)
+def get_tool_call_id(msg: dict) -> str | None:
+    return msg.get("tool_call_id")
 
 
-def msg_chars(msg: Any) -> int:
+def msg_chars(msg: dict) -> int:
     """Rough character cost of a single message."""
     chars = len(get_text(msg))
     if get_role(msg) == "assistant":
         for tc in get_tool_calls(msg):
-            if isinstance(tc, dict):
-                args = tc.get("function", {}).get("arguments", "")
-            else:
-                args = getattr(getattr(tc, "function", None), "arguments", "") or ""
-            chars += len(args) if isinstance(args, str) else 0
+            chars += len(tc.get("function", {}).get("arguments") or "")
     return chars
 
 
@@ -642,7 +630,7 @@ def compact_tool_result_envelope(
 # ---------------------------------------------------------------------------
 
 
-def _build_tool_name_index(messages: list) -> dict[str, str]:
+def build_tool_name_index(messages: list) -> dict[str, str]:
     """Build a tool_call_id → tool_name lookup from all assistant messages.
 
     Single O(n) pass replaces the per-tool-message backward walk.
@@ -652,11 +640,8 @@ def _build_tool_name_index(messages: list) -> dict[str, str]:
         if get_role(msg) != "assistant":
             continue
         for tc in get_tool_calls(msg):
-            tc_id = tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
-            if isinstance(tc, dict):
-                name = tc.get("function", {}).get("name")
-            else:
-                name = getattr(getattr(tc, "function", None), "name", None)
+            tc_id = tc.get("id")
+            name = tc.get("function", {}).get("name")
             if tc_id and name:
                 index[tc_id] = name
     return index
@@ -722,12 +707,12 @@ def prune_context(messages: list, context_length: int, chars_per_token: float = 
 
     start, end = _prunable_range(messages)
 
-    tool_name_index = _build_tool_name_index(messages)
+    tool_name_index = build_tool_name_index(messages)
 
     prunable: list[int] = []
     for i in range(start, end):
         msg = messages[i]
-        if get_role(msg) != "tool" or not isinstance(msg, dict):
+        if get_role(msg) != "tool":
             continue
         tc_id = get_tool_call_id(msg)
         name = tool_name_index.get(tc_id) if tc_id else None
@@ -827,11 +812,7 @@ def _messages_to_text(messages: list) -> str:
             if text:
                 parts.append(f"Assistant: {text[:limit]}")
             for tc in get_tool_calls(msg):
-                name = (
-                    tc.get("function", {}).get("name", "?")
-                    if isinstance(tc, dict)
-                    else getattr(getattr(tc, "function", None), "name", "?")
-                )
+                name = tc.get("function", {}).get("name", "?")
                 parts.append(f"  [Called tool: {name}]")
         elif role == "tool":
             snippet = text[:limit] + "..." if len(text) > limit else text

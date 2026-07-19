@@ -221,11 +221,16 @@ def apply_edit(content: str, old_text: str, new_text: str, replace_all: bool) ->
 
 
 
-def get_tool_definitions(include_subagent: bool = True) -> list[dict[str, Any]]:
-    """Return OpenAI-format tool definitions for all built-in tools.
+def get_tool_definitions(
+    include_subagent: bool = True,
+    allowed: set[str] | frozenset | None = None,
+) -> list[dict[str, Any]]:
+    """Return OpenAI-format tool definitions for the built-in tools.
 
     Set *include_subagent* to False for sub-agents, which must not be able to
     spawn further sub-agents (keeps spawning a single, sequential level deep).
+    Set *allowed* to a persona's tool whitelist to advertise only those tools;
+    None advertises all tools.
     """
     definitions = [
         {
@@ -486,6 +491,11 @@ def get_tool_definitions(include_subagent: bool = True) -> list[dict[str, Any]]:
             d for d in definitions
             if d.get("function", {}).get("name") != "spawn_subagent"
         ]
+    if allowed is not None:
+        definitions = [
+            d for d in definitions
+            if d.get("function", {}).get("name") in allowed
+        ]
     return definitions
 
 
@@ -533,7 +543,7 @@ class ToolExecutor:
         self._skill_loads: dict[str, int] = {}
         # Last report_goal() call result: None, or {"met": bool, "reason": str}.
         # Consumed by LLMAgent after each goal-check round.
-        self._goal_report: dict | None = None
+        self.goal_report: dict | None = None
 
     def _resolve_path(self, path: str | os.PathLike[str]) -> Path:
         """Resolve a caller path lexically against the executor's work directory."""
@@ -1392,13 +1402,13 @@ class ToolExecutor:
     def _report_goal(self, met: bool = False, reason: str = "") -> dict[str, Any]:
         """Record whether the current standing goal is met.
 
-        The result is stashed on ``self._goal_report`` for the agent loop to
+        The result is stashed on ``self.goal_report`` for the agent loop to
         read after the round; it decides whether to keep auto-iterating.
         """
         met = bool(met)
         reason = reason or ""
         self.console.tool(f"report_goal(met={met})")
-        self._goal_report = {"met": met, "reason": reason}
+        self.goal_report = {"met": met, "reason": reason}
         status = "goal met" if met else "goal not yet met"
         return {
             "message": f"Recorded: {status}." + (f" {reason}" if reason else ""),

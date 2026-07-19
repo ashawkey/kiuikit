@@ -62,13 +62,13 @@ def test_report_goal_records_result():
     result = executor.execute("report_goal", {"met": True, "reason": "all green"})
 
     assert result["success"] is True
-    assert executor._goal_report == {"met": True, "reason": "all green"}
+    assert executor.goal_report == {"met": True, "reason": "all green"}
 
 
 def test_report_goal_defaults_to_not_met():
     executor = ToolExecutor(console=AgentConsole())
     executor.execute("report_goal", {})
-    assert executor._goal_report == {"met": False, "reason": ""}
+    assert executor.goal_report == {"met": False, "reason": ""}
 
 
 # ----- iteration control ---------------------------------------------------
@@ -77,7 +77,7 @@ def test_maybe_continue_met_stops_loop():
     agent = make_agent()
     agent._cmd_goal("/goal x")
     agent._pending_auto = None  # consumed by the round
-    agent.tool_executor._goal_report = {"met": True, "reason": "done"}
+    agent.tool_executor.goal_report = {"met": True, "reason": "done"}
 
     agent._maybe_continue_goal()
     assert agent.goal_active is False
@@ -88,7 +88,7 @@ def test_maybe_continue_unmet_iterates():
     agent = make_agent()
     agent._cmd_goal("/goal x")
     agent._pending_auto = None
-    agent.tool_executor._goal_report = {"met": False, "reason": "still failing"}
+    agent.tool_executor.goal_report = {"met": False, "reason": "still failing"}
 
     agent._maybe_continue_goal()
     assert agent.goal_active is True
@@ -100,7 +100,7 @@ def test_maybe_continue_missing_report_still_iterates():
     agent = make_agent()
     agent._cmd_goal("/goal x")
     agent._pending_auto = None
-    agent.tool_executor._goal_report = None  # model forgot to call report_goal
+    agent.tool_executor.goal_report = None  # model forgot to call report_goal
 
     agent._maybe_continue_goal()
     assert agent.goal_active is True
@@ -112,7 +112,7 @@ def test_maybe_continue_interrupt_clears_goal():
     agent._cmd_goal("/goal x")
     agent._pending_auto = None
     agent._last_interrupted = True
-    agent.tool_executor._goal_report = None
+    agent.tool_executor.goal_report = None
 
     agent._maybe_continue_goal()
     assert agent.goal is None
@@ -123,7 +123,7 @@ def test_maybe_continue_interrupt_clears_goal():
 
 def test_maybe_continue_noop_when_no_goal():
     agent = make_agent()
-    agent.tool_executor._goal_report = {"met": False, "reason": "x"}
+    agent.tool_executor.goal_report = {"met": False, "reason": "x"}
     agent._maybe_continue_goal()
     assert agent._pending_auto is None
     assert agent.goal_iterations == 0

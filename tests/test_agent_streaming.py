@@ -47,8 +47,8 @@ def test_consume_stream_accumulates_content_and_calls_back():
         _chunk(delta=None, usage=_usage(total_tokens=3, prompt_tokens=1, completion_tokens=2)),
     ]
     message, usage = consume_stream(stream, on_content=parts.append)
-    assert message.content == "Hello"
-    assert message.tool_calls is None
+    assert message["content"] == "Hello"
+    assert "tool_calls" not in message
     assert parts == ["Hel", "lo"]
     assert usage.total_tokens == 3
 
@@ -60,12 +60,13 @@ def test_consume_stream_reassembles_tool_call_fragments():
         _chunk(delta=None, usage=_usage(total_tokens=5, prompt_tokens=3, completion_tokens=2)),
     ]
     message, _ = consume_stream(stream)
-    assert message.content is None
-    assert len(message.tool_calls) == 1
-    tc = message.tool_calls[0]
-    assert tc.id == "call_1"
-    assert tc.function.name == "read_file"
-    assert tc.function.arguments == '{"file": "a.py"}'
+    assert message["content"] is None
+    assert len(message["tool_calls"]) == 1
+    tc = message["tool_calls"][0]
+    assert tc["id"] == "call_1"
+    assert tc["type"] == "function"
+    assert tc["function"]["name"] == "read_file"
+    assert tc["function"]["arguments"] == '{"file": "a.py"}'
 
 
 def test_consume_stream_captures_reasoning_variants():
@@ -77,8 +78,8 @@ def test_consume_stream_captures_reasoning_variants():
     ]
     message, _ = consume_stream(stream, on_thinking=thoughts.append)
     assert thoughts == ["think ", "more"]
-    assert message.reasoning_content == "think more"
-    assert message.content == "answer"
+    assert message["reasoning_content"] == "think more"
+    assert message["content"] == "answer"
 
 
 def test_consume_stream_stops_early_on_should_stop():

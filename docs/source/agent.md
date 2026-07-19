@@ -216,6 +216,21 @@ Useful commands:
 
 `kia` ships with a `skill-creator` skill that can draft and validate new skill packs. Bundled skills are copied into the project on first use and never overwrite your edits.
 
+## Personas
+
+A persona owns the agent's identity, system prompt, and tool surface — unlike skills, which add instructions, a persona replaces them. Personas are Python modules bundled in `kiui/agent/personas/`; `coder` (the default) is the full coding agent, while `chatter` is a general chatbot limited to `web_search` and `web_fetch`, with no file/shell access and no environment context in its prompt.
+
+```bash
+kia --persona chatter   # start as another persona
+```
+
+```text
+/persona                list installed personas and their tool surface
+/persona chatter        switch persona (restarts the conversation, like /clear)
+```
+
+Each persona module defines `build_system_prompt(ctx)` — composed from the shared blocks in `kiui/agent/prompts.py` — and an optional `TOOLS` whitelist enforced in both the advertised tool definitions and the tool executor.
+
 ### Personal skill library
 
 Configure a Git repository to share skills between projects:
@@ -303,6 +318,7 @@ kia --clean
 | Option | Description |
 |--------|-------------|
 | `--model NAME` | Use a configured model alias. |
+| `--persona NAME` | Run as a persona (default: `agent`). |
 | `--reasoning-effort LEVEL` | Set `none`, `minimal`, `low`, `medium`, `high`, or `xhigh`. |
 | `--perm MODE` | Set `auto`, `default`, or `strict`. |
 | `--stream` / `--no-stream` | Enable or disable token-by-token output. |
@@ -328,6 +344,7 @@ Run `kia --help` for the options supported by your installed version.
 | `/model [name]` | Show or switch the active model. |
 | `/reasoning [level]` | Show or change reasoning effort. |
 | `/skills [name\|reload]` | List, load, or rediscover skills. |
+| `/persona [name]` | List personas, or switch (restarts the conversation). |
 | `/goal [text\|clear]` | Show, set, or clear a standing goal. |
 | `/perm [mode]` | Show or change confirmation mode. |
 | `/rewind [round]` | Roll conversation and/or files back. |

@@ -1,6 +1,8 @@
 """Regression tests for agent safety routing, compaction, and stream cleanup."""
 
 import json
+import os
+import sys
 from contextlib import nullcontext
 from types import SimpleNamespace as NS
 
@@ -77,6 +79,7 @@ def test_execute_initializes_session_id(monkeypatch):
     assert messages == [{"role": "user", "content": "review files"}]
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix shell command semantics")
 def test_direct_bash_routes_through_safety_guard(tmp_path):
     console = _Console()
     executed = []
@@ -307,7 +310,7 @@ def test_small_exec_result_discards_temporary_artifact(tmp_path):
     producer.write_text("small")
     console = _Console()
     console.system = lambda *args, **kwargs: None
-    tool_call = NS(function=NS(name="exec_command", arguments='{"command": "echo ok"}'), id="call-small")
+    tool_call = {"id": "call-small", "type": "function", "function": {"name": "exec_command", "arguments": '{"command": "echo ok"}'}}
     result = {
         "stdout": "ok\n",
         "exit_code": 0,
@@ -344,10 +347,7 @@ def test_large_failed_exec_uses_full_capture_for_compaction(tmp_path):
         "_artifact_path": str(producer),
         "original_output_chars": len(captured),
     }
-    tool_call = NS(
-        function=NS(name="exec_command", arguments='{"command": "custom-build"}'),
-        id="call-failed",
-    )
+    tool_call = {"id": "call-failed", "type": "function", "function": {"name": "exec_command", "arguments": '{"command": "custom-build"}'}}
     agent = NS(
         verbose=False,
         console=console,
@@ -380,10 +380,7 @@ def test_actual_failed_exec_capture_is_compacted_and_persisted(tmp_path):
         "python -c \"import sys; print('HEAD'); print('x' * 5000); "
         "print('brief stderr', file=sys.stderr); sys.exit(1)\""
     )
-    tool_call = NS(
-        function=NS(name="exec_command", arguments=json.dumps({"command": command})),
-        id="call-real-failed",
-    )
+    tool_call = {"id": "call-real-failed", "type": "function", "function": {"name": "exec_command", "arguments": json.dumps({"command": command})}}
     agent = NS(
         verbose=False,
         console=console,
@@ -416,7 +413,7 @@ def test_large_tool_result_is_persisted_before_context(tmp_path):
     console = _Console()
     console.system = lambda *args, **kwargs: None
     result_text = "first\n" + "noise\n" * 3000 + "ERROR final\n"
-    tool_call = NS(function=NS(name="exec_command", arguments='{"command": "noisy"}'), id="call-1")
+    tool_call = {"id": "call-1", "type": "function", "function": {"name": "exec_command", "arguments": '{"command": "noisy"}'}}
     agent = NS(
         verbose=False,
         console=console,
@@ -440,7 +437,8 @@ def test_large_tool_result_is_persisted_before_context(tmp_path):
     assert "Large exec_command result compacted" in stored
     artifact = tmp_path / ".kia" / "tool-results" / "test" / "r2-call-1-exec_command.txt"
     assert artifact.read_text() == result_text
-    assert artifact.stat().st_mode & 0o077 == 0
+    if os.name == "posix":  # Windows has no Unix permission bits
+        assert artifact.stat().st_mode & 0o077 == 0
 
 
 def test_artifact_unlink_failure_does_not_skip_tool_response(tmp_path):
@@ -450,10 +448,7 @@ def test_artifact_unlink_failure_does_not_skip_tool_response(tmp_path):
     console.system = lambda *args, **kwargs: None
     warnings = []
     console.warn = lambda message: warnings.append(message)
-    tool_call = NS(
-        function=NS(name="exec_command", arguments='{"command": "echo ok"}'),
-        id="call-unlink",
-    )
+    tool_call = {"id": "call-unlink", "type": "function", "function": {"name": "exec_command", "arguments": '{"command": "echo ok"}'}}
     result = {
         "stdout": "ok\n",
         "success": True,

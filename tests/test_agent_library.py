@@ -1,5 +1,7 @@
 """Tests for the Git-backed personal skill library."""
 
+import os
+import tempfile
 from pathlib import Path
 import subprocess
 
@@ -16,9 +18,32 @@ from kiui.agent.library import (
 )
 
 
+def _symlinks_supported() -> bool:
+    """Windows requires elevated privileges (or Developer Mode) for symlinks."""
+    with tempfile.TemporaryDirectory() as d:
+        try:
+            Path(d, "link").symlink_to(Path(d, "target"))
+            return True
+        except OSError:
+            return False
+
+
+symlink_required = pytest.mark.skipif(
+    not _symlinks_supported(), reason="symlinks not permitted on this system"
+)
+
+
 @pytest.fixture(autouse=True)
 def _isolated_home(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    home = str(tmp_path / "home")
+    # Path.home() follows HOME on POSIX, USERPROFILE on Windows.
+    monkeypatch.setenv("HOME", home)
+    monkeypatch.setenv("USERPROFILE", home)
+    # Env-based git identity: works regardless of the (now hidden) gitconfig.
+    for var in ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"):
+        monkeypatch.setenv(var, "kia-tests")
+    for var in ("GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"):
+        monkeypatch.setenv(var, "kia-tests@example.com")
 
 
 def _git(*args: str, cwd: Path | None = None) -> str:
@@ -271,6 +296,7 @@ def test_upload_rejects_bundled_skill(tmp_path, name):
         upload_skill(str(remote), name, source)
 
 
+@pytest.mark.skipif(os.name != "posix", reason="executable bit is POSIX-only")
 def test_upload_preserves_executable_mode_and_ignores_empty_directories(tmp_path):
     remote = _remote(tmp_path)
     source = tmp_path / "source"
@@ -289,6 +315,7 @@ def test_upload_preserves_executable_mode_and_ignores_empty_directories(tmp_path
     assert mode.startswith("100755 ")
 
 
+@symlink_required
 def test_upload_uses_validated_snapshot(tmp_path, monkeypatch):
     from contextlib import contextmanager
     from kiui.agent import library
@@ -326,6 +353,7 @@ def test_upload_rejects_git_metadata(tmp_path):
         upload_skill(str(remote), "alpha", source)
 
 
+@symlink_required
 def test_library_rejects_symlinked_skills_root(tmp_path):
     remote = _remote(tmp_path)
     seed = tmp_path / "seed"
@@ -344,6 +372,7 @@ def test_library_rejects_symlinked_skills_root(tmp_path):
     assert victim.is_dir()
 
 
+@symlink_required
 def test_upload_rejects_invalid_skill_and_symlink(tmp_path):
     remote = _remote(tmp_path)
     source = tmp_path / "source"

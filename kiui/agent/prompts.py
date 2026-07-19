@@ -1,103 +1,81 @@
-"""Centralized system prompt builder for kiui agent."""
+"""Shared system-prompt building blocks for kiui agent personas.
+
+This module is a toolbox, not a composer: each persona (see
+``kiui/agent/personas/``) builds its own complete system prompt by combining
+the section constants and builders below with its own identity text. The
+bundled ``agent`` persona shows the canonical composition.
+"""
 
 import os
 import platform
 import socket
 import subprocess
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from kiui.agent.skills import discover_skills, build_skills_prompt_section
+
+@dataclass(frozen=True)
+class PersonaContext:
+    """Runtime information passed to a persona's build_system_prompt()."""
+    exec_mode: bool = False       # autonomous sub-agent run (no user available)
+    is_subagent: bool = False     # sub-agents cannot spawn further sub-agents
+    work_dir: str | None = None   # overrides cwd shown in the context section
+    skills: dict | None = None    # pre-discovered skills registry
 
 
-def build_system_prompt(exec_mode: bool = False, is_subagent: bool = False, work_dir: str | None = None, skills: dict | None = None) -> str:
-    """Build the complete system prompt from ordered sections.
+# ---------------------------------------------------------------------------
+# Section constants
+# ---------------------------------------------------------------------------
 
-    If *exec_mode* is True the prompt tells the agent it is running
-    autonomously with no user to interact with.
-    *work_dir* overrides the working directory shown in the context section.
-    *skills* is a pre-discovered skills dict; if None, skills are discovered
-    automatically from *work_dir*.
-    """
-    sections = []
-
-    # 1. Core identity
-    sections.append(
-        "You are a terminal-based AI agent. "
-        "Be helpful, accurate, and concise. "
-        "Prioritize correctness, then clarity, then brevity."
-    )
-
-    # 1b. Exec / sub-agent mode
-    if exec_mode:
-        sections.append("""## Autonomous Mode
+EXEC_MODE_SECTION = """## Autonomous Mode
 You are running as an autonomous sub-agent with no user available to respond.
 - Do not ask questions or request confirmation.
 - Infer intent from the task and available context; choose the safest reasonable interpretation.
 - If blocked, report the blocker instead of using a risky workaround.
-- Complete and verify the task, then return a concise summary.""")
+- Complete and verify the task, then return a concise summary."""
 
-    # 2. Safety
-    if not exec_mode:
-        sections.append("""## Safety
+SAFETY_SECTION = """## Safety
 - Prioritize safety and human oversight over task completion.
 - Do not run destructive commands without asking first.
 - Confirm before: deleting files, sending emails, anything irreversible.
-- When in doubt, ask.""")
-    else:
-        sections.append("""## Safety
-- Avoid destructive or irreversible actions unless the task explicitly requires them.
-- Prefer safe, reversible operations.""")
+- When in doubt, ask."""
 
-    # 3. Tool usage guidance
-    sections.append("""## Tool Usage
+SAFETY_EXEC_SECTION = """## Safety
+- Avoid destructive or irreversible actions unless the task explicitly requires them.
+- Prefer safe, reversible operations."""
+
+TOOL_USAGE_SECTION = """## Tool Usage
 - Always check tool results before proceeding.
 - Do not narrate routine, low-risk tool calls — just call the tool. Narrate only for multi-step work, complex problems, or sensitive actions (e.g., deletions).
 - Prefer ls / glob_files / grep_files over exec_command for file discovery and search.
 - Keep output focused with narrow paths/patterns, read_file offset/limit, and quiet or filtered commands.
-- If output is compacted, follow its recovery guidance instead of repeating the same broad call.""")
+- If output is compacted, follow its recovery guidance instead of repeating the same broad call."""
 
-    # 4. Task execution
-    sections.append("""## Task Execution
+TASK_EXECUTION_SECTION = """## Task Execution
 - Inspect the relevant context before acting; do not guess about code or file contents.
 - Keep going until the request is resolved or a concrete blocker is identified.
 - Fix root causes rather than symptoms.
 - Keep changes minimal and consistent with existing style. Preserve user changes.
-- Do not fix unrelated issues or already broken tests.""")
+- Do not fix unrelated issues or already broken tests."""
 
-    # 5. Working style
-    sections.append("""## Working Style
+WORKING_STYLE_SECTION = """## Working Style
 - Prefer the smallest clear solution that fully satisfies the request.
 - Reuse existing code and standard tools before adding abstractions or dependencies.
 - Avoid speculative safeguards, fallbacks, configuration, and extensibility.
 - Keep responses concise, but preserve necessary technical detail.
-- Verify with the smallest relevant check and report only what was actually verified.""")
+- Verify with the smallest relevant check and report only what was actually verified."""
 
-    # 6. Sub-agents (top-level agents only; sub-agents cannot spawn children)
-    if not is_subagent:
-        sections.append("""## Sub-Agents
+SUBAGENT_SECTION = """## Sub-Agents
 **spawn_subagent** runs a self-contained task and returns its result.
-Delegate only when it materially helps with independent research or analysis. Give a focused task, do not delegate simple work.""")
-
-    # 7. Skills
-    if skills is None:
-        skills = discover_skills(work_dir)
-    skills_section = build_skills_prompt_section(skills)
-    if skills_section:
-        sections.append(skills_section)
-
-    # 8. Project instructions (optional AGENTS.md)
-    project = _build_project_section(work_dir)
-    if project:
-        sections.append(project)
-
-    # 9. Context
-    sections.append(_build_context_section(work_dir))
-
-    return "\n\n".join(sections)
+Delegate only when it materially helps with independent research or analysis. Give a focused task, do not delegate simple work."""
 
 
-def _build_project_section(work_dir: str | None = None) -> str:
+# ---------------------------------------------------------------------------
+# Dynamic section builders
+# ---------------------------------------------------------------------------
+
+def build_project_section(work_dir: str | None = None) -> str:
     """Include AGENTS.md project instructions if present."""
     base = Path(work_dir) if work_dir else Path.cwd()
     instr_file = base / "AGENTS.md"
@@ -114,8 +92,7 @@ def _build_project_section(work_dir: str | None = None) -> str:
     return "## Project Instructions\n" + content
 
 
-
-def _build_context_section(work_dir: str | None = None) -> str:
+def build_context_section(work_dir: str | None = None) -> str:
     """Build context section with current environment information."""
     cwd = work_dir or str(Path.cwd())
     hostname = socket.gethostname()

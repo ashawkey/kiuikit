@@ -129,18 +129,21 @@ def test_relative_paths_resolve_against_work_dir(tmp_path, monkeypatch):
     assert "a.txt" in te._ls("nested")["content"]
     assert te._glob_files("*.txt", base_dir="nested")["count"] == 1
     assert te._grep_files("three", path="nested")["count"] == 1
-    assert te._exec_command("pwd", cwd="nested")["stdout"].strip() == str(
+    # exec_command runs via PowerShell on Windows, bash elsewhere.
+    pwd = "(pwd).Path" if os.name == "nt" else "pwd"
+    assert te._exec_command(pwd, cwd="nested")["stdout"].strip() == str(
         work_dir / "nested"
     )
-    guard = SafetyGuard(work_dir="/tmp/job")
-    safe, _ = guard.check(
-        "exec_command", {"command": "rm -rf .", "cwd": "../../etc"}
-    )
-    assert not safe
-    safe, _ = guard.check(
-        "exec_command", {"command": "chmod -R 000 .", "cwd": "~"}
-    )
-    assert not safe
+    if os.name == "posix":  # Unix-shell safety patterns are POSIX-only
+        guard = SafetyGuard(work_dir="/tmp/job")
+        safe, _ = guard.check(
+            "exec_command", {"command": "rm -rf .", "cwd": "../../etc"}
+        )
+        assert not safe
+        safe, _ = guard.check(
+            "exec_command", {"command": "chmod -R 000 .", "cwd": "~"}
+        )
+        assert not safe
     assert te._remove_file("nested/a.txt")["success"]
     assert not (work_dir / "nested/a.txt").exists()
 
@@ -282,7 +285,8 @@ def test_exec_command_streams_carriage_return_updates(tmp_path):
     )
     worker.start()
     try:
-        assert console.printed.wait(timeout=1)
+        # Generous timeout: PowerShell + Python cold start can exceed 1s.
+        assert console.printed.wait(timeout=10)
         assert worker.is_alive()
         assert any("[stderr] progress" in line for line in console.output)
         worker.join(timeout=3)
@@ -329,7 +333,8 @@ def test_exec_artifact_limit_uses_utf8_bytes(tmp_path, monkeypatch):
     try:
         assert artifact.stat().st_size <= 11
         assert res["artifact_truncated"] is True
-        assert res["original_output_chars"] == 21
+        # The child emits \r\n on Windows (text-mode pipe), \n elsewhere.
+        assert res["original_output_chars"] == 20 + (2 if os.name == "nt" else 1)
     finally:
         artifact.unlink(missing_ok=True)
 
@@ -387,8 +392,10 @@ def test_exec_lingering_reader_marks_capture_incomplete(tmp_path, monkeypatch):
     monkeypatch.setattr(tools, "EXEC_READER_JOIN_TIMEOUT", 0.1)
     te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
     started = time.monotonic()
+    # Spawn a lingering grandchild holding the pipes (portable `sleep`).
     res = te._exec_command(
-        "python -c \"import subprocess; subprocess.Popen(['sleep', '30']); print('done')\""
+        "python -c \"import subprocess,sys; subprocess.Popen([sys.executable,"
+        " '-c','import time; time.sleep(30)']); print('done')\""
     )
     artifact = Path(res["_artifact_path"])
     try:

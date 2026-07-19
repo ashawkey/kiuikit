@@ -1,5 +1,7 @@
 """Tests for kiui.agent.permissions safety and permission modes."""
 
+import sys
+
 import pytest
 
 from kiui.agent.permissions import (
@@ -8,7 +10,18 @@ from kiui.agent.permissions import (
     SafetyGuard,
 )
 
+# The safety guard matches the shell that actually runs exec_command: Unix
+# shells on POSIX, PowerShell on Windows. Unix-command patterns are only
+# enforced (and only meaningful) on POSIX.
+unix_only = pytest.mark.skipif(
+    sys.platform == "win32", reason="Unix shell/filesystem semantics"
+)
+windows_only = pytest.mark.skipif(
+    sys.platform != "win32", reason="Windows shell semantics"
+)
 
+
+@unix_only
 @pytest.mark.parametrize(
     "command",
     [
@@ -77,6 +90,7 @@ def test_safety_allows_normal_commands(command):
     assert allowed and reason == ""
 
 
+@unix_only
 def test_safety_blocks_recursive_delete_of_work_dir(tmp_path):
     allowed, reason = SafetyGuard(work_dir=tmp_path).check(
         "exec_command", {"command": f"rm -rf {tmp_path}"}
@@ -91,6 +105,7 @@ def test_safety_allows_recursive_delete_in_unprotected_top_level_tree(tmp_path):
     assert allowed and reason == ""
 
 
+@unix_only
 def test_safety_blocks_symlink_to_critical_path(tmp_path):
     link = tmp_path / "system"
     link.symlink_to("/etc")
@@ -100,6 +115,7 @@ def test_safety_blocks_symlink_to_critical_path(tmp_path):
     assert not allowed and reason
 
 
+@unix_only
 def test_safety_blocks_relative_critical_delete_from_cwd(tmp_path):
     allowed, reason = SafetyGuard(work_dir=tmp_path).check(
         "exec_command", {"command": "rm -rf .", "cwd": "/etc"}
@@ -107,6 +123,7 @@ def test_safety_blocks_relative_critical_delete_from_cwd(tmp_path):
     assert not allowed and reason
 
 
+@unix_only
 def test_safety_blocks_file_tool_write_to_block_device():
     allowed, reason = SafetyGuard().check(
         "write_file", {"file": "/dev/sda", "content": "data"}
@@ -114,12 +131,14 @@ def test_safety_blocks_file_tool_write_to_block_device():
     assert not allowed and reason
 
 
+@unix_only
 @pytest.mark.parametrize("path", ["/", "/etc", "~"])
 def test_safety_blocks_remove_file_on_critical_paths(path):
     allowed, reason = SafetyGuard().check("remove_file", {"file": path})
     assert not allowed and reason
 
 
+@unix_only
 def test_safety_blocks_remove_block_device():
     allowed, reason = SafetyGuard().check("remove_file", {"file": "/dev/sda"})
     assert not allowed and reason
@@ -129,6 +148,40 @@ def test_safety_allows_remove_file_elsewhere(tmp_path):
     allowed, reason = SafetyGuard().check(
         "remove_file", {"file": str(tmp_path / "cache")}
     )
+    assert allowed and reason == ""
+
+
+@windows_only
+@pytest.mark.parametrize(
+    "command",
+    [
+        "format c: /q /y",
+        "echo x; diskpart /s script.txt",
+        "Clear-Disk -Number 1",
+        "Initialize-Disk 2",
+        "Stop-Computer -Force",
+        "Restart-Computer",
+        "Remove-Item C:\\ -Recurse -Force",
+        "rmdir C:\\ /s",
+    ],
+)
+def test_safety_blocks_dangerous_windows_commands(command):
+    allowed, reason = SafetyGuard().check("exec_command", {"command": command})
+    assert not allowed and reason.startswith("Blocked:")
+
+
+@windows_only
+@pytest.mark.parametrize(
+    "command",
+    [
+        "Get-ChildItem",
+        "Remove-Item -Recurse .\\build",
+        "echo 'format the report'",
+        "git status",
+    ],
+)
+def test_safety_allows_normal_windows_commands(command):
+    allowed, reason = SafetyGuard().check("exec_command", {"command": command})
     assert allowed and reason == ""
 
 

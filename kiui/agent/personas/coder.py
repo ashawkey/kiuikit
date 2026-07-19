@@ -1,0 +1,50 @@
+"""The default coding agent persona — full tool access, project-aware."""
+
+from kiui.agent.prompts import (
+    EXEC_MODE_SECTION,
+    SAFETY_EXEC_SECTION,
+    SAFETY_SECTION,
+    SUBAGENT_SECTION,
+    TASK_EXECUTION_SECTION,
+    TOOL_USAGE_SECTION,
+    WORKING_STYLE_SECTION,
+    build_context_section,
+    build_project_section,
+)
+from kiui.agent.skills import build_skills_prompt_section
+
+NAME = "coder"
+DESCRIPTION = "Full coding agent — all tools, project-aware (default)."
+TOOLS = None  # all tools
+
+
+def build_system_prompt(ctx) -> str:
+    sections = [
+        "You are a terminal-based AI agent. "
+        "Be helpful, accurate, and concise. "
+        "Prioritize correctness, then clarity, then brevity."
+    ]
+
+    if ctx.exec_mode:
+        sections.append(EXEC_MODE_SECTION)
+
+    sections.append(SAFETY_EXEC_SECTION if ctx.exec_mode else SAFETY_SECTION)
+    sections.append(TOOL_USAGE_SECTION)
+    sections.append(TASK_EXECUTION_SECTION)
+    sections.append(WORKING_STYLE_SECTION)
+
+    # sub-agents cannot spawn children, so advertising it would be misleading
+    if not ctx.is_subagent:
+        sections.append(SUBAGENT_SECTION)
+
+    skills_section = build_skills_prompt_section(ctx.skills or {})
+    if skills_section:
+        sections.append(skills_section)
+
+    project = build_project_section(ctx.work_dir)
+    if project:
+        sections.append(project)
+
+    sections.append(build_context_section(ctx.work_dir))
+
+    return "\n\n".join(sections)

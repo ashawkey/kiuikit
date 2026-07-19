@@ -36,7 +36,9 @@ def test_discover_ignores_external_agent_dirs(tmp_path):
 def test_project_skill_shadows_personal_skill(tmp_path, monkeypatch):
     project = tmp_path / "project"
     home = tmp_path / "home"
+    # Path.home() follows HOME on POSIX, USERPROFILE on Windows.
     monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
     _write_skill(project, ".kia", "dup", _valid("dup", "project copy"))
     _write_skill(home, ".kia", "dup", _valid("dup", "personal copy"))
 
