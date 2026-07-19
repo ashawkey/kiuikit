@@ -15,7 +15,7 @@ from typing import Iterator
 
 from filelock import FileLock
 
-from kiui.agent.skills import BUNDLED_SKILLS_DIR, read_skill, valid_skill_name
+from kiui.agent.skills import read_skill, valid_skill_name
 
 
 class LibraryError(RuntimeError):
@@ -359,8 +359,6 @@ def upload_skill(
     """
     if not valid_skill_name(name):
         raise LibraryError(f"invalid skill name: {name!r}")
-    if (BUNDLED_SKILLS_DIR / name / "SKILL.md").is_file():
-        raise LibraryError(f"bundled skill cannot be uploaded: {name}")
     base = Path(work_dir) if work_dir is not None else Path.cwd()
     source = base / ".kia" / "skills" / name
     if not source.is_dir():

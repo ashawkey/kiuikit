@@ -1,6 +1,7 @@
 """Tests for the /goal auto-iteration feature (kiui.agent)."""
 
 from kiui.agent.backend import LLMAgent
+from kiui.agent.personas import get_persona
 from kiui.agent.tools import ToolExecutor, get_tool_definitions
 from kiui.agent.ui import AgentConsole
 
@@ -14,6 +15,7 @@ def make_agent() -> LLMAgent:
     agent.goal_iterations = 0
     agent._pending_auto = None
     agent._last_interrupted = False
+    agent.persona = get_persona("coder")
     agent.tool_executor = ToolExecutor(console=agent.console)
     return agent
 
@@ -36,6 +38,17 @@ def test_goal_status_without_goal_is_noop():
     agent = make_agent()
     agent._cmd_goal("/goal")  # should not raise
     assert agent.goal is None
+    assert agent._pending_auto is None
+
+
+def test_goal_disabled_without_report_goal_access():
+    agent = make_agent()
+    agent.persona = get_persona("chatter")
+
+    agent._cmd_goal("/goal keep going")
+
+    assert agent.goal is None
+    assert agent.goal_active is False
     assert agent._pending_auto is None
 
 

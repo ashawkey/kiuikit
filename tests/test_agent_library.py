@@ -126,32 +126,6 @@ def test_remote_list_is_sorted_and_marks_local_skills(monkeypatch, capsys):
     assert output.index("• alpha") < output.index("• zeta (installed)")
 
 
-def test_local_list_marks_built_in_skills_without_remote(tmp_path, monkeypatch, capsys):
-    from kiui.agent import library_cli
-
-    monkeypatch.setattr(library_cli, "_configured_repo", lambda: None)
-    bundled = tmp_path / "bundled"
-    (bundled / "alpha").mkdir(parents=True)
-    (bundled / "alpha" / "SKILL.md").touch()
-    monkeypatch.setattr(library_cli, "BUNDLED_SKILLS_DIR", bundled)
-    monkeypatch.setattr(
-        library_cli,
-        "list_local_skills",
-        lambda: (
-            {
-                "zeta": {"description": "Last"},
-                "alpha": {"description": "First"},
-            },
-            [],
-        ),
-    )
-
-    assert library_cli.main(["list", "--local"]) == 0
-    output = capsys.readouterr().out
-    assert "• alpha (built-in)" in output
-    assert "• zeta\n" in output
-
-
 def test_local_list_marks_uploaded_skills(monkeypatch, capsys):
     from kiui.agent import library_cli
 
@@ -284,16 +258,6 @@ def test_upload_identical_skill_is_noop(tmp_path):
     _skill(source, "alpha")
     upload_skill(str(remote), "alpha", source)
     assert upload_skill(str(remote), "alpha", source) is None
-
-
-@pytest.mark.parametrize("name", ["lean", "skill-creator"])
-def test_upload_rejects_bundled_skill(tmp_path, name):
-    remote = _remote(tmp_path)
-    source = tmp_path / "source"
-    _skill(source, name)
-
-    with pytest.raises(LibraryError, match="bundled skill cannot be uploaded"):
-        upload_skill(str(remote), name, source)
 
 
 @pytest.mark.skipif(os.name != "posix", reason="executable bit is POSIX-only")

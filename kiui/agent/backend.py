@@ -16,7 +16,7 @@ from kiui.agent.terminal import TerminalInput
 from kiui.agent.utils import get_kia_dir
 from kiui.agent.prompts import PersonaContext
 from kiui.agent.personas import DEFAULT_PERSONA, PersonaInfo, get_persona, list_personas
-from kiui.agent.skills import discover_skills, install_bundled_skills
+from kiui.agent.skills import discover_skills
 from kiui.agent.tools import (
     MAX_GREP_MATCHES,
     ToolExecutor,
@@ -185,16 +185,8 @@ class LLMAgent:
 
             self.prompt_broker.set_terminal_adapter(terminal_ask_async)
 
-        # discover skills from .kia/skills/
-        # Top-level agents install kiui's bundled skills into the project's
-        # .kia/skills/ on first run (never overwriting existing/user-edited ones);
-        # sub-agents skip this and just reuse whatever is already there.
-        if not is_subagent:
-            newly = install_bundled_skills(work_dir)
-            if newly:
-                self.console.print(
-                    f"[dim]Installed bundled skill(s): {', '.join(newly)} → .kia/skills/[/dim]"
-                )
+        # Discover bundled skills directly from the installed package, followed
+        # by project and personal skills.
         skill_issues: dict = {}
         self.skills = discover_skills(work_dir, issues=skill_issues)
         if not is_subagent:
@@ -239,7 +231,6 @@ class LLMAgent:
             work_dir=self.work_dir,
             skills=self.skills,
             cancellation=cancellation,
-            allowed_tools=self.persona.tools,
         )
 
         self.context = ContextManager(self.system_prompt)
@@ -923,16 +914,30 @@ class LLMAgent:
             except Exception as e:
                 self.console.warn(f"Could not save session before clear: {e}")
 
-        # Start a brand-new session
-        self._session_id = time.strftime("%Y%m%d_%H%M%S")
+        # Start a brand-new session without reusing an ID from the same second.
+        base_id = time.strftime("%Y%m%d_%H%M%S")
+        session_id = base_id
+        suffix = 2
+        sessions_dir = self._sessions_dir()
+        while session_id == self._session_id or (sessions_dir / f"{session_id}.json").exists():
+            session_id = f"{base_id}_{suffix}"
+            suffix += 1
+        self._session_id = session_id
         self._last_save_time = 0.0  # allow immediate save of the new session
         self.context.replace_messages([])
         self.round_id = 0
+        self.token_totals = {key: 0 for key in self.token_totals}
+        self.tool_compaction_totals = {key: 0 for key in self.tool_compaction_totals}
+        self.tool_executor._loaded_skills.clear()
+        self.tool_executor._skill_loads.clear()
+        self.tool_executor.goal_report = None
+        self.permissions.reset_session()
         # Drop any standing goal — the new session starts clean.
         self.goal = None
         self.goal_active = False
         self.goal_iterations = 0
         self._pending_auto = None
+        self._last_interrupted = False
         # Create a fresh change tracker for the new session
         _wd = self.tool_executor._work_dir or os.getcwd()
         if self.changes is not None:
@@ -991,11 +996,12 @@ class LLMAgent:
         would otherwise conflict with the existing history (old tool calls the
         new persona no longer offers, context sections it no longer shows).
         """
+        # Save and clear while the old persona still owns the conversation.
+        self._restart_session()
         self.persona = persona
         self.tools = get_tool_definitions(include_subagent=not self.is_subagent, allowed=persona.tools)
         self.system_prompt = self._build_system_prompt()
         self.context.system_prompt["content"] = self.system_prompt
-        self._restart_session()
         self.console.system(f"Switched to persona: {persona.name}")
 
     # ----- /goal auto-iteration --------------------------------------------
@@ -1029,6 +1035,12 @@ class LLMAgent:
             self.goal_iterations = 0
             self._pending_auto = None
             self.console.system("Goal cleared.")
+            return
+
+        if self.persona.tools is not None and "report_goal" not in self.persona.tools:
+            self.console.warn(
+                f"Persona '{self.persona.name}' does not support /goal (report_goal is unavailable)."
+            )
             return
 
         # set a brand-new goal
@@ -1499,14 +1511,14 @@ class LLMAgent:
         )
 
     def _list_skills(self):
-        """List installed project and personal kia skills."""
+        """List bundled, project, and personal kia skills."""
         if not self.skills:
             from kiui.agent.skills import SKILL_DIRS
             base = Path(self.tool_executor._work_dir) if self.tool_executor._work_dir else Path.cwd()
             skills_dir = base / SKILL_DIRS[0] / "skills"
             searched = f"{SKILL_DIRS[0]}/skills/"
             self.console.print(
-                f"[bold blue]No skills installed.[/bold blue]\n"
+                f"[bold blue]No skills available.[/bold blue]\n"
                 f"\n"
                 f"  Skills are folders each containing a [cyan]SKILL.md[/cyan] file, searched in: [cyan]{searched}[/cyan]\n"
                 f"  (under both the project dir and your home dir)\n"
@@ -1522,7 +1534,7 @@ class LLMAgent:
             )
             return
 
-        self.console.print(f"[bold blue]Installed skills ({len(self.skills)}):[/bold blue]\n")
+        self.console.print(f"[bold blue]Available skills ({len(self.skills)}):[/bold blue]\n")
         from kiui.agent.skills import validate_skill
         for name, info in sorted(self.skills.items()):
             desc = info.get("description", "")
@@ -1566,7 +1578,7 @@ class LLMAgent:
         after = set(self.skills)
         added = sorted(after - before)
         removed = sorted(before - after)
-        summary = f"Reloaded skills ({len(self.skills)} installed)."
+        summary = f"Reloaded skills ({len(self.skills)} available)."
         if added:
             summary += f" Added: {', '.join(added)}."
         if removed:
@@ -1693,11 +1705,17 @@ class LLMAgent:
         # Restore the goal and auto-resume iteration; Ctrl+C stops it.
         self.goal = data.get("goal")
         self.goal_iterations = data.get("goal_iterations", 0)
-        if self.goal:
+        goal_supported = self.persona.tools is None or "report_goal" in self.persona.tools
+        if self.goal and goal_supported:
             self.goal_active = True
             self._pending_auto = self._build_goal_prompt()
             self.console.system(f"Goal resumed — iterating until met (Ctrl+C to stop):\n  {self.goal}")
         else:
+            if self.goal:
+                self.console.warn(
+                    f"Saved goal disabled because persona '{self.persona.name}' cannot use report_goal."
+                )
+            self.goal = None
             self.goal_active = False
             self._pending_auto = None
 

@@ -18,7 +18,6 @@ from kiui.agent.library import (
     remove_skill,
     upload_skill,
 )
-from kiui.agent.skills import BUNDLED_SKILLS_DIR
 
 
 def _configured_repo() -> str | None:
@@ -94,8 +93,6 @@ def main(argv: list[str] | None = None) -> int:
                     label.append(" (installed)", style="green")
                 if name in remote_names:
                     label.append(" (uploaded)", style="green")
-                if args.local and (BUNDLED_SKILLS_DIR / name / "SKILL.md").is_file():
-                    label.append(" (built-in)", style="green")
                 console.print(label)
                 console.print(Padding(Text(info["description"], style="grey50"), (0, 0, 0, 2)))
             for issue in errors:

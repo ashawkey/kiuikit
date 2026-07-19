@@ -11,7 +11,7 @@ A lightweight, terminal-based AI agent that can browse the web, read/write files
 - **Streaming**: Responses render token-by-token in both the terminal and Web UI, with reasoning/thinking stream shown automatically for compatible models.
 - **Sub-agents**: Can spawn sub-agents to handle complex sub-tasks in-process.
 - **Skills**: Load domain-specific instructions via customizable skill packs (`.kia/skills/`).
-- **Personas**: Switch the agent's identity, system prompt, and tool surface via bundled persona modules (e.g. `agent`, `chatter`).
+- **Personas**: Switch the agent's identity, system prompt, and tool surface via bundled persona modules (e.g. `coder`, `chatter`).
 - **Context Management**: Proactive tool-output filtering, automatic pruning, and LLM-based compaction keep context focused.
 - **Rewind**: Roll back conversation and/or code changes to any previous round.
 - **Permissions**: Three confirmation modes (auto / default / strict) and defense-in-depth detection of common destructive shell commands.
@@ -232,7 +232,7 @@ There is **no fixed iteration cap** — the loop runs until the goal is reported
 
 ## Skills
 
-Skills are modular prompt packs following the open [Agent Skills](https://agentskills.io) format, stored in `.kia/skills/<name>/SKILL.md`. Each skill provides domain-specific instructions the model can load on demand via the `load_skill` tool.
+Skills are modular prompt packs following the open [Agent Skills](https://agentskills.io) format. Custom skills are stored in `.kia/skills/<name>/SKILL.md`; bundled skills are loaded directly from the installed `kiui` package. Each skill provides domain-specific instructions the model can load on demand via the `load_skill` tool.
 
 ```
 .kia/skills/
@@ -258,7 +258,7 @@ e.g. `references/REFERENCE.md` or `scripts/extract.py`.
 
 `name` and `description` are required (the `description` is what the model matches against to decide when to activate a skill). Optional fields `license`, `compatibility`, and `metadata` are also parsed. `allowed-tools` is accepted for cross-agent compatibility but **not enforced** — kia uses its own permission model. Skills load via **progressive disclosure**: only name+description are advertised in the system prompt; the full body loads when the model calls `load_skill` (or you run `/skills <name>`); bundled `scripts/`, `references/`, and `assets/` files are read/run on demand via the ordinary file and exec tools (the skill's directory path is provided when it is loaded so relative references resolve correctly).
 
-Skills are discovered from `.kia/skills/` under **both the project directory and your home directory** (`~/.kia/skills/`), so you can keep personal skills that follow you across projects. Project skills take precedence over personal ones. Other agents' skill directories are not scanned; when needed, give kia a skill path explicitly so it can read the instructions.
+Skills are discovered from the installed package and from `.kia/skills/` under **both the project directory and your home directory** (`~/.kia/skills/`), so you can keep personal skills that follow you across projects. Bundled skills take precedence so they always match the installed `kiui` version; project skills then take precedence over personal ones. Other agents' skill directories are not scanned; when needed, give kia a skill path explicitly so it can read the instructions.
 
 Skill commands:
 
@@ -293,14 +293,14 @@ kib upload <name> --force        # update an existing remote skill
 Remote skills are not loaded or advertised to the agent until installed.
 The repository is cached under `~/.kia/library/`; each configured URL has an
 isolated checkout, so changing `kia_lib` selects a different cache. Existing
-local skills are never overwritten. Bundled skills shipped with kia cannot be
-uploaded. Upload validates the skill, rejects symlinks, creates a normal commit,
-and never force-pushes. An empty repository
-is initialized on the first upload.
+local skills are never overwritten. `kib` only manages project skills under
+`./.kia/skills/`; it does not list or otherwise special-case bundled skills.
+Upload validates the skill, rejects symlinks, creates a normal commit, and never
+force-pushes. An empty repository is initialized on the first upload.
 
 ### Bundled skills
 
-kia ships a few common skills (currently `skill-creator`, which teaches the agent how to author new spec-compliant skills). On first run in a project, these are copied into `.kia/skills/` so they are available out of the box and remain fully editable. An existing skill of the same name is never overwritten, so your edits are preserved; delete a copy to have it reinstalled on the next run.
+kia ships a few common skills, including `skill-creator` for authoring spec-compliant skills and `pdf-reading` for converting PDFs into readable Markdown and structured data with the external [MinerU](https://github.com/opendatalab/MinerU) CLI. The PDF skill can read extracted text, LaTeX, tables, and captions; direct inspection of extracted image pixels still requires a vision-capable tool. Bundled skills are loaded directly from the installed package rather than copied into `.kia`, so updates take effect whenever `kiui` is updated. To customize one, create a new project or personal skill under a different name.
 
 ## Personas
 
@@ -324,7 +324,7 @@ kia --persona chatter
 
 The active persona is saved with the session and re-applied on `--resume`.
 
-Each persona module defines `build_system_prompt(ctx)` — the complete system prompt, composed from the shared section blocks in `kiui/agent/prompts.py` — plus an optional `TOOLS` whitelist that is enforced both in the advertised tool definitions and in the tool executor itself. To add a persona, drop a new module into `kiui/agent/personas/` following the same contract.
+Each persona module defines `build_system_prompt(ctx)` — the complete system prompt, composed from the shared section blocks in `kiui/agent/prompts.py` — plus a `TOOLS` whitelist that controls which tools are advertised to the model. This is capability guidance, not a security boundary: interactive commands such as `!<command>` and `/skills` remain available to the user and are governed by the normal permission and safety checks. To add a persona, drop a new module into `kiui/agent/personas/` following the same contract.
 
 ## Sessions
 

@@ -179,9 +179,10 @@ Then open `http://127.0.0.1:8765` locally.
 
 ## Skills
 
-Skills are reusable instruction packs in the open [Agent Skills](https://agentskills.io) format. `kia` discovers them in both:
+Skills are reusable instruction packs in the open [Agent Skills](https://agentskills.io) format. `kia` discovers them from:
 
-- `./.kia/skills/` — project skills; these take precedence.
+- The installed `kiui` package — bundled skills; these take precedence and stay in sync with the installed version.
+- `./.kia/skills/` — project skills; these take precedence over personal skills.
 - `~/.kia/skills/` — personal skills shared across projects.
 
 Only each skill's name and description enter the base prompt. Full instructions and bundled resources are loaded on demand, preserving context for the actual task.
@@ -214,7 +215,7 @@ Useful commands:
 /skills pdf-processing  load one manually
 ```
 
-`kia` ships with a `skill-creator` skill that can draft and validate new skill packs. Bundled skills are copied into the project on first use and never overwrite your edits.
+`kia` ships with `skill-creator` for drafting and validating skill packs and `pdf-reading` for converting PDFs to Markdown and structured data with the external [MinerU](https://github.com/opendatalab/MinerU) CLI. The PDF skill reads extracted text, LaTeX, tables, and captions; direct image-pixel inspection requires a vision-capable tool. Bundled skills are loaded directly from the installed package rather than copied into `.kia`, so upgrading `kiui` also updates them. Create custom skills under a different name.
 
 ## Personas
 
@@ -229,7 +230,7 @@ kia --persona chatter   # start as another persona
 /persona chatter        switch persona (restarts the conversation, like /clear)
 ```
 
-Each persona module defines `build_system_prompt(ctx)` — composed from the shared blocks in `kiui/agent/prompts.py` — and an optional `TOOLS` whitelist enforced in both the advertised tool definitions and the tool executor.
+Each persona module defines `build_system_prompt(ctx)` — composed from the shared blocks in `kiui/agent/prompts.py` — and a `TOOLS` whitelist that controls which tools are advertised to the model. This is capability guidance, not a security boundary: interactive commands such as `!<command>` and `/skills` remain available to the user and are governed by the normal permission and safety checks.
 
 ### Personal skill library
 
@@ -250,7 +251,7 @@ kib upload pdf-processing --force
 kib remove pdf-processing
 ```
 
-Remote skills are not exposed to the agent until installed. Upload validates the pack and rejects symlinks; existing local skills are never overwritten.
+Remote skills are not exposed to the agent until installed. `kib` only manages project skills under `./.kia/skills/` and does not list or special-case bundled skills. Upload validates the pack and rejects symlinks; existing local skills are never overwritten.
 
 ## Context that stays useful
 
@@ -318,7 +319,7 @@ kia --clean
 | Option | Description |
 |--------|-------------|
 | `--model NAME` | Use a configured model alias. |
-| `--persona NAME` | Run as a persona (default: `agent`). |
+| `--persona NAME` | Run as a persona (default: `coder`). |
 | `--reasoning-effort LEVEL` | Set `none`, `minimal`, `low`, `medium`, `high`, or `xhigh`. |
 | `--perm MODE` | Set `auto`, `default`, or `strict`. |
 | `--stream` / `--no-stream` | Enable or disable token-by-token output. |

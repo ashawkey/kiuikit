@@ -3,6 +3,7 @@ and per-session skill load-count tracking (kiui.agent.skills / tools)."""
 
 from pathlib import Path
 
+from kiui.agent import skills as skills_module
 from kiui.agent.skills import build_skills_prompt_section, discover_skills
 from kiui.agent.tools import ToolExecutor
 
@@ -19,6 +20,35 @@ def _valid(name: str, desc: str = "does a thing, use when relevant") -> str:
 
 
 # ----- discovery issue reporting -------------------------------------------
+
+def test_bundled_skills_load_from_package_and_shadow_stale_copies(tmp_path, monkeypatch):
+    bundled = tmp_path / "package-skills"
+    project = tmp_path / "project"
+    (bundled / "alpha").mkdir(parents=True)
+    (bundled / "alpha" / "SKILL.md").write_text(
+        _valid("alpha", "current bundled"), encoding="utf-8"
+    )
+    _write_skill(project, ".kia", "alpha", _valid("alpha", "stale project copy"))
+    monkeypatch.setattr(skills_module, "BUNDLED_SKILLS_DIR", bundled)
+
+    issues = {}
+    skills = discover_skills(project, issues=issues)
+
+    assert skills["alpha"]["description"] == "current bundled"
+    assert Path(skills["alpha"]["dir"]) == bundled / "alpha"
+    assert issues["shadowed"][0]["path"] == str(project / ".kia" / "skills" / "alpha" / "SKILL.md")
+
+
+def test_discover_bundled_skills_does_not_create_project_copy(tmp_path, monkeypatch):
+    bundled = tmp_path / "package-skills"
+    project = tmp_path / "project"
+    (bundled / "alpha").mkdir(parents=True)
+    (bundled / "alpha" / "SKILL.md").write_text(_valid("alpha"), encoding="utf-8")
+    monkeypatch.setattr(skills_module, "BUNDLED_SKILLS_DIR", bundled)
+
+    assert "alpha" in discover_skills(project)
+    assert not (project / ".kia").exists()
+
 
 def test_discover_ignores_external_agent_dirs(tmp_path):
     _write_skill(tmp_path, ".kia", "native", _valid("native", "kia skill"))

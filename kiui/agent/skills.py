@@ -18,56 +18,30 @@ load_skill tool (or the manual ``/skills <name>`` command). Bundled resource
 files are read only when the instructions call for them (using the ordinary
 read_file / exec_command tools).
 
-Skills are discovered only from ``.kia/skills`` under the working directory
-(project skills) and the user's home (personal skills shared across projects).
-Project skills take precedence when names collide. Skills for other agents can
-still be used by giving kia their paths explicitly.
+Skills are discovered from kiui's bundled skill directory and ``.kia/skills``
+under the working directory (project skills) and the user's home (personal
+skills shared across projects). Bundled skills take precedence so they always
+match the installed kiui version; project skills take precedence over personal
+skills. Skills for other agents can still be used by giving kia their paths
+explicitly.
 """
 
 from __future__ import annotations
 
 import re
-import shutil
 from pathlib import Path
 
 import yaml
 
 SKILL_DIRS = (".kia",)
 
-# Bundled skills shipped with kiui, copied into a project's .kia/skills/ on init
-# so common skills are available out of the box (and remain user-editable).
+# Bundled skills are loaded directly from the installed package so their
+# instructions and resources always match the installed kiui version.
 BUNDLED_SKILLS_DIR = Path(__file__).parent / "skills"
 
 # name: 1-64 chars, lowercase alphanumeric + single hyphens, no leading/trailing/
 # consecutive hyphens (per the Agent Skills spec).
 _NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-
-
-def install_bundled_skills(work_dir: str | Path | None = None) -> list[str]:
-    """Copy kiui's bundled skills into ``<work_dir>/.kia/skills/`` if absent.
-
-    Runs once per project on agent init. Each bundled skill is copied only when
-    no skill of the same name already exists in ``.kia/skills/`` (any pre-existing
-    or user-edited copy is left untouched, so users can freely modify or delete
-    them). Returns the list of skill names that were newly installed.
-    """
-    base = Path(work_dir) if work_dir else Path.cwd()
-    if not BUNDLED_SKILLS_DIR.is_dir():
-        return []
-
-    dest_root = base / ".kia" / "skills"
-    installed: list[str] = []
-    for src in sorted(BUNDLED_SKILLS_DIR.iterdir()):
-        if not src.is_dir() or not (src / "SKILL.md").is_file():
-            continue
-        dest = dest_root / src.name
-        if dest.exists():
-            continue  # never overwrite an existing (possibly user-edited) skill
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(src, dest)
-        installed.append(src.name)
-
-    return installed
 
 
 def valid_skill_name(name: str) -> bool:
@@ -113,13 +87,14 @@ def discover_skills(
     work_dir: str | Path | None = None,
     issues: dict | None = None,
 ) -> dict[str, dict]:
-    """Scan project and personal ``.kia/skills`` folders for SKILL.md files.
+    """Scan bundled, project, and personal skill folders for SKILL.md files.
 
-    The project directory is searched before the user's home directory. Returns
-    ``{skill_name: {"path", "dir", "description", "body", "frontmatter",
-    "active"}}`` where ``dir`` is the skill root (for resolving bundled
-    resources), ``body`` is the markdown instructions with frontmatter stripped,
-    and ``active`` is always true. Project skills win name collisions.
+    Bundled skills are searched first so stale project copies left by older kia
+    versions cannot shadow them. The project directory is then searched before
+    the user's home directory. Returns ``{skill_name: {"path", "dir",
+    "description", "body", "frontmatter", "active"}}`` where ``dir`` is the
+    skill root (for resolving bundled resources), ``body`` is the markdown
+    instructions with frontmatter stripped, and ``active`` is always true.
 
     When *issues* is a dict, it is populated (in place) with non-fatal discovery
     problems so callers can surface them:
@@ -136,44 +111,44 @@ def discover_skills(
     shadowed: list[dict] = []
     errors: list[dict] = []
 
-    # Project scope wins over the personal (home) scope. Skip the home scope when
-    # the project already is the home dir to avoid scanning the same paths twice.
-    scopes = [base] if base.resolve() == home.resolve() else [base, home]
+    # Bundled skills are authoritative. Project scope then wins over personal
+    # scope. Skip home when the project already is home to avoid a duplicate scan.
+    skill_dirs = [BUNDLED_SKILLS_DIR, base / SKILL_DIRS[0] / "skills"]
+    if base.resolve() != home.resolve():
+        skill_dirs.append(home / SKILL_DIRS[0] / "skills")
 
     skills: dict[str, dict] = {}
-    for scope in scopes:
-        for agent_dir in SKILL_DIRS:
-            skills_dir = scope / agent_dir / "skills"
-            if not skills_dir.is_dir():
+    for skills_dir in skill_dirs:
+        if not skills_dir.is_dir():
+            continue
+
+        for item in sorted(skills_dir.iterdir()):
+            if not item.is_dir():
+                continue  # skip loose files
+
+            skill_md = item / "SKILL.md"
+            if not skill_md.is_file():
+                continue  # folder without SKILL.md is not a skill
+
+            skill_name = item.name
+            if skill_name in skills:
+                # A higher-precedence scope/dir already defined this name.
+                shadowed.append({
+                    "name": skill_name,
+                    "path": str(skill_md),
+                    "shadowed_by": skills[skill_name]["path"],
+                })
                 continue
 
-            for item in sorted(skills_dir.iterdir()):
-                if not item.is_dir():
-                    continue  # skip loose files
-
-                skill_md = item / "SKILL.md"
-                if not skill_md.is_file():
-                    continue  # folder without SKILL.md is not a skill
-
-                skill_name = item.name
-                if skill_name in skills:
-                    # A higher-precedence scope/dir already defined this name.
-                    shadowed.append({
-                        "name": skill_name,
-                        "path": str(skill_md),
-                        "shadowed_by": skills[skill_name]["path"],
-                    })
-                    continue
-
-                try:
-                    skills[skill_name] = read_skill(item)
-                except (OSError, UnicodeDecodeError, ValueError) as e:
-                    errors.append({
-                        "name": skill_name,
-                        "path": str(skill_md),
-                        "reason": str(e),
-                    })
-                    continue
+            try:
+                skills[skill_name] = read_skill(item)
+            except (OSError, UnicodeDecodeError, ValueError) as e:
+                errors.append({
+                    "name": skill_name,
+                    "path": str(skill_md),
+                    "reason": str(e),
+                })
+                continue
 
     if issues is not None:
         issues["shadowed"] = shadowed
@@ -267,6 +242,7 @@ def validate_skill(name: str, frontmatter: dict) -> list[str]:
     ):
         errors.append("metadata must map strings to strings")
 
+    # unsupported, just parse it.
     allowed_tools = frontmatter.get("allowed-tools")
     if allowed_tools is not None and not isinstance(allowed_tools, str):
         errors.append("allowed-tools must be a space-separated string")

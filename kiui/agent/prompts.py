@@ -3,7 +3,7 @@
 This module is a toolbox, not a composer: each persona (see
 ``kiui/agent/personas/``) builds its own complete system prompt by combining
 the section constants and builders below with its own identity text. The
-bundled ``agent`` persona shows the canonical composition.
+bundled ``coder`` persona shows the canonical composition.
 """
 
 import os

@@ -37,7 +37,7 @@ from kiui.agent.models import ReasoningEffort, resolve_model_profile
 class Args:
     """Terminal-based AI agent with tool-use, web access, and shell execution."""
     model: str = ""
-    persona: str = ""  # persona to run as (see /persona; default: agent)
+    persona: str = ""  # persona to run as (see /persona; default: coder)
     verbose: bool = False
     stream: bool = True  # stream the response token-by-token as it is generated
     reasoning_effort: ReasoningEffort | None = None  # defaults to model config, then high
