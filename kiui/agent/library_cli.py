@@ -59,24 +59,28 @@ def main(argv: list[str] | None = None) -> int:
     console = Console()
 
     try:
+        repo = _repo()
         local_names: set[str] = set()
-        if args.command == "list" and args.local:
-            skills, errors = list_local_skills()
-            title = "Local Kia Skills"
-        else:
-            repo = _repo()
+        remote_names: set[str] = set()
 
         if args.command == "list":
             if not args.local:
                 skills, errors = list_skills(repo)
                 local_names = set(list_local_skills()[0])
-                title = "Kia Skill Library"
-            console.print(f"[bold]{title}[/bold] ({repo})")
+                title = "Skill Library"
+                console.print(f"[bold]{title}[/bold] ({repo})")
+            else:
+                skills, errors = list_local_skills()
+                remote_names = set(list_skills(repo)[0])
+                title = "Local Skills"
+                console.print(f"[bold]{title}[/bold]")
             for name in sorted(skills):
                 info = skills[name]
                 label = Text(f"• {name}", style="magenta")
                 if name in local_names:
                     label.append(" (installed)", style="green")
+                if name in remote_names:
+                    label.append(" (uploaded)", style="green")
                 console.print(label)
                 console.print(Padding(Text(info["description"], style="grey50"), (0, 0, 0, 2)))
             for issue in errors:

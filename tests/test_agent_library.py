@@ -101,6 +101,33 @@ def test_remote_list_is_sorted_and_marks_local_skills(monkeypatch, capsys):
     assert output.index("• alpha") < output.index("• zeta (installed)")
 
 
+def test_local_list_marks_uploaded_skills(monkeypatch, capsys):
+    from kiui.agent import library_cli
+
+    monkeypatch.setattr(library_cli, "_repo", lambda: "git@example.com:skills.git")
+    monkeypatch.setattr(
+        library_cli,
+        "list_local_skills",
+        lambda: (
+            {
+                "zeta": {"description": "Last"},
+                "alpha": {"description": "First"},
+            },
+            [],
+        ),
+    )
+    monkeypatch.setattr(
+        library_cli,
+        "list_skills",
+        lambda repo: ({"zeta": {"description": "Uploaded"}}, []),
+    )
+
+    assert library_cli.main(["list", "--local"]) == 0
+    output = capsys.readouterr().out
+    assert "• alpha\n" in output
+    assert "• zeta (uploaded)" in output
+
+
 def test_list_local_skills_only_scans_current_project(tmp_path):
     project = tmp_path / "project"
     _skill(project, "alpha", "Local alpha")
