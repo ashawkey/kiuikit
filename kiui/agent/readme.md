@@ -72,8 +72,19 @@ kia --model <model_alias> --verbose --perm strict --resume [session_id]
 | `--perm MODE` | `auto` (default), `default`, or `strict` |
 | `--resume [SESSION_ID]` | Resume a session (bare `--resume` lists saved sessions interactively) |
 | `--list` | List available models with context-window info and exit |
+| `--storage` | Show allocated disk usage for each entry in the project `.kia/` and exit |
+| `--clean` | Remove generated sessions, tool results, and command history |
 | `--hub` | Run the shared web hub daemon (owns the public port) |
 | `--web-port PORT` | Hub listener port (default: `8765`) |
+
+### Storage management
+
+`kia --storage` reports usage of every top-level entry in the current project's `.kia/` directory. `kia --clean` immediately removes only generated `sessions/`, `tool-results/`, and `history` data; installed `skills/` and unrecognized entries are preserved.
+
+```bash
+kia --storage
+kia --clean
+```
 
 ## Web UI
 
@@ -269,7 +280,7 @@ kia_lib: git@github.com:username/kia-skills.git
 
 ```bash
 kib list                         # list remote names and descriptions
-kib list --local                 # list skills in ./.kia/skills
+kib list --local                 # list local skills without accessing the remote
 kib install <name>               # install into ./.kia/skills/<name>
 kib upload <name>                # upload from ./.kia/skills/<name>
 kib remove <name>                # remove a remote skill

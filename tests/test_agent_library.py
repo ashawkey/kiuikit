@@ -101,10 +101,18 @@ def test_remote_list_is_sorted_and_marks_local_skills(monkeypatch, capsys):
     assert output.index("• alpha") < output.index("• zeta (installed)")
 
 
-def test_local_list_marks_uploaded_skills(monkeypatch, capsys):
+def test_local_list_marks_built_in_skills_without_remote(tmp_path, monkeypatch, capsys):
     from kiui.agent import library_cli
 
-    monkeypatch.setattr(library_cli, "_repo", lambda: "git@example.com:skills.git")
+    monkeypatch.setattr(
+        library_cli,
+        "_repo",
+        lambda: pytest.fail("local listing must not access the remote configuration"),
+    )
+    bundled = tmp_path / "bundled"
+    (bundled / "alpha").mkdir(parents=True)
+    (bundled / "alpha" / "SKILL.md").touch()
+    monkeypatch.setattr(library_cli, "BUNDLED_SKILLS_DIR", bundled)
     monkeypatch.setattr(
         library_cli,
         "list_local_skills",
@@ -116,16 +124,11 @@ def test_local_list_marks_uploaded_skills(monkeypatch, capsys):
             [],
         ),
     )
-    monkeypatch.setattr(
-        library_cli,
-        "list_skills",
-        lambda repo: ({"zeta": {"description": "Uploaded"}}, []),
-    )
 
     assert library_cli.main(["list", "--local"]) == 0
     output = capsys.readouterr().out
-    assert "• alpha\n" in output
-    assert "• zeta (uploaded)" in output
+    assert "• alpha (built-in)" in output
+    assert "• zeta\n" in output
 
 
 def test_list_local_skills_only_scans_current_project(tmp_path):
@@ -226,6 +229,79 @@ def test_upload_rejects_bundled_skill(tmp_path, name):
 
     with pytest.raises(LibraryError, match="bundled skill cannot be uploaded"):
         upload_skill(str(remote), name, source)
+
+
+def test_upload_preserves_executable_mode_and_ignores_empty_directories(tmp_path):
+    remote = _remote(tmp_path)
+    source = tmp_path / "source"
+    skill = _skill(source, "alpha")
+    script = skill / "run.sh"
+    script.write_text("#!/bin/sh\n", encoding="utf-8")
+    script.chmod(0o644)
+    upload_skill(str(remote), "alpha", source)
+
+    script.chmod(0o755)
+    (skill / "empty").mkdir()
+    assert upload_skill(str(remote), "alpha", source, force=True) is not None
+    assert upload_skill(str(remote), "alpha", source) is None
+
+    mode = _git("--git-dir", str(remote), "ls-tree", "main", "skills/alpha/run.sh")
+    assert mode.startswith("100755 ")
+
+
+def test_upload_uses_validated_snapshot(tmp_path, monkeypatch):
+    from contextlib import contextmanager
+    from kiui.agent import library
+
+    remote = _remote(tmp_path)
+    source = tmp_path / "source"
+    skill = _skill(source, "alpha")
+    note = skill / "note.txt"
+    note.write_text("safe", encoding="utf-8")
+    secret = tmp_path / "secret"
+    secret.write_text("secret", encoding="utf-8")
+    original_checkout = library._checkout
+
+    @contextmanager
+    def mutate_after_snapshot(repo):
+        note.unlink()
+        note.symlink_to(secret)
+        with original_checkout(repo) as checkout:
+            yield checkout
+
+    monkeypatch.setattr(library, "_checkout", mutate_after_snapshot)
+    upload_skill(str(remote), "alpha", source)
+
+    content = _git("--git-dir", str(remote), "show", "main:skills/alpha/note.txt")
+    assert content == "safe"
+
+
+def test_upload_rejects_git_metadata(tmp_path):
+    remote = _remote(tmp_path)
+    source = tmp_path / "source"
+    skill = _skill(source, "alpha")
+    (skill / ".git").mkdir()
+
+    with pytest.raises(LibraryError, match="Git metadata"):
+        upload_skill(str(remote), "alpha", source)
+
+
+def test_library_rejects_symlinked_skills_root(tmp_path):
+    remote = _remote(tmp_path)
+    seed = tmp_path / "seed"
+    seed.mkdir()
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    (seed / "skills").symlink_to(victim, target_is_directory=True)
+    _git("init", "--initial-branch=main", cwd=seed)
+    _git("add", "skills", cwd=seed)
+    _git("commit", "-m", "symlink skills", cwd=seed)
+    _git("remote", "add", "origin", str(remote), cwd=seed)
+    _git("push", "origin", "main", cwd=seed)
+
+    with pytest.raises(LibraryError, match="skills directory is a symlink"):
+        list_skills(str(remote))
+    assert victim.is_dir()
 
 
 def test_upload_rejects_invalid_skill_and_symlink(tmp_path):

@@ -3,7 +3,7 @@
 Usage:
     kia [--model MODEL] [--verbose] [--perm auto|default|strict]
         [--resume [SESSION_ID]]
-        [--list]
+        [--list | --storage | --clean]
 """
 
 import json
@@ -44,6 +44,8 @@ class Args:
     perm: PermissionMode = PermissionMode.AUTO
     resume: str | None = None  # --resume [session_id]
     list: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # --list: show available models and exit
+    storage: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # show project .kia usage and exit
+    clean: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # remove generated project .kia data and exit
     hub: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # --hub: run the shared web hub daemon
     web_port: int = 8765
 
@@ -242,6 +244,42 @@ def cmd_list():
     console.table(table)
 
 
+def cmd_storage():
+    """Show allocated disk usage for each entry in the project .kia directory."""
+    from kiui.agent.storage import format_size, kia_storage_dir, storage_entries
+
+    console = AgentConsole()
+    root = kia_storage_dir()
+    entries = storage_entries()
+    if not entries:
+        console.system(f"No storage found in {root}")
+        return
+
+    table = Table(title=f"kia storage: {root}")
+    table.add_column("Entry", style="cyan")
+    table.add_column("Type", style="dim")
+    table.add_column("Size", justify="right", style="green")
+    for entry in entries:
+        table.add_row(entry.name, "directory" if entry.is_dir else "file", format_size(entry.size))
+    table.add_section()
+    table.add_row("Total", "", format_size(sum(entry.size for entry in entries)), style="bold")
+    console.table(table)
+
+
+def cmd_clean():
+    """Remove generated sessions, tool results, and command history."""
+    from kiui.agent.storage import clean_storage, cleanable_entries, format_size, kia_storage_dir
+
+    console = AgentConsole()
+    entries = cleanable_entries()
+    if not entries:
+        console.system(f"Nothing to clean in {kia_storage_dir()}")
+        return
+
+    removed = clean_storage()
+    console.system(f"Cleaned {format_size(removed)} from {kia_storage_dir()}")
+
+
 def cmd_hub(args: Args):
     """Run the shared web hub daemon (owns the public port)."""
     console = AgentConsole()
@@ -328,8 +366,16 @@ def main():
     if resume_value is not None:
         args.resume = resume_value
 
+    commands = (args.list, args.storage, args.clean, args.hub)
+    if sum(commands) > 1:
+        raise SystemExit("Choose only one of --list, --storage, --clean, or --hub")
+
     if args.list:
         cmd_list()
+    elif args.storage:
+        cmd_storage()
+    elif args.clean:
+        cmd_clean()
     elif args.hub:
         cmd_hub(args)
     else:

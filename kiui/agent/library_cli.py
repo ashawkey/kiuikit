@@ -18,6 +18,7 @@ from kiui.agent.library import (
     remove_skill,
     upload_skill,
 )
+from kiui.agent.skills import BUNDLED_SKILLS_DIR
 
 
 def _repo() -> str:
@@ -59,19 +60,17 @@ def main(argv: list[str] | None = None) -> int:
     console = Console()
 
     try:
-        repo = _repo()
         local_names: set[str] = set()
-        remote_names: set[str] = set()
 
         if args.command == "list":
             if not args.local:
+                repo = _repo()
                 skills, errors = list_skills(repo)
                 local_names = set(list_local_skills()[0])
                 title = "Skill Library"
                 console.print(f"[bold]{title}[/bold] ({repo})")
             else:
                 skills, errors = list_local_skills()
-                remote_names = set(list_skills(repo)[0])
                 title = "Local Skills"
                 console.print(f"[bold]{title}[/bold]")
             for name in sorted(skills):
@@ -79,8 +78,8 @@ def main(argv: list[str] | None = None) -> int:
                 label = Text(f"• {name}", style="magenta")
                 if name in local_names:
                     label.append(" (installed)", style="green")
-                if name in remote_names:
-                    label.append(" (uploaded)", style="green")
+                if args.local and (BUNDLED_SKILLS_DIR / name / "SKILL.md").is_file():
+                    label.append(" (built-in)", style="green")
                 console.print(label)
                 console.print(Padding(Text(info["description"], style="grey50"), (0, 0, 0, 2)))
             for issue in errors:
@@ -89,6 +88,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             return 0
 
+        repo = _repo()
         if args.command == "install":
             dest = install_skill(repo, args.name)
             console.print(f"Installed [cyan]{args.name}[/cyan] to {dest}")

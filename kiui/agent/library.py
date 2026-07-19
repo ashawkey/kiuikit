@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import filecmp
 import hashlib
 import os
 import shutil
+import stat
 import subprocess
+import tempfile
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
@@ -103,24 +104,105 @@ def _checkout(repo: str) -> Iterator[Path]:
         yield root
 
 
-def _reject_symlinks(root: Path) -> None:
+def _validate_tree(root: Path) -> None:
+    if root.is_symlink():
+        raise LibraryError(f"skill directory is a symlink: {root}")
     for current, dirs, files in os.walk(root, followlinks=False):
         base = Path(current)
-        for name in dirs + files:
+        for name in dirs:
             path = base / name
-            if path.is_symlink():
-                raise LibraryError(f"skill contains a symlink: {path.relative_to(root)}")
+            relative = path.relative_to(root)
+            if name == ".git":
+                raise LibraryError(f"skill contains Git metadata: {relative}")
+            mode = path.stat(follow_symlinks=False).st_mode
+            if stat.S_ISLNK(mode):
+                raise LibraryError(f"skill contains a symlink: {relative}")
+            if not stat.S_ISDIR(mode):
+                raise LibraryError(f"skill contains an invalid directory: {relative}")
+        for name in files:
+            path = base / name
+            relative = path.relative_to(root)
+            if name == ".git":
+                raise LibraryError(f"skill contains Git metadata: {relative}")
+            mode = path.stat(follow_symlinks=False).st_mode
+            if stat.S_ISLNK(mode):
+                raise LibraryError(f"skill contains a symlink: {relative}")
+            if not stat.S_ISREG(mode):
+                raise LibraryError(f"skill contains a non-regular file: {relative}")
 
 
 def _load_strict(skill_dir: Path) -> dict:
-    if skill_dir.is_symlink():
-        raise LibraryError(f"skill directory is a symlink: {skill_dir}")
     try:
-        info = read_skill(skill_dir, strict=True)
+        _validate_tree(skill_dir)
+        return read_skill(skill_dir, strict=True)
     except (OSError, UnicodeDecodeError, ValueError) as exc:
         raise LibraryError(f"invalid skill '{skill_dir.name}': {exc}") from exc
-    _reject_symlinks(skill_dir)
-    return info
+
+
+def _skills_root(checkout: Path) -> Path:
+    skills_dir = checkout / "skills"
+    if skills_dir.is_symlink():
+        raise LibraryError("library skills directory is a symlink")
+    if skills_dir.exists() and not skills_dir.is_dir():
+        raise LibraryError("library skills path is not a directory")
+    return skills_dir
+
+
+def _copy_tree(source: Path, dest: Path) -> None:
+    """Copy regular files without following source symlinks."""
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    directory = getattr(os, "O_DIRECTORY", 0)
+
+    def copy_dir(source_fd: int, target: Path) -> None:
+        for entry in os.scandir(source_fd):
+            relative = target / entry.name
+            if entry.name == ".git":
+                raise LibraryError(f"skill contains Git metadata: {entry.name}")
+            mode = entry.stat(follow_symlinks=False).st_mode
+            if stat.S_ISLNK(mode):
+                raise LibraryError(f"skill contains a symlink: {entry.name}")
+            if stat.S_ISDIR(mode):
+                relative.mkdir()
+                child_fd = os.open(
+                    entry.name, os.O_RDONLY | directory | nofollow, dir_fd=source_fd
+                )
+                try:
+                    copy_dir(child_fd, relative)
+                finally:
+                    os.close(child_fd)
+            elif stat.S_ISREG(mode):
+                source_file = os.open(entry.name, os.O_RDONLY | nofollow, dir_fd=source_fd)
+                try:
+                    opened_mode = os.fstat(source_file).st_mode
+                    if not stat.S_ISREG(opened_mode):
+                        raise LibraryError(f"skill contains a non-regular file: {entry.name}")
+                    with os.fdopen(source_file, "rb", closefd=False) as src, relative.open("xb") as dst:
+                        shutil.copyfileobj(src, dst)
+                    relative.chmod(stat.S_IMODE(opened_mode))
+                finally:
+                    os.close(source_file)
+            else:
+                raise LibraryError(f"skill contains a non-regular file: {entry.name}")
+
+    dest.mkdir()
+    source_fd = os.open(source, os.O_RDONLY | directory | nofollow)
+    try:
+        copy_dir(source_fd, dest)
+    finally:
+        os.close(source_fd)
+
+
+@contextmanager
+def _snapshot_skill(source: Path) -> Iterator[Path]:
+    """Copy and validate an immutable snapshot of a local skill."""
+    with tempfile.TemporaryDirectory(prefix="kia-skill-") as temp_dir:
+        snapshot = Path(temp_dir) / source.name
+        try:
+            _copy_tree(source, snapshot)
+        except OSError as exc:
+            raise LibraryError(f"cannot snapshot local skill '{source.name}': {exc}") from exc
+        _load_strict(snapshot)
+        yield snapshot
 
 
 def list_local_skills(
@@ -147,7 +229,7 @@ def list_local_skills(
 def list_skills(repo: str) -> tuple[dict[str, dict], list[dict]]:
     """Return valid marketplace skills and malformed-entry diagnostics."""
     with _checkout(repo) as checkout:
-        skills_dir = checkout / "skills"
+        skills_dir = _skills_root(checkout)
         skills: dict[str, dict] = {}
         errors: list[dict] = []
         if not skills_dir.is_dir():
@@ -170,7 +252,7 @@ def list_skills(repo: str) -> tuple[dict[str, dict], list[dict]]:
 def _remote_skill(checkout: Path, name: str) -> Path:
     if not valid_skill_name(name):
         raise LibraryError(f"invalid skill name: {name!r}")
-    skill_dir = checkout / "skills" / name
+    skill_dir = _skills_root(checkout) / name
     if not skill_dir.is_dir():
         raise LibraryError(f"skill not found in library: {name}")
     _load_strict(skill_dir)
@@ -198,13 +280,19 @@ def install_skill(repo: str, name: str, work_dir: str | Path | None = None) -> P
     return dest
 
 
+def _tree_manifest(root: Path) -> dict[str, tuple[str, bool]]:
+    manifest: dict[str, tuple[str, bool]] = {}
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        executable = bool(path.stat().st_mode & 0o111)
+        manifest[path.relative_to(root).as_posix()] = (digest, executable)
+    return manifest
+
+
 def _same_tree(left: Path, right: Path) -> bool:
-    comparison = filecmp.dircmp(left, right)
-    if comparison.left_only or comparison.right_only or comparison.funny_files:
-        return False
-    if any(not filecmp.cmp(left / name, right / name, shallow=False) for name in comparison.common_files):
-        return False
-    return all(_same_tree(left / name, right / name) for name in comparison.common_dirs)
+    return _tree_manifest(left) == _tree_manifest(right)
 
 
 def remove_skill(repo: str, name: str) -> str:
@@ -213,7 +301,7 @@ def remove_skill(repo: str, name: str) -> str:
         raise LibraryError(f"invalid skill name: {name!r}")
 
     with _checkout(repo) as checkout:
-        dest = checkout / "skills" / name
+        dest = _skills_root(checkout) / name
         if not dest.exists() and not dest.is_symlink():
             raise LibraryError(f"skill not found in library: {name}")
 
@@ -242,26 +330,25 @@ def upload_skill(
     source = base / ".kia" / "skills" / name
     if not source.is_dir():
         raise LibraryError(f"local project skill not found: {source}")
-    _load_strict(source)
+    with _snapshot_skill(source) as snapshot:
+        with _checkout(repo) as checkout:
+            dest = _skills_root(checkout) / name
+            updating = dest.exists() or dest.is_symlink()
+            if updating:
+                _load_strict(dest)
+                if _same_tree(snapshot, dest):
+                    return None
+                if not force:
+                    raise LibraryError(
+                        f"skill already exists in library: {name} (use --force to update it)"
+                    )
+                shutil.rmtree(dest)
 
-    with _checkout(repo) as checkout:
-        dest = checkout / "skills" / name
-        updating = dest.exists()
-        if updating:
-            _load_strict(dest)
-            if _same_tree(source, dest):
-                return None
-            if not force:
-                raise LibraryError(
-                    f"skill already exists in library: {name} (use --force to update it)"
-                )
-            shutil.rmtree(dest)
-
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(source, dest)
-        _git("add", "--force", "--", f"skills/{name}", cwd=checkout)
-        action = "update" if updating else "add"
-        _git("commit", "--quiet", "-m", f"skill: {action} {name}", cwd=checkout)
-        commit = _git("rev-parse", "HEAD", cwd=checkout).stdout.strip()
-        _git("push", "--quiet", "origin", "main", cwd=checkout)
-        return commit
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(snapshot, dest)
+            _git("add", "--force", "--", f"skills/{name}", cwd=checkout)
+            action = "update" if updating else "add"
+            _git("commit", "--quiet", "-m", f"skill: {action} {name}", cwd=checkout)
+            commit = _git("rev-parse", "HEAD", cwd=checkout).stdout.strip()
+            _git("push", "--quiet", "origin", "main", cwd=checkout)
+            return commit
