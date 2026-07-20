@@ -18,6 +18,43 @@ from typing import Any, Callable
 
 from kiui.agent.ui import AgentConsole
 
+
+class ContextManager:
+    """Flat conversation history with context-management hooks.
+
+    Messages use plain dictionaries in the OpenAI wire format. SDK response
+    objects are normalized at ingress by :mod:`kiui.agent.utils.streaming`.
+    """
+
+    def __init__(self, system_prompt: str):
+        self.system_prompt: dict[str, str] = {
+            "role": "system",
+            "content": system_prompt,
+        }
+        self.messages: list[dict[str, Any]] = []
+
+    def add(self, message: dict[str, Any]) -> None:
+        self.messages.append(message)
+
+    def get(self, include_system: bool = True) -> list[dict[str, Any]]:
+        messages: list[dict[str, Any]] = []
+        if include_system:
+            messages.append(self.system_prompt)
+        messages.extend(self.messages)
+        return messages
+
+    def replace_messages(self, new_messages: list[dict[str, Any]]) -> None:
+        if new_messages is not self.messages:
+            self.messages = list(new_messages)
+
+    def checkpoint(self) -> list[dict[str, Any]]:
+        """Return a shallow copy for rollback on interruption."""
+        return list(self.messages)
+
+    def rollback(self, snapshot: list[dict[str, Any]]) -> None:
+        self.messages = snapshot
+
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------

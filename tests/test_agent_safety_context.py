@@ -17,7 +17,7 @@ from kiui.agent.context import (
     compact_tool_result_envelope,
     tool_result_char_budget,
 )
-from kiui.agent.interrupt import RequestInterrupted
+from kiui.agent.utils.interrupt import RequestInterrupted
 from kiui.agent.permissions import PermissionController, PermissionMode
 from kiui.agent.tools import ToolExecutor
 

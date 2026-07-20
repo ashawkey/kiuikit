@@ -7,9 +7,9 @@ import pytest
 from rich.markdown import Markdown
 from rich.table import Table
 
-from kiui.agent.interrupt import RequestInterrupted
-from kiui.agent.io import EventHub
-from kiui.agent.streaming import consume_stream
+from kiui.agent.utils.interrupt import RequestInterrupted
+from kiui.agent.utils.io import EventHub
+from kiui.agent.utils.streaming import consume_stream
 from kiui.agent.ui import AgentConsole
 
 

@@ -3,7 +3,7 @@
 import os
 from typing import Any
 
-from kiui.agent.io import CancellationToken
+from kiui.agent.utils.io import CancellationToken
 from kiui.agent.ui import AgentConsole
 
 

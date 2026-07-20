@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from kiui.agent.io import CancellationToken, EventHub, InputBroker, PromptBroker
+from kiui.agent.utils.io import CancellationToken, EventHub, InputBroker, PromptBroker
 from kiui.agent.backend import LLMAgent
-from kiui.agent.interrupt import RequestInterrupted, run_interruptible
+from kiui.agent.utils.interrupt import RequestInterrupted, run_interruptible
 from kiui.agent.ui import AgentConsole
 
 
@@ -26,7 +26,7 @@ def test_event_hub_orders_and_bounds_replay():
 
 
 def test_event_hub_clips_oversized_text_fields():
-    from kiui.agent.io import EVENT_TEXT_LIMIT
+    from kiui.agent.utils.io import EVENT_TEXT_LIMIT
 
     hub = EventHub()
     event = hub.publish("output", text="x" * (EVENT_TEXT_LIMIT + 100), count=3)
@@ -291,7 +291,7 @@ def test_cancellation_releases_active_prompt():
 
 
 def test_change_tracker_close_persists_resumable_log(tmp_path, monkeypatch):
-    from kiui.agent.rewind import ChangeTracker
+    from kiui.agent.utils.rewind import ChangeTracker
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     work_dir = tmp_path / "work"

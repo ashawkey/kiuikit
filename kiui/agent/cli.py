@@ -82,7 +82,7 @@ def get_agent(args: Args) -> "tuple[LLMAgent | None, HubClient | None]":
 
     info = discover_hub(args.web_port)
     if info:
-        from kiui.agent.io import (
+        from kiui.agent.utils.io import (
             CancellationToken, EventHub, InputBroker, PromptBroker,
         )
         from kiui.agent.hubclient import HubClient
@@ -248,7 +248,7 @@ def cmd_list():
 
 def cmd_storage():
     """Show allocated disk usage for each entry in the project .kia directory."""
-    from kiui.agent.storage import format_size, kia_storage_dir, storage_entries
+    from kiui.agent.utils.storage import format_size, kia_storage_dir, storage_entries
 
     console = AgentConsole()
     root = kia_storage_dir()
@@ -270,7 +270,7 @@ def cmd_storage():
 
 def cmd_clean():
     """Remove generated sessions, tool results, process logs, and command history."""
-    from kiui.agent.storage import clean_storage, cleanable_entries, format_size, kia_storage_dir
+    from kiui.agent.utils.storage import clean_storage, cleanable_entries, format_size, kia_storage_dir
 
     console = AgentConsole()
     entries = cleanable_entries()

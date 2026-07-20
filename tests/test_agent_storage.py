@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from kiui.agent.storage import (
+from kiui.agent.utils.storage import (
     allocated_size,
     clean_storage,
     cleanable_entries,

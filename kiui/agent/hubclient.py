@@ -2,7 +2,7 @@
 
 A terminal ``kia`` process stays terminal-first. This client runs in a daemon
 thread, connects to the hub's loopback ``/internal/agent`` endpoint, registers
-a session, forwards every :class:`~kiui.agent.io.EventHub` event, and injects
+a session, forwards every :class:`~kiui.agent.utils.io.EventHub` event, and injects
 browser actions back into the same brokers the terminal uses — so terminal and
 web stay perfectly in sync.
 """
@@ -13,7 +13,7 @@ import asyncio
 import json
 import threading
 
-from kiui.agent.io import (
+from kiui.agent.utils.io import (
     CancellationToken,
     EventHub,
     InputBroker,

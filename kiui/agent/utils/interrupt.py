@@ -20,7 +20,7 @@ import time
 import threading
 from typing import Callable, TypeVar
 
-from kiui.agent.io import CancellationToken
+from .io import CancellationToken
 
 T = TypeVar("T")
 

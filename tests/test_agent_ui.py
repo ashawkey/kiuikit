@@ -6,7 +6,7 @@ from rich.console import Console
 from rich.progress_bar import ProgressBar
 from rich.table import Table
 
-from kiui.agent.io import EventHub
+from kiui.agent.utils.io import EventHub
 from kiui.agent.ui import _AGENT_LOGO, AgentConsole, ContextStatus, ThinkingIndicator
 
 

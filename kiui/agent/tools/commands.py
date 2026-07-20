@@ -12,7 +12,7 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
-from kiui.agent.interrupt import CancelWatcher
+from kiui.agent.utils.interrupt import CancelWatcher
 
 from .constants import (
     EXEC_READER_JOIN_TIMEOUT,

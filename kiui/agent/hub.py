@@ -14,7 +14,7 @@ Two client surfaces:
   the server generalizes a single authenticated event stream to a registry of
   per-session streams.
 * **Agents** connect to ``/internal/agent`` (loopback only, token-authed),
-  register a session, stream their :class:`~kiui.agent.io.EventHub`
+  register a session, stream their :class:`~kiui.agent.utils.io.EventHub`
   events, and receive browser actions to inject into their local brokers.
 
 Note: no ``from __future__ import annotations`` here — FastAPI must evaluate
@@ -37,7 +37,7 @@ from urllib.parse import urlsplit
 
 from starlette.websockets import WebSocketDisconnect
 
-from kiui.agent.io import EventHub
+from kiui.agent.utils.io import EventHub
 
 
 COOKIE_NAME = "kia_web_session"

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Iterable
 
-from kiui.agent.interrupt import RequestInterrupted
+from .interrupt import RequestInterrupted
 
 
 # Delta attribute names that carry reasoning/thinking text, most specific first.

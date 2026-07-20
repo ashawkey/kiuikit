@@ -22,7 +22,7 @@ from rich.text import Text
 from rich.theme import Theme
 
 if TYPE_CHECKING:
-    from kiui.agent.io import EventHub, PromptBroker
+    from kiui.agent.utils.io import EventHub, PromptBroker
 
 # Custom questionary style that blends with the CLI aesthetic
 _QS_STYLE = questionary.Style([

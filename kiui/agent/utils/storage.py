@@ -5,7 +5,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from kiui.agent.utils import KIA_DIR_NAME
+from .paths import KIA_DIR_NAME
 
 CLEANABLE_ENTRIES = ("sessions", "tool-results", "processes", "history")
 
