@@ -7,7 +7,7 @@
         <link rel="prefetch" href="../_static/logo.png" as="image">
 
     <link rel="shortcut icon" href="../_static/icon.png"><!-- Generated with Sphinx 8.1.3 and Furo 2025.12.19 -->
-        <title>Video - kiui 0.3.4 documentation</title>
+        <title>Video - kiui 0.3.5 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -164,7 +164,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../"><div class="brand">kiui 0.3.4 documentation</div></a>
+      <a href="../"><div class="brand">kiui 0.3.5 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -222,7 +222,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../render/">Mesh Renderer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../blender/">Blender Scripts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../remesh/">Remesh</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../agent/">Agent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../agent/"><code class="docutils literal notranslate"><span class="pre">kia</span></code> — an AI agent for your terminal</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../slurm/">Slurm Utilities</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../misc_cli/">Misc CLI</a></li>
 </ul>
@@ -432,196 +432,8 @@ kivi<span class="w"> </span>split<span class="w"> </span>input.mp4<span class="w
 </div>
 </section>
 </section>
-<section id="module-kiui.video">
-<span id="api"></span><h2>API<a class="headerlink" href="#module-kiui.video" title="Link to this heading">¶</a></h2>
-<dl class="py function">
-<dt class="sig sig-object py" id="kiui.video.read_video">
-<span class="sig-prename descclassname"><span class="pre">kiui.video.</span></span><span class="sig-name descname"><span class="pre">read_video</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">‘float’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘uint8’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘torch’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘tensor’</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'float'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/kiui/video/#read_video"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.video.read_video" title="Link to this definition">¶</a></dt>
-<dd><p>Read a video file into a tensor / numpy array.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>path</strong> – Path to the video file.</p></li>
-<li><p><strong>mode</strong> – Returned data type.
-- <code class="docutils literal notranslate"><span class="pre">&quot;uint8&quot;</span></code>: uint8 numpy array, [T, H, W, 3], range [0, 255]
-- <code class="docutils literal notranslate"><span class="pre">&quot;float&quot;</span></code>: float32 numpy array, [T, H, W, 3], range [0, 1]
-- <code class="docutils literal notranslate"><span class="pre">&quot;torch&quot;</span></code> / <code class="docutils literal notranslate"><span class="pre">&quot;tensor&quot;</span></code>: float32 torch tensor, [T, H, W, 3], range [0, 1]</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Video frames in the requested format.
-fps: Frames per second of the video.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>video</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="kiui.video.write_video">
-<span class="sig-prename descclassname"><span class="pre">kiui.video.</span></span><span class="sig-name descname"><span class="pre">write_video</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">video</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">‘RGB’</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">‘BGR’</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'RGB'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">codec</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'mp4v'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/kiui/video/#write_video"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.video.write_video" title="Link to this definition">¶</a></dt>
-<dd><p>Write a video from frames.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>path</strong> – Path to write the video file.</p></li>
-<li><p><strong>video</strong> – Video frames, [T, H, W, C] where C is 3 or 4.
-Can be numpy array (uint8 or float in [0, 1]) or torch tensor.</p></li>
-<li><p><strong>fps</strong> – Frames per second.</p></li>
-<li><p><strong>order</strong> – Channel order of the input frames, <code class="docutils literal notranslate"><span class="pre">&quot;RGB&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;BGR&quot;</span></code>.</p></li>
-<li><p><strong>codec</strong> – FourCC codec string for OpenCV, e.g. <code class="docutils literal notranslate"><span class="pre">&quot;mp4v&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;XVID&quot;</span></code>.</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="kiui.video.get_video_info">
-<span class="sig-prename descclassname"><span class="pre">kiui.video.</span></span><span class="sig-name descname"><span class="pre">get_video_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/kiui/video/#get_video_info"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.video.get_video_info" title="Link to this definition">¶</a></dt>
-<dd><p>Inspect a video file using ffprobe and return metadata.</p>
-<p>Requires ffmpeg / ffprobe to be installed in the system.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>path</strong> – Path to the video file.</p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><ul class="simple">
-<li><p>path</p></li>
-<li><p>width, height</p></li>
-<li><p>fps</p></li>
-<li><p>duration (seconds)</p></li>
-<li><p>codec</p></li>
-<li><p>codec_tag (fourcc / sample entry, e.g. <code class="docutils literal notranslate"><span class="pre">&quot;hvc1&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;hev1&quot;</span></code>)</p></li>
-<li><p>bitrate (bits per second)</p></li>
-<li><p>filesize (bytes)</p></li>
-<li><p>num_frames</p></li>
-<li><p>raw_size (uncompressed RGB size in bytes)</p></li>
-<li><p>compression_ratio (raw_size / filesize)</p></li>
-</ul>
-</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>dict with keys</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="kiui.video.print_video_info">
-<span class="sig-prename descclassname"><span class="pre">kiui.video.</span></span><span class="sig-name descname"><span class="pre">print_video_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/kiui/video/#print_video_info"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.video.print_video_info" title="Link to this definition">¶</a></dt>
-<dd><p>Pretty-print video (or image) information.</p>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="kiui.video.resize_video">
-<span class="sig-prename descclassname"><span class="pre">kiui.video.</span></span><span class="sig-name descname"><span class="pre">resize_video</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">width</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">height</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">codec</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">crf</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'medium'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/kiui/video/#resize_video"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.video.resize_video" title="Link to this definition">¶</a></dt>
-<dd><p>Resize a video and save to a new file using ffmpeg.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>input_path</strong> – Path to the input video.</p></li>
-<li><p><strong>output_path</strong> – Path to the output video.</p></li>
-<li><p><strong>width</strong> – Target width. If None, it will be inferred from <code class="docutils literal notranslate"><span class="pre">height</span></code> while
-keeping the aspect ratio.</p></li>
-<li><p><strong>height</strong> – Target height. If None, it will be inferred from <code class="docutils literal notranslate"><span class="pre">width</span></code> while
-keeping the aspect ratio.</p></li>
-<li><p><strong>codec</strong> – Video codec / encoder name for ffmpeg, e.g. <code class="docutils literal notranslate"><span class="pre">&quot;h264&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;hevc&quot;</span></code>,
-<code class="docutils literal notranslate"><span class="pre">&quot;libx264&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;libx265&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;mpeg4&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;h264_nvenc&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;hevc_nvenc&quot;</span></code>.
-If None, try to pick a reasonable encoder based on the input codec.</p></li>
-<li><p><strong>crf</strong> – Constant Rate Factor (quality, lower is better) for CRF-based codecs
-(e.g. libx264 / libx265). If None, the function will try to roughly
-match the source video’s bitrate (scaled by resolution/fps) instead
-of using CRF. For <code class="docutils literal notranslate"><span class="pre">&quot;mpeg4&quot;</span></code>, this is mapped to a quantizer value
-<code class="docutils literal notranslate"><span class="pre">q:v</span></code> internally when CRF is provided.</p></li>
-<li><p><strong>preset</strong> – ffmpeg preset, e.g. <code class="docutils literal notranslate"><span class="pre">&quot;slow&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;medium&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;fast&quot;</span></code>.</p></li>
-<li><p><strong>fps</strong> – If not None, resample video to this FPS.</p></li>
-</ul>
-</dd>
-</dl>
-<p>If the requested size is incompatible with the selected encoder’s default
-chroma subsampling, it is rounded to the closest compatible size and a
-warning is printed.</p>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="kiui.video.preview_video">
-<span class="sig-prename descclassname"><span class="pre">kiui.video.</span></span><span class="sig-name descname"><span class="pre">preview_video</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_mb</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">codec</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'libx264'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">crf</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">23</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'medium'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_resolution</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1920</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_resolution</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">480</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_fps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">30.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_fps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">15.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">audio_kbps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">128</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target_bpp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.06</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="../_modules/kiui/video/#preview_video"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.video.preview_video" title="Link to this definition">¶</a></dt>
-<dd><p>Create a share-friendly preview that stays under a file-size target.</p>
-<p>The preview uses a widely compatible codec (defaults to H.264 / yuv420p in
-an mp4 container with faststart and AAC audio) and is encoded with
-“capped CRF”: quality-driven CRF with a <code class="docutils literal notranslate"><span class="pre">maxrate</span></code> cap derived from the
-size target, so short/simple clips keep high quality while long/large ones
-stay under the cap. Downsampling is applied only when the input is too large
-for the budget, preferring resolution reduction over framerate reduction.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>input_path</strong> – Path to the input video.</p></li>
-<li><p><strong>output_path</strong> – Path to the output video. If None, <code class="docutils literal notranslate"><span class="pre">&lt;input&gt;_preview.mp4</span></code>
-next to the input is used.</p></li>
-<li><p><strong>target_mb</strong> – Target maximum file size in MB (mebibytes). Default 10.</p></li>
-<li><p><strong>codec</strong> – Video encoder. Default <code class="docutils literal notranslate"><span class="pre">&quot;libx264&quot;</span></code> for best compatibility.</p></li>
-<li><p><strong>crf</strong> – Constant Rate Factor (quality; lower is better). Default 23.</p></li>
-<li><p><strong>preset</strong> – ffmpeg preset, e.g. <code class="docutils literal notranslate"><span class="pre">&quot;slow&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;medium&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;fast&quot;</span></code>.</p></li>
-<li><p><strong>max_resolution</strong> – Cap on the longest spatial side (px). Inputs larger than
-this (e.g. 2K/4K) are downscaled. Default 1920.</p></li>
-<li><p><strong>min_resolution</strong> – Floor on the longest side (px) when downscaling for
-quality. Default 480.</p></li>
-<li><p><strong>max_fps</strong> – Cap on framerate. Inputs faster than this are resampled down.</p></li>
-<li><p><strong>min_fps</strong> – Floor on framerate when reducing fps for quality.</p></li>
-<li><p><strong>audio_kbps</strong> – AAC audio bitrate; also reserved from the size budget. Set 0
-to drop audio. Ignored if the input has no audio.</p></li>
-<li><p><strong>target_bpp</strong> – Desired bits-per-pixel-per-frame used to decide downsampling.</p></li>
-<li><p><strong>verbose</strong> – Print a before/after summary.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The output path.</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="kiui.video.split_video">
-<span class="sig-prename descclassname"><span class="pre">kiui.video.</span></span><span class="sig-name descname"><span class="pre">split_video</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timestamps</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">codec</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">crf</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'medium'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uniform</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">drop_last</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../_modules/kiui/video/#split_video"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#kiui.video.split_video" title="Link to this definition">¶</a></dt>
-<dd><p>Split a long video into shorter clips given split timestamps.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>input_path</strong> – Path to the input video.</p></li>
-<li><p><strong>output_dir</strong> – Directory to save the clips.</p></li>
-<li><p><strong>timestamps</strong> – <p>Sequence of timestamps in seconds.
-- If <code class="docutils literal notranslate"><span class="pre">drop_last=False</span></code> and <code class="docutils literal notranslate"><span class="pre">uniform=None</span></code>: treated as absolute</p>
-<blockquote>
-<div><p>boundaries; the first segment always starts at 0 and the last
-one ends at the video duration.</p>
-</div></blockquote>
-<ul>
-<li><p>If <code class="docutils literal notranslate"><span class="pre">drop_last=True</span></code> and <code class="docutils literal notranslate"><span class="pre">uniform</span> <span class="pre">is</span> <span class="pre">None</span></code>: treated as segment
-lengths; the first segment is [0, timestamps[0]], the second is
-[timestamps[0], timestamps[0] + timestamps[1]], etc. Any remaining
-tail of the video is dropped.</p></li>
-</ul>
-<p>Ignored if <code class="docutils literal notranslate"><span class="pre">uniform</span></code> is not None.</p>
-</p></li>
-<li><p><strong>codec</strong> – Video codec / encoder name for ffmpeg, e.g. <code class="docutils literal notranslate"><span class="pre">&quot;h264&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;hevc&quot;</span></code>,
-<code class="docutils literal notranslate"><span class="pre">&quot;libx264&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;libx265&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;mpeg4&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;h264_nvenc&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;hevc_nvenc&quot;</span></code>.
-If None, try to pick a reasonable encoder based on the input codec.</p></li>
-<li><p><strong>crf</strong> – Constant Rate Factor (quality, lower is better). If None, the
-function will try to roughly match the source video’s bitrate.</p></li>
-<li><p><strong>preset</strong> – ffmpeg preset, e.g. <code class="docutils literal notranslate"><span class="pre">&quot;slow&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;medium&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;fast&quot;</span></code>.</p></li>
-<li><p><strong>uniform</strong> – If not None, split the video into uniform segments of this many
-seconds. If <code class="docutils literal notranslate"><span class="pre">drop_last=True</span></code>, any remaining tail shorter than this
-interval is dropped. If <code class="docutils literal notranslate"><span class="pre">drop_last=False</span></code>, a final shorter segment
-is kept. Cannot be used together with explicit <code class="docutils literal notranslate"><span class="pre">timestamps</span></code>.</p></li>
-<li><p><strong>drop_last</strong> – Drop any remaining part of the video that is not explicitly
-covered by timestamps or a full uniform interval.</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
+<section id="api">
+<h2>API<a class="headerlink" href="#api" title="Link to this heading">¶</a></h2>
 </section>
 </section>
 
@@ -688,16 +500,7 @@ covered by timestamps or a full uniform interval.</p></li>
 <li><a class="reference internal" href="#split-a-video">Split a video</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#module-kiui.video">API</a><ul>
-<li><a class="reference internal" href="#kiui.video.read_video"><code class="docutils literal notranslate"><span class="pre">read_video()</span></code></a></li>
-<li><a class="reference internal" href="#kiui.video.write_video"><code class="docutils literal notranslate"><span class="pre">write_video()</span></code></a></li>
-<li><a class="reference internal" href="#kiui.video.get_video_info"><code class="docutils literal notranslate"><span class="pre">get_video_info()</span></code></a></li>
-<li><a class="reference internal" href="#kiui.video.print_video_info"><code class="docutils literal notranslate"><span class="pre">print_video_info()</span></code></a></li>
-<li><a class="reference internal" href="#kiui.video.resize_video"><code class="docutils literal notranslate"><span class="pre">resize_video()</span></code></a></li>
-<li><a class="reference internal" href="#kiui.video.preview_video"><code class="docutils literal notranslate"><span class="pre">preview_video()</span></code></a></li>
-<li><a class="reference internal" href="#kiui.video.split_video"><code class="docutils literal notranslate"><span class="pre">split_video()</span></code></a></li>
-</ul>
-</li>
+<li><a class="reference internal" href="#api">API</a></li>
 </ul>
 </li>
 </ul>
@@ -709,7 +512,7 @@ covered by timestamps or a full uniform interval.</p></li>
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=1c9fc4b9"></script>
+</div><script src="../_static/documentation_options.js?v=0e59f8a3"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>

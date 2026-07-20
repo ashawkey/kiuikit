@@ -7,7 +7,7 @@
         <link rel="prefetch" href="../_static/logo.png" as="image">
 
     <link rel="shortcut icon" href="../_static/icon.png"><!-- Generated with Sphinx 8.1.3 and Furo 2025.12.19 -->
-        <title>Agent - kiui 0.3.4 documentation</title>
+        <title>kia — an AI agent for your terminal - kiui 0.3.5 documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -164,7 +164,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../"><div class="brand">kiui 0.3.4 documentation</div></a>
+      <a href="../"><div class="brand">kiui 0.3.5 documentation</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -222,7 +222,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../render/">Mesh Renderer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../blender/">Blender Scripts</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../remesh/">Remesh</a></li>
-<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Agent</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">kia</span></code> — an AI agent for your terminal</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../slurm/">Slurm Utilities</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../misc_cli/">Misc CLI</a></li>
 </ul>
@@ -263,162 +263,208 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="agent">
-<h1>Agent<a class="headerlink" href="#agent" title="Link to this heading">¶</a></h1>
-<p><a class="reference external" href="https://github.com/ashawkey/kiuikit/blob/main/kiui/agent/">[source]</a></p>
-<p>A terminal-based AI agent (<code class="docutils literal notranslate"><span class="pre">kia</span></code>) with built-in tool-use, web access, shell execution, sub-agents, skills, context compaction, and rewind/rollback. Supports any OpenAI-compatible API.</p>
-<section id="api-keys">
-<h2>API keys<a class="headerlink" href="#api-keys" title="Link to this heading">¶</a></h2>
-<p>The API keys are stored in the <code class="docutils literal notranslate"><span class="pre">~/.kiui.yaml</span></code> file (or <code class="docutils literal notranslate"><span class="pre">./.kiui.yaml</span></code>), which is automatically loaded as <code class="docutils literal notranslate"><span class="pre">kiui.conf</span></code>.</p>
+          <section id="kia-an-ai-agent-for-your-terminal">
+<h1><code class="docutils literal notranslate"><span class="pre">kia</span></code> — an AI agent for your terminal<a class="headerlink" href="#kia-an-ai-agent-for-your-terminal" title="Link to this heading">¶</a></h1>
+<p><a class="reference external" href="https://github.com/ashawkey/kiuikit/tree/main/kiui/agent">[source]</a> · <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">&quot;kiui[kia]&quot;</span></code></p>
+<p><code class="docutils literal notranslate"><span class="pre">kia</span></code> is a lightweight coding agent that works where you do: in the terminal and inside your project. It can inspect a repository, edit files, run commands, search the web, delegate work, and keep long sessions focused. Bring any model served through an OpenAI-compatible API.</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>$ kia --model gpt
+&gt; find the cause of this failing test, fix it, and run the smallest relevant check
+
+● reads the repository and test output
+● edits only the affected files
+● runs the focused test
+✓ explains what changed and what was verified
+</pre></div>
+</div>
+<section id="features">
+<h2>Features<a class="headerlink" href="#features" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"></th>
+<th class="head"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Agentic coding</strong><span class="raw-html-m2r"><br></span>Reads, searches, edits, and runs commands with live output.</p></td>
+<td><p><strong>Model agnostic</strong><span class="raw-html-m2r"><br></span>Works with OpenAI-compatible APIs and switches models without leaving the session.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Terminal + Web UI</strong><span class="raw-html-m2r"><br></span>A polished Rich terminal experience with an optional synchronized, mobile-friendly browser UI.</p></td>
+<td><p><strong>Sub-agents and goals</strong><span class="raw-html-m2r"><br></span>Delegates independent research or iterates autonomously toward a standing objective.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Skills</strong><span class="raw-html-m2r"><br></span>Loads reusable <a class="reference external" href="https://agentskills.io">Agent Skills</a> only when relevant, keeping the base prompt lean.</p></td>
+<td><p><strong>Long-context management</strong><span class="raw-html-m2r"><br></span>Compacts large tool results, prunes old output, and summarizes history as context fills.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Rewind and sessions</strong><span class="raw-html-m2r"><br></span>Resumes previous work or rolls conversation and file changes back to an earlier round.</p></td>
+<td><p><strong>Human control</strong><span class="raw-html-m2r"><br></span>Offers three confirmation modes plus a hard guard against recognized destructive operations.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Web access</strong><span class="raw-html-m2r"><br></span>Searches current information and turns web pages into readable text.</p></td>
+<td><p><strong>Developer-friendly UI</strong><span class="raw-html-m2r"><br></span>Streams responses, shows diffs and token usage, and autocompletes file references with <code class="docutils literal notranslate"><span class="pre">&#64;</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<blockquote>
+<div><p><strong>One agent, two interfaces.</strong> Start work in the terminal, open the optional Web UI from another device, and interact with the same live session from either place.</p>
+</div></blockquote>
+</section>
+<section id="install">
+<h2>Install<a class="headerlink" href="#install" title="Link to this heading">¶</a></h2>
+<p>Install the agent and its optional dependencies from PyPI:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;kiui[kia]&quot;</span>
+</pre></div>
+</div>
+<p>For the latest development version:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>-U<span class="w"> </span><span class="s2">&quot;kiui[kia] @ git+https://github.com/ashawkey/kiuikit.git&quot;</span>
+</pre></div>
+</div>
+<p>This installs two commands:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">kia</span></code> — the coding agent and shared Web UI hub.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">kib</span></code> — the optional Git-backed personal skill library.</p></li>
+</ul>
+</section>
+<section id="configure-a-model">
+<h2>Configure a model<a class="headerlink" href="#configure-a-model" title="Link to this heading">¶</a></h2>
+<p>Create <code class="docutils literal notranslate"><span class="pre">.kiui.yaml</span></code> in the current project or <code class="docutils literal notranslate"><span class="pre">~/.kiui.yaml</span></code> for a global configuration. A project configuration takes precedence.</p>
 <div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">openai</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">my-model</span><span class="p">:</span><span class="w">              </span><span class="c1"># alias name for this model</span>
-<span class="w">    </span><span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpt-4o</span><span class="w">        </span><span class="c1"># the model name used in the API call</span>
-<span class="w">    </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sk-...</span><span class="w">      </span><span class="c1"># API key</span>
-<span class="w">    </span><span class="nt">base_url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://api.openai.com/v1</span><span class="w">  </span><span class="c1"># optional, defaults to OpenAI</span>
+<span class="w">  </span><span class="nt">gpt</span><span class="p">:</span><span class="w">                         </span><span class="c1"># short alias used by kia</span>
+<span class="w">    </span><span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpt-5</span><span class="w">               </span><span class="c1"># model ID sent to the provider</span>
+<span class="w">    </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sk-...</span>
+<span class="w">    </span><span class="nt">base_url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://api.openai.com/v1</span>
+<span class="w">    </span><span class="nt">reasoning_effort</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">high</span><span class="w">     </span><span class="c1"># optional</span>
+
+<span class="w">  </span><span class="nt">local</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-model</span>
+<span class="w">    </span><span class="nt">api_key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">not-needed</span>
+<span class="w">    </span><span class="nt">base_url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://localhost:8000/v1</span>
+
+<span class="nt">kia_web_token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">change-me</span><span class="w">       </span><span class="c1"># optional fixed Web UI token</span>
+</pre></div>
+</div>
+<p>The provider only needs to expose an OpenAI-compatible chat-completions API. Keep API keys out of files committed to version control.</p>
+<p>List the configured profiles and their detected capabilities:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>kia<span class="w"> </span>--list
 </pre></div>
 </div>
 </section>
-<section id="cli">
-<h2>CLI<a class="headerlink" href="#cli" title="Link to this heading">¶</a></h2>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>kiui.agent.cli<span class="w"> </span>--help
-<span class="c1"># short cut:</span>
-kia<span class="w"> </span>--help
-
-<span class="c1"># list all available models (from ~/.kiui.yaml)</span>
-kia<span class="w"> </span>--list
-
-<span class="c1"># start interactive chat (model defaults to the first in config)</span>
-kia
-
-<span class="c1"># use a specific model</span>
-kia<span class="w"> </span>--model<span class="w"> </span>my-model
-
-<span class="c1"># set permission mode: auto (confirm destructive), default (ask), strict (read-only)</span>
-kia<span class="w"> </span>--perm<span class="w"> </span>auto
-kia<span class="w"> </span>--perm<span class="w"> </span>strict
-
-<span class="c1"># enable verbose debugging (shows API timing, token counts, context stats)</span>
-kia<span class="w"> </span>--model<span class="w"> </span>my-model<span class="w"> </span>--verbose
-
-<span class="c1"># resume a previous session</span>
-kia<span class="w"> </span>--resume<span class="w"> </span>&lt;session_id&gt;
-
-<span class="c1"># pick a session interactively from saved sessions</span>
-kia<span class="w"> </span>--resume
+<section id="quick-start">
+<h2>Quick start<a class="headerlink" href="#quick-start" title="Link to this heading">¶</a></h2>
+<p>Run <code class="docutils literal notranslate"><span class="pre">kia</span></code> from the root of the project you want it to work on:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>my-project
+kia<span class="w"> </span>--model<span class="w"> </span>gpt
 </pre></div>
 </div>
-</section>
-<section id="built-in-tools">
-<h2>Built-in tools<a class="headerlink" href="#built-in-tools" title="Link to this heading">¶</a></h2>
-<p>The agent includes <strong>12 built-in tools</strong> — no external tool files needed:</p>
-<div class="table-wrapper docutils container">
-<table class="docutils align-default">
-<thead>
-<tr class="row-odd"><th class="head"><p>Tool</p></th>
-<th class="head"><p>Description</p></th>
-</tr>
-</thead>
-<tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">read_file</span></code></p></td>
-<td><p>Read file contents with offset/limit</p></td>
-</tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">write_file</span></code></p></td>
-<td><p>Create or overwrite a file</p></td>
-</tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">edit_file</span></code></p></td>
-<td><p>Surgical string replacement in files</p></td>
-</tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">exec_command</span></code></p></td>
-<td><p>Execute shell commands (real-time streaming)</p></td>
-</tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">glob_files</span></code></p></td>
-<td><p>Find files by glob pattern</p></td>
-</tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">grep_files</span></code></p></td>
-<td><p>Search file contents by regex</p></td>
-</tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">web_search</span></code></p></td>
-<td><p>Search the web for real-time information</p></td>
-</tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">web_fetch</span></code></p></td>
-<td><p>Fetch and convert URL content to text</p></td>
-</tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">remove_file</span></code></p></td>
-<td><p>Remove a file or directory</p></td>
-</tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">spawn_subagent</span></code></p></td>
-<td><p>Spawn a sub-agent for delegated tasks</p></td>
-</tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">load_skill</span></code></p></td>
-<td><p>Load specialized skill instructions</p></td>
-</tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">save_memory</span></code></p></td>
-<td><p>Persist important project-level insights</p></td>
-</tr>
-</tbody>
-</table>
+<p>If <code class="docutils literal notranslate"><span class="pre">--model</span></code> is omitted, the first profile in <code class="docutils literal notranslate"><span class="pre">openai</span></code> is used.</p>
+<p>Talk to it naturally:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&gt; explain how authentication flows through this repository
+&gt; fix the parser bug reported in issue #42 and run its tests
+&gt; compare these two approaches using current upstream documentation
+&gt; @src/server.py simplify this function without changing its API
+</pre></div>
 </div>
-</section>
-<section id="permissions">
-<h2>Permissions<a class="headerlink" href="#permissions" title="Link to this heading">¶</a></h2>
-<p>Three-tier permission system, configurable via <code class="docutils literal notranslate"><span class="pre">--perm</span></code>. A <strong>hard safety guard</strong> runs before mode-based checks and always blocks inherently dangerous operations (e.g. <code class="docutils literal notranslate"><span class="pre">rm</span> <span class="pre">-rf</span> <span class="pre">/</span></code>, <code class="docutils literal notranslate"><span class="pre">mkfs</span></code>, writing outside the working directory).</p>
-<div class="table-wrapper docutils container">
-<table class="docutils align-default">
-<thead>
-<tr class="row-odd"><th class="head"><p>Mode</p></th>
-<th class="head"><p>Behavior</p></th>
-</tr>
-</thead>
-<tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">auto</span></code></p></td>
-<td><p>All tools run without prompting (used for sub-agents / pipe mode)</p></td>
-</tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">default</span></code></p></td>
-<td><p>Safe tools (read, glob, grep, web search/fetch, load skill) auto-approve; risky tools (write, edit, exec, remove, spawn) prompt for confirmation</p></td>
-</tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">strict</span></code></p></td>
-<td><p>Every tool prompts for confirmation</p></td>
-</tr>
-</tbody>
-</table>
+<p>Prefix a command with <code class="docutils literal notranslate"><span class="pre">!</span></code> to bypass the model and run it directly:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>&gt; !git diff --stat
+&gt; !pytest tests/test_parser.py -q
+</pre></div>
 </div>
+<p>Type <code class="docutils literal notranslate"><span class="pre">&#64;</span></code> to autocomplete a project path. Responses, reasoning for compatible models, tool activity, command output, and diffs stream in the terminal.</p>
+</section>
+<section id="web-ui">
+<h2>Web UI<a class="headerlink" href="#web-ui" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">kia</span></code> remains terminal-first, but a shared hub can mirror many agents into one authenticated browser UI. Each running agent appears as a tab, even when agents were started in different projects or terminals.</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>┌──────────────────────────────┐       WebSocket       ┌─────────────────────┐
+│ kia --hub                    │◀──────────────────────▶│ browser             │
+│  ├─ project-a · gpt          │                       │  [project-a] [docs] │
+│  └─ docs · local             │                       └─────────────────────┘
+└──────────────▲───────────────┘
+               │ local agent links
+        ┌──────┴──────┐
+        │ kia sessions │
+        └──────────────┘
+</pre></div>
+</div>
+<p>Start the hub once, then launch agents normally:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># terminal 1: owns the browser UI port</span>
+kia<span class="w"> </span>--hub<span class="w"> </span>--web-port<span class="w"> </span><span class="m">8765</span>
+
+<span class="c1"># other terminals: automatically discover and join the hub</span>
+<span class="nb">cd</span><span class="w"> </span>~/project-a<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>kia<span class="w"> </span>--model<span class="w"> </span>gpt
+<span class="nb">cd</span><span class="w"> </span>~/project-b<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>kia<span class="w"> </span>--model<span class="w"> </span><span class="nb">local</span>
+</pre></div>
+</div>
+<p>Open the URL printed by the hub and sign in with its generated token, or set <code class="docutils literal notranslate"><span class="pre">kia_web_token</span></code> in <code class="docutils literal notranslate"><span class="pre">.kiui.yaml</span></code>. Connection information is stored in <code class="docutils literal notranslate"><span class="pre">~/.kia/hub.json</span></code>; agents continue terminal-only if no hub is available.</p>
+<p>The hub listens on loopback. To use it from another machine, forward the port with SSH or place it behind an authenticated tunnel:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ssh<span class="w"> </span>-L<span class="w"> </span><span class="m">8765</span>:127.0.0.1:8765<span class="w"> </span>user@workstation
+</pre></div>
+</div>
+<p>Then open <code class="docutils literal notranslate"><span class="pre">http://127.0.0.1:8765</span></code> locally.</p>
 </section>
 <section id="skills">
 <h2>Skills<a class="headerlink" href="#skills" title="Link to this heading">¶</a></h2>
-<p>The agent auto-discovers <strong>skill packs</strong> from <code class="docutils literal notranslate"><span class="pre">.kia/skills/</span></code> in the working directory. A skill pack is a directory containing a prompt file that provides specialized guidance. The agent can load skills on demand via the <code class="docutils literal notranslate"><span class="pre">load_skill</span></code> tool.</p>
-<p>Place skill packs in <code class="docutils literal notranslate"><span class="pre">.kia/skills/&lt;skill_name&gt;/</span></code> — the agent’s system prompt will list them as available.</p>
-</section>
-<section id="sub-agents">
-<h2>Sub-agents<a class="headerlink" href="#sub-agents" title="Link to this heading">¶</a></h2>
-<p>The <code class="docutils literal notranslate"><span class="pre">spawn_subagent</span></code> tool spawns a <strong>child agent</strong> that runs autonomously (no user interaction) and returns a result. Useful for decomposing large tasks into independent sub-tasks.</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Example sub-agent usage (from within a kia session):</span>
-<span class="c1"># &quot;spawn a sub-agent to review the codebase and write a summary&quot;</span>
-</pre></div>
-</div>
-</section>
-<section id="context-management">
-<h2>Context management<a class="headerlink" href="#context-management" title="Link to this heading">¶</a></h2>
-<p>The agent automatically manages the LLM context window:</p>
+<p>Skills are reusable instruction packs in the open <a class="reference external" href="https://agentskills.io">Agent Skills</a> format. <code class="docutils literal notranslate"><span class="pre">kia</span></code> discovers them from:</p>
 <ul class="simple">
-<li><p><strong>Pruning</strong>: Old, large tool results are truncated to stay within limits.</p></li>
-<li><p><strong>Compaction</strong>: When the context window is under pressure, the agent uses the LLM itself to summarize older messages into a compact form, preserving essential information.</p></li>
+<li><p>The installed <code class="docutils literal notranslate"><span class="pre">kiui</span></code> package — bundled skills; these take precedence and stay in sync with the installed version.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">./.kia/skills/</span></code> — project skills; these take precedence over personal skills.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">~/.kia/skills/</span></code> — personal skills shared across projects.</p></li>
 </ul>
-</section>
-<section id="rewind-rollback">
-<h2>Rewind / rollback<a class="headerlink" href="#rewind-rollback" title="Link to this heading">¶</a></h2>
-<p>The agent tracks file changes during a session. You can ask it to <strong>rewind</strong> (undo) changes made during the conversation:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&gt;</span> <span class="n">rewind</span> <span class="n">to</span> <span class="n">before</span> <span class="n">I</span> <span class="n">asked</span> <span class="n">you</span> <span class="n">to</span> <span class="n">refactor</span> <span class="n">utils</span><span class="o">.</span><span class="n">py</span>
+<p>Only each skill’s name and description enter the base prompt. Full instructions and bundled resources are loaded on demand, preserving context for the actual task.</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>.kia/skills/pdf-processing/
+├── SKILL.md
+├── scripts/       # optional
+├── references/    # optional
+└── assets/        # optional
 </pre></div>
 </div>
-<p>This reverts files to their pre-change state and truncates the conversation history.</p>
-</section>
-<section id="sessions">
-<h2>Sessions<a class="headerlink" href="#sessions" title="Link to this heading">¶</a></h2>
-<p>Sessions are automatically saved to <code class="docutils literal notranslate"><span class="pre">~/.kia/sessions/</span></code> on each turn. Resume with:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>kia<span class="w"> </span>--resume<span class="w">           </span><span class="c1"># pick interactively</span>
-kia<span class="w"> </span>--resume<span class="w"> </span>&lt;session_id&gt;
+<p>A minimal <code class="docutils literal notranslate"><span class="pre">SKILL.md</span></code> looks like this:</p>
+<div class="highlight-markdown notranslate"><div class="highlight"><pre><span></span>---
+name: pdf-processing
+<span class="gu">description: Extract, inspect, merge, and fill PDF documents. Use for PDF tasks.</span>
+<span class="gu">---</span>
+
+Follow the workflow in <span class="sb">`references/workflow.md`</span>.
+Use <span class="sb">`scripts/extract.py`</span> when text extraction is required.
 </pre></div>
 </div>
+<p>Useful commands:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>/skills                 list discovered skills
+/skills reload          discover new or edited skills
+/skills pdf-processing  load one manually
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">kia</span></code> ships with <code class="docutils literal notranslate"><span class="pre">skill-creator</span></code> for drafting and validating skill packs and <code class="docutils literal notranslate"><span class="pre">pdf-reading</span></code> for converting PDFs to Markdown and structured data with the external <a class="reference external" href="https://github.com/opendatalab/MinerU">MinerU</a> CLI. The PDF skill reads extracted text, LaTeX, tables, and captions; direct image-pixel inspection requires a vision-capable tool. Bundled skills are loaded directly from the installed package rather than copied into <code class="docutils literal notranslate"><span class="pre">.kia</span></code>, so upgrading <code class="docutils literal notranslate"><span class="pre">kiui</span></code> also updates them. Create custom skills under a different name.</p>
+<section id="personal-skill-library">
+<h3>Personal skill library<a class="headerlink" href="#personal-skill-library" title="Link to this heading">¶</a></h3>
+<p>Configure a Git repository to share skills between projects:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">kia_lib</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">git@github.com:username/kia-skills.git</span>
+</pre></div>
+</div>
+<p>Then manage it with <code class="docutils literal notranslate"><span class="pre">kib</span></code>:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>kib<span class="w"> </span>list
+kib<span class="w"> </span>list<span class="w"> </span>--local
+kib<span class="w"> </span>install<span class="w"> </span>pdf-processing
+kib<span class="w"> </span>update<span class="w"> </span><span class="o">[</span>pdf-processing<span class="w"> </span>...<span class="o">]</span>
+kib<span class="w"> </span>update<span class="w"> </span>pdf-processing<span class="w"> </span>--prefer<span class="w"> </span><span class="nb">local</span>
+kib<span class="w"> </span>upload<span class="w"> </span>pdf-processing
+kib<span class="w"> </span>upload<span class="w"> </span>pdf-processing<span class="w"> </span>--force
+kib<span class="w"> </span>remove<span class="w"> </span>pdf-processing
+kib<span class="w"> </span>remove<span class="w"> </span>pdf-processing<span class="w"> </span>--local
+</pre></div>
+</div>
+<p>Remote skills are not exposed to the agent until installed. <code class="docutils literal notranslate"><span class="pre">kib</span> <span class="pre">update</span></code> safely synchronizes all installed skills, or only the optional names: local-only changes are uploaded, remote-only changes are downloaded, and conflicts require <code class="docutils literal notranslate"><span class="pre">--prefer</span> <span class="pre">local</span></code> or <code class="docutils literal notranslate"><span class="pre">--prefer</span> <span class="pre">remote</span></code>. The committed <code class="docutils literal notranslate"><span class="pre">.kib.json</span></code> in each skill records its last synchronized tree, so this works across machines without relying on a local cache. <code class="docutils literal notranslate"><span class="pre">kib</span> <span class="pre">remove</span></code> deletes from the library; <code class="docutils literal notranslate"><span class="pre">--local</span></code> deletes only from the project. <code class="docutils literal notranslate"><span class="pre">kib</span></code> only manages project skills under <code class="docutils literal notranslate"><span class="pre">./.kia/skills/</span></code> and does not list or special-case bundled skills. Upload validates the pack and rejects symlinks; <code class="docutils literal notranslate"><span class="pre">kib</span> <span class="pre">install</span></code> never overwrites existing local skills.</p>
+</section>
+</section>
+<section id="personas">
+<h2>Personas<a class="headerlink" href="#personas" title="Link to this heading">¶</a></h2>
+<p>A persona owns the agent’s identity, system prompt, and tool surface — unlike skills, which add instructions, a persona replaces them. Personas are Python modules bundled in <code class="docutils literal notranslate"><span class="pre">kiui/agent/personas/</span></code>; <code class="docutils literal notranslate"><span class="pre">coder</span></code> (the default) is the full coding agent, while <code class="docutils literal notranslate"><span class="pre">chatter</span></code> is a general chatbot limited to <code class="docutils literal notranslate"><span class="pre">web_search</span></code> and <code class="docutils literal notranslate"><span class="pre">web_fetch</span></code>, with no file/shell access and no environment context in its prompt.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>kia<span class="w"> </span>--persona<span class="w"> </span>chatter<span class="w">   </span><span class="c1"># start as another persona</span>
+</pre></div>
+</div>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>/persona                list installed personas and their tool surface
+/persona chatter        switch persona (restarts the conversation, like /clear)
+</pre></div>
+</div>
+<p>Each persona module defines <code class="docutils literal notranslate"><span class="pre">build_system_prompt(ctx)</span></code> — composed from the shared blocks and builders in <code class="docutils literal notranslate"><span class="pre">kiui/agent/personas/common.py</span></code> — and a <code class="docutils literal notranslate"><span class="pre">TOOLS</span></code> whitelist that controls which tools are advertised to the model. This is capability guidance, not a security boundary: interactive commands such as <code class="docutils literal notranslate"><span class="pre">!&lt;command&gt;</span></code> and <code class="docutils literal notranslate"><span class="pre">/skills</span></code> remain available to the user and are governed by the normal permission and safety checks.</p>
 </section>
 </section>
 
@@ -477,16 +523,17 @@ kia<span class="w"> </span>--resume<span class="w"> </span>&lt;session_id&gt;
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">Agent</a><ul>
-<li><a class="reference internal" href="#api-keys">API keys</a></li>
-<li><a class="reference internal" href="#cli">CLI</a></li>
-<li><a class="reference internal" href="#built-in-tools">Built-in tools</a></li>
-<li><a class="reference internal" href="#permissions">Permissions</a></li>
-<li><a class="reference internal" href="#skills">Skills</a></li>
-<li><a class="reference internal" href="#sub-agents">Sub-agents</a></li>
-<li><a class="reference internal" href="#context-management">Context management</a></li>
-<li><a class="reference internal" href="#rewind-rollback">Rewind / rollback</a></li>
-<li><a class="reference internal" href="#sessions">Sessions</a></li>
+<li><a class="reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">kia</span></code> — an AI agent for your terminal</a><ul>
+<li><a class="reference internal" href="#features">Features</a></li>
+<li><a class="reference internal" href="#install">Install</a></li>
+<li><a class="reference internal" href="#configure-a-model">Configure a model</a></li>
+<li><a class="reference internal" href="#quick-start">Quick start</a></li>
+<li><a class="reference internal" href="#web-ui">Web UI</a></li>
+<li><a class="reference internal" href="#skills">Skills</a><ul>
+<li><a class="reference internal" href="#personal-skill-library">Personal skill library</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#personas">Personas</a></li>
 </ul>
 </li>
 </ul>
@@ -498,7 +545,7 @@ kia<span class="w"> </span>--resume<span class="w"> </span>&lt;session_id&gt;
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=1c9fc4b9"></script>
+</div><script src="../_static/documentation_options.js?v=0e59f8a3"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
