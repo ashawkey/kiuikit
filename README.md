@@ -34,7 +34,23 @@ pip install git+https://github.com/ashawkey/kiuikit.git # only the minimal packa
 | `kivi` | Video/image info, resize, preview (capped-CRF), split |
 | `kiss` | System information — OS, CPU, GPU, torch, CUDA, conda |
 | `ks` | Slurm job management — queue, history, logs, cancel, usage |
-| `kia` | Minimal yet powerful AI agent — tool-use, web access, skills |
+| `kia` | AI coding agent — terminal-native with web UI, sub-agents, skills, and more |
+
+### AI Agent (`kia`)
+
+`kia` is a lightweight yet powerful coding agent.
+
+```bash
+pip install "kiui[kia]"
+kia
+```
+
+What makes it different:
+- Native terminal + synchronized web UI, access from any browser.
+- Personal skill library via `kib`: upload/install your own skills.
+- Fully customizable personas.
+
+See the [agent documentation](https://kit.kiui.moe/agent.html) for full details.
 
 **Python library:**
 

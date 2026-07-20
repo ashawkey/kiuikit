@@ -102,43 +102,6 @@ Prefix a command with `!` to bypass the model and run it directly:
 
 Type `@` to autocomplete a project path. Responses, reasoning for compatible models, tool activity, command output, and diffs stream in the terminal.
 
-## A workflow built for real repositories
-
-### Inspect and change code
-
-The agent has focused tools for reading files, searching by glob or regular expression, listing directories, applying surgical edits, and batching atomic edits. It prefers narrow repository-aware operations over dumping an entire project into context.
-
-### Run and verify
-
-Shell commands stream in real time. Large output is compacted before entering model context, while the complete captured output remains available under `.kia/tool-results/` for focused follow-up. Common pytest, Git, package-manager, and compiler output receives tool-aware reduction so useful diagnostics survive.
-
-### Delegate independent work
-
-The agent can spawn an in-process sub-agent for a self-contained task. The child works autonomously with the same model profile and returns a concise result to the parent session.
-
-```text
-> spawn a sub-agent to review the database migration for data-loss risks
-```
-
-### Set a standing goal
-
-Use `/goal` when the agent should keep checking and working until an objective is met:
-
-```text
-> /goal all focused tests pass and the changed files have no lint errors
-```
-
-There is no fixed iteration cap. Press `Ctrl+C` or `Esc` during a round to stop the loop. Use `/goal clear` to remove the objective.
-
-### Rewind safely
-
-`/rewind` opens an interactive history picker. Choose a round, then restore:
-
-1. conversation only,
-2. conversation and code, or
-3. code only.
-
-File writes, edits, and removals are tracked per round, so an experiment does not have to become a permanent change.
 
 ## Web UI
 
@@ -217,20 +180,6 @@ Useful commands:
 
 `kia` ships with `skill-creator` for drafting and validating skill packs and `pdf-reading` for converting PDFs to Markdown and structured data with the external [MinerU](https://github.com/opendatalab/MinerU) CLI. The PDF skill reads extracted text, LaTeX, tables, and captions; direct image-pixel inspection requires a vision-capable tool. Bundled skills are loaded directly from the installed package rather than copied into `.kia`, so upgrading `kiui` also updates them. Create custom skills under a different name.
 
-## Personas
-
-A persona owns the agent's identity, system prompt, and tool surface — unlike skills, which add instructions, a persona replaces them. Personas are Python modules bundled in `kiui/agent/personas/`; `coder` (the default) is the full coding agent, while `chatter` is a general chatbot limited to `web_search` and `web_fetch`, with no file/shell access and no environment context in its prompt.
-
-```bash
-kia --persona chatter   # start as another persona
-```
-
-```text
-/persona                list installed personas and their tool surface
-/persona chatter        switch persona (restarts the conversation, like /clear)
-```
-
-Each persona module defines `build_system_prompt(ctx)` — composed from the shared blocks and builders in `kiui/agent/personas/common.py` — and a `TOOLS` whitelist that controls which tools are advertised to the model. This is capability guidance, not a security boundary: interactive commands such as `!<command>` and `/skills` remain available to the user and are governed by the normal permission and safety checks.
 
 ### Personal skill library
 
@@ -256,133 +205,17 @@ kib remove pdf-processing --local
 
 Remote skills are not exposed to the agent until installed. `kib update` safely synchronizes all installed skills, or only the optional names: local-only changes are uploaded, remote-only changes are downloaded, and conflicts require `--prefer local` or `--prefer remote`. The committed `.kib.json` in each skill records its last synchronized tree, so this works across machines without relying on a local cache. `kib remove` deletes from the library; `--local` deletes only from the project. `kib` only manages project skills under `./.kia/skills/` and does not list or special-case bundled skills. Upload validates the pack and rejects symlinks; `kib install` never overwrites existing local skills.
 
-## Context that stays useful
+## Personas
 
-Long sessions are managed in layers:
-
-1. **Tool-result compaction** reduces oversized output before it reaches conversation history and retains a private full capture for recovery.
-2. **Context pruning** trims, then clears, old large tool results as the context window fills.
-3. **LLM compaction** summarizes the oldest conversation when context pressure becomes high.
-
-The status display reports live context usage. `/usage` shows token totals and compaction statistics, `/context` provides a concise message log, and `/compact` forces summarization immediately.
-
-## Permissions and safety
-
-Choose how often tools require confirmation with `--perm` or `/perm`:
-
-| Mode | Confirmation behavior |
-|------|------------------------|
-| `auto` | Runs safety-approved tool calls without prompting. This is the CLI default. |
-| `default` | Automatically allows read/search/web/skill tools; prompts for writes, edits, shell commands, removals, and sub-agents. |
-| `strict` | Prompts before every tool call. |
+A persona owns the agent's identity, system prompt, and tool surface — unlike skills, which add instructions, a persona replaces them. Personas are Python modules bundled in `kiui/agent/personas/`; `coder` (the default) is the full coding agent, while `chatter` is a general chatbot limited to `web_search` and `web_fetch`, with no file/shell access and no environment context in its prompt.
 
 ```bash
-kia --perm default
-kia --perm strict
+kia --persona chatter   # start as another persona
 ```
-
-A hard safety guard runs before the selected mode and blocks recognized destructive operations such as recursive deletion of critical paths, filesystem formatting, writes to block devices, fork bombs, and shutdown commands.
-
-> The shell detector is defense in depth, **not a sandbox**. Static checks cannot understand every equivalent shell expression. Use a container, VM, restricted account, or OS-level sandbox when commands must be contained.
-
-File tools are not restricted to the current workspace. Review prompts carefully in `default` and `strict` modes.
-
-## Sessions and project data
-
-Sessions are saved automatically during work (throttled to at most once every 30 seconds) and can be resumed later:
-
-```bash
-kia --resume                 # choose interactively
-kia --resume <session_id>
-```
-
-You can also run `/resume` without leaving the current agent. Project-local state lives under `.kia/`:
 
 ```text
-.kia/
-├── sessions/       saved conversations
-├── tool-results/   retained full command output
-├── skills/         project skill packs
-└── history         terminal input history
+/persona                list installed personas and their tool surface
+/persona chatter        switch persona (restarts the conversation, like /clear)
 ```
 
-Inspect or clean generated data:
-
-```bash
-kia --storage
-kia --clean
-```
-
-`--clean` removes generated sessions, tool results, and command history. It preserves installed skills and unrecognized entries.
-
-## Command reference
-
-### CLI options
-
-| Option | Description |
-|--------|-------------|
-| `--model NAME` | Use a configured model alias. |
-| `--persona NAME` | Run as a persona (default: `coder`). |
-| `--reasoning-effort LEVEL` | Set `none`, `minimal`, `low`, `medium`, `high`, or `xhigh`. |
-| `--perm MODE` | Set `auto`, `default`, or `strict`. |
-| `--stream` / `--no-stream` | Enable or disable token-by-token output. |
-| `--resume [SESSION_ID]` | Resume by ID or choose a session interactively. |
-| `--verbose` | Show API timing and additional diagnostics. |
-| `--list` | List configured models and exit. |
-| `--storage` | Report project `.kia/` disk usage and exit. |
-| `--clean` | Remove generated project state and exit. |
-| `--hub` | Run the shared Web UI hub. |
-| `--web-port PORT` | Select the hub port; default is `8765`. |
-
-Run `kia --help` for the options supported by your installed version.
-
-### In-session commands
-
-| Command | Action |
-|---------|--------|
-| `/help` | Show built-in help. |
-| `/context` | Show a one-line-per-message context log. |
-| `/system_prompt` | Print the complete current system prompt. |
-| `/compact` | Force LLM context compaction. |
-| `/usage` | Show token and tool-compaction usage. |
-| `/model [name]` | Show or switch the active model. |
-| `/reasoning [level]` | Show or change reasoning effort. |
-| `/skills [name\|reload]` | List, load, or rediscover skills. |
-| `/persona [name]` | List personas, or switch (restarts the conversation). |
-| `/goal [text\|clear]` | Show, set, or clear a standing goal. |
-| `/perm [mode]` | Show or change confirmation mode. |
-| `/rewind [round]` | Roll conversation and/or files back. |
-| `/clear` | Save the current session and start a new one. |
-| `/resume [session_id]` | Save the current session, then resume another. |
-| `/exit`, `/quit` | Exit the agent. |
-
-### Keyboard shortcuts
-
-| Key | Action |
-|-----|--------|
-| `Enter` | Send the prompt. |
-| `Escape`, then `Enter` | Insert a newline. |
-| `Ctrl+C` on non-empty input | Clear the input. |
-| `Ctrl+C` twice on empty input | Exit. |
-| `Ctrl+C` or `Esc` during a request | Cancel the in-flight operation. |
-
-## Built-in tools
-
-| Tool | Purpose |
-|------|---------|
-| `read_file` | Read a focused range of a file. |
-| `write_file` | Create or replace a file. |
-| `edit_file` | Replace an exact text region surgically. |
-| `multi_edit` | Apply ordered edits to one file atomically. |
-| `ls` | List one directory level. |
-| `glob_files` | Find files with gitignore-aware globbing. |
-| `grep_files` | Search file contents with a regular expression. |
-| `exec_command` | Run a shell command with streaming output. |
-| `web_search` | Search the live web. |
-| `web_fetch` | Fetch a URL as readable text. |
-| `remove_file` | Remove a file or directory. |
-| `spawn_subagent` | Delegate an independent task. |
-| `load_skill` | Load a skill's full instructions. |
-| `report_goal` | Report whether a standing goal has been met. |
-
-No separate tool server is required; these tools ship with `kia`.
+Each persona module defines `build_system_prompt(ctx)` — composed from the shared blocks and builders in `kiui/agent/personas/common.py` — and a `TOOLS` whitelist that controls which tools are advertised to the model. This is capability guidance, not a security boundary: interactive commands such as `!<command>` and `/skills` remain available to the user and are governed by the normal permission and safety checks.
