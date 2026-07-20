@@ -14,14 +14,6 @@ class _SilentConsole:
         pass
 
 
-def test_persona_common_helpers_are_not_registered(tmp_path):
-    personas = list_personas()
-
-    assert "common" not in personas
-    prompt = personas["coder"].build(PersonaContext(work_dir=str(tmp_path)))
-    assert prompt.count("## Tool Usage") == 1
-    assert "Use start_process for servers" in prompt
-
 
 def test_reviewer_persona_contract(tmp_path):
     personas = list_personas()

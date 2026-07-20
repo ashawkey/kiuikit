@@ -37,7 +37,7 @@ SKILL_DIRS = (".kia",)
 
 # Bundled skills are loaded directly from the installed package so their
 # instructions and resources always match the installed kiui version.
-BUNDLED_SKILLS_DIR = Path(__file__).parent / "skills"
+BUNDLED_SKILLS_DIR = Path(__file__).parent / "bundled_skills"
 
 # name: 1-64 chars, lowercase alphanumeric + single hyphens, no leading/trailing/
 # consecutive hyphens (per the Agent Skills spec).
