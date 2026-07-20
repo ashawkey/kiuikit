@@ -1,10 +1,4 @@
-"""Shared system-prompt building blocks for kiui agent personas.
-
-This module is a toolbox, not a composer: each persona (see
-``kiui/agent/personas/``) builds its own complete system prompt by combining
-the section constants and builders below with its own identity text. The
-bundled ``coder`` persona shows the canonical composition.
-"""
+"""Shared context and prompt-building helpers for agent personas."""
 
 import os
 import platform
@@ -18,15 +12,12 @@ from pathlib import Path
 @dataclass(frozen=True)
 class PersonaContext:
     """Runtime information passed to a persona's build_system_prompt()."""
+
     exec_mode: bool = False       # autonomous sub-agent run (no user available)
     is_subagent: bool = False     # sub-agents cannot spawn further sub-agents
     work_dir: str | None = None   # overrides cwd shown in the context section
     skills: dict | None = None    # pre-discovered skills registry
 
-
-# ---------------------------------------------------------------------------
-# Section constants
-# ---------------------------------------------------------------------------
 
 EXEC_MODE_SECTION = """## Autonomous Mode
 You are running as an autonomous sub-agent with no user available to respond.
@@ -44,12 +35,13 @@ SAFETY_EXEC_SECTION = """## Safety
 - Avoid destructive or irreversible actions unless the task explicitly requires them.
 - Prefer safe, reversible operations when either approach satisfies the task."""
 
-TOOL_USAGE_SECTION = """## Tool Usage
-- Always check tool results before proceeding.
-- Do not narrate routine, low-risk tool calls — just call the tool. Narrate only for multi-step work, complex problems, or sensitive actions (e.g., deletions).
-- Prefer ls / glob_files / grep_files over exec_command for file discovery and search.
-- Keep output focused with narrow paths/patterns, read_file offset/limit, and quiet or filtered commands.
-- If output is compacted, follow its recovery guidance instead of repeating the same broad call."""
+TOOL_USAGE_RULES = (
+    "Always check tool results before proceeding.",
+    "Do not narrate routine, low-risk tool calls — just call the tool. Narrate only for multi-step work, complex problems, or sensitive actions (e.g., deletions).",
+    "Prefer ls / glob_files / grep_files over exec_command for file discovery and search.",
+    "Keep output focused with narrow paths/patterns, read_file offset/limit, and quiet or filtered commands.",
+    "If output is compacted, follow its recovery guidance instead of repeating the same broad call.",
+)
 
 TASK_EXECUTION_SECTION = """## Task Execution
 - Inspect the relevant context before acting; do not guess about code or file contents.
@@ -70,9 +62,20 @@ SUBAGENT_SECTION = """## Sub-Agents
 Delegate only when it materially helps with independent research or analysis. Give a focused task, do not delegate simple work."""
 
 
-# ---------------------------------------------------------------------------
-# Dynamic section builders
-# ---------------------------------------------------------------------------
+def build_bullet_section(title: str, rules: tuple[str, ...]) -> str:
+    """Render a Markdown section from a heading and bullet rules."""
+    return f"## {title}\n" + "\n".join(f"- {rule}" for rule in rules)
+
+
+def build_tool_usage_section(*extra_rules: str) -> str:
+    """Build the shared tool-usage section with persona-specific rules."""
+    return build_bullet_section("Tool Usage", TOOL_USAGE_RULES + extra_rules)
+
+
+def join_prompt_sections(*sections: str | None) -> str:
+    """Join populated prompt sections with consistent spacing."""
+    return "\n\n".join(section for section in sections if section)
+
 
 def build_project_section(work_dir: str | None = None) -> str:
     """Include AGENTS.md project instructions if present."""

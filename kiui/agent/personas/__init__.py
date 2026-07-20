@@ -4,7 +4,7 @@ A persona is a Python module in this package that owns the agent's identity,
 system prompt, and tool surface:
 
 - ``build_system_prompt(ctx) -> str`` (required): builds the complete system
-  prompt from a :class:`~kiui.agent.prompts.PersonaContext`.
+  prompt from a :class:`~kiui.agent.personas.common.PersonaContext`.
 - ``TOOLS`` (required): whitelist of tool names; ``None`` = all tools,
   ``[]`` = no tools. Enforced in the advertised tool definitions.
 - ``NAME`` / ``DESCRIPTION`` (required): shown by ``/persona``.
@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from kiui.agent.prompts import PersonaContext
+from .common import PersonaContext
 
 PERSONAS_DIR = Path(__file__).parent
 DEFAULT_PERSONA = "coder"
@@ -63,7 +63,7 @@ def list_personas() -> dict[str, PersonaInfo]:
     """Import every bundled persona module, keyed by persona name."""
     personas: dict[str, PersonaInfo] = {}
     for path in sorted(PERSONAS_DIR.glob("*.py")):
-        if path.stem == "__init__":
+        if path.stem in {"__init__", "common"}:
             continue
         info = _load_persona(path)
         personas[info.name] = info

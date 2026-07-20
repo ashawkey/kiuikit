@@ -14,8 +14,7 @@ from openai import OpenAI
 from kiui.agent.ui import AgentConsole, ContextStatus
 from kiui.agent.terminal import TerminalInput
 from kiui.agent.utils import get_kia_dir
-from kiui.agent.prompts import PersonaContext
-from kiui.agent.personas import DEFAULT_PERSONA, PersonaInfo, get_persona, list_personas
+from kiui.agent.personas import DEFAULT_PERSONA, PersonaContext, PersonaInfo, get_persona, list_personas
 from kiui.agent.skills import discover_skills
 from kiui.agent.tools import (
     MAX_GREP_MATCHES,

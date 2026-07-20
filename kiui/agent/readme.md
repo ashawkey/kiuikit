@@ -327,7 +327,7 @@ For `reviewer`, provide the paper PDF and preferably the venue, track, and exact
 
 The active persona is saved with the session and re-applied on `--resume`.
 
-Each persona module defines `build_system_prompt(ctx)` — the complete system prompt, composed from the shared section blocks in `kiui/agent/prompts.py` — plus a `TOOLS` whitelist that controls which tools are advertised to the model. This is capability guidance, not a security boundary: interactive commands such as `!<command>` and `/skills` remain available to the user and are governed by the normal permission and safety checks. To add a persona, drop a new module into `kiui/agent/personas/` following the same contract.
+Each persona module defines `build_system_prompt(ctx)` — the complete system prompt, composed from the shared blocks and builders in `kiui/agent/personas/common.py` — plus a `TOOLS` whitelist that controls which tools are advertised to the model. This is capability guidance, not a security boundary: interactive commands such as `!<command>` and `/skills` remain available to the user and are governed by the normal permission and safety checks. To add a persona, drop a new module into `kiui/agent/personas/` following the same contract.
 
 ## Sessions
 

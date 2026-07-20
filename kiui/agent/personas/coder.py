@@ -1,15 +1,16 @@
 """The default coding agent persona — full tool access, project-aware."""
 
-from kiui.agent.prompts import (
+from .common import (
     EXEC_MODE_SECTION,
     SAFETY_EXEC_SECTION,
     SAFETY_SECTION,
     SUBAGENT_SECTION,
     TASK_EXECUTION_SECTION,
-    TOOL_USAGE_SECTION,
     WORKING_STYLE_SECTION,
     build_context_section,
     build_project_section,
+    build_tool_usage_section,
+    join_prompt_sections,
 )
 from kiui.agent.skills import build_skills_prompt_section
 
@@ -29,10 +30,9 @@ def build_system_prompt(ctx) -> str:
         sections.append(EXEC_MODE_SECTION)
 
     sections.append(SAFETY_EXEC_SECTION if ctx.exec_mode else SAFETY_SECTION)
-    sections.append(
-        TOOL_USAGE_SECTION
-        + "\n- Use start_process for servers or commands that should run concurrently while you do other work."
-    )
+    sections.append(build_tool_usage_section(
+        "Use start_process for servers or commands that should run concurrently while you do other work."
+    ))
     sections.append(TASK_EXECUTION_SECTION)
     sections.append(WORKING_STYLE_SECTION)
 
@@ -50,4 +50,4 @@ def build_system_prompt(ctx) -> str:
 
     sections.append(build_context_section(ctx.work_dir))
 
-    return "\n\n".join(sections)
+    return join_prompt_sections(*sections)

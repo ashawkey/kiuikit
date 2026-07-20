@@ -230,7 +230,7 @@ kia --persona chatter   # start as another persona
 /persona chatter        switch persona (restarts the conversation, like /clear)
 ```
 
-Each persona module defines `build_system_prompt(ctx)` — composed from the shared blocks in `kiui/agent/prompts.py` — and a `TOOLS` whitelist that controls which tools are advertised to the model. This is capability guidance, not a security boundary: interactive commands such as `!<command>` and `/skills` remain available to the user and are governed by the normal permission and safety checks.
+Each persona module defines `build_system_prompt(ctx)` — composed from the shared blocks and builders in `kiui/agent/personas/common.py` — and a `TOOLS` whitelist that controls which tools are advertised to the model. This is capability guidance, not a security boundary: interactive commands such as `!<command>` and `/skills` remain available to the user and are governed by the normal permission and safety checks.
 
 ### Personal skill library
 

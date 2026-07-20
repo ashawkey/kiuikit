@@ -1,12 +1,13 @@
 """Academic paper reviewer persona — evidence-grounded, template-aware reviews."""
 
-from kiui.agent.prompts import (
+from .common import (
     EXEC_MODE_SECTION,
     SAFETY_EXEC_SECTION,
     SAFETY_SECTION,
     SUBAGENT_SECTION,
-    TOOL_USAGE_SECTION,
     build_context_section,
+    build_tool_usage_section,
+    join_prompt_sections,
 )
 from kiui.agent.skills import build_skills_prompt_section
 
@@ -96,7 +97,7 @@ def build_system_prompt(ctx) -> str:
 
     sections.append(SAFETY_EXEC_SECTION if ctx.exec_mode else SAFETY_SECTION)
     sections.append(_DOCUMENT_SECURITY)
-    sections.append(TOOL_USAGE_SECTION)
+    sections.append(build_tool_usage_section())
     sections.append(_REVIEW_WORKFLOW)
     sections.append(_REVIEW_STANDARDS)
     sections.append(_OUTPUT_RULES)
@@ -109,4 +110,4 @@ def build_system_prompt(ctx) -> str:
         sections.append(skills_section)
 
     sections.append(build_context_section(ctx.work_dir))
-    return "\n\n".join(sections)
+    return join_prompt_sections(*sections)
