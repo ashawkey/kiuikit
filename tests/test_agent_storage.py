@@ -48,6 +48,7 @@ def test_storage_does_not_create_missing_kia_directory(tmp_path):
 def test_clean_storage_preserves_skills_and_unknown_entries(tmp_path):
     _write(tmp_path / ".kia" / "sessions" / "one.json")
     _write(tmp_path / ".kia" / "tool-results" / "one" / "result.txt")
+    _write(tmp_path / ".kia" / "processes" / "p-test.log")
     _write(tmp_path / ".kia" / "history")
     _write(tmp_path / ".kia" / "skills" / "custom" / "SKILL.md")
     _write(tmp_path / ".kia" / "notes")
@@ -58,6 +59,7 @@ def test_clean_storage_preserves_skills_and_unknown_entries(tmp_path):
     assert removed == expected
     assert not (tmp_path / ".kia" / "sessions").exists()
     assert not (tmp_path / ".kia" / "tool-results").exists()
+    assert not (tmp_path / ".kia" / "processes").exists()
     assert not (tmp_path / ".kia" / "history").exists()
     assert (tmp_path / ".kia" / "skills" / "custom" / "SKILL.md").exists()
     assert (tmp_path / ".kia" / "notes").exists()

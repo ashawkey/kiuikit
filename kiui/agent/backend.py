@@ -920,6 +920,7 @@ class LLMAgent:
         self.round_id = 0
         self.token_totals = {key: 0 for key in self.token_totals}
         self.tool_compaction_totals = {key: 0 for key in self.tool_compaction_totals}
+        self.tool_executor.shutdown_processes(clear=True)
         self.tool_executor._loaded_skills.clear()
         self.tool_executor._skill_loads.clear()
         self.tool_executor.goal_report = None
@@ -1173,6 +1174,7 @@ class LLMAgent:
             self._session_id = old_id
             self._last_save_time = old_save_time
             return
+        self.tool_executor.shutdown_processes(clear=True)
         _wd = self.tool_executor._work_dir or os.getcwd()
         if self.changes is not None:
             self.changes.close()
@@ -1923,6 +1925,7 @@ class LLMAgent:
                 self.console.warn(f"Could not save session before exit: {e}")
             if self.changes is not None:
                 self.changes.close()
+            self.tool_executor.shutdown_processes()
             self._print_token_summary(resume=self._session_id if session_saved else None)
         
     def execute(self, query: str, *, manage_operation: bool = True):

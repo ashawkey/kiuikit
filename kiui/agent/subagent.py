@@ -56,6 +56,7 @@ class SubagentManager:
         old_depth = os.environ.get("KIA_SPAWN_DEPTH")
         os.environ["KIA_SPAWN_DEPTH"] = str(self._depth + 1)
 
+        agent = None
         try:
             agent = LLMAgent(
                 model=model_conf.get("model", self.model_alias),
@@ -97,6 +98,8 @@ class SubagentManager:
             return {"error": f"Sub-agent error: {e}", "success": False}
 
         finally:
+            if agent is not None:
+                agent.tool_executor.shutdown_processes()
             if old_depth is None:
                 os.environ.pop("KIA_SPAWN_DEPTH", None)
             else:

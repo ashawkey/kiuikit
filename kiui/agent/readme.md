@@ -75,13 +75,13 @@ kia --model <model_alias> --verbose --perm strict --resume [session_id]
 | `--resume [SESSION_ID]` | Resume a session (bare `--resume` lists saved sessions interactively) |
 | `--list` | List available models with context-window info and exit |
 | `--storage` | Show allocated disk usage for each entry in the project `.kia/` and exit |
-| `--clean` | Remove generated sessions, tool results, and command history |
+| `--clean` | Remove generated sessions, tool results, process logs, and command history |
 | `--hub` | Run the shared web hub daemon (owns the public port) |
 | `--web-port PORT` | Hub listener port (default: `8765`) |
 
 ### Storage management
 
-`kia --storage` reports usage of every top-level entry in the current project's `.kia/` directory. `kia --clean` immediately removes only generated `sessions/`, `tool-results/`, and `history` data; installed `skills/` and unrecognized entries are preserved.
+`kia --storage` reports usage of every top-level entry in the current project's `.kia/` directory. `kia --clean` immediately removes only generated `sessions/`, `tool-results/`, `processes/`, and `history` data; installed `skills/` and unrecognized entries are preserved.
 
 ```bash
 kia --storage
@@ -344,7 +344,10 @@ The agent has access to the following tools:
 | `edit_file` | Surgical text replacement in files (whitespace-tolerant match) |
 | `multi_edit` | Apply an ordered batch of edits to one file atomically (all-or-nothing) |
 | `ls` | List a directory's immediate contents (gitignore-aware) |
-| `exec_command` | Run shell commands with real-time streaming output |
+| `exec_command` | Run foreground shell commands with real-time streaming output |
+| `start_process` | Start a managed background process with file-backed output |
+| `inspect_processes` | Inspect one or all managed background processes |
+| `stop_process` | Stop a managed background process and its child process tree |
 | `glob_files` | Find files matching a glob pattern (gitignore-aware) |
 | `grep_files` | Search file contents using regex (prefers ripgrep; gitignore-aware) |
 | `web_search` | Search the web via DuckDuckGo |

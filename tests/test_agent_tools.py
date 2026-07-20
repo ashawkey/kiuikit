@@ -2,6 +2,8 @@
 gitignore-aware glob/grep (kiui.agent.tools / kiui.agent.gitignore)."""
 
 import os
+import shlex
+import sys
 import threading
 import time
 from pathlib import Path
@@ -386,6 +388,194 @@ def test_exec_artifact_write_failure_keeps_draining(tmp_path, monkeypatch):
         assert res["exit_code"] == 0
     finally:
         artifact.unlink(missing_ok=True)
+
+
+def test_managed_background_process_lifecycle(tmp_path):
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+    started = te._start_process(
+        "python -u -c \"import time; print('ready'); time.sleep(30)\""
+    )
+    process_id = started["process_id"]
+    log_path = tmp_path / started["log_path"]
+    try:
+        assert started["status"] == "running"
+        assert log_path.is_file()
+        for _ in range(100):
+            if "ready" in log_path.read_text():
+                break
+            time.sleep(0.05)
+        assert "ready" in log_path.read_text()
+
+        inspected = te._inspect_processes(process_id)
+        assert inspected["success"]
+        assert inspected["processes"][0]["status"] == "running"
+
+        stopped = te._stop_process(process_id)
+        assert stopped["success"]
+        assert stopped["status"] == "exited"
+        assert stopped["exit_code"] is not None
+    finally:
+        te.shutdown_processes()
+
+
+def test_managed_background_process_caps_log(tmp_path, monkeypatch):
+    monkeypatch.setattr(tools, "MAX_PROCESS_LOG_BYTES", 10)
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+    started = te._start_process("python -c \"print('x' * 1000)\"")
+    record = te._processes[started["process_id"]]
+    record["process"].wait(timeout=5)
+    record["capture_thread"].join(timeout=5)
+    inspected = te._inspect_processes(started["process_id"])["processes"][0]
+    assert inspected["log_truncated"] is True
+    assert (tmp_path / inspected["log_path"]).stat().st_size == 10
+
+
+def test_managed_background_process_reports_normal_exit(tmp_path):
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+    started = te._start_process("python -c \"print('done')\"")
+    for _ in range(100):
+        process = te._inspect_processes(started["process_id"])["processes"][0]
+        if process["status"] == "exited":
+            break
+        time.sleep(0.05)
+    assert process["status"] == "exited"
+    assert process["exit_code"] == 0
+    assert (tmp_path / process["log_path"]).read_text().strip() == "done"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX process semantics")
+def test_managed_background_process_stops_child_after_shell_exits(tmp_path):
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+    child_pid_file = tmp_path / "child.pid"
+    child_code = (
+        "import os,pathlib,time; "
+        f"pathlib.Path({str(child_pid_file)!r}).write_text(str(os.getpid())); "
+        "time.sleep(30)"
+    )
+    launcher = f"import subprocess,sys; subprocess.Popen([sys.executable, '-c', {child_code!r}])"
+    command = f"python -c {shlex.quote(launcher)}"
+    started = te._start_process(command)
+    for _ in range(100):
+        if child_pid_file.exists() and te._processes[started["process_id"]]["process"].poll() is not None:
+            break
+        time.sleep(0.05)
+    assert child_pid_file.exists()
+    te._stop_process(started["process_id"])
+    child_pid = int(child_pid_file.read_text())
+    with pytest.raises(ProcessLookupError):
+        os.kill(child_pid, 0)
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux subreaper semantics")
+def test_managed_background_process_stops_detached_descendant(tmp_path):
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+    child_pid_file = tmp_path / "detached.pid"
+    child_code = (
+        "import os,pathlib,time; os.setsid(); "
+        f"pathlib.Path({str(child_pid_file)!r}).write_text(str(os.getpid())); "
+        "time.sleep(30)"
+    )
+    launcher = f"import subprocess,sys; subprocess.Popen([sys.executable, '-c', {child_code!r}])"
+    started = te._start_process(f"python -c {shlex.quote(launcher)}")
+    for _ in range(100):
+        if child_pid_file.exists():
+            break
+        time.sleep(0.05)
+    assert child_pid_file.exists()
+
+    te._stop_process(started["process_id"])
+
+    child_pid = int(child_pid_file.read_text())
+    with pytest.raises(ProcessLookupError):
+        os.kill(child_pid, 0)
+
+
+def test_managed_background_process_rejects_unknown_id(tmp_path):
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+    assert not te._inspect_processes("missing")["success"]
+    assert not te._stop_process("missing")["success"]
+
+
+def test_windows_process_is_suspended_until_assigned_to_job(tmp_path, monkeypatch):
+    events = []
+
+    class Stdout:
+        def read1(self, size):
+            return b""
+
+        def close(self):
+            pass
+
+    class Process:
+        pid = 123
+        stdout = Stdout()
+        returncode = None
+
+        def poll(self):
+            return self.returncode
+
+        def wait(self, timeout=None):
+            self.returncode = 0
+            return 0
+
+    def popen(*args, **kwargs):
+        events.append(("create", kwargs["creationflags"]))
+        return Process()
+
+    monkeypatch.setattr(tools.sys, "platform", "win32")
+    monkeypatch.setattr(tools.subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200, raising=False)
+    monkeypatch.setattr(tools.subprocess, "Popen", popen)
+    job_active = [True]
+    monkeypatch.setattr(tools, "_create_windows_job", lambda proc: events.append(("assign", proc.pid)) or 77)
+    monkeypatch.setattr(tools, "_resume_windows_process", lambda proc: events.append(("resume", proc.pid)))
+    monkeypatch.setattr(tools, "_windows_job_active_processes", lambda job: int(job_active[0]))
+    monkeypatch.setattr(tools, "_close_windows_job", lambda job, terminate=False: None)
+
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+    started = te._start_process("server")
+
+    assert started["status"] == "running"
+    assert events == [("create", 0x204), ("assign", 123), ("resume", 123)]
+    job_active[0] = False
+    te._processes[started["process_id"]]["capture_thread"].join(timeout=1)
+
+
+def test_windows_process_info_keeps_job_open_while_descendants_run(monkeypatch):
+    closed = []
+
+    class Process:
+        pid = 123
+        returncode = 0
+
+        def poll(self):
+            return 0
+
+        def wait(self):
+            return 0
+
+    record = {
+        "process_id": "p-test",
+        "pid": 123,
+        "process": Process(),
+        "exit_code": None,
+        "command": "server",
+        "cwd": "C:\\work",
+        "log_path": ".kia/processes/p-test.log",
+        "log_truncated": False,
+        "job_handle": 77,
+        "job_lock": threading.Lock(),
+        "state_lock": threading.Lock(),
+    }
+    active = iter((1, 0))
+    monkeypatch.setattr(tools, "_windows_job_active_processes", lambda job: next(active))
+    monkeypatch.setattr(tools, "_close_windows_job", lambda job: closed.append(job))
+
+    assert ToolExecutor._process_info(record)["status"] == "running"
+    assert record["job_handle"] == 77
+    assert closed == []
+    assert ToolExecutor._process_info(record)["status"] == "exited"
+    assert record["job_handle"] is None
+    assert closed == [77]
 
 
 def test_exec_lingering_reader_marks_capture_incomplete(tmp_path, monkeypatch):

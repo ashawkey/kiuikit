@@ -39,6 +39,7 @@ SAFE_TOOLS = frozenset({
     "web_search",
     "web_fetch",
     "load_skill",
+    "inspect_processes",
 })
 
 RISKY_TOOLS = frozenset({
@@ -46,6 +47,8 @@ RISKY_TOOLS = frozenset({
     "edit_file",
     "multi_edit",
     "exec_command",
+    "start_process",
+    "stop_process",
     "remove_file",
     "spawn_subagent",
 })
@@ -174,7 +177,7 @@ class SafetyGuard:
         Only performs *hard* checks that should never be skipped:
         destructive shell commands, critical rm/chmod patterns, etc.
         """
-        if tool_name == "exec_command":
+        if tool_name in ("exec_command", "start_process"):
             cwd = arguments.get("cwd")
             if cwd:
                 cwd = os.path.expanduser(cwd)
@@ -441,8 +444,10 @@ class SafetyGuard:
 
 def _summarize_call(name: str, args: dict[str, Any]) -> str:
     """Build a short human-readable summary of a tool call."""
-    if name == "exec_command":
-        return f"exec_command: {args.get('command', '?')}"
+    if name in ("exec_command", "start_process"):
+        return f"{name}: {args.get('command', '?')}"
+    if name == "stop_process":
+        return f"stop_process: {args.get('process_id', '?')}"
     if name in ("write_file", "edit_file", "multi_edit", "read_file", "remove_file", "ls"):
         return f"{name}: {args.get('file') or args.get('path', '?')}"
     if name == "spawn_subagent":

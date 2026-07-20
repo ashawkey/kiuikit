@@ -29,7 +29,10 @@ def build_system_prompt(ctx) -> str:
         sections.append(EXEC_MODE_SECTION)
 
     sections.append(SAFETY_EXEC_SECTION if ctx.exec_mode else SAFETY_SECTION)
-    sections.append(TOOL_USAGE_SECTION)
+    sections.append(
+        TOOL_USAGE_SECTION
+        + "\n- Use start_process for servers or commands that should run concurrently while you do other work."
+    )
     sections.append(TASK_EXECUTION_SECTION)
     sections.append(WORKING_STYLE_SECTION)
 

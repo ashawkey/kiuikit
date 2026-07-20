@@ -7,7 +7,7 @@ from pathlib import Path
 
 from kiui.agent.utils import KIA_DIR_NAME
 
-CLEANABLE_ENTRIES = ("sessions", "tool-results", "history")
+CLEANABLE_ENTRIES = ("sessions", "tool-results", "processes", "history")
 
 
 @dataclass(frozen=True)

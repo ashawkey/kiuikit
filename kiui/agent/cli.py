@@ -269,7 +269,7 @@ def cmd_storage():
 
 
 def cmd_clean():
-    """Remove generated sessions, tool results, and command history."""
+    """Remove generated sessions, tool results, process logs, and command history."""
     from kiui.agent.storage import clean_storage, cleanable_entries, format_size, kia_storage_dir
 
     console = AgentConsole()

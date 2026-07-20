@@ -91,6 +91,14 @@ def test_safety_allows_normal_commands(command):
 
 
 @unix_only
+def test_start_process_uses_exec_command_safety_checks():
+    allowed, reason = SafetyGuard().check(
+        "start_process", {"command": "rm -rf /etc"}
+    )
+    assert not allowed and reason.startswith("Blocked:")
+
+
+@unix_only
 def test_safety_blocks_recursive_delete_of_work_dir(tmp_path):
     allowed, reason = SafetyGuard(work_dir=tmp_path).check(
         "exec_command", {"command": f"rm -rf {tmp_path}"}
@@ -201,6 +209,16 @@ class _FakeConsole:
 
     def ask_text(self, *a, **k):
         return ""
+
+
+def test_background_process_permissions():
+    ctrl = PermissionController(
+        mode=PermissionMode.DEFAULT,
+        console=_FakeConsole(answer="No"),
+    )
+    assert not ctrl.check("start_process", {"command": "python server.py"})[0]
+    assert ctrl.check("inspect_processes", {})[0]
+    assert not ctrl.check("stop_process", {"process_id": "p-test"})[0]
 
 
 def test_outside_write_uses_normal_default_permission():
