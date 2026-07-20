@@ -19,9 +19,11 @@ from kiui.agent.tools import (
     apply_edit,
     find_match,
     format_tool_result,
+    get_tool_definitions,
 )
 from kiui.agent.tools.gitignore import build_gitignore_matcher
 from kiui.agent.permissions import SafetyGuard
+from kiui.agent.utils.io import CancellationToken, EventHub
 
 
 class _SilentConsole:
@@ -443,6 +445,57 @@ def test_managed_background_process_reports_normal_exit(tmp_path):
     assert process["status"] == "exited"
     assert process["exit_code"] == 0
     assert (tmp_path / process["log_path"]).read_text().strip() == "done"
+
+
+def test_inspect_process_waits_before_reporting(tmp_path):
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+    started = te._start_process("python -c \"import time; time.sleep(0.1)\"")
+    before = time.monotonic()
+    inspected = te._inspect_processes(started["process_id"], wait=0.3)
+
+    assert time.monotonic() - before >= 0.25
+    assert inspected["processes"][0]["status"] == "exited"
+
+
+def test_inspect_process_rejects_negative_wait(tmp_path):
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+    result = te._inspect_processes(wait=-1)
+
+    assert not result["success"]
+    assert "non-negative" in result["error"]
+
+
+def test_inspect_process_wait_schema():
+    inspect = next(
+        tool for tool in get_tool_definitions()
+        if tool["function"]["name"] == "inspect_processes"
+    )
+    wait = inspect["function"]["parameters"]["properties"]["wait"]
+
+    assert wait["type"] == "number"
+    assert wait["minimum"] == 0
+    assert wait["default"] == 0
+
+
+def test_inspect_process_wait_can_be_interrupted_without_stopping_process(tmp_path):
+    cancellation = CancellationToken(EventHub())
+    operation_id = cancellation.begin("test")
+    te = ToolExecutor(
+        console=_SilentConsole(), work_dir=str(tmp_path), cancellation=cancellation
+    )
+    started = te._start_process("python -c \"import time; time.sleep(30)\"")
+    timer = threading.Timer(0.1, cancellation.cancel)
+    timer.start()
+    try:
+        before = time.monotonic()
+        inspected = te._inspect_processes(started["process_id"], wait=30)
+        assert time.monotonic() - before < 2
+        assert inspected["interrupted"] is True
+        assert te._process_info(te._processes[started["process_id"]])["status"] == "running"
+    finally:
+        timer.cancel()
+        cancellation.finish(operation_id)
+        te.shutdown_processes()
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX process semantics")

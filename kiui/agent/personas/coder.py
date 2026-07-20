@@ -31,8 +31,8 @@ def build_system_prompt(ctx) -> str:
 
     sections.append(SAFETY_EXEC_SECTION if ctx.exec_mode else SAFETY_SECTION)
     sections.append(build_tool_usage_section(
-        "Use exec_command for commands the current turn must wait for, including polling and monitoring loops; when the command exits, the agent automatically continues from its result.",
-        "Use start_process only for servers or independent tasks that should run in the background while the user regains the prompt; background process completion does not automatically resume the agent.",
+        "Use exec_command for foreground commands expected to finish reliably; when the command exits, the agent automatically continues from its result.",
+        "Use start_process for servers and long-running or potentially stuck commands, then inspect_processes(wait=N) for bounded monitoring.",
     ))
     sections.append(TASK_EXECUTION_SECTION)
     sections.append(WORKING_STYLE_SECTION)
