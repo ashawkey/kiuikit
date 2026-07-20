@@ -11,6 +11,8 @@ from pathlib import Path
 import pytest
 
 import kiui.agent.tools as tools
+import kiui.agent.tools.commands as command_tools
+import kiui.agent.tools.processes as process_tools
 from kiui.agent.tools import (
     ToolExecutor,
     _human_size,
@@ -328,7 +330,7 @@ def test_exec_command_captures_full_output_artifact(tmp_path):
 
 
 def test_exec_artifact_limit_uses_utf8_bytes(tmp_path, monkeypatch):
-    monkeypatch.setattr(tools, "MAX_EXEC_ARTIFACT_BYTES", 11)
+    monkeypatch.setattr(command_tools, "MAX_EXEC_ARTIFACT_BYTES", 11)
     te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
     res = te._exec_command("python -c \"print('é' * 20)\"")
     artifact = Path(res["_artifact_path"])
@@ -344,11 +346,11 @@ def test_exec_artifact_limit_uses_utf8_bytes(tmp_path, monkeypatch):
 def test_exec_artifact_creation_failure_does_not_start_process(tmp_path, monkeypatch):
     started = []
     monkeypatch.setattr(
-        tools.tempfile,
+        command_tools.tempfile,
         "NamedTemporaryFile",
         lambda **kwargs: (_ for _ in ()).throw(OSError("no temp space")),
     )
-    monkeypatch.setattr(tools.subprocess, "Popen", lambda *a, **k: started.append(True))
+    monkeypatch.setattr(command_tools.subprocess, "Popen", lambda *a, **k: started.append(True))
     te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
     with pytest.raises(OSError, match="no temp space"):
         te._exec_command("echo unreachable")
@@ -356,7 +358,7 @@ def test_exec_artifact_creation_failure_does_not_start_process(tmp_path, monkeyp
 
 
 def test_exec_artifact_write_failure_keeps_draining(tmp_path, monkeypatch):
-    original = tools.tempfile.NamedTemporaryFile
+    original = command_tools.tempfile.NamedTemporaryFile
 
     class FailingWriter:
         def __init__(self, wrapped):
@@ -373,7 +375,7 @@ def test_exec_artifact_write_failure_keeps_draining(tmp_path, monkeypatch):
             return self._wrapped.close()
 
     monkeypatch.setattr(
-        tools.tempfile,
+        command_tools.tempfile,
         "NamedTemporaryFile",
         lambda **kwargs: FailingWriter(original(**kwargs)),
     )
@@ -419,7 +421,7 @@ def test_managed_background_process_lifecycle(tmp_path):
 
 
 def test_managed_background_process_caps_log(tmp_path, monkeypatch):
-    monkeypatch.setattr(tools, "MAX_PROCESS_LOG_BYTES", 10)
+    monkeypatch.setattr(process_tools, "MAX_PROCESS_LOG_BYTES", 10)
     te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
     started = te._start_process("python -c \"print('x' * 1000)\"")
     record = te._processes[started["process_id"]]
@@ -522,14 +524,14 @@ def test_windows_process_is_suspended_until_assigned_to_job(tmp_path, monkeypatc
         events.append(("create", kwargs["creationflags"]))
         return Process()
 
-    monkeypatch.setattr(tools.sys, "platform", "win32")
-    monkeypatch.setattr(tools.subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200, raising=False)
-    monkeypatch.setattr(tools.subprocess, "Popen", popen)
+    monkeypatch.setattr(process_tools.sys, "platform", "win32")
+    monkeypatch.setattr(process_tools.subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200, raising=False)
+    monkeypatch.setattr(process_tools.subprocess, "Popen", popen)
     job_active = [True]
-    monkeypatch.setattr(tools, "_create_windows_job", lambda proc: events.append(("assign", proc.pid)) or 77)
-    monkeypatch.setattr(tools, "_resume_windows_process", lambda proc: events.append(("resume", proc.pid)))
-    monkeypatch.setattr(tools, "_windows_job_active_processes", lambda job: int(job_active[0]))
-    monkeypatch.setattr(tools, "_close_windows_job", lambda job, terminate=False: None)
+    monkeypatch.setattr(process_tools, "_create_windows_job", lambda proc: events.append(("assign", proc.pid)) or 77)
+    monkeypatch.setattr(process_tools, "_resume_windows_process", lambda proc: events.append(("resume", proc.pid)))
+    monkeypatch.setattr(process_tools, "_windows_job_active_processes", lambda job: int(job_active[0]))
+    monkeypatch.setattr(process_tools, "_close_windows_job", lambda job, terminate=False: None)
 
     te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
     started = te._start_process("server")
@@ -567,8 +569,8 @@ def test_windows_process_info_keeps_job_open_while_descendants_run(monkeypatch):
         "state_lock": threading.Lock(),
     }
     active = iter((1, 0))
-    monkeypatch.setattr(tools, "_windows_job_active_processes", lambda job: next(active))
-    monkeypatch.setattr(tools, "_close_windows_job", lambda job: closed.append(job))
+    monkeypatch.setattr(process_tools, "_windows_job_active_processes", lambda job: next(active))
+    monkeypatch.setattr(process_tools, "_close_windows_job", lambda job: closed.append(job))
 
     assert ToolExecutor._process_info(record)["status"] == "running"
     assert record["job_handle"] == 77
@@ -579,7 +581,7 @@ def test_windows_process_info_keeps_job_open_while_descendants_run(monkeypatch):
 
 
 def test_exec_lingering_reader_marks_capture_incomplete(tmp_path, monkeypatch):
-    monkeypatch.setattr(tools, "EXEC_READER_JOIN_TIMEOUT", 0.1)
+    monkeypatch.setattr(command_tools, "EXEC_READER_JOIN_TIMEOUT", 0.1)
     te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
     started = time.monotonic()
     # Spawn a lingering grandchild holding the pipes (portable `sleep`).
