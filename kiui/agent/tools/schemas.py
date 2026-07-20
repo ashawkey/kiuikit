@@ -155,12 +155,19 @@ def get_tool_definitions(
             "function": {
                 "name": "inspect_processes",
                 "description": (
-                    "Inspect status of managed background processes. Omit process_id to list all processes. "
+                    "Inspect status of managed background processes, optionally after a bounded wait. "
+                    "Omit process_id to list all processes."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "process_id": {"type": "string", "description": "Process ID to inspect (optional)"},
+                        "wait": {
+                            "type": "number",
+                            "minimum": 0,
+                            "default": 0,
+                            "description": "Seconds to wait before inspecting (default: 0)",
+                        },
                     },
                     "required": [],
                 },

@@ -311,7 +311,7 @@ The agent has access to the following tools:
 | `ls` | List a directory's immediate contents (gitignore-aware) |
 | `exec_command` | Run foreground shell commands with real-time streaming output |
 | `start_process` | Start a managed background process with file-backed output |
-| `inspect_processes` | Inspect one or all managed background processes |
+| `inspect_processes` | Inspect one or all managed background processes, optionally after a bounded wait |
 | `stop_process` | Stop a managed background process and its child process tree |
 | `glob_files` | Find files matching a glob pattern (gitignore-aware) |
 | `grep_files` | Search file contents using regex (prefers ripgrep; gitignore-aware) |

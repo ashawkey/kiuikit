@@ -10,6 +10,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from kiui.agent.utils.interrupt import CancelWatcher
+
 from .constants import MAX_PROCESS_LOG_BYTES
 
 
@@ -363,16 +365,44 @@ class ProcessToolsMixin:
             "capture_error": record.get("capture_error"),
         }
 
-    def _inspect_processes(self, process_id: str | None = None) -> dict[str, Any]:
-        """Return status and metadata for one or all managed processes."""
-        self.console.tool(f"inspect_processes: {process_id or 'all'}")
-        with self._process_lock:
-            if process_id is not None:
+    def _inspect_processes(
+        self, process_id: str | None = None, wait: float = 0
+    ) -> dict[str, Any]:
+        """Optionally wait, then return status for one or all managed processes."""
+        self.console.tool(f"inspect_processes: {process_id or 'all'} (wait={wait}s)")
+        if wait < 0:
+            return {"error": "wait must be non-negative", "success": False}
+
+        record = None
+        if process_id is not None:
+            with self._process_lock:
                 record = self._processes.get(process_id)
-                if record is None:
-                    return {"error": f"Unknown managed process: {process_id}", "success": False}
-                records = [record]
-            else:
+            if record is None:
+                return {"error": f"Unknown managed process: {process_id}", "success": False}
+
+        if wait:
+            deadline = time.monotonic() + wait
+            interrupted = False
+            try:
+                with CancelWatcher(self.cancellation) as watcher:
+                    while (remaining := deadline - time.monotonic()) > 0:
+                        if watcher.is_cancelled:
+                            interrupted = True
+                            break
+                        time.sleep(min(0.1, remaining))
+            except KeyboardInterrupt:
+                interrupted = True
+            if interrupted:
+                return {
+                    "error": "Process inspection wait was interrupted by user.",
+                    "success": False,
+                    "interrupted": True,
+                }
+
+        if record is not None:
+            records = [record]
+        else:
+            with self._process_lock:
                 records = list(self._processes.values())
         return {
             "processes": [self._process_info(record) for record in records],
