@@ -7,7 +7,7 @@ from rich.progress_bar import ProgressBar
 from rich.table import Table
 
 from kiui.agent.io import EventHub
-from kiui.agent.ui import AgentConsole, ContextStatus, ThinkingIndicator
+from kiui.agent.ui import _AGENT_LOGO, AgentConsole, ContextStatus, ThinkingIndicator
 
 
 def test_context_status_renders_progress_bar():
@@ -60,6 +60,46 @@ def test_thinking_indicator_renders_indeterminate_progress():
         console.print(label)
     assert "Compacting... (2s)" in capture.get()
     assert "436 messages, ~305,603 tokens" in capture.get()
+
+
+def test_startup_panel_renders_agent_details():
+    output = StringIO()
+    console = AgentConsole()
+    console._console = Console(file=output, width=100, force_terminal=False)
+
+    console.startup_panel(
+        model="openai/gpt-5",
+        context="258,000 tokens",
+        reasoning="openai · high effort",
+        permission="auto",
+        persona="coder",
+        skills="4 available · ~468 tokens (11.2% of prompt)",
+        workspace="/home/user/project",
+    )
+
+    rendered = output.getvalue()
+    rendered_lines = rendered.splitlines()
+    logo_lines = _AGENT_LOGO.splitlines()
+    rendered_logo = [
+        line[3:3 + len(logo_lines[0])]
+        for line in rendered_lines[1:1 + len(logo_lines)]
+    ]
+    assert rendered_logo == logo_lines
+    assert "Model         openai/gpt-5 (258,000 tokens) · openai · high effort" in rendered_lines[1]
+    assert "Permission    auto" in rendered_lines[2]
+    assert "Persona       coder" in rendered_lines[3]
+    assert "kia" not in rendered_lines[0]
+    assert "terminal AI agent" not in rendered_lines[-1]
+    for value in (
+        "openai/gpt-5",
+        "258,000 tokens",
+        "openai · high effort",
+        "auto",
+        "coder",
+        "4 available",
+        "/home/user/project",
+    ):
+        assert value in rendered
 
 
 def test_console_reset_timeline_emits_web_reset():

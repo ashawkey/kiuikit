@@ -201,9 +201,6 @@ class LLMAgent:
         self.work_dir = str(Path(work_dir).absolute()) if work_dir else str(Path.cwd())
         self.persona: PersonaInfo = get_persona(persona or DEFAULT_PERSONA)
         self.system_prompt = self._build_system_prompt()
-        # The skills summary only makes sense when the persona can load skills.
-        if not is_subagent and (self.persona.tools is None or "load_skill" in self.persona.tools):
-            self._report_skills_summary()
         self.tools = get_tool_definitions(include_subagent=not is_subagent, allowed=self.persona.tools)
 
         self.permissions = PermissionController(
@@ -259,11 +256,6 @@ class LLMAgent:
             "retained_chars": 0,
         }
 
-        self.console.system(
-            f"Created Agent with model: {model} (context: {self.context_length:,} tokens, "
-            f"reasoning: {self.profile.reasoning or 'none'}/{self.reasoning_effort}), "
-            f"permission: {permission_mode.value}, persona: {self.persona.name}"
-        )
         # self.console.system(f"System prompt: {self.system_prompt[:100]}...")
 
 
@@ -1498,17 +1490,19 @@ class LLMAgent:
                 f"{len(shadowed)} lower-precedence duplicate skill(s) ignored: {preview}"
             )
 
-    def _report_skills_summary(self):
-        """Report discovered and advertised skill counts and prompt share."""
+    def _skills_summary(self) -> str:
+        """Return discovered skill count and its share of the system prompt."""
         from kiui.agent.skills import build_skills_prompt_section
 
         skills_section = build_skills_prompt_section(self.skills)
         total_tokens = self.token_estimator.chars_to_tokens(len(self.system_prompt))
         skill_tokens = self.token_estimator.chars_to_tokens(len(skills_section))
         percent = 100 * skill_tokens / total_tokens if total_tokens else 0
-        self.console.system(
-            f"Found {len(self.skills)} skill(s); using ~{skill_tokens:,} tokens ({percent:.1f}% of the ~{total_tokens:,}-token system prompt)."
-        )
+        return f"{len(self.skills)} available · ~{skill_tokens:,} tokens ({percent:.1f}% of prompt)"
+
+    def _report_skills_summary(self):
+        """Report discovered skill count and prompt share."""
+        self.console.system(self._skills_summary())
 
     def _list_skills(self):
         """List bundled, project, and personal kia skills."""
@@ -1813,9 +1807,18 @@ class LLMAgent:
 
     def chat_loop(self, resumed_session_id: str | None = None):
 
-        self.console.system("Type `/help` for available commands. Prefix with `!` to run shell commands.")
-        self.console.system("`Enter` to send. `Escape` then `Enter` for a newline.")
-        self.console.system("Current working directory: " + os.getcwd())
+        reasoning = self.profile.reasoning or "none"
+        if reasoning != "none":
+            reasoning += f" · {self.reasoning_effort} effort"
+        self.console.startup_panel(
+            model=self.model,
+            context=f"{self.context_length:,} tokens",
+            reasoning=reasoning,
+            permission=self.permissions.mode.value,
+            persona=self.persona.name,
+            skills=self._skills_summary(),
+            workspace=self.work_dir,
+        )
 
         # Auto-save session id: reuse resumed session or generate a new one.
         self._session_id = resumed_session_id or time.strftime("%Y%m%d_%H%M%S")
