@@ -316,7 +316,7 @@ class FileToolsMixin:
 
         matcher = None
         if not all:
-            from kiui.agent.gitignore import build_gitignore_matcher
+            from kiui.agent.tools.gitignore import build_gitignore_matcher
             matcher = build_gitignore_matcher(base)
 
         try:

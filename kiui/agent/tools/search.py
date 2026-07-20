@@ -33,7 +33,7 @@ class SearchToolsMixin:
 
         matcher = None
         if not include_ignored:
-            from kiui.agent.gitignore import build_gitignore_matcher
+            from kiui.agent.tools.gitignore import build_gitignore_matcher
             matcher = build_gitignore_matcher(base)
         base_resolved = base.resolve()
 
@@ -192,7 +192,7 @@ class SearchToolsMixin:
         matcher = None
         base_resolved = base
         if base.is_dir():
-            from kiui.agent.gitignore import build_gitignore_matcher
+            from kiui.agent.tools.gitignore import build_gitignore_matcher
             matcher = build_gitignore_matcher(base)
             base_resolved = base.resolve()
 

@@ -1,5 +1,5 @@
 """Tests for the core file tools: apply_edit, multi_edit, ls, and
-gitignore-aware glob/grep (kiui.agent.tools / kiui.agent.gitignore)."""
+gitignore-aware glob/grep (kiui.agent.tools / kiui.agent.tools.gitignore)."""
 
 import os
 import shlex
@@ -20,7 +20,7 @@ from kiui.agent.tools import (
     find_match,
     format_tool_result,
 )
-from kiui.agent.gitignore import build_gitignore_matcher
+from kiui.agent.tools.gitignore import build_gitignore_matcher
 from kiui.agent.permissions import SafetyGuard
 
 
