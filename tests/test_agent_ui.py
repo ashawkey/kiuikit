@@ -102,6 +102,28 @@ def test_startup_panel_renders_agent_details():
         assert value in rendered
 
 
+def test_session_end_panel_renders_usage_and_resume():
+    output = StringIO()
+    console = AgentConsole()
+    console._console = Console(file=output, width=120, force_terminal=False)
+
+    console.session_end_panel(
+        total=1234,
+        prompt=900,
+        cached_prompt=400,
+        completion=300,
+        reasoning=34,
+        resume="20260719_193251",
+    )
+
+    rendered = output.getvalue()
+    assert "1,234 total · 900 input · 400 cached input · 300 output · 34 reasoning" in rendered
+    assert "kia --resume 20260719_193251" in rendered
+    assert _AGENT_LOGO.splitlines()[0].strip() not in rendered
+    assert "compaction" not in rendered.lower()
+    assert "Skills" not in rendered
+
+
 def test_console_reset_timeline_emits_web_reset():
     events = EventHub()
 

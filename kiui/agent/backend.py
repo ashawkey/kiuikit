@@ -1923,9 +1923,7 @@ class LLMAgent:
                 self.console.warn(f"Could not save session before exit: {e}")
             if self.changes is not None:
                 self.changes.close()
-            self._print_token_summary()
-            if session_saved:
-                self.console.system(f"Resume with: kia --resume {self._session_id}")
+            self._print_token_summary(resume=self._session_id if session_saved else None)
         
     def execute(self, query: str, *, manage_operation: bool = True):
         self.console.system(f"Executing query: {query}")
@@ -1974,18 +1972,19 @@ class LLMAgent:
             f"tokens (-{saved}%)"
         )
 
-    def _print_token_summary(self):
-        self.console.system(
-            f"Total tokens used: {self.token_totals['total']} "
-            f"(input: {self.token_totals['prompt']}, cached input: {self.token_totals['cached_prompt']}, "
-            f"output: {self.token_totals['completion']}, reasoning: {self.token_totals['reasoning']})"
-        )
-        if self.tool_compaction_totals["calls"]:
-            self.console.system(f"Tool compaction: {self._tool_compaction_summary()}")
-        skill_loads = self.tool_executor._skill_loads
-        if skill_loads:
-            summary = ", ".join(
-                f"{n} ({c}\u00d7)"
-                for n, c in sorted(skill_loads.items(), key=lambda kv: (-kv[1], kv[0]))
+    def _print_token_summary(self, resume: str | None = None):
+        if resume is None:
+            self.console.system(
+                f"Total tokens used: {self.token_totals['total']} "
+                f"(input: {self.token_totals['prompt']}, cached input: {self.token_totals['cached_prompt']}, "
+                f"output: {self.token_totals['completion']}, reasoning: {self.token_totals['reasoning']})"
             )
-            self.console.system(f"Skills loaded: {summary}")
+            return
+        self.console.session_end_panel(
+            total=self.token_totals["total"],
+            prompt=self.token_totals["prompt"],
+            cached_prompt=self.token_totals["cached_prompt"],
+            completion=self.token_totals["completion"],
+            reasoning=self.token_totals["reasoning"],
+            resume=resume,
+        )
