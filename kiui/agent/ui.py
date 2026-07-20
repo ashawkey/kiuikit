@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 import questionary
 from rich.console import Console
+from rich.panel import Panel
 from rich.progress_bar import ProgressBar
 from rich.status import Status
 from rich.table import Table
@@ -41,6 +42,13 @@ _QS_STYLE = questionary.Style([
 _DOT = "\u2022"      # bullet •
 _CHECK = "\u2713"    # ✓
 _CROSS = "\u2717"    # ✗
+
+_AGENT_LOGO = (
+    "   ▄   \n"
+    " ▄█▀█▄ \n"
+    "▀█▄▀▄█▀\n"
+    "  ▀█▀  \n"
+)
 
 # Diff rendering: if old + new lines exceed this, show a summary instead
 DIFF_MAX_LINES = 200
@@ -374,6 +382,66 @@ class AgentConsole:
         self._console.print(table)
         if self.events is not None:
             self._emit("output", text=self._render_plain(table))
+
+    def _agent_panel(
+        self, rows: list[tuple[str, str]], *, show_logo: bool = True
+    ) -> None:
+        """Render an agent information panel with the kiwi theme."""
+        details = Table.grid(padding=(0, 1), expand=True)
+        details.add_column(width=12, no_wrap=True, style="dim green")
+        details.add_column(ratio=1, style="white", overflow="fold")
+        for label, value in rows:
+            details.add_row(label, Text(value, style="bold"))
+
+        if show_logo:
+            logo = Text(_AGENT_LOGO.rstrip("\n"), style="bold green")
+            body = Table.grid(expand=True)
+            logo_width = max(len(line) for line in _AGENT_LOGO.splitlines())
+            body.add_column(width=logo_width + 4, no_wrap=True)
+            body.add_column(ratio=1)
+            body.add_row(logo, details)
+        else:
+            body = details
+        self.print(Panel(body, border_style="green", padding=(0, 2)))
+
+    def startup_panel(
+        self,
+        model: str,
+        context: str,
+        reasoning: str,
+        permission: str,
+        persona: str,
+        skills: str,
+        workspace: str,
+    ) -> None:
+        """Render the interactive agent's startup summary."""
+        self._agent_panel([
+            ("Model", f"{model} ({context}) · {reasoning}"),
+            ("Permission", permission),
+            ("Persona", persona),
+            ("Skills", skills),
+            ("Workspace", workspace),
+        ])
+
+    def session_end_panel(
+        self,
+        *,
+        total: int,
+        prompt: int,
+        cached_prompt: int,
+        completion: int,
+        reasoning: int,
+        resume: str,
+    ) -> None:
+        """Render token usage and the command for resuming a session."""
+        usage = (
+            f"{total:,} total · {prompt:,} input · {cached_prompt:,} cached input · "
+            f"{completion:,} output · {reasoning:,} reasoning"
+        )
+        self._agent_panel([
+            ("Tokens", usage),
+            ("Resume", f"kia --resume {resume}"),
+        ], show_logo=False)
 
     def rule(self):
         self._console.rule(style="dim color(240)")
