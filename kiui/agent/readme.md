@@ -1,23 +1,4 @@
-# kiui.agent
-
-A lightweight, terminal-based AI agent that can browse the web, read/write files, and execute shell commands.
-
-## Features
-
-- **File Operations**: Read, write, and surgically edit files with syntax-highlighted diffs.
-- **Shell Execution**: Run arbitrary shell commands with real-time streaming output.
-- **Web Capabilities**: Search the web and fetch/parse webpage content.
-- **Tool-use**: Automatically chooses the right tool for the task.
-- **Streaming**: Responses render token-by-token in both the terminal and Web UI, with reasoning/thinking stream shown automatically for compatible models.
-- **Sub-agents**: Can spawn sub-agents to handle complex sub-tasks in-process.
-- **Skills**: Load domain-specific instructions via customizable skill packs (`.kia/skills/`).
-- **Personas**: Switch the agent's identity, system prompt, and tool surface via bundled persona modules (e.g. `coder`, `chatter`, `reviewer`).
-- **Context Management**: Proactive tool-output filtering, automatic pruning, and LLM-based compaction keep context focused.
-- **Rewind**: Roll back conversation and/or code changes to any previous round.
-- **Permissions**: Three confirmation modes (auto / default / strict) and defense-in-depth detection of common destructive shell commands.
-- **Model Switching**: Hot-swap between configured models mid-session.
-- **Interactive**: Rich terminal interface with syntax highlighting, file-path autocomplete, and progress indicators.
-- **Remote Web UI**: Optional authenticated, mobile-friendly companion synchronized with the terminal. A shared hub multiplexes many terminal agents into one page (a tab per agent) behind a single port.
+# kia (kiui.agent)
 
 ## Installation
 
@@ -27,36 +8,32 @@ pip install kiui[kia]
 
 ## Configuration
 
-The agent uses a YAML configuration file located at `./.kiui.yaml` (current directory) or `~/.kiui.yaml` (home directory). You need to define your model profiles under the `openai` key (even for non-OpenAI providers, as long as they provide an OpenAI-compatible API).
+The agent uses a YAML configuration file located at `./.kiui.yaml` (current directory) or `~/.kiui.yaml` (home directory). You need to define your model profiles under the `openai` key (OpenAI-compatible API).
 
 Example `.kiui.yaml`:
 
 ```yaml
 openai:
-  gpt: # model_alias, convenient name to use in the CLI
+  gpt: # model_alias
     model: gpt-4o # actual model name used in the API
     api_key: sk-proj-...
     base_url: https://api.openai.com/v1
 
 kia_web_token: web-secret # optional Web UI access token
-kia_lib: git@github.com:username/kia-skills.git # optional personal skill library
+kia_lib: git@github.com:username/kia-skills.git # optional personal skill library repo
 ```
 
 ## Usage
 
-### List available models
 
 ```bash
+# List available models
 kia --list
-```
 
-### Start an interactive chat
-
-```bash
+# Start an interactive chat
 kia --model <model_alias>
+kia # use the first configured model
 ```
-
-Simply running `kia` (with no arguments) starts a chat with the first configured model.
 
 ### Additional options
 
@@ -137,7 +114,7 @@ The agent supports the following slash commands in the CLI:
 
 | Command | Description |
 |---------|-------------|
-| `/help` | Show help message |
+| `/help` | Show help message for all slash commands |
 | `/context` | Show a concise one-line-per-message context log |
 | `/system_prompt` | Print the current full system prompt |
 | `/compact` | Force context compaction via LLM summarization |
@@ -177,27 +154,20 @@ Three permission modes control when the agent asks for confirmation before execu
 
 | Mode | Behavior |
 |------|----------|
-| `auto` | All tools run without prompting (useful for sub-agents / pipe mode) |
+| `auto` | All tools run without prompting (default) |
 | `default` | Risky tools (write, edit, remove, exec, spawn) prompt for confirmation |
 | `strict` | Every tool call prompts for confirmation |
 
-The permission layer also provides:
-- File tools are not workspace-confined. `auto` runs safety-approved calls without prompting; `default` and `strict` apply the tool-level confirmation rules above.
-- Defense-in-depth detection of common destructive shell commands (`rm -rf /`, `mkfs`, device writes, fork bombs, shutdown/reboot, etc.), including direct `!` commands.
-
-Shell detection is heuristic, not a security boundary: arbitrary shell syntax can evade static pattern matching. Use an OS-level sandbox or container when commands must be contained.
+In all modes, we always detect and prevent common destructive shell commands (`rm -rf /`, `mkfs`, device writes, fork bombs, shutdown/reboot, etc.).
+However, this is not a security boundary: arbitrary shell syntax can evade static pattern matching. Use an OS-level sandbox or container when commands must be contained!
 
 ## Context Management
 
 The agent automatically manages context window usage through three layers:
 
-1. **Proactive tool-result compaction** — before a result enters conversation history, oversized output is reduced with a tool-aware pipeline. Shell results use semantic reducers for pytest, git, Python package tools, and compiler diagnostics before falling back to ANSI/progress cleanup, repeated-line collapse, and diagnostic-preserving edge samples. File reads retain contiguous prefixes, while search/list results use weighted edge samples. Full command output is teed during execution and saved privately under `.kia/tool-results/<session>/`, retained for up to seven days within a 100 MB project cap. Compact results include estimated token savings, reducer provenance, confidence tier, and a focused recovery path.
+1. **Proactive tool-result compaction** — before a result enters conversation history, oversized output is reduced with a tool-aware pipeline. Full command output is teed during execution and saved under `.kia/tool-results/<session>/`.
 2. **Context pruning** — old tool results from read/exec/web tools are trimmed (head+tail) at 30% usage, then hard-cleared at 50%.
 3. **LLM compaction** — when context exceeds 75%, the oldest messages are summarized via an LLM call and replaced with a compact summary.
-
-Deterministic ingress compaction is preferred over automatically spawning a summarization sub-agent: it has no extra latency or model cost, cannot hallucinate away exact errors, and still preserves searchable access to the captured output.
-
-Live context/token usage is shown inline in the `Working... (Xs)` status bar (terminal and web UI), in addition to the full `/usage` breakdown.
 
 ## Rewind
 
@@ -220,15 +190,7 @@ The `/goal` command sets a **standing objective** the agent works toward autonom
 /goal all pytest tests pass and there are no lint errors
 ```
 
-Usage:
-
-| Form | Effect |
-|------|--------|
-| `/goal <text>` | Set a new goal and start auto-iterating |
-| `/goal` | Show the current goal and status |
-| `/goal clear` | Clear the goal and stop iterating |
-
-There is **no fixed iteration cap** — the loop runs until the goal is reported met or you stop it. Since the terminal prompt is blocked while the loop runs, **`Ctrl+C` / `Esc` during a round is the way to stop it**, which clears the goal. Goals are saved with the session and **auto-resume** on `--resume`.
+There is **no fixed iteration cap** — the loop runs until the goal is reported met or you stop it. Since the terminal prompt is blocked while the loop runs, **`Ctrl+C` / `Esc` during a round is the way to stop it**, which clears the goal.
 
 ## Skills
 
@@ -335,10 +297,6 @@ For `reviewer`, provide the paper PDF and preferably the venue, track, and exact
 The active persona is saved with the session and re-applied on `--resume`.
 
 Each persona module defines `build_system_prompt(ctx)` — the complete system prompt, composed from the shared blocks and builders in `kiui/agent/personas/common.py` — plus a `TOOLS` whitelist that controls which tools are advertised to the model. This is capability guidance, not a security boundary: interactive commands such as `!<command>` and `/skills` remain available to the user and are governed by the normal permission and safety checks. To add a persona, drop a new module into `kiui/agent/personas/` following the same contract.
-
-## Sessions
-
-Sessions are automatically saved after each round (throttled to ≤ once per 30 seconds) to `.kia/sessions/<session_id>.json`. Use `--resume` to pick up where you left off, or `/clear` to start a fresh session.
 
 ## Tools
 
