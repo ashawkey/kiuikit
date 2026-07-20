@@ -285,16 +285,23 @@ kia_lib: git@github.com:username/kia-skills.git
 kib list [pattern]               # list remote skills, optionally filtering names
 kib list [pattern] --local       # list/filter local skills; remote status is best-effort
 kib install <name> [<name> ...]  # install one or more remote skills
+kib update [<name> ...]          # sync all or selected installed skills
+kib update <names...> --prefer local|remote  # resolve conflicts
 kib upload <name> [<name> ...]   # upload one or more local skills
 kib remove <name> [<name> ...]   # remove one or more remote skills
-kib upload <names...> --force    # update existing remote skills
+kib remove <names...> --local    # remove project copies only
+kib upload <names...> --force    # replace existing remote skills
 ```
 
 Remote skills are not loaded or advertised to the agent until installed.
 The repository is cached under `~/.kia/library/`; each configured URL has an
-isolated checkout, so changing `kia_lib` selects a different cache. Existing
-local skills are never overwritten. `kib` only manages project skills under
-`./.kia/skills/`; it does not list or otherwise special-case bundled skills.
+isolated checkout, so changing `kia_lib` selects a different cache. Each skill's
+last synchronized tree is recorded in its committed `.kib.json`, so update works
+across machines and does not depend on the cache. Install never overwrites an
+existing local skill. Update uploads local-only changes and downloads remote-only changes.
+Conflicting changes fail until `--prefer local` or `--prefer remote` is given.
+`kib` only manages project skills under `./.kia/skills/`; it does not list or
+otherwise special-case bundled skills.
 Upload validates the skill, rejects symlinks, creates a normal commit, and never
 force-pushes. An empty repository is initialized on the first upload.
 

@@ -15,7 +15,9 @@ from kiui.agent.library import (
     install_skill,
     list_local_skills,
     list_skills,
+    remove_local_skill,
     remove_skill,
+    update_skill,
     upload_skill,
 )
 
@@ -51,8 +53,17 @@ def build_parser() -> argparse.ArgumentParser:
     install = commands.add_parser("install", help="install library skills into this project")
     install.add_argument("names", nargs="+", metavar="name")
 
-    remove = commands.add_parser("remove", help="remove skills from the library")
+    update = commands.add_parser("update", help="sync installed skills with the library")
+    update.add_argument("names", nargs="*", metavar="name")
+    update.add_argument(
+        "--prefer",
+        choices=("local", "remote"),
+        help="resolve conflicts by keeping the local or remote copy",
+    )
+
+    remove = commands.add_parser("remove", help="remove skills from the library or project")
     remove.add_argument("names", nargs="+", metavar="name")
+    remove.add_argument("--local", action="store_true", help="remove from this project")
 
     upload = commands.add_parser("upload", help="upload project skills to the library")
     upload.add_argument("names", nargs="+", metavar="name")
@@ -105,11 +116,36 @@ def main(argv: list[str] | None = None) -> int:
                 )
             return 0
 
+        if args.command == "remove" and args.local:
+            for name in args.names:
+                path = remove_local_skill(name)
+                console.print(f"Removed local [cyan]{name}[/cyan] from {path}")
+            return 0
+
         repo = _repo()
         if args.command == "install":
             for name in args.names:
                 dest = install_skill(repo, name)
                 console.print(f"Installed [cyan]{name}[/cyan] to {dest}")
+            return 0
+
+        if args.command == "update":
+            if args.names:
+                names = args.names
+            else:
+                skills, errors = list_local_skills()
+                if errors:
+                    detail = ", ".join(issue["name"] for issue in errors)
+                    raise LibraryError(f"cannot update invalid local skills: {detail}")
+                names = sorted(skills)
+            for name in names:
+                action = update_skill(repo, name, prefer=args.prefer)
+                if action == "current":
+                    console.print(f"[cyan]{name}[/cyan] is already up to date.")
+                elif action == "pulled":
+                    console.print(f"Updated local [cyan]{name}[/cyan] from the library.")
+                else:
+                    console.print(f"Updated library [cyan]{name}[/cyan] from local.")
             return 0
 
         if args.command == "remove":

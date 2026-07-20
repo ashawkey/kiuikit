@@ -7,13 +7,16 @@ import subprocess
 
 import pytest
 
+from kiui.agent.skills import read_skill
 from kiui.agent.library import (
     LibraryError,
     _validate_repo,
     install_skill,
     list_local_skills,
     list_skills,
+    remove_local_skill,
     remove_skill,
+    update_skill,
     upload_skill,
 )
 
@@ -233,6 +236,84 @@ def test_cli_installs_multiple_skills(monkeypatch, capsys, tmp_path):
     assert "Installed beta" in output
 
 
+def test_cli_updates_selected_skills(monkeypatch, capsys):
+    from kiui.agent import library_cli
+
+    calls = []
+    monkeypatch.setattr(library_cli, "_repo", lambda: "repo")
+
+    def update(repo, name, prefer=None):
+        calls.append((repo, name, prefer))
+        return "pulled" if name == "alpha" else "pushed"
+
+    monkeypatch.setattr(library_cli, "update_skill", update)
+
+    assert library_cli.main(["update", "alpha", "beta", "--prefer", "remote"]) == 0
+    assert calls == [("repo", "alpha", "remote"), ("repo", "beta", "remote")]
+    output = capsys.readouterr().out
+    assert "Updated local alpha from the library" in output
+    assert "Updated library beta from local" in output
+
+
+def test_cli_updates_all_local_skills_by_default(monkeypatch, capsys):
+    from kiui.agent import library_cli
+
+    calls = []
+    monkeypatch.setattr(library_cli, "_repo", lambda: "repo")
+    monkeypatch.setattr(
+        library_cli,
+        "list_local_skills",
+        lambda: ({"beta": {}, "alpha": {}}, []),
+    )
+    monkeypatch.setattr(
+        library_cli,
+        "update_skill",
+        lambda repo, name, prefer=None: calls.append((repo, name)) or "current",
+    )
+
+    assert library_cli.main(["update"]) == 0
+    assert calls == [("repo", "alpha"), ("repo", "beta")]
+    output = capsys.readouterr().out
+    assert "alpha is already up to date" in output
+    assert "beta is already up to date" in output
+
+
+def test_cli_update_all_reports_invalid_skills(monkeypatch, capsys):
+    from kiui.agent import library_cli
+
+    monkeypatch.setattr(library_cli, "_repo", lambda: "repo")
+    monkeypatch.setattr(
+        library_cli,
+        "list_local_skills",
+        lambda: ({"alpha": {}}, [{"name": "broken", "reason": "invalid"}]),
+    )
+
+    assert library_cli.main(["update"]) == 1
+    assert "cannot update invalid local skills: broken" in capsys.readouterr().err
+
+
+def test_cli_removes_local_skills_without_repo(monkeypatch, capsys, tmp_path):
+    from kiui.agent import library_cli
+
+    calls = []
+    monkeypatch.setattr(
+        library_cli,
+        "remove_local_skill",
+        lambda name: calls.append(name) or tmp_path / name,
+    )
+    monkeypatch.setattr(
+        library_cli,
+        "_repo",
+        lambda: (_ for _ in ()).throw(AssertionError("repo should not be needed")),
+    )
+
+    assert library_cli.main(["remove", "alpha", "beta", "--local"]) == 0
+    assert calls == ["alpha", "beta"]
+    output = capsys.readouterr().out
+    assert "Removed local alpha" in output
+    assert "Removed local beta" in output
+
+
 def test_cli_removes_multiple_skills(monkeypatch, capsys):
     from kiui.agent import library_cli
 
@@ -332,6 +413,146 @@ def test_install_refuses_existing_skill(tmp_path):
 
     with pytest.raises(LibraryError, match="already exists"):
         install_skill(str(remote), "alpha", target)
+
+
+def test_update_skill_pulls_changed_library_copy(tmp_path):
+    remote = _remote(tmp_path)
+    source = tmp_path / "source"
+    skill = _skill(source, "alpha", "First")
+    upload_skill(str(remote), "alpha", source)
+
+    target = tmp_path / "target"
+    dest = install_skill(str(remote), "alpha", target)
+    assert update_skill(str(remote), "alpha", target) == "current"
+
+    (skill / "SKILL.md").write_text(
+        "---\nname: alpha\ndescription: Second\n---\nUpdated.\n",
+        encoding="utf-8",
+    )
+    upload_skill(str(remote), "alpha", source, force=True)
+
+    assert update_skill(str(remote), "alpha", target) == "pulled"
+    assert read_skill(dest)["description"] == "Second"
+
+
+def test_install_persists_sync_metadata_in_library(tmp_path):
+    remote = _remote(tmp_path)
+    source = tmp_path / "source"
+    _skill(source, "alpha", "First")
+    upload_skill(str(remote), "alpha", source)
+
+    target = tmp_path / "target"
+    dest = install_skill(str(remote), "alpha", target)
+
+    assert (dest / ".kib.json").is_file()
+    assert _git("--git-dir", str(remote), "show", "main:skills/alpha/.kib.json")
+
+
+def test_update_uses_remote_metadata_on_another_machine(tmp_path):
+    remote = _remote(tmp_path)
+    source = tmp_path / "source"
+    _skill(source, "alpha", "First")
+    upload_skill(str(remote), "alpha", source)
+
+    other_machine = tmp_path / "other-machine"
+    dest = install_skill(str(remote), "alpha", other_machine)
+    (dest / "SKILL.md").write_text(
+        "---\nname: alpha\ndescription: Other machine\n---\nUpdated.\n",
+        encoding="utf-8",
+    )
+
+    assert update_skill(str(remote), "alpha", other_machine) == "pushed"
+    assert list_skills(str(remote))[0]["alpha"]["description"] == "Other machine"
+
+
+def test_update_skill_pushes_changed_local_copy(tmp_path):
+    remote = _remote(tmp_path)
+    source = tmp_path / "source"
+    _skill(source, "alpha", "First")
+    upload_skill(str(remote), "alpha", source)
+
+    target = tmp_path / "target"
+    dest = install_skill(str(remote), "alpha", target)
+    (dest / "SKILL.md").write_text(
+        "---\nname: alpha\ndescription: Local\n---\nUpdated.\n",
+        encoding="utf-8",
+    )
+
+    assert update_skill(str(remote), "alpha", target) == "pushed"
+    assert list_skills(str(remote))[0]["alpha"]["description"] == "Local"
+
+
+def test_update_skill_rejects_conflicting_changes(tmp_path):
+    remote = _remote(tmp_path)
+    source = tmp_path / "source"
+    skill = _skill(source, "alpha", "First")
+    upload_skill(str(remote), "alpha", source)
+
+    target = tmp_path / "target"
+    dest = install_skill(str(remote), "alpha", target)
+    (dest / "SKILL.md").write_text(
+        "---\nname: alpha\ndescription: Local\n---\nLocal.\n",
+        encoding="utf-8",
+    )
+    (skill / "SKILL.md").write_text(
+        "---\nname: alpha\ndescription: Remote\n---\nRemote.\n",
+        encoding="utf-8",
+    )
+    upload_skill(str(remote), "alpha", source, force=True)
+
+    with pytest.raises(LibraryError, match="both copies changed.*--prefer"):
+        update_skill(str(remote), "alpha", target)
+    assert update_skill(str(remote), "alpha", target, prefer="local") == "pushed"
+    assert list_skills(str(remote))[0]["alpha"]["description"] == "Local"
+
+
+def test_update_pushes_local_skill_missing_from_library(tmp_path):
+    remote = _remote(tmp_path)
+    project = tmp_path / "project"
+    _skill(project, "alpha", "Local")
+
+    assert update_skill(str(remote), "alpha", project) == "pushed"
+    assert list_skills(str(remote))[0]["alpha"]["description"] == "Local"
+
+
+def test_update_without_history_requires_preference(tmp_path):
+    remote = _remote(tmp_path)
+    source = tmp_path / "source"
+    _skill(source, "alpha", "Remote")
+    upload_skill(str(remote), "alpha", source)
+    target = tmp_path / "target"
+    _skill(target, "alpha", "Local")
+
+    with pytest.raises(LibraryError, match="no sync history.*--prefer"):
+        update_skill(str(remote), "alpha", target)
+    assert update_skill(str(remote), "alpha", target, prefer="remote") == "pulled"
+    assert list_local_skills(target)[0]["alpha"]["description"] == "Remote"
+
+
+def test_remove_local_skill(tmp_path):
+    project = tmp_path / "project"
+    skill = _skill(project, "alpha")
+
+    assert remove_local_skill("alpha", project) == skill
+    assert not skill.exists()
+
+
+def test_remove_local_malformed_skill(tmp_path):
+    project = tmp_path / "project"
+    skill = project / ".kia" / "skills" / "broken"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("invalid", encoding="utf-8")
+
+    assert remove_local_skill("broken", project) == skill
+    assert not skill.exists()
+
+
+def test_update_skill_requires_installed_skill(tmp_path):
+    remote = _remote(tmp_path)
+    _seed_remote(remote, tmp_path)
+
+    with pytest.raises(LibraryError, match="local project skill not found"):
+        update_skill(str(remote), "alpha", tmp_path / "target")
 
 
 def test_upload_requires_force_to_update(tmp_path):

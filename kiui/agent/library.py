@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import shutil
 import stat
@@ -312,13 +313,119 @@ def install_skill(repo: str, name: str, work_dir: str | Path | None = None) -> P
         finally:
             if staging.exists():
                 shutil.rmtree(staging)
+    _record_sync(dest, _tree_digest(dest))
     return dest
+
+
+def update_skill(
+    repo: str,
+    name: str,
+    work_dir: str | Path | None = None,
+    prefer: str | None = None,
+) -> str:
+    """Synchronize one installed skill with its library copy.
+
+    Returns ``"current"``, ``"pulled"``, or ``"pushed"``. Without an explicit
+    preference, synchronization uses the last common tree and rejects conflicts.
+    """
+    if prefer not in (None, "local", "remote"):
+        raise LibraryError(f"invalid update preference: {prefer!r}")
+    base = Path(work_dir) if work_dir is not None else Path.cwd()
+    dest = base / ".kia" / "skills" / name
+    if not dest.is_dir() or dest.is_symlink():
+        raise LibraryError(f"local project skill not found: {dest}")
+
+    with _snapshot_skill(dest) as snapshot:
+        local_digest = _tree_digest(snapshot)
+        with _checkout(repo) as checkout:
+            if not valid_skill_name(name):
+                raise LibraryError(f"invalid skill name: {name!r}")
+            source = _skills_root(checkout) / name
+            baseline = _sync_digest(snapshot)
+            if not source.is_dir():
+                if baseline is not None:
+                    raise LibraryError(
+                        f"cannot update '{name}': removed from library; restore it with "
+                        "'kib upload' or remove the project copy with 'kib remove --local'"
+                    )
+                source.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(snapshot, source)
+                _record_sync(source, local_digest)
+                _git("add", "--force", "--", f"skills/{name}", cwd=checkout)
+                _git("commit", "--quiet", "-m", f"skill: add {name}", cwd=checkout)
+                _git("push", "--quiet", "origin", "main", cwd=checkout)
+                action = "pushed"
+            else:
+                _load_strict(source)
+                remote_digest = _tree_digest(source)
+                if local_digest == remote_digest:
+                    if _record_sync(source, remote_digest):
+                        _git("add", "--force", "--", f"skills/{name}", cwd=checkout)
+                        _git("commit", "--quiet", "-m", f"skill: track {name}", cwd=checkout)
+                        _git("push", "--quiet", "origin", "main", cwd=checkout)
+                    action = "current"
+                elif baseline == remote_digest or (
+                    baseline not in (local_digest, remote_digest) and prefer == "local"
+                ):
+                    shutil.rmtree(source)
+                    shutil.copytree(snapshot, source)
+                    _record_sync(source, local_digest)
+                    _git("add", "--force", "--", f"skills/{name}", cwd=checkout)
+                    _git("commit", "--quiet", "-m", f"skill: update {name}", cwd=checkout)
+                    _git("push", "--quiet", "origin", "main", cwd=checkout)
+                    action = "pushed"
+                elif baseline == local_digest or (
+                    baseline not in (local_digest, remote_digest) and prefer == "remote"
+                ):
+                    if _tree_digest(dest) != local_digest:
+                        raise LibraryError(
+                            f"cannot update '{name}': local copy changed during update; retry"
+                        )
+                    if _record_sync(source, remote_digest):
+                        _git("add", "--force", "--", f"skills/{name}", cwd=checkout)
+                        _git("commit", "--quiet", "-m", f"skill: track {name}", cwd=checkout)
+                        _git("push", "--quiet", "origin", "main", cwd=checkout)
+                    _replace_local_skill(source, dest, local_digest)
+                    local_digest = remote_digest
+                    action = "pulled"
+                else:
+                    reason = "both copies changed" if baseline is not None else "no sync history"
+                    raise LibraryError(
+                        f"cannot update '{name}': {reason}; use --prefer local or "
+                        "--prefer remote"
+                    )
+
+    _record_sync(dest, local_digest)
+    return action
+
+
+def _replace_local_skill(source: Path, dest: Path, expected_digest: str) -> None:
+    dest_root = dest.parent
+    staging = dest_root / f".{dest.name}.tmp-{uuid.uuid4().hex}"
+    backup = dest_root / f".{dest.name}.bak-{uuid.uuid4().hex}"
+    try:
+        shutil.copytree(source, staging)
+        if _tree_digest(dest) != expected_digest:
+            raise LibraryError(f"local copy changed during update: {dest.name}")
+        os.replace(dest, backup)
+        try:
+            os.replace(staging, dest)
+        except BaseException:
+            os.replace(backup, dest)
+            raise
+        shutil.rmtree(backup)
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging)
+
+
+_SYNC_FILE = ".kib.json"
 
 
 def _tree_manifest(root: Path) -> dict[str, tuple[str, bool]]:
     manifest: dict[str, tuple[str, bool]] = {}
     for path in root.rglob("*"):
-        if not path.is_file():
+        if not path.is_file() or path.relative_to(root).as_posix() == _SYNC_FILE:
             continue
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         executable = bool(path.stat().st_mode & 0o111)
@@ -328,6 +435,49 @@ def _tree_manifest(root: Path) -> dict[str, tuple[str, bool]]:
 
 def _same_tree(left: Path, right: Path) -> bool:
     return _tree_manifest(left) == _tree_manifest(right)
+
+
+def _tree_digest(root: Path) -> str:
+    manifest = _tree_manifest(root)
+    encoded = json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _sync_digest(skill: Path) -> str | None:
+    path = skill / _SYNC_FILE
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise LibraryError(f"reserved sync metadata is invalid: {path}: {exc}") from exc
+    digest = data.get("digest")
+    if set(data) != {"kib", "digest"} or data.get("kib") != 1 or not isinstance(digest, str):
+        raise LibraryError(f"reserved sync metadata is invalid: {path}")
+    return digest
+
+
+def _record_sync(skill: Path, digest: str) -> bool:
+    path = skill / _SYNC_FILE
+    if path.exists() and _sync_digest(skill) is None:
+        raise LibraryError(f"reserved sync metadata path is invalid: {path}")
+    content = json.dumps({"kib": 1, "digest": digest}) + "\n"
+    if path.is_file() and path.read_text(encoding="utf-8") == content:
+        return False
+    path.write_text(content, encoding="utf-8")
+    return True
+
+
+def remove_local_skill(name: str, work_dir: str | Path | None = None) -> Path:
+    """Remove one project skill from ``<work_dir>/.kia/skills``."""
+    if not valid_skill_name(name):
+        raise LibraryError(f"invalid skill name: {name!r}")
+    base = Path(work_dir) if work_dir is not None else Path.cwd()
+    skill = base / ".kia" / "skills" / name
+    if not skill.is_dir() or skill.is_symlink():
+        raise LibraryError(f"local project skill not found: {skill}")
+    shutil.rmtree(skill)
+    return skill
 
 
 def remove_skill(repo: str, name: str) -> str:
@@ -370,6 +520,13 @@ def upload_skill(
             if updating:
                 _load_strict(dest)
                 if _same_tree(snapshot, dest):
+                    digest = _tree_digest(snapshot)
+                    remote_changed = _record_sync(dest, digest)
+                    if remote_changed:
+                        _git("add", "--force", "--", f"skills/{name}", cwd=checkout)
+                        _git("commit", "--quiet", "-m", f"skill: track {name}", cwd=checkout)
+                        _git("push", "--quiet", "origin", "main", cwd=checkout)
+                    _record_sync(source, digest)
                     return None
                 if not force:
                     raise LibraryError(
@@ -379,9 +536,12 @@ def upload_skill(
 
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(snapshot, dest)
+            digest = _tree_digest(snapshot)
+            _record_sync(dest, digest)
             _git("add", "--force", "--", f"skills/{name}", cwd=checkout)
             action = "update" if updating else "add"
             _git("commit", "--quiet", "-m", f"skill: {action} {name}", cwd=checkout)
             commit = _git("rev-parse", "HEAD", cwd=checkout).stdout.strip()
             _git("push", "--quiet", "origin", "main", cwd=checkout)
+            _record_sync(source, digest)
             return commit
