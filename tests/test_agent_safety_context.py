@@ -9,7 +9,7 @@ from types import SimpleNamespace as NS
 import pytest
 
 import kiui.agent.backend as backend
-import kiui.agent.tool_results as tool_results
+import kiui.agent.tools.results as tool_results
 from kiui.agent.backend import LLMAgent
 from kiui.agent.context import (
     ToolResultEnvelope,

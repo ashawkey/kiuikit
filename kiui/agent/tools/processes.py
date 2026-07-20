@@ -241,7 +241,7 @@ class ProcessToolsMixin:
                 process_backend = "windows_job"
             elif sys.platform.startswith("linux"):
                 job_handle = None
-                supervisor = Path(__file__).parent.parent / "process_supervisor.py"
+                supervisor = Path(__file__).with_name("process_supervisor.py")
                 shell_cmd = [sys.executable, str(supervisor), command]
                 proc = subprocess.Popen(
                     shell_cmd,
