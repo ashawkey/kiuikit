@@ -257,6 +257,43 @@ def test_grep_python_gitignore_aware(repo, monkeypatch):
     assert not any("build" in f for f in files)
 
 
+def test_glob_truncated_flag_at_cap_boundary(tmp_path, monkeypatch):
+    import kiui.agent.tools.search as search
+    monkeypatch.setattr(search, "MAX_GLOB_RESULTS", 3)
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+
+    for i in range(3):
+        (tmp_path / f"f{i}.txt").write_text("x")
+    # Exactly at the cap with no further matches: must not be flagged truncated.
+    res = te._glob_files("*.txt")
+    assert res["count"] == 3 and res["truncated"] is False
+
+    # One more match than the cap: truncated and capped at MAX_GLOB_RESULTS.
+    (tmp_path / "f3.txt").write_text("x")
+    res = te._glob_files("*.txt")
+    assert res["count"] == 3 and res["truncated"] is True
+
+
+@pytest.mark.parametrize("use_python", [False, True])
+def test_grep_truncated_flag_at_cap_boundary(tmp_path, monkeypatch, use_python):
+    import kiui.agent.tools.search as search
+    if use_python:
+        import shutil
+        monkeypatch.setattr(shutil, "which", lambda name: None)  # force python fallback
+    monkeypatch.setattr(search, "MAX_GREP_MATCHES", 3)
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+
+    (tmp_path / "a.txt").write_text("hit\nhit\nhit\n")
+    # Exactly at the cap with no further matches: must not be flagged truncated.
+    res = te._grep_files("hit")
+    assert res["count"] == 3 and res["truncated"] is False
+
+    # One more match than the cap: truncated and capped at MAX_GREP_MATCHES.
+    (tmp_path / "b.txt").write_text("hit\n")
+    res = te._grep_files("hit")
+    assert res["count"] == 3 and res["truncated"] is True
+
+
 def test_multi_edit_success(tmp_path):
     f = tmp_path / "m.py"
     f.write_text("alpha\nbeta\ngamma\n")

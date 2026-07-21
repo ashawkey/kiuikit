@@ -32,9 +32,22 @@ class ContextManager:
             "content": system_prompt,
         }
         self.messages: list[dict[str, Any]] = []
+        # Running character total of ``self.messages`` (excluding the system
+        # prompt, matching estimate_context_chars). Maintained incrementally on
+        # append and invalidated (None) on any bulk mutation.
+        self._char_cache: int | None = 0
+
+    @property
+    def estimated_chars(self) -> int:
+        """Cached character total of the history, recomputed only when stale."""
+        if self._char_cache is None:
+            self._char_cache = estimate_context_chars(self.messages)
+        return self._char_cache
 
     def add(self, message: dict[str, Any]) -> None:
         self.messages.append(message)
+        if self._char_cache is not None:
+            self._char_cache += msg_chars(message)
 
     def get(self, include_system: bool = True) -> list[dict[str, Any]]:
         messages: list[dict[str, Any]] = []
@@ -44,8 +57,11 @@ class ContextManager:
         return messages
 
     def replace_messages(self, new_messages: list[dict[str, Any]]) -> None:
+        # A same-object call is a no-op (content unchanged) so the cache stays
+        # valid; only a genuine replacement invalidates it.
         if new_messages is not self.messages:
             self.messages = list(new_messages)
+            self._char_cache = None
 
     def checkpoint(self) -> list[dict[str, Any]]:
         """Return a shallow copy for rollback on interruption."""
@@ -53,6 +69,7 @@ class ContextManager:
 
     def rollback(self, snapshot: list[dict[str, Any]]) -> None:
         self.messages = snapshot
+        self._char_cache = None
 
 
 # ---------------------------------------------------------------------------
@@ -724,20 +741,27 @@ def _prunable_range(messages: list) -> tuple[int, int]:
     return start, end
 
 
-def prune_context(messages: list, context_length: int, chars_per_token: float = DEFAULT_CHARS_PER_TOKEN) -> list:
+def prune_context(
+    messages: list,
+    context_length: int,
+    chars_per_token: float = DEFAULT_CHARS_PER_TOKEN,
+    total_chars: int | None = None,
+) -> list:
     """Prune old tool results to manage context window usage.
 
     Phase 1 (soft trim, 30 %): keep head + tail of large prunable results.
     Phase 2 (hard clear, 50 %): replace entire results with a placeholder.
 
     Returns the original list when no pruning is needed, or a new list
-    with pruned messages otherwise.
+    with pruned messages otherwise. Pass *total_chars* to reuse an already
+    computed character total and skip the full-history scan.
     """
     if not messages or context_length <= 0:
         return messages
 
     char_window = context_length * chars_per_token
-    total_chars = estimate_context_chars(messages)
+    if total_chars is None:
+        total_chars = estimate_context_chars(messages)
 
     if total_chars < char_window * SOFT_TRIM_RATIO:
         return messages
@@ -821,9 +845,16 @@ Conversation:
 Summary:"""
 
 
-def needs_compaction(messages: list, context_length: int, chars_per_token: float = DEFAULT_CHARS_PER_TOKEN) -> bool:
+def needs_compaction(
+    messages: list,
+    context_length: int,
+    chars_per_token: float = DEFAULT_CHARS_PER_TOKEN,
+    total_chars: int | None = None,
+) -> bool:
     char_window = context_length * chars_per_token
-    return estimate_context_chars(messages) > char_window * COMPACTION_RATIO
+    if total_chars is None:
+        total_chars = estimate_context_chars(messages)
+    return total_chars > char_window * COMPACTION_RATIO
 
 
 def _safe_split_index(messages: list, idx: int) -> int:

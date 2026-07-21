@@ -93,8 +93,8 @@ def consume_stream(
     on_content: Callable[[str], None] | None = None,
     on_thinking: Callable[[str], None] | None = None,
     should_stop: Callable[[], bool] | None = None,
-) -> tuple[dict[str, Any], Any]:
-    """Fold a streamed chat completion into ``(message, usage)``.
+) -> tuple[dict[str, Any], Any, str | None]:
+    """Fold a stream into ``(message, usage, finish_reason)``.
 
     Callbacks fire synchronously as chunks arrive. If *should_stop* returns
     true, cancellation is raised so a partial response cannot enter context.
@@ -103,6 +103,7 @@ def consume_stream(
     reasoning_parts: list[str] = []
     tool_calls: dict[int, _ToolCallAccumulator] = {}
     usage: Any = None
+    finish_reason: str | None = None
     role = "assistant"
 
     for chunk in stream:
@@ -116,7 +117,10 @@ def consume_stream(
         if not chunk.choices:
             continue
 
-        delta = chunk.choices[0].delta
+        choice = chunk.choices[0]
+        if choice.finish_reason is not None:
+            finish_reason = choice.finish_reason
+        delta = choice.delta
         if delta is None:
             continue
         if delta.role:
@@ -154,4 +158,4 @@ def consume_stream(
     if reasoning:
         message["reasoning_content"] = reasoning
 
-    return message, usage
+    return message, usage, finish_reason

@@ -51,6 +51,7 @@ class SearchToolsMixin:
             iterator = base.rglob(pattern)
 
         matches = []
+        truncated = False
         for p in iterator:
             if any(part in _SKIP_DIRS for part in p.parts):
                 continue
@@ -61,15 +62,18 @@ class SearchToolsMixin:
                     is_dir = False
                 if matcher.is_ignored((base_resolved / p.relative_to(base)), is_dir):
                     continue
-            matches.append(str(p.relative_to(base)))
+            # Stop once one match beyond the cap is seen, so an exact-cap result
+            # (with no further matches) is not falsely flagged as truncated.
             if len(matches) >= MAX_GLOB_RESULTS:
+                truncated = True
                 break
+            matches.append(str(p.relative_to(base)))
 
         matches.sort()
         return {
             "matches": matches,
             "count": len(matches),
-            "truncated": len(matches) == MAX_GLOB_RESULTS,
+            "truncated": truncated,
             "success": True,
         }
 
@@ -138,9 +142,8 @@ class SearchToolsMixin:
             return {"error": f"ripgrep error: {stderr}", "success": False}
 
         matches = []
+        truncated = False
         for raw_line in _decode_bytes(result.stdout).splitlines():
-            if len(matches) >= MAX_GREP_MATCHES:
-                break
             try:
                 event = json.loads(raw_line)
             except json.JSONDecodeError:
@@ -153,6 +156,11 @@ class SearchToolsMixin:
             path_obj = data["path"]
             if "text" not in path_obj:
                 continue
+            # Stop once a match beyond the cap is seen, so an exact-cap result
+            # (with no further matches) is not falsely flagged as truncated.
+            if len(matches) >= MAX_GREP_MATCHES:
+                truncated = True
+                break
             file_str = path_obj["text"]
             lines_obj = data["lines"]
             text = lines_obj.get("text", "").rstrip("\n")
@@ -171,7 +179,7 @@ class SearchToolsMixin:
         return {
             "matches": matches,
             "count": len(matches),
-            "truncated": len(matches) == MAX_GREP_MATCHES,
+            "truncated": truncated,
             "success": True,
         }
 
@@ -209,8 +217,9 @@ class SearchToolsMixin:
                     yield p
 
         matches = []
+        truncated = False
         for file_path in _candidate_files():
-            if len(matches) >= MAX_GREP_MATCHES:
+            if truncated:
                 break
             try:
                 text = file_path.read_text(encoding="utf-8", errors="strict")
@@ -219,13 +228,16 @@ class SearchToolsMixin:
             rel = str(file_path.relative_to(base)) if not base.is_file() else str(file_path)
             for lineno, line in enumerate(text.splitlines(), 1):
                 if compiled.search(line):
-                    matches.append({"file": rel, "line": lineno, "text": line[:200]})
+                    # Stop once a match beyond the cap is seen, so an exact-cap
+                    # result is not falsely flagged as truncated.
                     if len(matches) >= MAX_GREP_MATCHES:
+                        truncated = True
                         break
+                    matches.append({"file": rel, "line": lineno, "text": line[:200]})
 
         return {
             "matches": matches,
             "count": len(matches),
-            "truncated": len(matches) == MAX_GREP_MATCHES,
+            "truncated": truncated,
             "success": True,
         }

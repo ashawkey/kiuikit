@@ -14,7 +14,6 @@ from kiui.agent.utils.io import (
     PromptBroker,
     sanitize_unicode,
 )
-from kiui.agent.backend import LLMAgent
 from kiui.agent.utils.interrupt import RequestInterrupted, run_interruptible
 from kiui.agent.ui import AgentConsole
 
@@ -185,34 +184,6 @@ def test_cancellation_is_operation_scoped():
     token.finish(operation_id)
     assert not token.cancelled
     assert token.operation_id is None
-
-
-def test_web_input_can_win_over_pending_terminal_prompt():
-    hub = EventHub()
-    broker = InputBroker(hub)
-    agent = object.__new__(LLMAgent)
-    agent.input_broker = broker
-
-    class FakeTerminal:
-        def __init__(self):
-            self.cancelled = False
-
-        def prompt(self):
-            # Block long enough for the web message to arrive first.
-            time.sleep(2)
-            self.cancelled = True
-            return ""
-
-        async def prompt_async(self):
-            # Yield to the loop so the web poller can win the race.
-            await asyncio.sleep(2)
-            self.cancelled = True
-            return ""
-
-    terminal = FakeTerminal()
-    threading.Timer(0.05, lambda: broker.submit("from phone")).start()
-    submission = agent._next_submission(terminal)
-    assert submission.text == "from phone"
 
 
 def test_run_interruptible_observes_web_cancellation():

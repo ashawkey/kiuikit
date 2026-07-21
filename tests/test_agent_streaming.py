@@ -24,8 +24,8 @@ def _delta(content=None, reasoning=None, reasoning_content=None, tool_calls=None
     )
 
 
-def _chunk(delta=None, usage=None):
-    choices = [] if delta is None else [NS(delta=delta)]
+def _chunk(delta=None, usage=None, finish_reason=None):
+    choices = [] if delta is None else [NS(delta=delta, finish_reason=finish_reason)]
     return NS(choices=choices, usage=usage)
 
 
@@ -46,11 +46,12 @@ def test_consume_stream_accumulates_content_and_calls_back():
         _chunk(_delta(content="lo")),
         _chunk(delta=None, usage=_usage(total_tokens=3, prompt_tokens=1, completion_tokens=2)),
     ]
-    message, usage = consume_stream(stream, on_content=parts.append)
+    message, usage, finish_reason = consume_stream(stream, on_content=parts.append)
     assert message["content"] == "Hello"
     assert "tool_calls" not in message
     assert parts == ["Hel", "lo"]
     assert usage.total_tokens == 3
+    assert finish_reason is None
 
 
 def test_consume_stream_reassembles_tool_call_fragments():
@@ -59,7 +60,7 @@ def test_consume_stream_reassembles_tool_call_fragments():
         _chunk(_delta(tool_calls=[_tc(0, args=' "a.py"}')])),
         _chunk(delta=None, usage=_usage(total_tokens=5, prompt_tokens=3, completion_tokens=2)),
     ]
-    message, _ = consume_stream(stream)
+    message, _, _ = consume_stream(stream)
     assert message["content"] is None
     assert len(message["tool_calls"]) == 1
     tc = message["tool_calls"][0]
@@ -69,6 +70,13 @@ def test_consume_stream_reassembles_tool_call_fragments():
     assert tc["function"]["arguments"] == '{"file": "a.py"}'
 
 
+def test_consume_stream_captures_finish_reason():
+    stream = [_chunk(_delta(content="partial"), finish_reason="length")]
+    message, _, finish_reason = consume_stream(stream)
+    assert message["content"] == "partial"
+    assert finish_reason == "length"
+
+
 def test_consume_stream_captures_reasoning_variants():
     thoughts = []
     stream = [
@@ -76,7 +84,7 @@ def test_consume_stream_captures_reasoning_variants():
         _chunk(_delta(reasoning="more")),             # openai/gemini-style
         _chunk(_delta(content="answer")),
     ]
-    message, _ = consume_stream(stream, on_thinking=thoughts.append)
+    message, _, _ = consume_stream(stream, on_thinking=thoughts.append)
     assert thoughts == ["think ", "more"]
     assert message["reasoning_content"] == "think more"
     assert message["content"] == "answer"

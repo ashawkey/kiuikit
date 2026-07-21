@@ -220,9 +220,10 @@ class SessionMixin:
             self.console.system("Code changes preserved.")
 
         if revert_conv:
-            self.context.messages, self.round_id = self.changes.rollback_conversation(
+            reverted, self.round_id = self.changes.rollback_conversation(
                 self.context.messages, actual_target
             )
+            self.context.replace_messages(reverted)
             replay_messages = len(self.context.messages)
             self.console.reset_timeline()
             self._replay_context()

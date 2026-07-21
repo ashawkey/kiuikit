@@ -10,11 +10,13 @@ import pytest
 
 import kiui.agent.backend as backend
 import kiui.agent.tools.results as tool_results
-from kiui.agent.backend import LLMAgent
+from kiui.agent.backend import LLMAgent, MAX_OUTPUT_TOKENS
 from kiui.agent.context import (
+    ContextManager,
     ToolResultEnvelope,
     compact_context,
     compact_tool_result_envelope,
+    estimate_context_chars,
     tool_result_char_budget,
 )
 from kiui.agent.utils.interrupt import RequestInterrupted
@@ -571,6 +573,42 @@ def test_tool_artifact_names_do_not_overwrite_existing_files(tmp_path):
     assert (tmp_path / second).read_text() == "second"
 
 
+def test_call_api_sets_output_limit_and_rejects_truncated_response():
+    kwargs_seen = {}
+    added = []
+    usage = NS(prompt_tokens=1, completion_tokens=MAX_OUTPUT_TOKENS, total_tokens=MAX_OUTPUT_TOKENS + 1)
+
+    def completion(kwargs):
+        kwargs_seen.update(kwargs)
+        return {"role": "assistant", "content": "partial"}, usage, "length"
+
+    agent = NS(
+        context_length=0,
+        model="test-model",
+        INITIAL_BACKOFF=1.0,
+        MAX_BACKOFF=64.0,
+        verbose=False,
+        round_id=1,
+        _pending_images=[],
+        _messages_with_pending_images=lambda: [],
+        stream=False,
+        tools=[],
+        profile=NS(reasoning=None),
+        reasoning_effort="high",
+        _blocking_completion=completion,
+        cancellation=None,
+        _accumulate_usage=lambda value: None,
+        token_estimator=NS(calibrate=lambda *args: None),
+        context=NS(add=added.append),
+    )
+
+    with pytest.raises(RuntimeError, match="finish_reason='length'"):
+        LLMAgent.call_api(agent)
+
+    assert kwargs_seen["max_tokens"] == 20_000
+    assert added == []
+
+
 def test_stream_is_closed_when_consumption_is_cancelled(monkeypatch):
     class Stream(list):
         close_calls = 0
@@ -601,3 +639,51 @@ def test_stream_is_closed_when_consumption_is_cancelled(monkeypatch):
         LLMAgent._stream_completion(agent, {})
 
     assert stream.close_calls == 1
+
+
+def _tool_call_msg(name, args_json):
+    return {
+        "role": "assistant",
+        "content": None,
+        "tool_calls": [
+            {"id": "t1", "type": "function", "function": {"name": name, "arguments": args_json}}
+        ],
+    }
+
+
+def test_context_char_cache_matches_full_recompute():
+    """The incremental char cache stays consistent with a full rescan across
+    every mutation path (add / replace / rollback)."""
+    ctx = ContextManager("system prompt text")
+    assert ctx.estimated_chars == 0  # system prompt is excluded
+
+    # Incremental appends, including an assistant message with tool-call args
+    # (msg_chars counts argument length too).
+    ctx.add({"role": "user", "content": "hello world"})
+    ctx.add(_tool_call_msg("exec_command", '{"command": "ls -la"}'))
+    ctx.add({"role": "tool", "tool_call_id": "t1", "content": "a" * 500})
+    assert ctx.estimated_chars == estimate_context_chars(ctx.messages)
+
+    snapshot = ctx.checkpoint()
+
+    # Bulk replacement invalidates and lazily recomputes.
+    ctx.replace_messages([{"role": "user", "content": "x" * 42}])
+    assert ctx.estimated_chars == estimate_context_chars(ctx.messages) == 42
+
+    # Further append after a replace keeps the cache correct.
+    ctx.add({"role": "assistant", "content": "reply"})
+    assert ctx.estimated_chars == estimate_context_chars(ctx.messages)
+
+    # Rollback restores the earlier state and the cache tracks it.
+    ctx.rollback(snapshot)
+    assert ctx.estimated_chars == estimate_context_chars(ctx.messages)
+
+
+def test_context_replace_same_object_keeps_cache_valid():
+    """Passing the live list back (as prune_context does on a no-op) must not
+    corrupt the cache."""
+    ctx = ContextManager("sys")
+    ctx.add({"role": "user", "content": "abc"})
+    before = ctx.estimated_chars
+    ctx.replace_messages(ctx.messages)  # same object → no-op
+    assert ctx.estimated_chars == before == estimate_context_chars(ctx.messages)

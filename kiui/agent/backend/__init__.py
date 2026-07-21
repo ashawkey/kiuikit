@@ -76,9 +76,26 @@ from kiui.agent.utils.io import (
     sanitize_unicode,
 )
 
-# How often the input race checks the web queue while the terminal
-# prompt is pending.
-INPUT_POLL_INTERVAL = 0.05
+MAX_OUTPUT_TOKENS = 20_000
+
+
+# HTTP status codes that represent transient failures worth retrying even
+# though they are 4xx. Everything else in the 4xx range is a permanent client
+# error (bad key, bad request, unknown model, …) and must not be retried.
+_RETRYABLE_STATUS_CODES = frozenset({408, 409, 425, 429})
+
+
+def _is_fatal_api_error(exc: Exception) -> bool:
+    """Whether *exc* is a permanent client error that retrying cannot fix.
+
+    Only HTTP 4xx responses other than a few transient ones (rate limit,
+    timeout, conflict) are fatal. Connection errors, timeouts, and 5xx server
+    errors have no ``status_code`` or a retryable one, so they keep retrying.
+    """
+    status = getattr(exc, "status_code", None)
+    if status is None:
+        return False
+    return 400 <= status < 500 and status not in _RETRYABLE_STATUS_CODES
 
 
 _AT_PATH_RE = re.compile(r"(?<!\S)@([\w./\\~+-]+)")
@@ -285,7 +302,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
 
     def _status_suffix(self) -> ContextStatus:
         """Context-window progress shown in the 'Working...' status bar."""
-        ctx_chars = estimate_context_chars(self.context.messages)
+        ctx_chars = self.context.estimated_chars
         return ContextStatus(
             tokens=self.token_estimator.chars_to_tokens(ctx_chars),
             limit=self.context_length,
@@ -314,24 +331,34 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         return time.strftime("%Y%m%d_%H%M%S")
 
     def call_api(self):
-        """Call the API using current context, with automatic retry on any error.
+        """Call the API using current context, with automatic retry on transient errors.
 
-        All errors are retried indefinitely with capped exponential backoff.
+        Transient errors (connection failures, timeouts, 5xx, rate limits) are
+        retried indefinitely with capped exponential backoff. Permanent client
+        errors (auth, malformed request, unknown model, …) are re-raised as
+        ``RuntimeError`` so ``get_response`` can end the turn gracefully.
         """
 
         # context management: prune old tool results, then compact if needed
         if self.context_length > 0:
             t_prune = time.monotonic()
             cpt = self.token_estimator.chars_per_token
+            # Reuse the incrementally maintained char total to skip a full scan.
             self.context.replace_messages(
-                prune_context(self.context.messages, self.context_length, cpt)
+                prune_context(
+                    self.context.messages, self.context_length, cpt,
+                    total_chars=self.context.estimated_chars,
+                )
             )
             prune_elapsed = time.monotonic() - t_prune
             if self.verbose and prune_elapsed > 0.1:
                 self.console.debug(f"Context pruning took {prune_elapsed:.2f}s")
 
-            if needs_compaction(self.context.messages, self.context_length, cpt):
-                before_chars = estimate_context_chars(self.context.messages)
+            if needs_compaction(
+                self.context.messages, self.context_length, cpt,
+                total_chars=self.context.estimated_chars,
+            ):
+                before_chars = self.context.estimated_chars
                 before_msgs = len(self.context.messages)
                 before_tokens = self.token_estimator.chars_to_tokens(before_chars)
                 self.console.system("Context window pressure — compacting via LLM summarization")
@@ -359,7 +386,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                     raise RequestInterrupted()
                 self.context.replace_messages(compacted)
                 compact_elapsed = time.monotonic() - t_compact
-                after_chars = estimate_context_chars(self.context.messages)
+                after_chars = self.context.estimated_chars
                 after_msgs = len(self.context.messages)
                 after_tokens = self.token_estimator.chars_to_tokens(after_chars)
                 saved_pct = (1 - after_chars / before_chars) * 100 if before_chars else 0
@@ -371,7 +398,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 )
 
         if self.verbose:
-            ctx_chars = estimate_context_chars(self.context.messages)
+            ctx_chars = self.context.estimated_chars
             ctx_tokens = self.token_estimator.chars_to_tokens(ctx_chars)
             ctx_pct = ctx_tokens / self.context_length * 100 if self.context_length else 0
             self.console.debug(
@@ -386,6 +413,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             "model": self.model,
             "messages": messages,
             "stream": self.stream,
+            "max_tokens": MAX_OUTPUT_TOKENS,
         }
         if self.stream:
             # Ask the server to emit a final usage-only chunk so streamed turns
@@ -404,13 +432,18 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         while True:
             try:
                 if self.stream:
-                    message, usage = self._stream_completion(kwargs)
+                    message, usage, finish_reason = self._stream_completion(kwargs)
                 else:
-                    message, usage = self._blocking_completion(kwargs)
+                    message, usage, finish_reason = self._blocking_completion(kwargs)
                 break
             except RequestInterrupted:
                 raise  # user cancelled — never retry, let get_response roll back
             except Exception as e:
+                if _is_fatal_api_error(e):
+                    # Permanent client error — retrying cannot help. Surface it
+                    # as RuntimeError so get_response ends the turn gracefully.
+                    status = getattr(e, "status_code", "?")
+                    raise RuntimeError(f"API request rejected (HTTP {status}): {e}") from e
                 retry_count += 1
                 self.console.system(
                     f"[Retry {retry_count}] {e} — retrying in {wait_time:.1f}s…"
@@ -428,13 +461,13 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             self.token_estimator.calibrate(
                 estimate_context_chars(messages), usage.prompt_tokens
             )
-        self.context.add(message)
 
         if self.verbose:
             cached = usage.prompt_tokens_details.cached_tokens if usage.prompt_tokens_details else None
             reasoning = usage.completion_tokens_details.reasoning_tokens if usage.completion_tokens_details else None
             self.console.debug(
-                f"API response in {api_elapsed:.1f}s — total_tokens: {usage.total_tokens} = "
+                f"API response in {api_elapsed:.1f}s — finish_reason: {finish_reason or 'N/A'}, "
+                f"total_tokens: {usage.total_tokens} = "
                 f"output: {usage.completion_tokens} (reasoning: {reasoning or 'N/A'}) "
                 f"input: {usage.prompt_tokens} (cached: {cached or 'N/A'})"
             )
@@ -442,6 +475,14 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             if tool_calls:
                 self.console.debug(f"Requested tool calls: {len(tool_calls)}")
 
+        if finish_reason == "length":
+            raise RuntimeError(
+                "Response truncated by the output-token limit "
+                f"(finish_reason='length', output={usage.completion_tokens:,}, "
+                f"requested max_tokens={MAX_OUTPUT_TOKENS:,})."
+            )
+
+        self.context.add(message)
         return message
 
 
@@ -477,7 +518,8 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 )
         finally:
             client.close()
-        return message_to_dict(response.choices[0].message), response.usage
+        choice = response.choices[0]
+        return message_to_dict(choice.message), response.usage, choice.finish_reason
 
     def _stream_completion(self, kwargs: dict):
         """Streaming call: buffer terminal output, return ``(message, usage)``.
@@ -506,7 +548,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                         stream.close()
 
                 try:
-                    message, usage = run_interruptible(
+                    message, usage, finish_reason = run_interruptible(
                         request, self.cancellation, on_cancel=client.close
                     )
                 finally:
@@ -515,7 +557,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             # Some proxies omit the usage chunk; fall back to an estimate so
             # accounting/calibration still works.
             usage = self._estimate_usage(message)
-        return message, usage
+        return message, usage, finish_reason
 
     def _estimate_usage(self, message) -> Any:
         """Build a rough usage object when the stream omits the usage chunk."""
@@ -860,51 +902,6 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self.console.system(f"Started new session '{self._session_id}'.")
 
     # ----- main loops -------------------------------------------------------
-
-    def _next_submission(self, terminal: TerminalInput) -> UserSubmission:
-        """Wait for terminal or web input and return whichever arrives first."""
-        if self.input_broker is None:
-            return UserSubmission(
-                text=terminal.prompt(), source="terminal", id="terminal"
-            )
-
-        try:
-            return self.input_broker.get_nowait()
-        except queue.Empty:
-            pass
-
-        async def wait_web() -> UserSubmission:
-            while True:
-                try:
-                    return self.input_broker.get_nowait()
-                except queue.Empty:
-                    await asyncio.sleep(INPUT_POLL_INTERVAL)
-
-        async def race() -> UserSubmission:
-            terminal_task = asyncio.create_task(terminal.prompt_async())
-            web_task = asyncio.create_task(wait_web())
-            done, _ = await asyncio.wait(
-                {terminal_task, web_task}, return_when=asyncio.FIRST_COMPLETED
-            )
-            if web_task in done:
-                if not terminal_task.done():
-                    terminal_task.cancel()
-                try:
-                    await terminal_task
-                except (asyncio.CancelledError, EOFError, KeyboardInterrupt):
-                    pass
-                return web_task.result()
-            if not web_task.done():
-                web_task.cancel()
-            try:
-                await web_task
-            except asyncio.CancelledError:
-                pass
-            return UserSubmission(
-                text=terminal_task.result(), source="terminal", id="terminal"
-            )
-
-        return asyncio.run(race())
 
     def _run_terminal_loop(self, terminal: TerminalInput) -> None:
         """Keep the editor active while agent rounds run on a worker thread."""
