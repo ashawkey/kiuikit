@@ -3,15 +3,18 @@ from __future__ import annotations
 import datetime
 import os
 import subprocess
+import threading
 import time
 from pathlib import Path
-from typing import AsyncGenerator, Iterable
+from typing import AsyncGenerator, Callable, Iterable
 
 from filelock import FileLock
 from prompt_toolkit import PromptSession
 from prompt_toolkit.application import run_in_terminal
 from prompt_toolkit.completion import Completer, Completion
+from prompt_toolkit.filters import is_searching
 from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.key_binding.bindings.search import accept_search
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.lexers import PygmentsLexer
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
@@ -349,10 +352,15 @@ class AtFileCompleter(Completer):
         return "/".join(dirs), prefix
 
 
-class NonEmptyInputValidator(Validator):
+class MessageValidator(Validator):
+    def __init__(self, has_pending: Callable[[], bool]):
+        self._has_pending = has_pending
+
     def validate(self, document):
         if not document.text.strip():
             raise ValidationError(message="Please enter a message.")
+        if self._has_pending():
+            raise ValidationError(message="Another message is already pending.")
 
 
 class SharedFileHistory(FileHistory):
@@ -393,8 +401,24 @@ class TerminalInput:
     ):
         self._prompt_label = prompt_label
         self._last_ctrl_c = 0.0  # timestamp of last Ctrl+C on an empty buffer
+        self._busy = False
+        self._status: list[tuple[str, str]] = []
+        self._status_lock = threading.Lock()
+        self._cancel: Callable[[], None] | None = None
+        self._pending_text: Callable[[], str | None] | None = None
+        self._edit_pending: Callable[[], str | None] | None = None
         self.style = Style.from_dict({
             "prompt": "bold ansiyellow",
+            "status.spinner": "bold ansigreen",
+            "status.text": "ansiwhite",
+            "status.detail": "ansibrightblack",
+            "status.pending": "ansimagenta",
+            "status.progress": "ansicyan",
+            "status.context.low": "ansicyan",
+            "status.context.medium": "ansiyellow",
+            "status.context.high": "ansired",
+            "status.track": "ansibrightblack",
+            "separator": "ansibrightblack",
             "": "ansiyellow",
         })
 
@@ -406,7 +430,7 @@ class TerminalInput:
             auto_suggest=AutoSuggestFromHistory(),
             key_bindings=self._create_keybindings(),
             lexer=PygmentsLexer(MarkdownLexer),
-            validator=NonEmptyInputValidator(),
+            validator=MessageValidator(self._has_pending),
             validate_while_typing=False,
             completer=AtFileCompleter(work_dir),
             erase_when_done=True,
@@ -415,7 +439,7 @@ class TerminalInput:
     def _create_keybindings(self) -> KeyBindings:
         kb = KeyBindings()
 
-        @kb.add("enter")
+        @kb.add("enter", filter=~is_searching)
         def _(event):
             buf = event.current_buffer
             if buf.complete_state is not None:
@@ -430,13 +454,17 @@ class TerminalInput:
             else:
                 buf.validate_and_handle()
 
-        @kb.add("escape", "enter")
+        @kb.add("escape", "enter", filter=~is_searching)
         def _(event):
             event.current_buffer.insert_text("\n")
 
-        @kb.add("c-c")
+        @kb.add("c-c", filter=~is_searching)
         def _(event):
             buf = event.current_buffer
+            if self._busy:
+                if self._cancel is not None:
+                    self._cancel()
+                return
             if buf.text:
                 # Non-empty prompt: Ctrl+C just clears what's typed.
                 buf.reset()
@@ -450,7 +478,83 @@ class TerminalInput:
                 self._last_ctrl_c = now
                 run_in_terminal(lambda: print("(press Ctrl+C again to exit)"))
 
+        @kb.add("escape", filter=~is_searching)
+        def _(event):
+            if self._busy and self._cancel is not None:
+                self._cancel()
+
+        @kb.add("up", filter=~is_searching)
+        def _(event):
+            pending = (
+                self._pending_text()
+                if self._pending_text is not None
+                else None
+            )
+            if pending is not None and not event.current_buffer.text:
+                text = self._edit_pending() if self._edit_pending is not None else None
+                if text is not None:
+                    event.current_buffer.text = text
+                    event.current_buffer.cursor_position = len(text)
+                return
+            event.current_buffer.auto_up(count=event.arg)
+
+        @kb.add("tab", filter=is_searching)
+        def _(event):
+            accept_search.call(event)
+
         return kb
+
+    def _has_pending(self) -> bool:
+        return bool(
+            self._pending_text is not None and self._pending_text() is not None
+        )
+
+    def _message(self):
+        pending = self._pending_text() if self._pending_text is not None else None
+        with self._status_lock:
+            status = list(self._status)
+        if pending is not None:
+            preview = pending.replace("\n", " ")
+            if len(preview) > 20:
+                preview = preview[:20] + "..."
+            label = f"(pending: {preview})"
+            if status:
+                status.append(("class:status.pending", f" {label}"))
+            else:
+                status = [("class:status.pending", label)]
+        width = max(1, self._session.app.output.get_size().columns - 1)
+        prompt = [
+            ("class:separator", "─" * width),
+            ("", "\n"),
+            ("class:prompt", self._prompt_label),
+        ]
+        if status:
+            return [*status, ("", "\n"), *prompt]
+        return prompt
+
+    def set_runtime_state(
+        self,
+        *,
+        cancel: Callable[[], None],
+        pending_text: Callable[[], str | None],
+        edit_pending: Callable[[], str | None],
+    ) -> None:
+        self._cancel = cancel
+        self._pending_text = pending_text
+        self._edit_pending = edit_pending
+
+    def set_busy(self, busy: bool) -> None:
+        self._busy = busy
+        app = self._session.app
+        if app.is_running:
+            app.invalidate()
+
+    def set_status(self, status: list[tuple[str, str]] | None) -> None:
+        with self._status_lock:
+            self._status = status or []
+        app = self._session.app
+        if app.is_running:
+            app.invalidate()
 
     def prompt(self) -> str:
         """Read a line of input from the terminal.
@@ -459,10 +563,16 @@ class TerminalInput:
             KeyboardInterrupt: When the user presses Ctrl+C.
             EOFError: When the user presses Ctrl+D (end of input).
         """
-        return self._session.prompt([("class:prompt", self._prompt_label)])
+        return self._session.prompt(self._message)
 
-    async def prompt_async(self) -> str:
+    async def prompt_async(self, default: str = "") -> str:
         """Read input without moving prompt_toolkit off the main thread."""
-        return await self._session.prompt_async(
-            [("class:prompt", self._prompt_label)]
-        )
+        return await self._session.prompt_async(self._message, default=default)
+
+    @property
+    def app(self):
+        return self._session.app
+
+    @property
+    def text(self) -> str:
+        return self._session.default_buffer.text

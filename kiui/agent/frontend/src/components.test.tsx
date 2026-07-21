@@ -11,9 +11,12 @@ function ControlledComposer({ onSend }: { onSend: (text: string) => void }) {
   return (
     <Composer
       operationId={null}
+      pending={null}
+      busy={false}
       draft={draft}
       onDraftChange={setDraft}
       onSend={onSend}
+      onWithdraw={() => undefined}
       onCancel={() => undefined}
     />
   )
@@ -37,6 +40,27 @@ describe('interaction components', () => {
     fireEvent.change(field, { target: { value: 'hello' } })
     fireEvent.keyDown(field, { key: 'Enter' })
     expect(onSend).toHaveBeenCalledWith('hello')
+  })
+
+  it('shows pending input and offers withdrawal', () => {
+    const onWithdraw = vi.fn()
+    render(
+      <Composer
+        operationId="op"
+        pending={{ id: 'p', text: 'follow up later', source: 'terminal', action_id: null }}
+        busy={false}
+        draft=""
+        onDraftChange={() => undefined}
+        onSend={() => undefined}
+        onWithdraw={onWithdraw}
+        onCancel={() => undefined}
+      />,
+    )
+    expect(screen.getByText('follow up later')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Queue a message...')).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: /Pending/ }))
+    expect(onWithdraw).toHaveBeenCalled()
   })
 
   it('highlights the command in a permission prompt', () => {

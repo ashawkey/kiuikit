@@ -6,7 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from kiui.agent.utils.io import CancellationToken, EventHub, InputBroker, PromptBroker
+from kiui.agent.utils.io import (
+    EVENT_TEXT_LIMIT,
+    CancellationToken,
+    EventHub,
+    InputBroker,
+    PromptBroker,
+)
 from kiui.agent.backend import LLMAgent
 from kiui.agent.utils.interrupt import RequestInterrupted, run_interruptible
 from kiui.agent.ui import AgentConsole
@@ -41,10 +47,82 @@ def test_input_broker_accepts_only_one_pending_submission():
     broker = InputBroker(hub)
     first = broker.submit("first")
 
-    with pytest.raises(ValueError, match="not ready"):
+    with pytest.raises(ValueError, match="already pending"):
         broker.submit("second")
 
     assert broker.get_nowait() == first
+    assert [(e.type, e.data.get("reason")) for e in hub.after(0)] == [
+        ("pending_set", None),
+        ("pending_cleared", "consumed"),
+    ]
+
+
+def test_input_broker_serializes_state_and_events():
+    class BlockingEventHub(EventHub):
+        def __init__(self):
+            super().__init__()
+            self.publishing = threading.Event()
+            self.release = threading.Event()
+
+        def publish(self, event_type, **data):
+            if event_type == "pending_set":
+                self.publishing.set()
+                assert self.release.wait(timeout=2)
+            return super().publish(event_type, **data)
+
+    hub = BlockingEventHub()
+    broker = InputBroker(hub)
+    submitted = threading.Thread(target=lambda: broker.submit("first"))
+    submitted.start()
+    assert hub.publishing.wait(timeout=1)
+
+    withdrawn = threading.Thread(target=broker.withdraw)
+    withdrawn.start()
+    time.sleep(0.05)
+    assert withdrawn.is_alive()
+
+    hub.release.set()
+    submitted.join(timeout=1)
+    withdrawn.join(timeout=1)
+    assert [event.type for event in hub.after(0)] == [
+        "pending_set", "pending_cleared"
+    ]
+    assert broker.pending == 0
+
+
+def test_input_broker_rejects_messages_that_events_would_truncate():
+    hub = EventHub()
+    broker = InputBroker(hub)
+
+    with pytest.raises(ValueError, match="too large"):
+        broker.submit("é" * (EVENT_TEXT_LIMIT // 2 + 1))
+
+
+def test_input_broker_notifies_listeners():
+    hub = EventHub()
+    broker = InputBroker(hub)
+    notified = threading.Event()
+    broker.add_listener(notified.set)
+
+    broker.submit("first")
+    assert notified.wait(timeout=1)
+
+    notified.clear()
+    broker.get_nowait()
+    assert notified.wait(timeout=1)
+
+    broker.remove_listener(notified.set)
+
+
+def test_input_broker_withdraws_pending_submission_for_editing():
+    hub = EventHub()
+    broker = InputBroker(hub)
+    first = broker.submit("first")
+
+    assert broker.withdraw("wrong") is None
+    assert broker.withdraw(first.id) == first
+    assert broker.pending == 0
+    assert hub.after(0)[-1].data["reason"] == "withdrawn"
 
 
 def test_prompt_broker_first_valid_answer_wins():

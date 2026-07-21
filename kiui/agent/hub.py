@@ -127,6 +127,7 @@ class RemoteSession:
         # Derived UI state, tracked from the event stream (mirrors what the
         # single-agent server pulls from its brokers).
         self.prompt: dict | None = None
+        self.pending: dict | None = None
         self.operation_id: str | None = None
         self.agent_ws = None             # starlette WebSocket to the agent
         self.agent_send_lock = asyncio.Lock()
@@ -140,6 +141,7 @@ class RemoteSession:
         """Start a fresh event stream (new stream_id) on agent (re)connect."""
         self.events = EventHub()
         self.prompt = None
+        self.pending = None
         self.operation_id = None
 
     def touch(self) -> None:
@@ -181,6 +183,16 @@ class RemoteSession:
             }
         elif etype == "prompt_resolved":
             self.prompt = None
+        elif etype == "pending_set":
+            self.pending = {
+                "id": data.get("id", ""),
+                "text": data.get("text", ""),
+                "source": data.get("source", ""),
+                "action_id": data.get("action_id"),
+            }
+        elif etype == "pending_cleared":
+            if self.pending is not None and self.pending["id"] == data.get("id"):
+                self.pending = None
         elif etype == "operation_start":
             self.operation_id = data.get("id")
         elif etype == "operation_end":
@@ -646,6 +658,7 @@ class Hub:
                 "latest_seq": s.events.latest_seq,
                 "operation_id": s.operation_id,
                 "prompt": s.prompt,
+                "pending": s.pending,
                 "oldest_seq": s.events.oldest_seq,
                 "replay_truncated": s.events.has_replay_gap(after_seq),
             }
@@ -686,7 +699,9 @@ class Hub:
                 if not isinstance(payload, dict):
                     continue
                 action = payload.get("type")
-                if action not in {"submit", "prompt_response", "cancel"}:
+                if action not in {
+                    "submit", "withdraw_pending", "prompt_response", "cancel"
+                }:
                     await websocket.send_json({
                         "type": "rejected", "error": "Unknown action type."
                     })
@@ -697,12 +712,14 @@ class Hub:
                         await websocket.send_json({"type": "prompt_ack", "ok": False})
                         continue
                 ok = await self._forward_to_agent(session_id, payload)
-                if action == "submit":
+                if action in {"submit", "withdraw_pending"}:
                     if ok:
                         await websocket.send_json({"type": "accepted"})
                     else:
                         await websocket.send_json({
-                            "type": "rejected", "error": "Agent is offline."
+                            "type": "rejected",
+                            "error": "Agent is offline.",
+                            "action_id": payload.get("action_id", ""),
                         })
                 elif action == "prompt_response":
                     await websocket.send_json({"type": "prompt_ack", "ok": ok})

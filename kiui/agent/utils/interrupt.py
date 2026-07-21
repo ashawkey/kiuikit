@@ -103,7 +103,9 @@ class CancelWatcher:
         self._cancellation = cancellation
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
-        self._active = _can_watch()
+        self._active = _can_watch() and (
+            cancellation is None or cancellation.watch_keyboard
+        )
 
     def __enter__(self) -> "CancelWatcher":
         if self._active:
@@ -165,7 +167,9 @@ def run_interruptible(
             done.set()  # wake the main thread
 
     w = None
-    if _can_watch():
+    if _can_watch() and (
+        cancellation is None or cancellation.watch_keyboard
+    ):
         w = threading.Thread(target=watcher, daemon=True)
         w.start()
 

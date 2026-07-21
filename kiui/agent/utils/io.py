@@ -88,27 +88,60 @@ class UserSubmission:
     text: str
     source: str
     id: str
+    action_id: str | None = None
 
 
 class InputBroker:
-    """Single pending web submission shared with the terminal input loop."""
+    """Single pending submission shared by terminal and web clients."""
 
     def __init__(self, events: EventHub):
         self.events = events
         self._lock = threading.Lock()
         self._submission: UserSubmission | None = None
+        self._listeners: set[Callable[[], None]] = set()
 
-    def submit(self, text: str, source: str = "web") -> UserSubmission:
+    def add_listener(self, listener: Callable[[], None]) -> None:
+        with self._lock:
+            self._listeners.add(listener)
+
+    def remove_listener(self, listener: Callable[[], None]) -> None:
+        with self._lock:
+            self._listeners.discard(listener)
+
+    def _notify(self, listeners: tuple[Callable[[], None], ...]) -> None:
+        for listener in listeners:
+            listener()
+
+    def submit(
+        self,
+        text: str,
+        source: str = "web",
+        action_id: str | None = None,
+    ) -> UserSubmission:
         text = text.strip()
         if not text:
             raise ValueError("Message cannot be empty.")
-        if len(text.encode("utf-8")) > 128 * 1024:
+        if len(text.encode("utf-8")) > EVENT_TEXT_LIMIT:
             raise ValueError("Message is too large.")
-        item = UserSubmission(text=text, source=source, id=uuid.uuid4().hex)
+        item = UserSubmission(
+            text=text,
+            source=source,
+            id=uuid.uuid4().hex,
+            action_id=action_id,
+        )
         with self._lock:
             if self._submission is not None:
-                raise ValueError("Agent is not ready for another message.")
+                raise ValueError("Another message is already pending.")
             self._submission = item
+            self.events.publish(
+                "pending_set",
+                id=item.id,
+                text=item.text,
+                source=item.source,
+                action_id=item.action_id,
+            )
+            listeners = tuple(self._listeners)
+        self._notify(listeners)
         return item
 
     def get_nowait(self) -> UserSubmission:
@@ -117,7 +150,39 @@ class InputBroker:
                 raise queue.Empty
             item = self._submission
             self._submission = None
-            return item
+            self.events.publish("pending_cleared", id=item.id, reason="consumed")
+            listeners = tuple(self._listeners)
+        self._notify(listeners)
+        return item
+
+    def withdraw(
+        self,
+        submission_id: str | None = None,
+        action_id: str | None = None,
+    ) -> UserSubmission | None:
+        """Remove and return the pending message for editing."""
+        with self._lock:
+            item = self._submission
+            if item is None or (
+                submission_id is not None and item.id != submission_id
+            ):
+                return None
+            self._submission = None
+            self.events.publish(
+                "pending_cleared",
+                id=item.id,
+                reason="withdrawn",
+                action_id=action_id,
+                text=item.text,
+            )
+            listeners = tuple(self._listeners)
+        self._notify(listeners)
+        return item
+
+    @property
+    def submission(self) -> UserSubmission | None:
+        with self._lock:
+            return self._submission
 
     @property
     def pending(self) -> int:
@@ -303,6 +368,7 @@ class CancellationToken:
         self._event = threading.Event()
         self._lock = threading.Lock()
         self._operation_id: str | None = None
+        self.watch_keyboard = True
 
     def begin(self, label: str) -> str:
         with self._lock:

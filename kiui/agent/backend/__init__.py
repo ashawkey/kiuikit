@@ -6,10 +6,12 @@ import re
 import threading
 import time
 from contextlib import nullcontext
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
 from openai import OpenAI
+from prompt_toolkit.patch_stdout import patch_stdout
 
 from kiui.agent.backend.commands import AgentCommandsMixin
 from kiui.agent.backend.goals import GoalMixin
@@ -136,8 +138,16 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self.token_estimator = TokenEstimator()
 
         self.events = events
+        if input_broker is None and not is_subagent:
+            events = events or EventHub()
+            self.events = events
+            input_broker = InputBroker(events)
         self.input_broker = input_broker
+        if prompt_broker is None and not is_subagent:
+            prompt_broker = PromptBroker(events)
         self.prompt_broker = prompt_broker
+        if cancellation is None and not is_subagent:
+            cancellation = CancellationToken(events, prompt_broker)
         self.cancellation = cancellation
         if self.cancellation is not None and self.prompt_broker is not None:
             self.cancellation.prompts = self.prompt_broker
@@ -884,6 +894,234 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
 
         return asyncio.run(race())
 
+    def _run_terminal_loop(self, terminal: TerminalInput) -> None:
+        """Keep the editor active while agent rounds run on a worker thread."""
+        assert self.input_broker is not None
+        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="kia-agent")
+        active: Future | None = None
+        exit_requested = False
+        should_exit = False
+        prompt_task: asyncio.Task | None = None
+        prompt_suspended = False
+        prompt_resumed: asyncio.Event | None = None
+        draft = ""
+
+        def cancel() -> None:
+            if self.cancellation is not None:
+                self.cancellation.cancel()
+
+        def pending_text() -> str | None:
+            item = self.input_broker.submission
+            return item.text if item is not None else None
+
+        def edit_pending() -> str | None:
+            item = self.input_broker.withdraw()
+            if item is not None:
+                terminal.app.invalidate()
+            return item.text if item is not None else None
+
+        terminal.set_runtime_state(
+            cancel=cancel,
+            pending_text=pending_text,
+            edit_pending=edit_pending,
+        )
+        if self.cancellation is not None:
+            self.cancellation.watch_keyboard = False
+        self.console.interactive_input = True
+        self.console.status_sink = terminal.set_status
+
+        async def loop() -> None:
+            nonlocal active, exit_requested, should_exit, prompt_task, prompt_suspended, prompt_resumed, draft
+            ui_loop = asyncio.get_running_loop()
+            input_ready = asyncio.Event()
+
+            def wake_input() -> None:
+                ui_loop.call_soon_threadsafe(input_ready.set)
+
+            self.input_broker.add_listener(wake_input)
+            prompt_resumed = asyncio.Event()
+            prompt_resumed.set()
+            prompt_task = asyncio.create_task(terminal.prompt_async())
+
+            async def show_prompt(prompt):
+                nonlocal prompt_task, prompt_suspended, draft
+                prompt_suspended = True
+                prompt_resumed.clear()
+                draft = terminal.text
+                prompt_task.cancel()
+                try:
+                    try:
+                        await prompt_task
+                    except asyncio.CancelledError:
+                        pass
+                    terminal_message = prompt.message.splitlines()[0]
+                    if prompt.kind == "select":
+                        return await self.console.select_terminal_async(
+                            terminal_message,
+                            choices=prompt.choices,
+                            default=prompt.default or None,
+                        )
+                    return await self.console.ask_text_terminal_async(
+                        terminal_message, default=prompt.default
+                    )
+                finally:
+                    prompt_task = asyncio.create_task(terminal.prompt_async(draft))
+                    draft = ""
+                    prompt_suspended = False
+                    prompt_resumed.set()
+
+            async def terminal_ask(prompt):
+                future = asyncio.run_coroutine_threadsafe(
+                    show_prompt(prompt), ui_loop
+                )
+                return await asyncio.wrap_future(future)
+
+            if self.prompt_broker is not None:
+                self.prompt_broker.set_terminal_adapter(terminal_ask)
+
+            try:
+                while True:
+                    input_task = asyncio.create_task(input_ready.wait())
+                    wait = {prompt_task, input_task}
+                    if active is not None:
+                        wait.add(asyncio.wrap_future(active))
+                    done, _ = await asyncio.wait(
+                        wait, return_when=asyncio.FIRST_COMPLETED
+                    )
+                    if input_task in done:
+                        input_ready.clear()
+                    else:
+                        input_task.cancel()
+
+                    if active is not None and active.done():
+                        should_exit = active.result()
+                        active = None
+                        terminal.set_busy(False)
+                        if exit_requested or should_exit:
+                            return
+                        self._queue_pending_auto()
+                        if self.input_broker.pending:
+                            active = executor.submit(self._process_next_submission)
+                            terminal.set_busy(True)
+
+                    if active is None and self.input_broker.pending:
+                        active = executor.submit(self._process_next_submission)
+                        terminal.set_busy(True)
+
+                    if prompt_task in done:
+                        try:
+                            text = prompt_task.result()
+                        except asyncio.CancelledError:
+                            if prompt_suspended:
+                                await prompt_resumed.wait()
+                                continue
+                            raise
+                        except (EOFError, KeyboardInterrupt):
+                            if active is None:
+                                return
+                            exit_requested = True
+                            cancel()
+                            prompt_task = asyncio.create_task(terminal.prompt_async())
+                            continue
+
+                        text = text.strip()
+                        if not text:
+                            prompt_task = asyncio.create_task(terminal.prompt_async())
+                            continue
+                        try:
+                            self.input_broker.submit(text, source="terminal")
+                        except ValueError as exc:
+                            prompt_task = asyncio.create_task(
+                                terminal.prompt_async(text)
+                            )
+                            self.console.warn(str(exc))
+                            continue
+                        prompt_task = asyncio.create_task(terminal.prompt_async())
+                        terminal.app.invalidate()
+                        if active is None:
+                            active = executor.submit(self._process_next_submission)
+                            terminal.set_busy(True)
+            finally:
+                self.input_broker.remove_listener(wake_input)
+                if prompt_task is not None:
+                    prompt_task.cancel()
+                if active is not None:
+                    await asyncio.wrap_future(active)
+
+        try:
+            with patch_stdout(raw=True):
+                asyncio.run(loop())
+        finally:
+            executor.shutdown(wait=True)
+            if self.cancellation is not None:
+                self.cancellation.watch_keyboard = True
+            self.console.interactive_input = False
+            self.console.status_sink = None
+
+    def _queue_pending_auto(self) -> None:
+        if self._pending_auto is None or self.input_broker is None:
+            return
+        query = self._pending_auto
+        self._pending_auto = None
+        try:
+            self.input_broker.submit(query, source="goal")
+        except ValueError:
+            self._pending_auto = query
+
+    def _process_next_submission(self) -> bool:
+        assert self.input_broker is not None
+        try:
+            submission = self.input_broker.get_nowait()
+        except queue.Empty:
+            return False
+        return self._process_query(submission)
+
+    def _process_query(self, submission: UserSubmission) -> bool:
+        """Process one user submission. Return True when chat should exit."""
+        query = _strip_at_marks(submission.text.strip())
+        if not query:
+            return False
+        self.console.rule()
+        self.console.user_input(
+            query,
+            source=submission.source,
+            submission_id=submission.id,
+            with_rule=False,
+        )
+        if query.lower() in ("exit", "quit"):
+            return True
+        if query.startswith("!"):
+            bash_cmd = query[1:].strip()
+            if bash_cmd:
+                self._run_bash_command(bash_cmd)
+            else:
+                self.console.warn("Usage: !<shell command>")
+            return False
+        if query.startswith("/"):
+            cmd_word = query.split()[0][1:].lower()
+            if cmd_word in self.COMMANDS:
+                return self._handle_command(query)
+            self.console.warn(
+                f"Unknown command: /{cmd_word}. Type /help for available commands."
+            )
+            return False
+
+        self.context.add({"role": "user", "content": query})
+        self.round_id += 1
+        self.console.rule()
+        self.tool_executor.goal_report = None
+        with self._operation("agent response"):
+            self.get_response()
+        self._maybe_continue_goal()
+        try:
+            now = time.monotonic()
+            if now - self._last_save_time >= 30:
+                self.save_session(self._session_id)
+                self._last_save_time = now
+        except Exception:
+            pass
+        return False
+
     def chat_loop(self, resumed_session_id: str | None = None):
 
         reasoning = self.profile.reasoning or "none"
@@ -913,86 +1151,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         terminal = TerminalInput(history_path=str(self._kia_dir() / "history"), work_dir=_wd)
 
         try:
-            while True:
-                # An armed goal queues an auto-prompt; run it instead of waiting
-                # for user input, so the agent iterates until the goal is met.
-                if self._pending_auto is not None:
-                    query = self._pending_auto
-                    self._pending_auto = None
-                    self.console.rule()
-                    self.console.system(f"[goal] checking (iteration {self.goal_iterations}): {self.goal}")
-                    self.console.user_input(query, source="goal", with_rule=False)
-                else:
-                    try:
-                        self.console.rule()
-                        submission = self._next_submission(terminal)
-                        query = _strip_at_marks(submission.text.strip())
-                    except KeyboardInterrupt:
-                        # Ctrl+C is handled inside the prompt (clear / double-tap
-                        # to quit); a stray one here just starts a fresh prompt.
-                        continue
-                    except EOFError:
-                        # Ctrl+D, or double Ctrl+C on an empty prompt → quit.
-                        break
-
-                    if not query:
-                        continue
-
-                    self.console.user_input(
-                        query,
-                        source=submission.source,
-                        submission_id=submission.id,
-                        with_rule=False,
-                    )
-
-                    # exit shortcut
-                    if query.lower() in ("exit", "quit"):
-                        break
-
-                    # bash command shortcut: !<command>
-                    if query.startswith("!"):
-                        bash_cmd = query[1:].strip()
-                        if bash_cmd:
-                            self._run_bash_command(bash_cmd)
-                        else:
-                            self.console.warn("Usage: !<shell command>")
-                        continue
-
-                    # slash commands
-                    if query.startswith("/"):
-                        cmd_word = query.split()[0][1:].lower()
-                        if cmd_word in self.COMMANDS:
-                            if self._handle_command(query):
-                                break
-                            continue
-                        else:
-                            self.console.warn(f"Unknown command: /{cmd_word}. Type /help for available commands.")
-                            continue
-
-                user_message = {"role": "user", "content": query}
-                self.context.add(user_message)
-
-                self.round_id += 1
-
-                self.console.rule()
-
-                # Reset any stale goal report before running the round.
-                self.tool_executor.goal_report = None
-
-                with self._operation("agent response"):
-                    self.get_response()
-
-                # If a goal is armed, decide whether to iterate again.
-                self._maybe_continue_goal()
-
-                # Auto-save after each round (throttled: ≤ once per 30 s)
-                try:
-                    now = time.monotonic()
-                    if now - self._last_save_time >= 30:
-                        self.save_session(self._session_id)
-                        self._last_save_time = now
-                except Exception:
-                    pass  # never let save failure break the loop
+            self._run_terminal_loop(terminal)
         finally:
             session_saved = False
             try:
@@ -1004,7 +1163,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 self.changes.close()
             self.tool_executor.shutdown_processes()
             self._print_token_summary(resume=self._session_id if session_saved else None)
-        
+
     def execute(self, query: str, *, manage_operation: bool = True):
         self.console.system(f"Executing query: {query}")
         t0 = time.time()

@@ -316,8 +316,15 @@ def test_remote_session_ingest_tracks_derived_state():
     assert session.prompt["id"] == "p"
     session.ingest({"type": "prompt_resolved", "data": {"id": "p"}})
     assert session.prompt is None
+    session.ingest({"type": "pending_set", "data": {
+        "id": "m", "text": "later", "source": "web", "action_id": "a"}})
+    assert session.pending == {
+        "id": "m", "text": "later", "source": "web", "action_id": "a"
+    }
+    session.ingest({"type": "pending_cleared", "data": {"id": "m"}})
+    assert session.pending is None
     # Every ingested event is re-published for browser replay.
-    assert session.events.latest_seq == 4
+    assert session.events.latest_seq == 6
 
 
 # -- action feedback / discovery -------------------------------------------
@@ -336,16 +343,24 @@ def test_apply_reports_broker_failures():
 
     inputs.submit("first", "web")  # occupy the single input slot
     before = events.latest_seq
-    client._apply({"type": "submit", "text": "overflow"})  # busy -> rejected
-    errors = [e for e in events.after(before) if e.type == "error"]
-    assert errors and "not sent" in errors[0].data["text"].lower()
+    client._apply({
+        "type": "submit", "text": "overflow", "action_id": "action-1"
+    })
+    rejected = [
+        e for e in events.after(before) if e.type == "submission_rejected"
+    ]
+    assert rejected and rejected[0].data["action_id"] == "action-1"
+    assert "already pending" in rejected[0].data["error"].lower()
 
     inputs.get_nowait()
     operation_id = cancellation.begin("working")
-    before = events.latest_seq
-    client._apply({"type": "submit", "text": "while busy"})
-    errors = [e for e in events.after(before) if e.type == "error"]
-    assert errors and "working" in errors[0].data["text"].lower()
+    client._apply({
+        "type": "submit", "text": "while busy", "action_id": "action-2"
+    })
+    assert inputs.submission is not None
+    assert inputs.submission.text == "while busy"
+    assert inputs.submission.action_id == "action-2"
+    inputs.get_nowait()
     cancellation.finish(operation_id)
 
     before = events.latest_seq

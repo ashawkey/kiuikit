@@ -4,7 +4,7 @@ import { Composer, Login, PromptDialog, ScrollTopButton, SessionSidebar, Thinkin
 import { EventCard } from './renderers'
 import { applyTheme, hasStoredTheme, resolveInitialTheme, storeTheme } from './theme'
 import type { Theme } from './theme'
-import type { AgentEvent, ClientAction, DisplayEvent, Prompt, SessionSummary, StateMessage } from './types'
+import type { AgentEvent, ClientAction, DisplayEvent, PendingMessage, Prompt, SessionSummary, StateMessage } from './types'
 import { displayTypes, isPrompt } from './types'
 import { appendDelta, finalizeStream } from './streaming'
 
@@ -42,6 +42,11 @@ function SessionPane({
   const [events, setEvents] = useState<DisplayEvent[]>([])
   const [operationId, setOperationId] = useState<string | null>(null)
   const [prompt, setPrompt] = useState<Prompt | null>(null)
+  const [pending, setPending] = useState<PendingMessage | null>(null)
+  const [submitAction, setSubmitAction] = useState<string | null>(null)
+  const [withdrawAction, setWithdrawAction] = useState<string | null>(null)
+  const submitActionRef = useRef<string | null>(null)
+  const withdrawActionRef = useRef<string | null>(null)
   const [thinking, setThinking] = useState(false)
   const [thinkingStatus, setThinkingStatus] = useState({
     suffix: '',
@@ -86,6 +91,14 @@ function SessionPane({
       streamKey.current = key
       setOperationId(state.operation_id)
       setPrompt(state.prompt)
+      setPending(state.pending)
+      const submitId = submitActionRef.current
+      if (submitId !== null && state.pending?.action_id === submitId) {
+        onDraftChange('')
+        submitActionRef.current = null
+      }
+      setSubmitAction(null)
+      setWithdrawAction(null)
       if (state.replay_truncated) {
         showEvent(
           'warning',
@@ -95,7 +108,17 @@ function SessionPane({
       return
     }
     if (message.type === 'rejected') {
-      showEvent('error', message.error || 'Message rejected')
+      const actionId = typeof message.action_id === 'string' ? message.action_id : ''
+      if (actionId && actionId === submitActionRef.current) {
+        submitActionRef.current = null
+        setSubmitAction(null)
+      } else if (actionId && actionId === withdrawActionRef.current) {
+        withdrawActionRef.current = null
+        setWithdrawAction(null)
+        showEvent('error', message.error || 'Pending message is unavailable.')
+      } else {
+        showEvent('error', message.error || 'Message rejected')
+      }
       return
     }
     if (message.type === 'cancel_ack') {
@@ -111,6 +134,44 @@ function SessionPane({
 
     const data = message.data ?? {}
     switch (message.type) {
+      case 'pending_set':
+        setPending({
+          id: typeof data.id === 'string' ? data.id : '',
+          text: typeof data.text === 'string' ? data.text : '',
+          source: typeof data.source === 'string' ? data.source : '',
+          action_id: typeof data.action_id === 'string' ? data.action_id : null,
+        })
+        if (typeof data.action_id === 'string' && data.action_id === submitActionRef.current) {
+          onDraftChange('')
+          submitActionRef.current = null
+          setSubmitAction(null)
+        }
+        break
+      case 'pending_cleared':
+        setPending(null)
+        if (
+          data.reason === 'withdrawn' &&
+          typeof data.action_id === 'string' &&
+          data.action_id === withdrawActionRef.current
+        ) {
+          onDraftChange(typeof data.text === 'string' ? data.text : '')
+          withdrawActionRef.current = null
+          setWithdrawAction(null)
+        }
+        break
+      case 'submission_rejected':
+        if (typeof data.action_id === 'string' && data.action_id === submitActionRef.current) {
+          submitActionRef.current = null
+          setSubmitAction(null)
+        }
+        break
+      case 'withdrawal_rejected':
+        if (typeof data.action_id === 'string' && data.action_id === withdrawActionRef.current) {
+          withdrawActionRef.current = null
+          setWithdrawAction(null)
+          showEvent('error', typeof data.error === 'string' ? data.error : 'Pending message is unavailable.')
+        }
+        break
       case 'prompt_open':
         if (isPrompt(data)) setPrompt(data)
         break
@@ -161,7 +222,7 @@ function SessionPane({
           showEvent(message.type, typeof data.text === 'string' ? data.text : '', data, message.seq)
         }
     }
-  }, [showEvent])
+  }, [onDraftChange, showEvent])
 
   // Open the session socket once and keep it open for the pane's whole life.
   useEffect(() => {
@@ -186,6 +247,8 @@ function SessionPane({
       }
       next.onclose = (event) => {
         if (disposed || socket.current !== next) return
+        setSubmitAction(null)
+        setWithdrawAction(null)
         // 4404: the agent exited; the control channel will prune this pane.
         if (event.code !== 4403 && event.code !== 4404) {
           reconnectTimer = window.setTimeout(connect, 1200)
@@ -234,9 +297,14 @@ function SessionPane({
     if (activeRef.current && pinned.current) scrollToTail()
   }, [events, thinking, scrollToTail])
 
-  const send = useCallback((action: ClientAction) => {
-    if (socket.current?.readyState === WebSocket.OPEN) {
-      socket.current.send(JSON.stringify(action))
+  const send = useCallback((action: ClientAction): boolean => {
+    const current = socket.current
+    if (current?.readyState !== WebSocket.OPEN) return false
+    try {
+      current.send(JSON.stringify(action))
+      return true
+    } catch {
+      return false
     }
   }, [])
 
@@ -254,12 +322,25 @@ function SessionPane({
       {active ? (
         <Composer
           operationId={operationId}
+          pending={pending}
+          busy={submitAction !== null || withdrawAction !== null}
           draft={draft}
           onDraftChange={onDraftChange}
           onSend={(text) => {
-            send({ type: 'submit', text })
+            if (pending || submitAction) return
+            const actionId = crypto.randomUUID()
+            if (!send({ type: 'submit', text, action_id: actionId })) return
+            submitActionRef.current = actionId
+            setSubmitAction(actionId)
             pinned.current = true
             scrollToTail()
+          }}
+          onWithdraw={() => {
+            if (!pending || draft || withdrawAction) return
+            const actionId = crypto.randomUUID()
+            if (!send({ type: 'withdraw_pending', id: pending.id, action_id: actionId })) return
+            withdrawActionRef.current = actionId
+            setWithdrawAction(actionId)
           }}
           onCancel={() => send({ type: 'cancel', operation_id: operationId })}
         />

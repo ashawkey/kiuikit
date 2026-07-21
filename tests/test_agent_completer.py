@@ -8,6 +8,7 @@ available, pruned filesystem walk otherwise).
 import os
 import shutil
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 from prompt_toolkit.buffer import Buffer, CompletionState
@@ -65,6 +66,34 @@ def test_enter_applies_first_completion_when_none_selected():
 
     assert buffer.text == "@kiui/agent/terminal.py"
     assert buffer.complete_state is None
+
+
+def test_up_preserves_normal_multiline_navigation():
+    terminal = object.__new__(TerminalInput)
+    terminal._pending_text = lambda: "pending"
+    terminal._edit_pending = Mock()
+    bindings = terminal._create_keybindings()
+    handler = next(b.handler for b in bindings.bindings if b.keys == (Keys.Up,))
+    buffer = Buffer(document=Document("first\nsecond", cursor_position=12))
+
+    handler(SimpleNamespace(current_buffer=buffer, arg=1))
+
+    assert buffer.document.cursor_position_row == 0
+    terminal._edit_pending.assert_not_called()
+
+
+def test_up_with_empty_buffer_withdraws_pending_message():
+    terminal = object.__new__(TerminalInput)
+    terminal._pending_text = lambda: "pending"
+    terminal._edit_pending = Mock(return_value="pending")
+    bindings = terminal._create_keybindings()
+    handler = next(b.handler for b in bindings.bindings if b.keys == (Keys.Up,))
+    buffer = Buffer()
+
+    handler(SimpleNamespace(current_buffer=buffer, arg=1))
+
+    assert buffer.text == "pending"
+    terminal._edit_pending.assert_called_once_with()
 
 
 def test_fuzzy_finds_nested_file(tmp_path):

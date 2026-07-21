@@ -10,7 +10,7 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 import questionary
 from rich.console import Console
@@ -136,12 +136,16 @@ class ThinkingIndicator:
         status_suffix: str | ContextStatus = "",
         label: str = "Working",
         progress: bool = False,
+        render_terminal: bool = True,
+        status_sink: Callable[[list[tuple[str, str]] | None], None] | None = None,
     ):
         self._console = console
         self._events = events
         self._status_suffix = status_suffix
         self._label_text = label
         self._progress = progress
+        self._render_terminal = render_terminal
+        self._status_sink = status_sink
         self._status: Status | None = None
         self._start_time: float = 0
         self._started_at: float = 0
@@ -152,15 +156,20 @@ class ThinkingIndicator:
         self._start_time = time.monotonic()
         self._started_at = time.time()
         self._running = True
-        self._status = Status(
-            self._label(0.0),
-            spinner="dots",
-            console=self._console,
-            speed=1.5,
-        )
-        self._status.start()
-        self._thread = threading.Thread(target=self._tick, daemon=True)
-        self._thread.start()
+        if self._status_sink is not None:
+            self._status_sink(self._prompt_status("⠋", 0.0))
+            self._thread = threading.Thread(target=self._tick, daemon=True)
+            self._thread.start()
+        elif self._render_terminal:
+            self._status = Status(
+                self._label(0.0),
+                spinner="dots",
+                console=self._console,
+                speed=1.5,
+            )
+            self._status.start()
+            self._thread = threading.Thread(target=self._tick, daemon=True)
+            self._thread.start()
         if self._events is not None:
             if isinstance(self._status_suffix, ContextStatus):
                 self._events.publish(
@@ -189,8 +198,73 @@ class ThinkingIndicator:
             self._thread.join(timeout=1.0)
         if self._status is not None:
             self._status.stop()
+        if self._status_sink is not None:
+            self._status_sink(None)
         if self._events is not None:
             self._events.publish("thinking_stop")
+
+    def _prompt_status(
+        self, frame: str, elapsed: float
+    ) -> list[tuple[str, str]]:
+        label = (
+            f"{self._label_text}... ({elapsed:.0f}s)"
+            if elapsed
+            else f"{self._label_text}..."
+        )
+        fragments = [
+            ("class:status.spinner", f"{frame} "),
+            ("class:status.text", label),
+        ]
+        width = 14
+        if self._progress:
+            position = int(elapsed * 8) % (width * 2 - 2)
+            position = min(position, width * 2 - 2 - position)
+            start = max(0, position - 1)
+            pulse = min(3, width - start)
+            fragments.extend([
+                ("", " "),
+                ("class:status.track", "━" * start),
+                ("class:status.progress", "━" * pulse),
+                ("class:status.track", "━" * (width - start - pulse)),
+            ])
+        elif isinstance(self._status_suffix, ContextStatus):
+            complete = round(width * self._status_suffix.fraction)
+            color = (
+                "high"
+                if self._status_suffix.fraction >= 0.9
+                else "medium"
+                if self._status_suffix.fraction >= 0.75
+                else "low"
+            )
+            fragments.extend([
+                ("", " "),
+                (f"class:status.context.{color}", "━" * complete),
+                ("class:status.track", "━" * (width - complete)),
+            ])
+        if self._status_suffix:
+            suffix = (
+                f"{self._status_suffix.fraction:.0%} · "
+                f"{_compact_tokens(self._status_suffix.total_tokens_used)} used"
+                if isinstance(self._status_suffix, ContextStatus)
+                else str(self._status_suffix)
+            )
+            fragments.append(("class:status.detail", f" · {suffix}"))
+        return fragments
+
+    def _label_plain(self, elapsed: float) -> str:
+        base = (
+            f"{self._label_text}... ({elapsed:.0f}s)"
+            if elapsed
+            else f"{self._label_text}..."
+        )
+        if not self._status_suffix:
+            return base
+        suffix = (
+            self._status_suffix.plain()
+            if isinstance(self._status_suffix, ContextStatus)
+            else str(self._status_suffix)
+        )
+        return f"{base} · {suffix}"
 
     def _label(self, elapsed: float) -> str | Table:
         base = (
@@ -223,13 +297,19 @@ class ThinkingIndicator:
     def _tick(self) -> None:
         """Background loop that updates the elapsed-time label."""
         while self._running:
-            time.sleep(0.5)
-            if self._running and self._status is not None:
-                elapsed = time.monotonic() - self._start_time
-                try:
+            time.sleep(0.08 if self._status_sink is not None else 0.5)
+            if not self._running:
+                continue
+            elapsed = time.monotonic() - self._start_time
+            try:
+                if self._status_sink is not None:
+                    frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+                    frame = frames[int(elapsed / 0.08) % len(frames)]
+                    self._status_sink(self._prompt_status(frame, elapsed))
+                elif self._status is not None:
                     self._status.update(self._label(elapsed))
-                except Exception:
-                    pass  # best-effort; don't crash the agent on a display glitch
+            except Exception:
+                pass  # best-effort; don't crash the agent on a display glitch
 
 
 class ResponseStream:
@@ -316,6 +396,10 @@ class AgentConsole:
         self._console = Console(theme=AGENT_THEME)
         self.events = events
         self.prompt_broker: PromptBroker | None = None
+        self.interactive_input = False
+        self.status_sink: (
+            Callable[[list[tuple[str, str]] | None], None] | None
+        ) = None
 
     def _emit(self, event_type: str, **data) -> None:
         if self.events is not None:
@@ -352,6 +436,8 @@ class AgentConsole:
             status_suffix=status_suffix,
             label=label,
             progress=progress,
+            render_terminal=not self.interactive_input,
+            status_sink=self.status_sink if self.interactive_input else None,
         )
 
     def stream_response(self, *, show_thinking: bool = False) -> ResponseStream:

@@ -16,6 +16,13 @@ export type EventData = {
   [key: string]: unknown
 }
 
+export type PendingMessage = {
+  id: string
+  text: string
+  source: string
+  action_id?: string | null
+}
+
 export type Prompt = {
   id: string
   kind: 'select' | 'text'
@@ -34,6 +41,7 @@ export type StateMessage = {
   replay_truncated: boolean
   operation_id: string | null
   prompt: Prompt | null
+  pending: PendingMessage | null
 }
 
 export type SessionSummary = {
@@ -56,6 +64,7 @@ export type AgentEvent = {
   data?: EventData
   error?: string
   ok?: boolean
+  action_id?: string
   csrf?: string
   session?: string
   sessions?: SessionSummary[]
@@ -63,6 +72,7 @@ export type AgentEvent = {
   latest_seq?: number
   operation_id?: string | null
   prompt?: Prompt | null
+  pending?: PendingMessage | null
 }
 
 export function isPrompt(value: unknown): value is Prompt {
@@ -99,6 +109,7 @@ export type DisplayEvent = {
 }
 
 export type ClientAction =
-  | { type: 'submit'; text: string }
+  | { type: 'submit'; text: string; action_id: string }
+  | { type: 'withdraw_pending'; id: string; action_id: string }
   | { type: 'prompt_response'; id: string; answer: string }
   | { type: 'cancel'; operation_id: string | null }

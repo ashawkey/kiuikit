@@ -591,6 +591,25 @@ html { scrollbar-gutter: stable; }
 .prompt-options button.primary { color: var(--accent-ink); border-color: transparent; background: var(--accent); }
 .prompt-options textarea { width: 100%; min-height: 6rem; padding: 0.65rem; resize: vertical; color: var(--text); background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; }
 
+.pending-message {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: min(100%, calc(var(--content) - 2 * var(--gutter)));
+  margin: 0 auto 0.4rem;
+  padding: 0.45rem 0.7rem;
+  color: var(--text);
+  text-align: left;
+  background: var(--elevated);
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.pending-message span { flex: none; color: var(--accent); font-size: 0.78rem; font-weight: 700; text-transform: uppercase; }
+.pending-message strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.pending-message em { flex: none; color: var(--dim); font-size: 0.82rem; font-style: normal; }
+.pending-message:disabled { cursor: default; opacity: 0.65; }
 .composer-shell {
   position: fixed;
   z-index: 20;

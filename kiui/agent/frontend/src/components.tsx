@@ -1,6 +1,6 @@
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from 'react'
 
-import type { Prompt, SessionSummary } from './types'
+import type { PendingMessage, Prompt, SessionSummary } from './types'
 import type { Theme } from './theme'
 
 export function SessionSidebar({
@@ -283,15 +283,21 @@ export function PromptDialog({
 
 export function Composer({
   operationId,
+  pending,
+  busy,
   draft,
   onDraftChange,
   onSend,
+  onWithdraw,
   onCancel,
 }: {
   operationId: string | null
+  pending: PendingMessage | null
+  busy: boolean
   draft: string
   onDraftChange: (text: string) => void
   onSend: (text: string) => void
+  onWithdraw: () => void
   onCancel: () => void
 }) {
   const text = draft
@@ -331,9 +337,8 @@ export function Composer({
 
   function submit() {
     const value = text.trim()
-    if (!value || operationId) return
+    if (!value || busy || pending) return
     onSend(value)
-    setText('')
     field.current?.focus()
   }
 
@@ -346,14 +351,26 @@ export function Composer({
 
   return (
     <section className="composer-shell" ref={shell}>
+      {pending ? (
+        <button
+          className="pending-message"
+          type="button"
+          onClick={onWithdraw}
+          disabled={busy || Boolean(text)}
+          title={text ? 'Clear the draft before editing the pending message' : 'Withdraw and edit pending message'}
+        >
+          <span>Pending</span>
+          <strong>{pending.text}</strong>
+          <em>Edit</em>
+        </button>
+      ) : null}
       <div className="composer">
         <textarea
           ref={field}
           rows={1}
           maxLength={32768}
-          placeholder={operationId ? 'Agent is working...' : 'Type Anything...'}
+          placeholder={operationId ? 'Queue a message...' : 'Type Anything...'}
           value={text}
-          disabled={Boolean(operationId)}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={keyDown}
         />
@@ -372,7 +389,7 @@ export function Composer({
           className="send-button"
           type="button"
           onClick={submit}
-          disabled={Boolean(operationId)}
+          disabled={busy || Boolean(pending)}
           aria-label="Send"
           title="Send"
         >

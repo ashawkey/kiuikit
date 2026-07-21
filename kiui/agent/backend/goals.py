@@ -68,8 +68,7 @@ class GoalMixin:
             return
 
         if self._last_interrupted:
-            # Terminal input is blocked during the loop, so Ctrl+C / Esc is the
-            # way to stop it: clear the goal entirely.
+            # Cancelling a goal round clears the goal entirely.
             self.goal = None
             self.goal_active = False
             self.goal_iterations = 0

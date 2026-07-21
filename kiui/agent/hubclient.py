@@ -199,13 +199,30 @@ class HubClient:
         """
         kind = action.get("type")
         if kind == "submit":
-            if self.cancellation.operation_id is not None:
-                self.events.publish("error", text="Message not sent: agent is working.")
-                return
+            action_id = str(action.get("action_id", ""))
             try:
-                self.inputs.submit(str(action.get("text", "")), "web")
+                self.inputs.submit(
+                    str(action.get("text", "")),
+                    "web",
+                    action_id=action_id,
+                )
             except ValueError as exc:
-                self.events.publish("error", text=f"Message not sent: {exc}")
+                self.events.publish(
+                    "submission_rejected",
+                    action_id=action_id,
+                    error=str(exc),
+                )
+        elif kind == "withdraw_pending":
+            action_id = str(action.get("action_id", ""))
+            item = self.inputs.withdraw(
+                str(action.get("id", "")), action_id=action_id
+            )
+            if item is None:
+                self.events.publish(
+                    "withdrawal_rejected",
+                    action_id=action_id,
+                    error="Pending message is no longer available.",
+                )
         elif kind == "prompt_response":
             ok = self.prompts.resolve(
                 str(action.get("id", "")), str(action.get("answer", "")), source="web"
