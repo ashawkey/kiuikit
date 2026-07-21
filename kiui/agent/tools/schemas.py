@@ -171,7 +171,7 @@ def get_tool_definitions(
             "function": {
                 "name": "inspect_processes",
                 "description": (
-                    "Inspect status of managed background processes, optionally after a bounded wait. "
+                    "Inspect managed background process status after an optional bounded wait. "
                     "Omit process_id to list all processes."
                 ),
                 "parameters": {
@@ -182,7 +182,7 @@ def get_tool_definitions(
                             "type": "number",
                             "minimum": 0,
                             "default": 0,
-                            "description": "Seconds to wait before inspecting (default: 0)",
+                            "description": "Seconds to wait before returning a status snapshot (default: 0)",
                         },
                     },
                     "required": [],

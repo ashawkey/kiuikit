@@ -595,6 +595,9 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             elif function_name == "exec_command":
                 with self.console.thinking(label="Running exec_command"):
                     result = self.tool_executor.execute(function_name, function_args)
+            elif function_name == "inspect_processes" and function_args.get("wait", 0) > 0:
+                with self.console.thinking(label="Waiting for inspect_processes"):
+                    result = self.tool_executor.execute(function_name, function_args)
             else:
                 result = self.tool_executor.execute(function_name, function_args)
             exec_elapsed = time.monotonic() - t_exec

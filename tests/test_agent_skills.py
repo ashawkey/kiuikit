@@ -39,6 +39,18 @@ def test_bundled_skills_load_from_package_and_shadow_stale_copies(tmp_path, monk
     assert issues["shadowed"][0]["path"] == str(project / ".kia" / "skills" / "alpha" / "SKILL.md")
 
 
+def test_bundled_monitor_skill_keeps_checkpoint_loop_alive(tmp_path):
+    skill = discover_skills(tmp_path)["monitor"]
+
+    assert "monitor continuously" in skill["description"]
+    assert "load_skill" not in skill["body"]
+    assert "Do not end with a text-only response" in skill["body"]
+    assert "progress update must be followed" in skill["body"]
+    assert "inspect_processes(process_id, wait=<interval seconds>)" in skill["body"]
+    assert "relaunch" in skill["body"]
+    assert "ask me to check again" in skill["body"]
+
+
 def test_bundled_skill_library_documents_kib_commands(tmp_path):
     skills = discover_skills(tmp_path)
 

@@ -38,6 +38,7 @@ class _Console:
 
     def __init__(self):
         self.results = []
+        self.thinking_calls = []
 
     def print(self, *args, **kwargs):
         pass
@@ -49,6 +50,7 @@ class _Console:
         self.results.append((message, success))
 
     def thinking(self, **kwargs):
+        self.thinking_calls.append(kwargs)
         return nullcontext()
 
     def stream_response(self, **kwargs):
@@ -303,6 +305,33 @@ def test_unsaved_artifact_guidance_does_not_claim_saved_output():
     assert compacted
     assert "could not be saved" in result
     assert "Search the saved output" not in result
+
+
+def test_waiting_process_inspection_shows_activity_indicator():
+    console = _Console()
+    result = {"processes": [], "success": True}
+    tool_call = {
+        "id": "call-inspect",
+        "type": "function",
+        "function": {
+            "name": "inspect_processes",
+            "arguments": '{"process_id": "p-123", "wait": 1800}',
+        },
+    }
+    agent = NS(
+        verbose=False,
+        console=console,
+        permissions=NS(check=lambda *args: (True, "")),
+        tool_executor=NS(execute=lambda *args: result),
+        context_length=16_000,
+        token_estimator=NS(chars_per_token=3.3),
+        context=NS(messages=[], add=lambda message: agent.context.messages.append(message)),
+        cancellation=None,
+    )
+
+    LLMAgent.execute_tool_calls(agent, [tool_call])
+
+    assert console.thinking_calls == [{"label": "Waiting for inspect_processes"}]
 
 
 def test_small_exec_result_discards_temporary_artifact(tmp_path):
