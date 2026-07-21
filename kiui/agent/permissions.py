@@ -33,6 +33,7 @@ class PermissionMode(str, Enum):
 
 SAFE_TOOLS = frozenset({
     "read_file",
+    "read_image",
     "ls",
     "glob_files",
     "grep_files",
@@ -448,7 +449,7 @@ def _summarize_call(name: str, args: dict[str, Any]) -> str:
         return f"{name}: {args.get('command', '?')}"
     if name == "stop_process":
         return f"stop_process: {args.get('process_id', '?')}"
-    if name in ("write_file", "edit_file", "multi_edit", "read_file", "remove_file", "ls"):
+    if name in ("write_file", "edit_file", "multi_edit", "read_file", "read_image", "remove_file", "ls"):
         return f"{name}: {args.get('file') or args.get('path', '?')}"
     if name == "spawn_subagent":
         return f"spawn_subagent: {args.get('task', '?')[:80]}"

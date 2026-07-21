@@ -27,6 +27,7 @@ class ToolExecutor(
 
     _DISPATCH_MAP: dict[str, str] = {
         "read_file": "_read_file",
+        "read_image": "_read_image",
         "write_file": "_write_file",
         "edit_file": "_edit_file",
         "multi_edit": "_multi_edit",

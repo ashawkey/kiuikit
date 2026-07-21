@@ -1,6 +1,7 @@
 """Tests for persona switching and session state."""
 
 from kiui.agent.backend import ContextManager, LLMAgent
+from kiui.agent.models import resolve_model_profile
 from kiui.agent.permissions import PermissionController
 from kiui.agent.personas import PersonaContext, get_persona, list_personas
 from kiui.agent.tools import ToolExecutor
@@ -20,7 +21,7 @@ def test_reviewer_persona_contract(tmp_path):
     reviewer = personas["reviewer"]
 
     assert reviewer.tools is not None
-    assert {"read_file", "write_file", "exec_command", "load_skill"} <= reviewer.tools
+    assert {"read_file", "read_image", "write_file", "exec_command", "load_skill"} <= reviewer.tools
     assert "remove_file" not in reviewer.tools
 
     prompt = reviewer.build(PersonaContext(
@@ -41,6 +42,36 @@ def test_reviewer_persona_contract(tmp_path):
     assert "load_skill** before" in prompt
 
 
+def test_agent_tool_surface_follows_model_capability():
+    agent = object.__new__(LLMAgent)
+    agent.is_subagent = False
+    agent.persona = get_persona("coder")
+
+    agent.profile = resolve_model_profile("gpt-4o")
+    assert "read_image" in {
+        tool["function"]["name"] for tool in agent._get_tool_definitions()
+    }
+
+    agent.profile = resolve_model_profile("deepseek-v4")
+    assert "read_image" not in {
+        tool["function"]["name"] for tool in agent._get_tool_definitions()
+    }
+
+
+def test_pending_images_are_transient():
+    agent = object.__new__(LLMAgent)
+    agent.context = ContextManager("system")
+    agent.context.add({"role": "tool", "tool_call_id": "call", "content": "loaded"})
+    agent._pending_images = [{"file": "plot.png", "url": "data:image/png;base64,AAAA"}]
+
+    messages = agent._messages_with_pending_images()
+
+    assert messages[-1]["content"][1]["type"] == "image_url"
+    assert messages[-1]["content"][1]["image_url"]["url"].startswith("data:image/png")
+    assert len(agent.context.messages) == 1
+    assert "base64" not in str(agent.context.messages)
+
+
 class _ChangeTracker:
     def __init__(self, session_id, work_dir, console):
         self.session_id = session_id
@@ -55,9 +86,11 @@ def test_switch_saves_old_persona_then_resets_session(tmp_path, monkeypatch):
     agent = object.__new__(LLMAgent)
     agent.console = _SilentConsole()
     agent.persona = get_persona("coder")
+    agent.profile = resolve_model_profile("deepseek-v4")
     agent.system_prompt = "coder prompt"
     agent.context = ContextManager(agent.system_prompt)
     agent.context.add({"role": "user", "content": "old conversation"})
+    agent._pending_images = []
     agent.tools = []
     agent.is_subagent = False
     agent.exec_mode = False

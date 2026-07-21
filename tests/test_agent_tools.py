@@ -1,6 +1,7 @@
 """Tests for the core file tools: apply_edit, multi_edit, ls, and
 gitignore-aware glob/grep (kiui.agent.tools / kiui.agent.tools.gitignore)."""
 
+import base64
 import os
 import shlex
 import sys
@@ -165,6 +166,48 @@ def test_web_fetch_rejects_non_public_destinations():
     ):
         result = te._web_fetch(url)
         assert not result["success"], url
+
+
+def test_read_image_returns_data_url(tmp_path):
+    data = b"\x89PNG\r\n\x1a\n" + b"test"
+    image = tmp_path / "image.png"
+    image.write_bytes(data)
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+
+    result = te.execute("read_image", {"file": "image.png"})
+
+    assert result["success"]
+    assert result["mime_type"] == "image/png"
+    assert result["image_url"] == (
+        "data:image/png;base64," + base64.b64encode(data).decode("ascii")
+    )
+
+
+def test_read_image_rejects_unsupported_file(tmp_path):
+    (tmp_path / "not-image.txt").write_text("hello")
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+
+    result = te.execute("read_image", {"file": "not-image.txt"})
+
+    assert not result["success"]
+    assert "Unsupported image format" in result["error"]
+
+
+def test_read_image_tool_requires_multimodal_capability():
+    default_names = {t["function"]["name"] for t in get_tool_definitions()}
+    multimodal_names = {
+        t["function"]["name"]
+        for t in get_tool_definitions(supports_image_input=True)
+    }
+
+    assert "read_image" not in default_names
+    assert "read_image" in multimodal_names
+    assert "read_image" not in {
+        t["function"]["name"]
+        for t in get_tool_definitions(
+            supports_image_input=True, allowed={"read_file"}
+        )
+    }
 
 
 def test_read_file_logs_offset_and_limit(tmp_path):

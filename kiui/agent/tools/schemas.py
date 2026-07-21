@@ -5,13 +5,15 @@ from typing import Any
 def get_tool_definitions(
     include_subagent: bool = True,
     allowed: set[str] | frozenset | None = None,
+    supports_image_input: bool = False,
 ) -> list[dict[str, Any]]:
     """Return OpenAI-format tool definitions for the built-in tools.
 
     Set *include_subagent* to False for sub-agents, which must not be able to
     spawn further sub-agents (keeps spawning a single, sequential level deep).
     Set *allowed* to a persona's tool whitelist to advertise only those tools;
-    None advertises all tools.
+    None advertises all tools. ``read_image`` is advertised only when
+    *supports_image_input* is true.
     """
     definitions = [
         {
@@ -25,6 +27,20 @@ def get_tool_definitions(
                         "file": {"type": "string", "description": "Path to the file to read"},
                         "offset": {"type": "integer", "description": "Line number to start reading from (1-indexed)"},
                         "limit": {"type": "integer", "description": "Maximum number of lines to read"},
+                    },
+                    "required": ["file"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "read_image",
+                "description": "Read a local PNG, JPEG, GIF, or WebP image and send it to the model for visual inspection.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "file": {"type": "string", "description": "Path to the image file"},
                     },
                     "required": ["file"],
                 },
@@ -322,6 +338,11 @@ def get_tool_definitions(
         },
     ]
 
+    if not supports_image_input:
+        definitions = [
+            d for d in definitions
+            if d.get("function", {}).get("name") != "read_image"
+        ]
     if not include_subagent:
         definitions = [
             d for d in definitions

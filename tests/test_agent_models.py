@@ -8,6 +8,13 @@ def test_reasoning_profiles():
     assert resolve_model_profile("deepseek-v4-pro").reasoning == "deepseek"
 
 
+def test_image_input_profiles():
+    for model in ("gpt-4o", "claude-sonnet-4", "gemini-3-pro", "kimi-k3"):
+        assert resolve_model_profile(model).supports_image_input
+    for model in ("deepseek-v4", "glm-5", "unknown-model"):
+        assert not resolve_model_profile(model).supports_image_input
+
+
 def test_openai_reasoning():
     assert reasoning_kwargs("openai", "xhigh") == {"reasoning_effort": "xhigh"}
 

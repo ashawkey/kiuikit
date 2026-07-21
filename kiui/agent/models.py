@@ -15,17 +15,20 @@ class ModelProfile:
 
     context_length: int = 128_000
     reasoning: str | None = None  # "openai" | "anthropic" | "gemini" | "deepseek" | "kimi"
+    supports_image_input: bool = False
 
 
 # Ordered most-specific → least-specific within each family.
 # Matching is case-insensitive substring; first hit wins.
 MODEL_CATALOG: list[tuple[str, ModelProfile]] = [
-    ("gpt-5", ModelProfile(context_length=258_000, reasoning="openai")),
-    ("gemini", ModelProfile(context_length=1_000_000, reasoning="gemini")),
-    ("claude", ModelProfile(context_length=1_000_000, reasoning="anthropic")),
+    ("gpt-5", ModelProfile(context_length=258_000, reasoning="openai", supports_image_input=True)),
+    ("gpt", ModelProfile(supports_image_input=True)),
+    ("gemini", ModelProfile(context_length=1_000_000, reasoning="gemini", supports_image_input=True)),
+    ("claude", ModelProfile(context_length=1_000_000, reasoning="anthropic", supports_image_input=True)),
     ("deepseek", ModelProfile(context_length=1_000_000, reasoning="deepseek")),
     ("glm", ModelProfile(context_length=1_000_000, reasoning="deepseek")),
-    ("kimi-k3", ModelProfile(context_length=1_000_000, reasoning="kimi")),
+    ("kimi-k3", ModelProfile(context_length=1_000_000, reasoning="kimi", supports_image_input=True)),
+    ("kimi", ModelProfile(supports_image_input=True)),
 ]
 
 DEFAULT_PROFILE = ModelProfile()

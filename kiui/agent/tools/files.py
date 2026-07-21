@@ -1,11 +1,29 @@
 """File reading, writing, editing, listing, and removal tools."""
 
+import base64
 import os
 import shutil
 from pathlib import Path
 from typing import Any
 
 from .constants import MAX_READ_BYTES, MAX_READ_LINES, SKIP_DIRS as _SKIP_DIRS
+
+
+_IMAGE_SIGNATURES = (
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"GIF87a", "image/gif"),
+    (b"GIF89a", "image/gif"),
+)
+
+
+def _image_mime_type(data: bytes) -> str | None:
+    for signature, mime_type in _IMAGE_SIGNATURES:
+        if data.startswith(signature):
+            return mime_type
+    if len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
 
 
 def _human_size(n: int) -> str:
@@ -171,6 +189,33 @@ class FileToolsMixin:
             content += f"\n[output truncated: {len(lines)} of {total_lines} lines shown. Use offset/limit for more.]"
 
         return {"content": content, "lines_read": len(lines), "success": True}
+
+    def _read_image(self, file: str) -> dict[str, Any]:
+        """Read an image into an OpenAI-compatible data URL."""
+        self.console.tool(f"read_image {file}")
+
+        file_path = self._resolve_path(file)
+        if not file_path.exists():
+            return {"error": f"File not found: {file}", "success": False}
+        if not file_path.is_file():
+            return {"error": f"Path is not a file: {file}", "success": False}
+
+        data = file_path.read_bytes()
+        mime_type = _image_mime_type(data)
+        if mime_type is None:
+            return {
+                "error": f"Unsupported image format: {file}. Use PNG, JPEG, GIF, or WebP.",
+                "success": False,
+            }
+
+        encoded = base64.b64encode(data).decode("ascii")
+        return {
+            "message": f"Image loaded: {file} ({mime_type}, {_human_size(len(data))})",
+            "image_url": f"data:{mime_type};base64,{encoded}",
+            "mime_type": mime_type,
+            "size": len(data),
+            "success": True,
+        }
 
     def _write_file(self, file: str, content: str) -> dict[str, Any]:
         """Write content to file, creating parent directories."""

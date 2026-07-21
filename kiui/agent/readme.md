@@ -305,6 +305,7 @@ The agent has access to the following tools:
 | Tool | Description |
 |------|-------------|
 | `read_file` | Read file contents with optional offset/limit |
+| `read_image` | Send a local PNG, JPEG, GIF, or WebP image to a multimodal model (not registered for text-only models) |
 | `write_file` | Create or overwrite files, creating parent directories |
 | `edit_file` | Surgical text replacement in files (whitespace-tolerant match) |
 | `multi_edit` | Apply an ordered batch of edits to one file atomically (all-or-nothing) |

@@ -13,7 +13,6 @@ from kiui.agent.context import (
 from kiui.agent.models import REASONING_EFFORTS, resolve_model_profile
 from kiui.agent.permissions import PermissionMode
 from kiui.agent.personas import DEFAULT_PERSONA, PersonaInfo, get_persona, list_personas
-from kiui.agent.tools import get_tool_definitions
 
 
 class AgentCommandsMixin:
@@ -188,7 +187,7 @@ class AgentCommandsMixin:
         # Save and clear while the old persona still owns the conversation.
         self._restart_session()
         self.persona = persona
-        self.tools = get_tool_definitions(include_subagent=not self.is_subagent, allowed=persona.tools)
+        self.tools = self._get_tool_definitions()
         self.system_prompt = self._build_system_prompt()
         self.context.system_prompt["content"] = self.system_prompt
         self.console.system(f"Switched to persona: {persona.name}")
@@ -317,6 +316,7 @@ class AgentCommandsMixin:
         self._base_url = model_conf.get("base_url", "")
         self.client = self._request_client()
         self.profile = resolve_model_profile(self.model, self.model_alias)
+        self.tools = self._get_tool_definitions()
         self.context_length = model_conf.get("context_length", self.profile.context_length)
         self.reasoning_effort = model_conf.get("reasoning_effort", self.reasoning_effort)
         self.show_thinking = self.profile.reasoning is not None

@@ -15,6 +15,7 @@ NAME = "reviewer"
 DESCRIPTION = "Academic paper reviewer — rigorous, evidence-grounded, and venue-template aware."
 TOOLS = [
     "read_file",
+    "read_image",
     "write_file",
     "ls",
     "exec_command",

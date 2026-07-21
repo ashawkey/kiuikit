@@ -177,7 +177,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self.work_dir = str(Path(work_dir).absolute()) if work_dir else str(Path.cwd())
         self.persona: PersonaInfo = get_persona(persona or DEFAULT_PERSONA)
         self.system_prompt = self._build_system_prompt()
-        self.tools = get_tool_definitions(include_subagent=not is_subagent, allowed=self.persona.tools)
+        self.tools = self._get_tool_definitions()
 
         self.permissions = PermissionController(
             mode=permission_mode,
@@ -207,6 +207,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         )
 
         self.context = ContextManager(self.system_prompt)
+        self._pending_images: list[dict[str, str]] = []
 
         self.round_id = 0
         self._session_id: str | None = None  # set by chat_loop
@@ -234,6 +235,27 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
 
         # self.console.system(f"System prompt: {self.system_prompt[:100]}...")
 
+
+    def _get_tool_definitions(self) -> list[dict[str, Any]]:
+        return get_tool_definitions(
+            include_subagent=not self.is_subagent,
+            allowed=self.persona.tools,
+            supports_image_input=self.profile.supports_image_input,
+        )
+
+    def _messages_with_pending_images(self) -> list[dict[str, Any]]:
+        messages = self.context.get()
+        if not self._pending_images:
+            return messages
+
+        content: list[dict[str, Any]] = []
+        for image in self._pending_images:
+            content.extend((
+                {"type": "text", "text": f"Image returned by read_image: {image['file']}"},
+                {"type": "image_url", "image_url": {"url": image["url"]}},
+            ))
+        messages.append({"role": "user", "content": content})
+        return messages
 
     def _build_system_prompt(self) -> str:
         """Build the system prompt via the active persona."""
@@ -350,7 +372,8 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 f"context: ~{ctx_tokens}tok / {self.context_length}tok [{ctx_pct:.0f}%])"
             )
 
-        messages = self.context.get()
+        had_pending_images = bool(self._pending_images)
+        messages = self._messages_with_pending_images()
 
         kwargs = {
             "model": self.model,
@@ -392,10 +415,12 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         if self.cancellation is not None and self.cancellation.cancelled:
             raise RequestInterrupted()
 
+        self._pending_images.clear()
         self._accumulate_usage(usage)
-        self.token_estimator.calibrate(
-            estimate_context_chars(messages), usage.prompt_tokens
-        )
+        if not had_pending_images:
+            self.token_estimator.calibrate(
+                estimate_context_chars(messages), usage.prompt_tokens
+            )
         self.context.add(message)
 
         if self.verbose:
@@ -554,6 +579,12 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             else:
                 result = self.tool_executor.execute(function_name, function_args)
             exec_elapsed = time.monotonic() - t_exec
+            image_url = result.pop("image_url", None)
+            if image_url and result.get("success"):
+                self._pending_images.append({
+                    "file": function_args["file"],
+                    "url": image_url,
+                })
             result_text = format_tool_result(result)
 
             success = result.get("success", False)
@@ -693,11 +724,13 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             except RequestInterrupted:
                 # Roll back to the state before this request was sent.
                 self.context.rollback(snapshot)
+                self._pending_images.clear()
                 self.console.system("Request cancelled.")
                 self._last_interrupted = True
                 return None
             except RuntimeError as e:
                 self.context.rollback(snapshot)
+                self._pending_images.clear()
                 self.console.error(f"API call failed: {e}")
                 return None
             except Exception:
@@ -722,6 +755,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 # The user cancelled a tool mid-round. Stop the agentic loop
                 # and return to the prompt instead of feeding the (partial)
                 # tool results back to the model for another iteration.
+                self._pending_images.clear()
                 self.console.system("Turn interrupted.")
                 self._last_interrupted = True
                 return None
@@ -779,6 +813,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self._session_id = session_id
         self._last_save_time = 0.0  # allow immediate save of the new session
         self.context.replace_messages([])
+        self._pending_images.clear()
         self.round_id = 0
         self.token_totals = {key: 0 for key in self.token_totals}
         self.tool_compaction_totals = {key: 0 for key in self.tool_compaction_totals}

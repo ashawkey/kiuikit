@@ -6,7 +6,7 @@ from pathlib import Path
 
 from kiui.agent.context import get_role, get_text, get_tool_calls
 from kiui.agent.personas import get_persona
-from kiui.agent.tools import format_tool_summary, get_tool_definitions
+from kiui.agent.tools import format_tool_summary
 
 
 class SessionMixin:
@@ -300,7 +300,7 @@ class SessionMixin:
             except ValueError:
                 self.console.warn(f"Session persona '{saved_persona}' not found; keeping '{self.persona.name}'.")
             else:
-                self.tools = get_tool_definitions(include_subagent=not self.is_subagent, allowed=self.persona.tools)
+                self.tools = self._get_tool_definitions()
                 self.system_prompt = self._build_system_prompt()
                 self.context.system_prompt["content"] = self.system_prompt
 
