@@ -118,6 +118,14 @@ def test_fuzzy_char_sequence_match(tmp_path):
     assert "@pkg/dottedthing.txt" in res
 
 
+def test_fuzzy_path_match_continues_after_separator(tmp_path):
+    _touch(str(tmp_path / "src" / "components" / "widget.txt"))
+    comp = AtFileCompleter(tmp_path)
+
+    assert "@src/components/" in _complete(comp, "@components/")
+    assert "@src/components/widget.txt" in _complete(comp, "@components/widget")
+
+
 def test_skip_dirs_are_pruned(tmp_path):
     _touch(str(tmp_path / "node_modules" / "pkg" / "index.js"))
     _touch(str(tmp_path / "src" / "index.js"))

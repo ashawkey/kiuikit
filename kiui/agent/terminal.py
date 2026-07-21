@@ -48,9 +48,10 @@ class AtFileCompleter(Completer):
       before the full path so ``@terminal`` surfaces
       ``kiui/agent/terminal.py`` at the top even in a deep tree.
 
-    When a directory separator is present in *partial* the completer falls
-    back to exact-prefix listing inside the specified directory (classic
-    Tab completion within a known directory).
+    When a directory separator is present in *partial*, the completer uses
+    exact-prefix listing for known directories and repo-wide fuzzy matching
+    otherwise. This allows queries such as ``@agent/term`` to match
+    ``kiui/agent/terminal.py``.
     """
 
     # Hard limit on completions shown
@@ -110,8 +111,8 @@ class AtFileCompleter(Completer):
         if " " in partial or "\t" in partial:
             return
 
-        # A directory separator means the user is navigating a known
-        # directory: classic prefix listing inside it.
+        # Use classic prefix listing when the directory portion is exact.
+        # Otherwise keep fuzzy-matching the whole path, including separators.
         has_sep = "/" in partial or "\\" in partial
         if has_sep:
             base_dir, prefix = self._split(partial)
@@ -120,12 +121,11 @@ class AtFileCompleter(Completer):
                 search_dir = search_dir.resolve()
             except (OSError, RuntimeError):
                 return
-            if not search_dir.is_dir():
+            if search_dir.is_dir():
+                yield from self._direct_completions(search_dir, base_dir, prefix, partial)
                 return
-            yield from self._direct_completions(search_dir, base_dir, prefix, partial)
-            return
 
-        # No separator: fuzzy-match against the cached, repo-wide index.
+        # Fuzzy-match against the cached, repo-wide index.
         # An empty query lists the top-level entries from the same index
         # so ignored/hidden noise (.git, .venv, ...) stays out.
         if not partial:
@@ -183,12 +183,13 @@ class AtFileCompleter(Completer):
         scored: list[tuple[int, str, bool]] = []  # (score, rel_path, is_dir)
 
         for rel, is_dir in self._get_index():
+            candidate = f"{rel}/" if is_dir else rel
             base = rel.rsplit("/", 1)[-1]
             score = self._fuzzy_score(base.lower(), pl)
             if score > 0:
                 score += 20  # prefer basename hits
             else:
-                score = self._fuzzy_score(rel.lower(), pl)
+                score = self._fuzzy_score(candidate.lower(), pl)
             if score <= 0:
                 continue
             # Shallower paths and shorter names rank higher on ties.
