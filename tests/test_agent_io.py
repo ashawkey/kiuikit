@@ -12,6 +12,7 @@ from kiui.agent.utils.io import (
     EventHub,
     InputBroker,
     PromptBroker,
+    sanitize_unicode,
 )
 from kiui.agent.backend import LLMAgent
 from kiui.agent.utils.interrupt import RequestInterrupted, run_interruptible
@@ -31,6 +32,21 @@ def test_event_hub_orders_and_bounds_replay():
     assert not hub.has_replay_gap(second.seq - 1)
 
 
+def test_sanitize_unicode_combines_pairs_and_replaces_lone_surrogates():
+    value = {"text": "a\ud83d\ude00b\ud800c", "nested": ["\udc00"]}
+
+    assert sanitize_unicode(value) == {"text": "a😀b�c", "nested": ["�"]}
+
+
+def test_event_hub_sanitizes_invalid_surrogates():
+    hub = EventHub()
+
+    event = hub.publish("output", text="a\ud83d\ude00b\ud800c")
+
+    assert event.data["text"] == "a😀b�c"
+    assert event.data["text"].encode("utf-8") == b"a\xf0\x9f\x98\x80b\xef\xbf\xbdc"
+
+
 def test_event_hub_clips_oversized_text_fields():
     from kiui.agent.utils.io import EVENT_TEXT_LIMIT
 
@@ -40,6 +56,15 @@ def test_event_hub_clips_oversized_text_fields():
     assert len(event.data["text"]) < EVENT_TEXT_LIMIT + 100
     assert "truncated, 100 more characters" in event.data["text"]
     assert event.data["count"] == 3  # non-str fields untouched
+
+
+def test_input_broker_sanitizes_invalid_surrogates():
+    hub = EventHub()
+    broker = InputBroker(hub)
+
+    item = broker.submit("a\ud83d\ude00b\ud800c")
+
+    assert item.text == "a😀b�c"
 
 
 def test_input_broker_accepts_only_one_pending_submission():

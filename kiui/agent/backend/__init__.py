@@ -74,6 +74,7 @@ from kiui.agent.utils.io import (
     InputBroker,
     PromptBroker,
     UserSubmission,
+    sanitize_unicode,
 )
 
 # How often the input race checks the web queue while the terminal
@@ -383,7 +384,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             )
 
         had_pending_images = bool(self._pending_images)
-        messages = self._messages_with_pending_images()
+        messages = sanitize_unicode(self._messages_with_pending_images())
 
         kwargs = {
             "model": self.model,

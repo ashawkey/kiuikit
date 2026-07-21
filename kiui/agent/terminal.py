@@ -17,10 +17,13 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.key_binding.bindings.search import accept_search
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.lexers import PygmentsLexer
+from prompt_toolkit.output.defaults import create_output
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.styles import Style
 from prompt_toolkit.validation import Validator, ValidationError
 from pygments.lexers.markup import MarkdownLexer
+
+from kiui.agent.utils.io import sanitize_unicode
 
 
 class AtFileCompleter(Completer):
@@ -372,6 +375,7 @@ class SharedFileHistory(FileHistory):
         self._lock = FileLock(f"{filename}.lock")
 
     def store_string(self, string: str) -> None:
+        string = sanitize_unicode(string)
         payload = [f"\n# {datetime.datetime.now()}\n"]
         payload.extend(f"+{line}\n" for line in string.split("\n"))
         data = "".join(payload).encode("utf-8")
@@ -423,6 +427,9 @@ class TerminalInput:
         })
 
         self.history = SharedFileHistory(str(history_path)) if history_path else None
+        output = create_output()
+        if hasattr(output, "enable_cpr"):
+            output.enable_cpr = False
         self._session = PromptSession(
             multiline=True,
             style=self.style,
@@ -434,6 +441,7 @@ class TerminalInput:
             validate_while_typing=False,
             completer=AtFileCompleter(work_dir),
             erase_when_done=True,
+            output=output,
         )
 
     def _create_keybindings(self) -> KeyBindings:

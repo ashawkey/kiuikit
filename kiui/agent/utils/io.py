@@ -18,6 +18,24 @@ from typing import Any, Awaitable, Callable
 EVENT_TEXT_LIMIT = 64 * 1024
 
 
+def sanitize_unicode(value: Any) -> Any:
+    """Replace invalid surrogate code points in JSON-like external data."""
+    if isinstance(value, str):
+        if not any("\ud800" <= char <= "\udfff" for char in value):
+            return value
+        return value.encode("utf-16", errors="surrogatepass").decode(
+            "utf-16", errors="replace"
+        )
+    if isinstance(value, list):
+        return [sanitize_unicode(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            sanitize_unicode(key): sanitize_unicode(item)
+            for key, item in value.items()
+        }
+    return value
+
+
 def _clip_text(text: str, limit: int = EVENT_TEXT_LIMIT) -> str:
     if len(text) <= limit:
         return text
@@ -45,6 +63,7 @@ class EventHub:
         self._seq = 0
 
     def publish(self, event_type: str, **data: Any) -> AgentEvent:
+        data = sanitize_unicode(data)
         data = {
             key: _clip_text(value) if isinstance(value, str) else value
             for key, value in data.items()
@@ -118,7 +137,7 @@ class InputBroker:
         source: str = "web",
         action_id: str | None = None,
     ) -> UserSubmission:
-        text = text.strip()
+        text = sanitize_unicode(text).strip()
         if not text:
             raise ValueError("Message cannot be empty.")
         if len(text.encode("utf-8")) > EVENT_TEXT_LIMIT:
@@ -327,6 +346,7 @@ class PromptBroker:
         return prompt.answer
 
     def resolve(self, prompt_id: str, answer: str, source: str = "web") -> bool:
+        answer = sanitize_unicode(answer)
         with self._cond:
             prompt = self._active
             if prompt is None or prompt.id != prompt_id or prompt.done.is_set():
