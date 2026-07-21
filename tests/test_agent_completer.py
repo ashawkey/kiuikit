@@ -40,6 +40,13 @@ def _press_enter(buffer: Buffer) -> None:
     handler(SimpleNamespace(current_buffer=buffer))
 
 
+def test_markdown_lexer_does_not_reparse_from_start():
+    terminal = TerminalInput()
+    lexer = terminal._session.app.layout.current_control.lexer.get_lexer()
+
+    assert not lexer.sync_from_start()
+
+
 def test_enter_applies_selected_completion():
     document = Document("@term")
     completions = [

@@ -24,7 +24,6 @@ from rich.table import Table
 
 from kiui.config import conf, LOCAL_CONFIG_PATH
 from kiui.agent.ui import AgentConsole
-from kiui.agent.backend import LLMAgent
 from kiui.agent.permissions import PermissionMode
 from kiui.agent.models import ReasoningEffort, resolve_model_profile
 
@@ -61,6 +60,8 @@ def get_agent(args: Args) -> "tuple[LLMAgent | None, HubClient | None]":
     Returns ``(None, None)`` if the model is not found. If a reachable hub is
     running, the agent links to it automatically; otherwise it runs terminal-only.
     """
+    from kiui.agent.backend import LLMAgent
+
     console = AgentConsole()
     openai_conf = conf.get("openai", {})
 

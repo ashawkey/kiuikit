@@ -92,7 +92,8 @@ class ContextStatus:
 
     tokens: int
     limit: int
-    total_tokens_used: int
+    input_tokens: int
+    output_tokens: int
 
     @property
     def fraction(self) -> float:
@@ -102,8 +103,8 @@ class ContextStatus:
 
     def plain(self) -> str:
         if self.limit <= 0:
-            return f"~{_compact_tokens(self.tokens)} · {_compact_tokens(self.total_tokens_used)} used"
-        return f"{self.fraction:.0%} · {_compact_tokens(self.total_tokens_used)} used"
+            return f"~{_compact_tokens(self.tokens)} · ↑{_compact_tokens(self.input_tokens)} · ↓{_compact_tokens(self.output_tokens)}"
+        return f"{self.fraction:.0%} · ↑{_compact_tokens(self.input_tokens)} · ↓{_compact_tokens(self.output_tokens)}"
 
     def render(self) -> Table | Text:
         if self.limit <= 0:
@@ -121,7 +122,10 @@ class ContextStatus:
                 finished_style=color,
             ),
             Text(f"{self.fraction:.0%}", style=color),
-            Text(f"· {_compact_tokens(self.total_tokens_used)} used", style="dim"),
+            Text(
+                f"· ↑{_compact_tokens(self.input_tokens)} · ↓{_compact_tokens(self.output_tokens)}",
+                style="dim",
+            ),
         )
         return row
 
@@ -177,7 +181,8 @@ class ThinkingIndicator:
                     suffix=self._status_suffix.plain(),
                     context_tokens=self._status_suffix.tokens,
                     context_limit=self._status_suffix.limit,
-                    total_tokens_used=self._status_suffix.total_tokens_used,
+                    input_tokens=self._status_suffix.input_tokens,
+                    output_tokens=self._status_suffix.output_tokens,
                     started_at=self._started_at,
                     label=self._label_text,
                     progress=self._progress,
@@ -244,7 +249,8 @@ class ThinkingIndicator:
         if self._status_suffix:
             suffix = (
                 f"{self._status_suffix.fraction:.0%} · "
-                f"{_compact_tokens(self._status_suffix.total_tokens_used)} used"
+                f"↑{_compact_tokens(self._status_suffix.input_tokens)} · "
+                f"↓{_compact_tokens(self._status_suffix.output_tokens)}"
                 if isinstance(self._status_suffix, ContextStatus)
                 else str(self._status_suffix)
             )

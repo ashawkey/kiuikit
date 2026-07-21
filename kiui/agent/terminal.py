@@ -436,7 +436,9 @@ class TerminalInput:
             history=self.history,
             auto_suggest=AutoSuggestFromHistory(),
             key_bindings=self._create_keybindings(),
-            lexer=PygmentsLexer(MarkdownLexer),
+            # Synchronize near the visible lines instead of reparsing the whole
+            # multiline buffer on every keystroke.
+            lexer=PygmentsLexer(MarkdownLexer, sync_from_start=False),
             validator=MessageValidator(self._has_pending),
             validate_while_typing=False,
             completer=AtFileCompleter(work_dir),

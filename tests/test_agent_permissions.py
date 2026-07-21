@@ -197,9 +197,10 @@ class _FakeConsole:
     def __init__(self, answer="Yes"):
         self.answer = answer
         self.prompt_broker = None
+        self.printed = []
 
     def print(self, *a, **k):
-        pass
+        self.printed.append((a, k))
 
     def local(self, *a, **k):
         pass
@@ -209,6 +210,18 @@ class _FakeConsole:
 
     def ask_text(self, *a, **k):
         return ""
+
+
+@unix_only
+def test_safety_denial_prints_command():
+    console = _FakeConsole()
+    ctrl = PermissionController(console=console)
+    command = "echo 'unterminated"
+
+    allowed, reason = ctrl.check("exec_command", {"command": command})
+
+    assert not allowed and "cannot safely parse" in reason
+    assert console.printed[-1] == ((f"   Command: {command!r}",), {"markup": False})
 
 
 def test_background_process_permissions():

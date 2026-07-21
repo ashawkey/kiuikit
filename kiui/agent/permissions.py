@@ -515,6 +515,9 @@ class PermissionController:
             self.console.print(
                 f"[bold red]🛡  Safety guard:[/bold red] [red]{reason}[/red]"
             )
+            if tool_name in ("exec_command", "start_process"):
+                command = arguments.get("command", "")
+                self.console.print(f"   Command: {command!r}", markup=False)
         return safe, reason
 
     def _needs_prompt(self, tool_name: str) -> bool:

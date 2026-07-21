@@ -375,7 +375,13 @@ def test_discover_hub_ignores_stale_file(tmp_path, monkeypatch):
     info_path = tmp_path / "hub.json"
     monkeypatch.setattr(hubmod, "HUB_INFO_PATH", info_path)
 
+    reachable = hubmod._hub_reachable
+    monkeypatch.setattr(
+        hubmod, "_hub_reachable",
+        lambda *args, **kwargs: pytest.fail("missing discovery file should not probe"),
+    )
     assert hubmod.discover_hub() is None  # no file
+    monkeypatch.setattr(hubmod, "_hub_reachable", reachable)
 
     dead = free_port()  # bound then released -> nothing listening
     info_path.write_text(json.dumps({"host": "127.0.0.1", "port": dead, "token": "s"}))
@@ -389,18 +395,6 @@ def test_discover_hub_ignores_stale_file(tmp_path, monkeypatch):
         assert got is not None and got["port"] == port
     finally:
         hub.stop()
-
-
-def test_discover_hub_retries_info_after_port_becomes_reachable(monkeypatch):
-    import kiui.agent.hub as hubmod
-
-    info = {"host": "127.0.0.1", "port": 8765, "token": "s"}
-    reads = iter([None, info])
-    monkeypatch.setattr(hubmod, "read_hub_info", lambda: next(reads))
-    monkeypatch.setattr(hubmod, "_hub_reachable", lambda *args, **kwargs: True)
-    monkeypatch.setattr(hubmod, "DISCOVERY_INFO_RETRY_DELAY", 0)
-
-    assert hubmod.discover_hub(8765) == info
 
 
 def test_hub_rejects_double_start(tmp_path, monkeypatch):

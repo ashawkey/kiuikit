@@ -10,7 +10,6 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from openai import OpenAI
 from prompt_toolkit.patch_stdout import patch_stdout
 
 from kiui.agent.backend.commands import AgentCommandsMixin
@@ -126,11 +125,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self.profile = resolve_model_profile(model, model_alias)
         self._api_key = api_key
         self._base_url = base_url
-        self.client = OpenAI(
-            api_key=api_key,
-            base_url=base_url,
-            max_retries=0,
-        )
+        self._client = None
         self.verbose = verbose
         self.stream = stream
         self.show_thinking = self.profile.reasoning is not None
@@ -294,7 +289,8 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         return ContextStatus(
             tokens=self.token_estimator.chars_to_tokens(ctx_chars),
             limit=self.context_length,
-            total_tokens_used=self.token_totals["total"],
+            input_tokens=self.token_totals["prompt"],
+            output_tokens=self.token_totals["completion"],
         )
 
     def _interruptible_sleep(self, seconds: float):
@@ -450,7 +446,19 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
 
 
 
+    @property
+    def client(self):
+        if self._client is None:
+            self._client = self._request_client()
+        return self._client
+
+    @client.setter
+    def client(self, client) -> None:
+        self._client = client
+
     def _request_client(self):
+        from openai import OpenAI
+
         return OpenAI(
             api_key=self._api_key,
             base_url=self._base_url,

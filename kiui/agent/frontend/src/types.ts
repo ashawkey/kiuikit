@@ -10,7 +10,8 @@ export type EventData = {
   id?: string
   context_tokens?: number
   context_limit?: number
-  total_tokens_used?: number
+  input_tokens?: number
+  output_tokens?: number
   label?: string
   progress?: boolean
   [key: string]: unknown

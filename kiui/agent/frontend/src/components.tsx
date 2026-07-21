@@ -127,7 +127,8 @@ export function Thinking({
   suffix = '',
   contextTokens = 0,
   contextLimit = 0,
-  totalTokensUsed = 0,
+  inputTokens = 0,
+  outputTokens = 0,
   label = 'Working',
   progress = false,
   startedAt,
@@ -135,7 +136,8 @@ export function Thinking({
   suffix?: string
   contextTokens?: number
   contextLimit?: number
-  totalTokensUsed?: number
+  inputTokens?: number
+  outputTokens?: number
   label?: string
   progress?: boolean
   startedAt?: number
@@ -164,7 +166,7 @@ export function Thinking({
             <i style={{ width: `${fraction * 100}%` }} />
           </i>
           <strong className={contextLevel}>{Math.round(fraction * 100)}%</strong>
-          <small>{compactTokens(totalTokensUsed)} used</small>
+          <small>↑{compactTokens(inputTokens)} · ↓{compactTokens(outputTokens)}</small>
         </>
       ) : suffix ? <small>{suffix}</small> : null}
     </div>

@@ -11,10 +11,10 @@ from kiui.agent.ui import _AGENT_LOGO, AgentConsole, ContextStatus, ThinkingIndi
 
 
 def test_context_status_renders_progress_bar():
-    status = ContextStatus(tokens=58_784, limit=1_000_000, total_tokens_used=418_431)
+    status = ContextStatus(tokens=58_784, limit=1_000_000, input_tokens=900_000, output_tokens=418_431)
 
     assert status.fraction == 0.058784
-    assert status.plain() == "6% · 418K used"
+    assert status.plain() == "6% · ↑900K · ↓418K"
 
     rendered = status.render()
     assert isinstance(rendered, Table)
@@ -23,7 +23,7 @@ def test_context_status_renders_progress_bar():
 
 def test_thinking_indicator_publishes_structured_context_status():
     events = EventHub()
-    status = ContextStatus(tokens=750, limit=1_000, total_tokens_used=2_000)
+    status = ContextStatus(tokens=750, limit=1_000, input_tokens=3_000, output_tokens=2_000)
     indicator = ThinkingIndicator(Console(), events, status_suffix=status)
 
     with indicator:
@@ -33,10 +33,11 @@ def test_thinking_indicator_publishes_structured_context_status():
     started_at = event.data["started_at"]
     assert isinstance(started_at, float)
     assert event.data == {
-        "suffix": "75% · 2K used",
+        "suffix": "75% · ↑3K · ↓2K",
         "context_tokens": 750,
         "context_limit": 1_000,
-        "total_tokens_used": 2_000,
+        "input_tokens": 3_000,
+        "output_tokens": 2_000,
         "started_at": started_at,
         "label": "Working",
         "progress": False,
@@ -146,7 +147,7 @@ def test_response_renders_markdown_from_first_line():
 
 def test_thinking_indicator_includes_context_progress():
     console = Console()
-    status = ContextStatus(tokens=750, limit=1_000, total_tokens_used=2_000)
+    status = ContextStatus(tokens=750, limit=1_000, input_tokens=3_000, output_tokens=2_000)
 
     label = ThinkingIndicator(console, status_suffix=status)._label(2)
 
@@ -157,4 +158,4 @@ def test_thinking_indicator_includes_context_progress():
     assert "Working... (2s)" in text
     assert "ctx" not in text
     assert "75%" in text
-    assert "2K used" in text
+    assert "↑3K · ↓2K" in text

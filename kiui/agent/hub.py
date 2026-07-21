@@ -54,8 +54,6 @@ MAX_BODY_BYTES = 4096
 MAX_ANSWER_BYTES = 128 * 1024
 LOOPBACK_HOST = "127.0.0.1"
 DEFAULT_HUB_PORT = 8765
-DISCOVERY_INFO_RETRIES = 10
-DISCOVERY_INFO_RETRY_DELAY = 0.05
 
 # Discovery file: written by the hub, read by terminal agents so they can find
 # the hub's port and the shared access token without config edits.
@@ -94,18 +92,7 @@ def discover_hub(port: int = DEFAULT_HUB_PORT) -> dict | None:
     """
     info = read_hub_info()
     if not info:
-        # Uvicorn becomes reachable just before Hub.start writes hub.json.
-        # Only wait when the expected port is already accepting connections,
-        # keeping the normal "no hub" path fast.
-        if not _hub_reachable(LOOPBACK_HOST, port):
-            return None
-        for _ in range(DISCOVERY_INFO_RETRIES):
-            time.sleep(DISCOVERY_INFO_RETRY_DELAY)
-            info = read_hub_info()
-            if info:
-                break
-        if not info:
-            return None
+        return None
     if not _hub_reachable(info.get("host", LOOPBACK_HOST), info.get("port", 0)):
         return None
     return info

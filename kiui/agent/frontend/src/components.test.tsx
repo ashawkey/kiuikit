@@ -121,11 +121,11 @@ describe('interaction components', () => {
 
   it('shows terminal-style context progress while working', () => {
     const { container } = render(
-      <Thinking contextTokens={1_000} contextLimit={128_000} totalTokensUsed={500} />,
+      <Thinking contextTokens={1_000} contextLimit={128_000} inputTokens={2_000} outputTokens={500} />,
     )
     expect(screen.getByText('Working... (0s)')).toBeInTheDocument()
     expect(screen.getByText('1%')).toBeInTheDocument()
-    expect(screen.getByText('500 used')).toBeInTheDocument()
+    expect(screen.getByText('↑2K · ↓500')).toBeInTheDocument()
     expect(container.querySelector('.context-progress > i')).toHaveStyle({ width: '0.78125%' })
   })
 
