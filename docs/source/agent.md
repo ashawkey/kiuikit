@@ -1,4 +1,4 @@
-# `kia` — an AI agent for your terminal
+# Agent (kia)
 
 [[source]](https://github.com/ashawkey/kiuikit/tree/main/kiui/agent) · `pip install "kiui[kia]"`
 
