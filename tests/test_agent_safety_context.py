@@ -10,7 +10,7 @@ import pytest
 
 import kiui.agent.backend as backend
 import kiui.agent.tools.results as tool_results
-from kiui.agent.backend import LLMAgent, MAX_OUTPUT_TOKENS
+from kiui.agent.backend import LLMAgent
 from kiui.agent.context import (
     ContextManager,
     ToolResultEnvelope,
@@ -334,7 +334,9 @@ def test_waiting_process_inspection_shows_activity_indicator():
 
     LLMAgent.execute_tool_calls(agent, [tool_call])
 
-    assert console.thinking_calls == [{"label": "Waiting for inspect_processes"}]
+    assert console.thinking_calls == [
+        {"label": "Executing", "status_suffix": "inspect_processes"}
+    ]
 
 
 def test_small_exec_result_discards_temporary_artifact(tmp_path):
@@ -577,7 +579,8 @@ def test_tool_artifact_names_do_not_overwrite_existing_files(tmp_path):
 def test_call_api_sets_output_limit_and_rejects_truncated_response():
     kwargs_seen = {}
     added = []
-    usage = NS(prompt_tokens=1, completion_tokens=MAX_OUTPUT_TOKENS, total_tokens=MAX_OUTPUT_TOKENS + 1)
+    max_output_tokens = 20_000
+    usage = NS(prompt_tokens=1, completion_tokens=max_output_tokens, total_tokens=max_output_tokens + 1)
 
     def completion(kwargs):
         kwargs_seen.update(kwargs)
@@ -586,6 +589,7 @@ def test_call_api_sets_output_limit_and_rejects_truncated_response():
     agent = NS(
         context_length=0,
         model="test-model",
+        max_output_tokens=max_output_tokens,
         INITIAL_BACKOFF=1.0,
         MAX_BACKOFF=64.0,
         verbose=False,
@@ -606,7 +610,7 @@ def test_call_api_sets_output_limit_and_rejects_truncated_response():
     with pytest.raises(RuntimeError, match="finish_reason='length'"):
         LLMAgent.call_api(agent)
 
-    assert kwargs_seen["max_tokens"] == 20_000
+    assert kwargs_seen["max_tokens"] == max_output_tokens
     assert added == []
 
 
