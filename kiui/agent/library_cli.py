@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 
 from rich.console import Console
@@ -38,22 +39,35 @@ def _repo() -> str:
     return repo
 
 
+def _add_verbose(parser: argparse.ArgumentParser, *, global_option: bool = False) -> None:
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        default=False if global_option else argparse.SUPPRESS,
+        help="show detailed operation and Git logs",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="kib",
         description="Manage skills in a personal GitHub-backed library.",
     )
+    _add_verbose(parser, global_option=True)
     commands = parser.add_subparsers(dest="command", required=True)
     list_command = commands.add_parser("list", help="list available skills")
+    _add_verbose(list_command)
     list_command.add_argument("pattern", nargs="?", help="filter skill names by substring")
     list_command.add_argument(
         "--local", action="store_true", help="list skills installed in this project"
     )
 
     install = commands.add_parser("install", help="install library skills into this project")
+    _add_verbose(install)
     install.add_argument("names", nargs="+", metavar="name")
 
     update = commands.add_parser("update", help="sync installed skills with the library")
+    _add_verbose(update)
     update.add_argument("names", nargs="*", metavar="name")
     update.add_argument(
         "--prefer",
@@ -62,10 +76,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     remove = commands.add_parser("remove", help="remove skills from the library or project")
+    _add_verbose(remove)
     remove.add_argument("names", nargs="+", metavar="name")
     remove.add_argument("--local", action="store_true", help="remove from this project")
 
     upload = commands.add_parser("upload", help="upload project skills to the library")
+    _add_verbose(upload)
     upload.add_argument("names", nargs="+", metavar="name")
     upload.add_argument("--force", action="store_true", help="replace an existing library skill")
     return parser
@@ -74,6 +90,16 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     console = Console()
+    library_logger = logging.getLogger("kiui.agent.library")
+    verbose_handler: logging.Handler | None = None
+    previous_level = library_logger.level
+    previous_propagate = library_logger.propagate
+    if args.verbose:
+        verbose_handler = logging.StreamHandler()
+        verbose_handler.setFormatter(logging.Formatter("[kib] %(message)s"))
+        library_logger.addHandler(verbose_handler)
+        library_logger.setLevel(logging.INFO)
+        library_logger.propagate = False
 
     try:
         local_names: set[str] = set()
@@ -164,6 +190,11 @@ def main(argv: list[str] | None = None) -> int:
     except LibraryError as exc:
         Console(stderr=True).print(f"[bold red]Error:[/bold red] {exc}")
         return 1
+    finally:
+        if verbose_handler is not None:
+            library_logger.removeHandler(verbose_handler)
+            library_logger.setLevel(previous_level)
+            library_logger.propagate = previous_propagate
 
 
 if __name__ == "__main__":

@@ -18,6 +18,7 @@ Use `kib` through `exec_command` from the project working directory.
 - `kib upload <name> [<name> ...] --force` — update existing remote skills.
 - `kib remove <name> [<name> ...]` — remove one or more skills from the remote library.
 - `kib remove <name> [<name> ...] --local` — remove one or more project copies without accessing the library.
+- `kib --verbose <command> ...` — show operation progress, Git commands, output, exit status, and timing details for troubleshooting.
 
 The library repository comes from `kia_lib` in `.kiui.yaml` and uses the current Git/SSH authentication environment. Do not overwrite an existing local skill with `kib install`; use `kib update` to synchronize it. Update tracks the last common copy in each skill's committed `.kib.json`, works across machines, and refuses to guess when both local and remote changed.
 

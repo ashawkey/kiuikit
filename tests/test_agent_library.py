@@ -83,6 +83,16 @@ def test_missing_repo_error_explains_configuration():
         _validate_repo("")
 
 
+def test_git_verbose_log_includes_timing(caplog, tmp_path):
+    from kiui.agent import library
+
+    caplog.set_level("INFO", logger="kiui.agent.library")
+    library._git("--version", cwd=tmp_path)
+
+    assert "Running git --version" in caplog.text
+    assert "with exit code 0 in" in caplog.text
+
+
 def test_inaccessible_repo_error_is_clear(tmp_path):
     missing = tmp_path / "does-not-exist.git"
     with pytest.raises(LibraryError, match="cannot access the kia_lib repository"):
@@ -150,6 +160,20 @@ def test_remote_list_filters_skill_names_by_pattern(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "• image-tools" in output
     assert "pdf-reading" not in output
+
+
+def test_cli_verbose_logs_local_operations(monkeypatch, capsys):
+    from kiui.agent import library_cli
+
+    monkeypatch.setattr(library_cli, "_configured_repo", lambda: None)
+
+    assert library_cli.main(["--verbose", "list", "--local"]) == 0
+    output = capsys.readouterr()
+    assert "[kib] Scanning local skills in" in output.err
+
+    assert library_cli.main(["list", "--local", "--verbose"]) == 0
+    output = capsys.readouterr()
+    assert "[kib] Scanning local skills in" in output.err
 
 
 def test_local_list_filters_skill_names_by_pattern(monkeypatch, capsys):

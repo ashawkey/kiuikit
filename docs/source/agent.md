@@ -201,6 +201,7 @@ kib upload pdf-processing
 kib upload pdf-processing --force
 kib remove pdf-processing
 kib remove pdf-processing --local
+kib --verbose list  # show operation, Git command, and timing details
 ```
 
 Remote skills are not exposed to the agent until installed. `kib update` safely synchronizes all installed skills, or only the optional names: local-only changes are uploaded, remote-only changes are downloaded, and conflicts require `--prefer local` or `--prefer remote`. The committed `.kib.json` in each skill records its last synchronized tree, so this works across machines without relying on a local cache. `kib remove` deletes from the library; `--local` deletes only from the project. `kib` only manages project skills under `./.kia/skills/` and does not list or special-case bundled skills. Upload validates the pack and rejects symlinks; `kib install` never overwrites existing local skills.

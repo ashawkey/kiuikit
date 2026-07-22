@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
+import shlex
 import shutil
 import stat
 import subprocess
 import tempfile
+import time
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
@@ -19,14 +22,25 @@ from filelock import FileLock
 from kiui.agent.skills import read_skill, valid_skill_name
 
 
+logger = logging.getLogger(__name__)
+
+
 class LibraryError(RuntimeError):
     """A user-facing skill library error."""
 
 
 def _git(*args: str, cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess:
+    command = ["git", *args]
+    display_command = command.copy()
+    if args[:2] == ("clone", "--quiet"):
+        display_command[-2] = "<repository>"
+    command_text = shlex.join(display_command)
+    location = f" (cwd: {cwd})" if cwd is not None else ""
+    logger.info("Running %s%s", command_text, location)
+    started = time.monotonic()
     try:
         result = subprocess.run(
-            ["git", *args],
+            command,
             cwd=cwd,
             text=True,
             stdout=subprocess.PIPE,
@@ -34,6 +48,16 @@ def _git(*args: str, cwd: Path | None = None, check: bool = True) -> subprocess.
         )
     except FileNotFoundError as exc:
         raise LibraryError("Git is not installed or is not available on PATH") from exc
+    logger.info(
+        "Finished %s with exit code %d in %.2fs",
+        command_text,
+        result.returncode,
+        time.monotonic() - started,
+    )
+    if result.stdout.strip():
+        logger.info("Git stdout: %s", result.stdout.strip())
+    if result.stderr.strip():
+        logger.info("Git stderr: %s", result.stderr.strip())
     if check and result.returncode:
         detail = result.stderr.strip() or result.stdout.strip()
         raise LibraryError(f"git {' '.join(args)} failed: {detail}")
@@ -51,6 +75,7 @@ def _validate_repo(repo: str) -> str:
 
 def _sync_checkout(root: Path) -> None:
     """Reset the managed checkout to the remote main branch."""
+    logger.info("Refreshing cached checkout")
     _git("reset", "--hard", cwd=root, check=False)
     _git("clean", "-fdx", cwd=root)
     _git("fetch", "--quiet", "origin", cwd=root)
@@ -81,10 +106,15 @@ def _checkout(repo: str) -> Iterator[Path]:
     root = library_root / key
     library_root.mkdir(parents=True, exist_ok=True)
 
-    with FileLock(str(library_root / f"{key}.lock")):
+    lock_path = library_root / f"{key}.lock"
+    logger.info("Library cache: %s", root)
+    logger.info("Waiting for cache lock: %s", lock_path)
+    with FileLock(str(lock_path)):
+        logger.info("Acquired cache lock")
         creating = not root.exists()
         try:
             if creating:
+                logger.info("Cloning library repository")
                 _git("clone", "--quiet", repo, str(root))
             elif not (root / ".git").is_dir():
                 raise LibraryError(f"invalid library cache: {root}")
@@ -246,6 +276,7 @@ def list_local_skills(
 ) -> tuple[dict[str, dict], list[dict]]:
     """Return skills installed in the current project's ``.kia`` directory."""
     base = Path(work_dir) if work_dir is not None else Path.cwd()
+    logger.info("Scanning local skills in %s", base / ".kia" / "skills")
     skills_dir = base / ".kia" / "skills"
     skills: dict[str, dict] = {}
     errors: list[dict] = []
@@ -264,6 +295,7 @@ def list_local_skills(
 
 def list_skills(repo: str) -> tuple[dict[str, dict], list[dict]]:
     """Return valid marketplace skills and malformed-entry diagnostics."""
+    logger.info("Listing remote library skills")
     with _checkout(repo) as checkout:
         skills_dir = _skills_root(checkout)
         skills: dict[str, dict] = {}
@@ -297,6 +329,7 @@ def _remote_skill(checkout: Path, name: str) -> Path:
 
 def install_skill(repo: str, name: str, work_dir: str | Path | None = None) -> Path:
     """Install one remote skill into ``<work_dir>/.kia/skills`` atomically."""
+    logger.info("Installing skill %s", name)
     base = Path(work_dir) if work_dir is not None else Path.cwd()
     dest_root = base / ".kia" / "skills"
     dest = dest_root / name
@@ -330,6 +363,7 @@ def update_skill(
     """
     if prefer not in (None, "local", "remote"):
         raise LibraryError(f"invalid update preference: {prefer!r}")
+    logger.info("Updating skill %s", name)
     base = Path(work_dir) if work_dir is not None else Path.cwd()
     dest = base / ".kia" / "skills" / name
     if not dest.is_dir() or dest.is_symlink():
@@ -470,6 +504,7 @@ def _record_sync(skill: Path, digest: str) -> bool:
 
 def remove_local_skill(name: str, work_dir: str | Path | None = None) -> Path:
     """Remove one project skill from ``<work_dir>/.kia/skills``."""
+    logger.info("Removing local skill %s", name)
     if not valid_skill_name(name):
         raise LibraryError(f"invalid skill name: {name!r}")
     base = Path(work_dir) if work_dir is not None else Path.cwd()
@@ -482,6 +517,7 @@ def remove_local_skill(name: str, work_dir: str | Path | None = None) -> Path:
 
 def remove_skill(repo: str, name: str) -> str:
     """Remove a skill from the library and return the new commit hash."""
+    logger.info("Removing remote skill %s", name)
     if not valid_skill_name(name):
         raise LibraryError(f"invalid skill name: {name!r}")
 
@@ -507,6 +543,7 @@ def upload_skill(
 
     Returns the new commit hash, or ``None`` when the remote copy is identical.
     """
+    logger.info("Uploading skill %s", name)
     if not valid_skill_name(name):
         raise LibraryError(f"invalid skill name: {name!r}")
     base = Path(work_dir) if work_dir is not None else Path.cwd()
