@@ -318,6 +318,7 @@ class AgentCommandsMixin:
         self.profile = resolve_model_profile(self.model, self.model_alias)
         self.tools = self._get_tool_definitions()
         self.context_length = model_conf.get("context_length", self.profile.context_length)
+        self.max_output_tokens = model_conf.get("max_output_tokens", self.profile.max_output_tokens)
         self.reasoning_effort = model_conf.get("reasoning_effort", self.reasoning_effort)
         self.show_thinking = self.profile.reasoning is not None
 

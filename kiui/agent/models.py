@@ -16,18 +16,22 @@ class ModelProfile:
     context_length: int = 128_000
     reasoning: str | None = None  # "openai" | "anthropic" | "gemini" | "deepseek" | "kimi"
     supports_image_input: bool = False
+    # Max output tokens per request. Reasoning tokens count against this budget,
+    # so reasoning models need generous ceilings to avoid mid-tool-call
+    # `finish_reason="length"` truncation. Kept below each provider's hard cap.
+    max_output_tokens: int = 32_000
 
 
 # Ordered most-specific → least-specific within each family.
 # Matching is case-insensitive substring; first hit wins.
 MODEL_CATALOG: list[tuple[str, ModelProfile]] = [
-    ("gpt-5", ModelProfile(context_length=258_000, reasoning="openai", supports_image_input=True)),
+    ("gpt-5", ModelProfile(context_length=258_000, reasoning="openai", supports_image_input=True, max_output_tokens=128_000)),
     ("gpt", ModelProfile(supports_image_input=True)),
-    ("gemini", ModelProfile(context_length=1_000_000, reasoning="gemini", supports_image_input=True)),
-    ("claude", ModelProfile(context_length=1_000_000, reasoning="anthropic", supports_image_input=True)),
-    ("deepseek", ModelProfile(context_length=1_000_000, reasoning="deepseek")),
-    ("glm", ModelProfile(context_length=1_000_000, reasoning="deepseek")),
-    ("kimi-k3", ModelProfile(context_length=1_000_000, reasoning="kimi", supports_image_input=True)),
+    ("gemini", ModelProfile(context_length=1_000_000, reasoning="gemini", supports_image_input=True, max_output_tokens=64_000)),
+    ("claude", ModelProfile(context_length=1_000_000, reasoning="anthropic", supports_image_input=True, max_output_tokens=64_000)),
+    ("deepseek", ModelProfile(context_length=1_000_000, reasoning="deepseek", max_output_tokens=64_000)),
+    ("glm", ModelProfile(context_length=1_000_000, reasoning="deepseek", max_output_tokens=64_000)),
+    ("kimi-k3", ModelProfile(context_length=1_000_000, reasoning="kimi", supports_image_input=True, max_output_tokens=64_000)),
     ("kimi", ModelProfile(supports_image_input=True)),
 ]
 

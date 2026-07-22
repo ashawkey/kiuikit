@@ -76,9 +76,6 @@ from kiui.agent.utils.io import (
     sanitize_unicode,
 )
 
-MAX_OUTPUT_TOKENS = 20_000
-
-
 # HTTP status codes that represent transient failures worth retrying even
 # though they are 4xx. Everything else in the 4xx range is a permanent client
 # error (bad key, bad request, unknown model, …) and must not be retried.
@@ -148,6 +145,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self.show_thinking = self.profile.reasoning is not None
         self.reasoning_effort = reasoning_effort
         self.context_length = context_length if context_length is not None else self.profile.context_length
+        self.max_output_tokens = self.profile.max_output_tokens
         self.token_estimator = TokenEstimator()
 
         self.events = events
@@ -413,7 +411,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             "model": self.model,
             "messages": messages,
             "stream": self.stream,
-            "max_tokens": MAX_OUTPUT_TOKENS,
+            "max_tokens": self.max_output_tokens,
         }
         if self.stream:
             # Ask the server to emit a final usage-only chunk so streamed turns
@@ -479,7 +477,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             raise RuntimeError(
                 "Response truncated by the output-token limit "
                 f"(finish_reason='length', output={usage.completion_tokens:,}, "
-                f"requested max_tokens={MAX_OUTPUT_TOKENS:,})."
+                f"requested max_tokens={self.max_output_tokens:,})."
             )
 
         self.context.add(message)
