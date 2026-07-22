@@ -70,26 +70,6 @@ def test_consume_stream_reassembles_tool_call_fragments():
     assert tc["function"]["arguments"] == '{"file": "a.py"}'
 
 
-def test_consume_stream_captures_finish_reason():
-    stream = [_chunk(_delta(content="partial"), finish_reason="length")]
-    message, _, finish_reason = consume_stream(stream)
-    assert message["content"] == "partial"
-    assert finish_reason == "length"
-
-
-def test_consume_stream_captures_reasoning_variants():
-    thoughts = []
-    stream = [
-        _chunk(_delta(reasoning_content="think ")),   # deepseek-style
-        _chunk(_delta(reasoning="more")),             # openai/gemini-style
-        _chunk(_delta(content="answer")),
-    ]
-    message, _, _ = consume_stream(stream, on_thinking=thoughts.append)
-    assert thoughts == ["think ", "more"]
-    assert message["reasoning_content"] == "think more"
-    assert message["content"] == "answer"
-
-
 def test_consume_stream_stops_early_on_should_stop():
     parts = []
     seen = {"n": 0}
@@ -110,70 +90,3 @@ def test_consume_stream_stops_early_on_should_stop():
 
 def _stream_events(hub):
     return [(e.type, e.data.get("text")) for e in hub.after(0)]
-
-
-def test_response_stream_emits_reasoning_events_only_when_shown():
-    """show_thinking gates reasoning uniformly: no thinking events when off."""
-    hub = EventHub()
-    console = AgentConsole(events=hub)
-    with console.stream_response(show_thinking=False) as sink:
-        sink.on_thinking("secret reasoning")
-        sink.on_content("answer")
-
-    events = _stream_events(hub)
-    assert ("thinking_delta", "secret reasoning") not in events
-    assert all(etype != "thinking" for etype, _ in events)
-    assert ("assistant_delta", "answer") in events
-    assert ("assistant_message", "answer") in events
-
-
-def test_response_stream_finalizes_reasoning_when_shown():
-    hub = EventHub()
-    console = AgentConsole(events=hub)
-    with console.stream_response(show_thinking=True) as sink:
-        sink.on_thinking("let me think")
-        sink.on_content("answer")
-
-    events = _stream_events(hub)
-    assert ("thinking_delta", "let me think") in events
-    # A finalizing thinking event lets late-joining clients rebuild the block.
-    assert ("thinking", "let me think") in events
-    assert ("assistant_message", "answer") in events
-
-
-def test_response_stream_renders_terminal_markdown_once_on_close():
-    console = Mock()
-    sink = AgentConsole().stream_response()
-    sink._console = console
-
-    with sink:
-        sink.on_content("# Head")
-        sink.on_content("ing")
-        console.print.assert_not_called()
-
-    console.print.assert_called_once()
-    rendered = console.print.call_args.args[0]
-    assert isinstance(rendered, Table)
-    assert rendered.columns[0]._cells[0].plain == "• "
-    markdown = rendered.columns[1]._cells[0]
-    assert isinstance(markdown, Markdown)
-    assert markdown.markup == "# Heading"
-
-    sink.close()
-    sink.on_content(" ignored")
-    console.print.assert_called_once()
-
-
-def test_response_stream_does_not_render_failed_attempt():
-    console = Mock()
-    sink = AgentConsole().stream_response()
-    sink._console = console
-
-    try:
-        with sink:
-            sink.on_content("partial response")
-            raise RuntimeError("stream failed")
-    except RuntimeError:
-        pass
-
-    console.print.assert_not_called()

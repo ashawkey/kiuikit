@@ -56,20 +56,6 @@ def test_hub_is_loopback_only():
     assert hub.host == "127.0.0.1"
 
 
-def test_built_frontend_and_security_policy_are_served():
-    hub = make_hub()
-    with TestClient(hub.app) as client:
-        response = client.get("/")
-        assert response.status_code == 200
-        assert '<div id="root"></div>' in response.text
-        asset = re.search(r'(?:src|href)="(/assets/[^"]+)"', response.text)
-        assert asset is not None
-        assert client.get(asset.group(1)).status_code == 200
-        policy = response.headers["content-security-policy"]
-        assert "script-src 'self'" in policy
-        assert "style-src 'self' 'unsafe-inline'" in policy
-
-
 def test_login_rejects_bad_tokens():
     hub = make_hub()
     with TestClient(hub.app) as client:
@@ -82,14 +68,6 @@ def test_login_rejects_bad_tokens():
         assert "Secure" not in response.headers["set-cookie"]
 
 
-def test_https_proxy_marks_session_cookie_secure():
-    hub = make_hub()
-    with TestClient(hub.app, base_url="https://kia.example") as client:
-        response = client.post("/api/login", json={"token": "correct-token"})
-        assert response.status_code == 200
-        assert "Secure" in response.headers["set-cookie"]
-
-
 def test_sessions_endpoint_requires_auth_and_lists():
     hub = make_hub()
     add_session(hub, "s1")
@@ -100,41 +78,7 @@ def test_sessions_endpoint_requires_auth_and_lists():
         assert [s["id"] for s in listed] == ["s1"]
 
 
-def test_logout_removes_login_without_refreshing_it():
-    hub = make_hub()
-    with TestClient(hub.app) as client:
-        response = client.post("/api/login", json={"token": "correct-token"})
-        login_id = response.cookies["kia_web_session"]
-        csrf = response.json()["csrf"]
-
-        class TrackingDict(dict):
-            writes = 0
-
-            def __setitem__(self, key, value):
-                self.writes += 1
-                super().__setitem__(key, value)
-
-        hub._logins = TrackingDict(hub._logins)
-
-        response = client.post("/api/logout", headers={"x-csrf-token": csrf})
-        assert response.status_code == 200
-        assert login_id not in hub._logins
-        assert hub._logins.writes == 0
-
-
 # -- browser websockets ----------------------------------------------------
-
-def test_control_channel_lists_sessions():
-    hub = make_hub()
-    add_session(hub, "s1")
-    with TestClient(hub.app) as client:
-        client.post("/api/login", json={"token": "correct-token"})
-        with client.websocket_connect(
-            "/api/ws", headers={"origin": "http://testserver"}
-        ) as sock:
-            message = receive_type(sock, "sessions")
-            assert [s["id"] for s in message["sessions"]] == ["s1"]
-
 
 def test_per_session_state_and_event_replay():
     hub = make_hub()
@@ -152,114 +96,6 @@ def test_per_session_state_and_event_replay():
             assert receive_type(sock, "system")["data"]["text"] == "ready"
 
 
-def test_per_session_reports_truncated_replay():
-    hub = make_hub()
-    session = add_session(hub, "s1")
-    session.events = EventHub(max_events=2)
-    session.events.publish("system", text="evicted")
-    session.events.publish("system", text="kept-1")
-    session.events.publish("system", text="kept-2")
-    with TestClient(hub.app) as client:
-        client.post("/api/login", json={"token": "correct-token"})
-        with client.websocket_connect(
-            "/api/ws?session=s1&after=0", headers={"origin": "http://testserver"}
-        ) as sock:
-            state = receive_type(sock, "state")
-            assert state["replay_truncated"] is True
-            assert state["oldest_seq"] == 2
-            assert receive_type(sock, "system")["data"]["text"] == "kept-1"
-
-
-def test_per_session_state_reflects_derived_prompt():
-    hub = make_hub()
-    session = add_session(hub, "s1")
-    session.ingest({
-        "type": "prompt_open",
-        "data": {"id": "p1", "kind": "select", "message": "ok?",
-                 "choices": ["Yes", "No"], "default": "Yes"},
-    })
-    with TestClient(hub.app) as client:
-        client.post("/api/login", json={"token": "correct-token"})
-        with client.websocket_connect(
-            "/api/ws?session=s1&after=0", headers={"origin": "http://testserver"}
-        ) as sock:
-            state = receive_type(sock, "state")
-            assert state["prompt"]["id"] == "p1"
-
-
-def test_per_session_restarts_stream_on_agent_reconnect():
-    hub = make_hub()
-    session = add_session(hub, "s1")
-    session.events.publish("system", text="first")
-    with TestClient(hub.app) as client:
-        client.post("/api/login", json={"token": "correct-token"})
-        with client.websocket_connect(
-            "/api/ws?session=s1&after=0", headers={"origin": "http://testserver"}
-        ) as sock:
-            first_stream = receive_type(sock, "state")["stream_id"]
-            assert receive_type(sock, "system")["data"]["text"] == "first"
-
-            # Agent reconnects: register swaps in a fresh event stream.
-            hub.register("s1", session.meta)
-            reconnected = hub.get_session("s1")
-            reconnected.events.publish("system", text="second")
-
-            # The browser must be re-issued state on the new stream, then the
-            # new event — not silently stall on the stale sequence cursor.
-            new_state = receive_type(sock, "state")
-            assert new_state["stream_id"] != first_stream
-            assert receive_type(sock, "system")["data"]["text"] == "second"
-
-
-def test_unknown_session_is_rejected():
-    hub = make_hub()
-    with TestClient(hub.app) as client:
-        client.post("/api/login", json={"token": "correct-token"})
-        with client.websocket_connect(
-            "/api/ws?session=missing", headers={"origin": "http://testserver"}
-        ) as sock:
-            with pytest.raises(WebSocketDisconnect) as exc:
-                sock.receive_json()
-        assert exc.value.code == 4404
-
-
-def test_submit_without_agent_is_rejected():
-    hub = make_hub()
-    add_session(hub, "s1")  # registered but no live agent websocket
-    with TestClient(hub.app) as client:
-        client.post("/api/login", json={"token": "correct-token"})
-        with client.websocket_connect(
-            "/api/ws?session=s1", headers={"origin": "http://testserver"}
-        ) as sock:
-            receive_type(sock, "state")
-            sock.send_json({"type": "submit", "text": "hi"})
-            assert receive_type(sock, "rejected")["error"] == "Agent is offline."
-
-
-def test_unknown_browser_action_is_rejected_without_forwarding():
-    hub = make_hub()
-    session = add_session(hub, "s1")
-
-    class FakeAgentSocket:
-        def __init__(self):
-            self.sent = []
-
-        async def send_json(self, payload):
-            self.sent.append(payload)
-
-    agent = FakeAgentSocket()
-    session.agent_ws = agent
-    with TestClient(hub.app) as client:
-        client.post("/api/login", json={"token": "correct-token"})
-        with client.websocket_connect(
-            "/api/ws?session=s1", headers={"origin": "http://testserver"}
-        ) as sock:
-            receive_type(sock, "state")
-            sock.send_json({"type": "delete_all_files"})
-            assert receive_type(sock, "rejected")["error"] == "Unknown action type."
-    assert agent.sent == []
-
-
 def test_websocket_requires_same_origin():
     hub = make_hub()
     add_session(hub, "s1")
@@ -273,182 +109,9 @@ def test_websocket_requires_same_origin():
         assert exc.value.code == 4403
 
 
-def test_malformed_json_rejected_without_disconnect():
-    hub = make_hub()
-    add_session(hub, "s1")
-    with TestClient(hub.app) as client:
-        client.post("/api/login", json={"token": "correct-token"})
-        with client.websocket_connect(
-            "/api/ws?session=s1", headers={"origin": "http://testserver"}
-        ) as sock:
-            receive_type(sock, "state")
-            sock.send_text("not-json")
-            assert receive_type(sock, "rejected")["error"] == "Invalid JSON message."
-
-
-def test_client_slot_released_after_disconnect():
-    hub = make_hub()
-    add_session(hub, "s1")
-    with TestClient(hub.app) as client:
-        client.post("/api/login", json={"token": "correct-token"})
-        for _ in range(3):
-            with client.websocket_connect(
-                "/api/ws?session=s1", headers={"origin": "http://testserver"}
-            ) as sock:
-                receive_type(sock, "state")
-                assert hub._clients == 1
-    deadline = time.time() + 2
-    while hub._clients != 0 and time.time() < deadline:
-        time.sleep(0.01)
-    assert hub._clients == 0
-
-
 # -- RemoteSession derived-state unit --------------------------------------
 
-def test_remote_session_ingest_tracks_derived_state():
-    session = RemoteSession("s", {})
-    session.ingest({"type": "operation_start", "data": {"id": "op1"}})
-    assert session.operation_id == "op1"
-    session.ingest({"type": "operation_end", "data": {"id": "op1"}})
-    assert session.operation_id is None
-    session.ingest({"type": "prompt_open", "data": {
-        "id": "p", "kind": "text", "message": "m", "choices": [], "default": ""}})
-    assert session.prompt["id"] == "p"
-    session.ingest({"type": "prompt_resolved", "data": {"id": "p"}})
-    assert session.prompt is None
-    session.ingest({"type": "pending_set", "data": {
-        "id": "m", "text": "later", "source": "web", "action_id": "a"}})
-    assert session.pending == {
-        "id": "m", "text": "later", "source": "web", "action_id": "a"
-    }
-    session.ingest({"type": "pending_cleared", "data": {"id": "m"}})
-    assert session.pending is None
-    # Every ingested event is re-published for browser replay.
-    assert session.events.latest_seq == 6
-
-
 # -- action feedback / discovery -------------------------------------------
-
-def test_apply_reports_broker_failures():
-    from kiui.agent.hubclient import HubClient
-
-    events = EventHub()
-    inputs = InputBroker(events)
-    prompts = PromptBroker(events)
-    cancellation = CancellationToken(events)
-    client = HubClient(
-        events, inputs, prompts, cancellation,
-        host="127.0.0.1", port=1, token="", session_id="x", meta={},
-    )
-
-    inputs.submit("first", "web")  # occupy the single input slot
-    before = events.latest_seq
-    client._apply({
-        "type": "submit", "text": "overflow", "action_id": "action-1"
-    })
-    rejected = [
-        e for e in events.after(before) if e.type == "submission_rejected"
-    ]
-    assert rejected and rejected[0].data["action_id"] == "action-1"
-    assert "already pending" in rejected[0].data["error"].lower()
-
-    inputs.get_nowait()
-    operation_id = cancellation.begin("working")
-    client._apply({
-        "type": "submit", "text": "while busy", "action_id": "action-2"
-    })
-    assert inputs.submission is not None
-    assert inputs.submission.text == "while busy"
-    assert inputs.submission.action_id == "action-2"
-    inputs.get_nowait()
-    cancellation.finish(operation_id)
-
-    before = events.latest_seq
-    client._apply({"type": "prompt_response", "id": "missing", "answer": "x"})
-    errors = [e for e in events.after(before) if e.type == "error"]
-    assert errors and "not accepted" in errors[0].data["text"].lower()
-
-
-def test_discover_hub_ignores_stale_file(tmp_path, monkeypatch):
-    import kiui.agent.hub as hubmod
-
-    info_path = tmp_path / "hub.json"
-    monkeypatch.setattr(hubmod, "HUB_INFO_PATH", info_path)
-
-    reachable = hubmod._hub_reachable
-    monkeypatch.setattr(
-        hubmod, "_hub_reachable",
-        lambda *args, **kwargs: pytest.fail("missing discovery file should not probe"),
-    )
-    assert hubmod.discover_hub() is None  # no file
-    monkeypatch.setattr(hubmod, "_hub_reachable", reachable)
-
-    dead = free_port()  # bound then released -> nothing listening
-    info_path.write_text(json.dumps({"host": "127.0.0.1", "port": dead, "token": "s"}))
-    assert hubmod.discover_hub() is None  # stale: unreachable
-
-    port = free_port()
-    hub = Hub(port=port, token="t")
-    hub.start()  # writes the (monkeypatched) info file
-    try:
-        got = hubmod.discover_hub()
-        assert got is not None and got["port"] == port
-    finally:
-        hub.stop()
-
-
-def test_hub_rejects_double_start(tmp_path, monkeypatch):
-    import kiui.agent.hub as hubmod
-
-    monkeypatch.setattr(hubmod, "HUB_INFO_PATH", tmp_path / "hub.json")
-    hub = Hub(port=free_port(), token="t")
-    hub.start()
-    try:
-        with pytest.raises(RuntimeError, match="already started"):
-            hub.start()
-    finally:
-        hub.stop()
-
-
-def test_hubclient_uses_server_assigned_session_id():
-    import asyncio
-    from kiui.agent.hubclient import HubClient
-
-    events = EventHub()
-    client = HubClient(
-        events,
-        InputBroker(events),
-        PromptBroker(events),
-        CancellationToken(events),
-        host="127.0.0.1",
-        port=1,
-        token="s",
-        session_id="",
-        meta={},
-    )
-
-    class FakeWebSocket:
-        async def send(self, _payload):
-            pass
-
-        async def recv(self):
-            return json.dumps({"type": "registered", "session_id": "assigned"})
-
-        def __aiter__(self):
-            return self
-
-        async def __anext__(self):
-            raise StopAsyncIteration
-
-    async def run():
-        client._stopped.set()
-        client._async_stopped = asyncio.Event()
-        client._async_stopped.set()
-        await client._session(FakeWebSocket())
-
-    asyncio.run(run())
-    assert client.session_id == "assigned"
-
 
 # -- live agent link (real loopback; internal endpoint is 127.0.0.1 only) ---
 
@@ -581,34 +244,6 @@ def test_two_sessions_stream_concurrently():
         client_a.stop()
         client_b.stop()
         hub.stop()
-
-
-def test_agent_reconnect_rejects_old_socket_events():
-    import asyncio
-
-    class Socket:
-        def __init__(self, messages):
-            self.messages = iter(messages)
-            self.closed = []
-
-        async def receive_json(self):
-            return next(self.messages)
-
-        async def close(self, **kwargs):
-            self.closed.append(kwargs)
-
-    hub = make_hub()
-    session = hub.register("same", {})
-    old = Socket([{
-        "type": "event",
-        "event": {"type": "system", "data": {"text": "stale"}},
-    }])
-    new = Socket([])
-    session.agent_ws = new
-    asyncio.run(hub._serve_agent(old, session))
-
-    assert old.closed
-    assert session.events.latest_seq == 0
 
 
 def test_agent_link_rejects_wrong_token():

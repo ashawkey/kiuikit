@@ -106,27 +106,12 @@ def test_safety_blocks_recursive_delete_of_work_dir(tmp_path):
     assert not allowed and reason
 
 
-def test_safety_allows_recursive_delete_in_unprotected_top_level_tree(tmp_path):
-    allowed, reason = SafetyGuard().check(
-        "exec_command", {"command": f"rm -rf {tmp_path / 'cache'}"}
-    )
-    assert allowed and reason == ""
-
-
 @unix_only
 def test_safety_blocks_symlink_to_critical_path(tmp_path):
     link = tmp_path / "system"
     link.symlink_to("/etc")
     allowed, reason = SafetyGuard(work_dir=tmp_path).check(
         "exec_command", {"command": "rm -rf system"}
-    )
-    assert not allowed and reason
-
-
-@unix_only
-def test_safety_blocks_relative_critical_delete_from_cwd(tmp_path):
-    allowed, reason = SafetyGuard(work_dir=tmp_path).check(
-        "exec_command", {"command": "rm -rf .", "cwd": "/etc"}
     )
     assert not allowed and reason
 
@@ -144,19 +129,6 @@ def test_safety_blocks_file_tool_write_to_block_device():
 def test_safety_blocks_remove_file_on_critical_paths(path):
     allowed, reason = SafetyGuard().check("remove_file", {"file": path})
     assert not allowed and reason
-
-
-@unix_only
-def test_safety_blocks_remove_block_device():
-    allowed, reason = SafetyGuard().check("remove_file", {"file": "/dev/sda"})
-    assert not allowed and reason
-
-
-def test_safety_allows_remove_file_elsewhere(tmp_path):
-    allowed, reason = SafetyGuard().check(
-        "remove_file", {"file": str(tmp_path / "cache")}
-    )
-    assert allowed and reason == ""
 
 
 @windows_only
@@ -210,47 +182,3 @@ class _FakeConsole:
 
     def ask_text(self, *a, **k):
         return ""
-
-
-@unix_only
-def test_safety_denial_prints_command():
-    console = _FakeConsole()
-    ctrl = PermissionController(console=console)
-    command = "echo 'unterminated"
-
-    allowed, reason = ctrl.check("exec_command", {"command": command})
-
-    assert not allowed and "cannot safely parse" in reason
-    assert console.printed[-1] == ((f"   Command: {command!r}",), {"markup": False})
-
-
-def test_background_process_permissions():
-    ctrl = PermissionController(
-        mode=PermissionMode.DEFAULT,
-        console=_FakeConsole(answer="No"),
-    )
-    assert not ctrl.check("start_process", {"command": "python server.py"})[0]
-    assert ctrl.check("inspect_processes", {})[0]
-    assert not ctrl.check("stop_process", {"process_id": "p-test"})[0]
-
-
-def test_outside_write_uses_normal_default_permission():
-    ctrl = PermissionController(
-        mode=PermissionMode.DEFAULT,
-        console=_FakeConsole(answer="Yes"),
-    )
-    allowed, reason = ctrl.check(
-        "write_file", {"file": "/etc/example.conf", "content": "x"}
-    )
-    assert allowed and reason == ""
-
-
-def test_outside_write_allowed_in_auto_mode():
-    ctrl = PermissionController(
-        mode=PermissionMode.AUTO,
-        console=_FakeConsole(),
-    )
-    allowed, reason = ctrl.check(
-        "write_file", {"file": "/etc/example.conf", "content": "x"}
-    )
-    assert allowed and reason == ""

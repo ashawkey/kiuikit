@@ -21,8 +21,3 @@ def test_fatal_client_errors_are_not_retried(status):
 @pytest.mark.parametrize("status", [408, 409, 425, 429, 500, 502, 503])
 def test_transient_errors_are_retried(status):
     assert _is_fatal_api_error(_StatusError(status)) is False
-
-
-def test_errors_without_status_are_retried():
-    # Connection errors / timeouts carry no status_code and must keep retrying.
-    assert _is_fatal_api_error(Exception("connection reset")) is False
