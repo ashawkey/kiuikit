@@ -632,14 +632,9 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 if denial_reason:
                     msg += f"\nReason: {denial_reason}"
                 result = {"error": msg, "success": False}
-            elif function_name == "exec_command":
-                with self.console.thinking(label="Running exec_command"):
-                    result = self.tool_executor.execute(function_name, function_args)
-            elif function_name == "inspect_processes" and function_args.get("wait", 0) > 0:
-                with self.console.thinking(label="Waiting for inspect_processes"):
-                    result = self.tool_executor.execute(function_name, function_args)
             else:
-                result = self.tool_executor.execute(function_name, function_args)
+                with self.console.thinking(label="Executing", status_suffix=function_name):
+                    result = self.tool_executor.execute(function_name, function_args)
             exec_elapsed = time.monotonic() - t_exec
             image_url = result.pop("image_url", None)
             if image_url and result.get("success"):
@@ -841,7 +836,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             return
         t_exec = time.monotonic()
         with self._operation("shell command"):
-            with self.console.thinking(label="Running exec_command"):
+            with self.console.thinking(label="Executing", status_suffix="exec_command"):
                 result = self.tool_executor.execute("exec_command", arguments)
         exec_elapsed = time.monotonic() - t_exec
         result_text = format_tool_result(result)
