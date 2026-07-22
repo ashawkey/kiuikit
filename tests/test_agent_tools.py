@@ -210,6 +210,46 @@ def test_read_image_tool_requires_multimodal_capability():
     }
 
 
+def test_tool_output_policy_is_consistent_without_repeating_shared_cap():
+    definitions = {
+        tool["function"]["name"]: tool["function"]["description"]
+        for tool in get_tool_definitions()
+    }
+    cap = f"{tools.MAX_TOOL_OUTPUT_CHARS:,}"
+
+    for name in ("read_file", "ls", "exec_command", "inspect_processes", "glob_files", "grep_files", "web_fetch"):
+        assert cap not in definitions[name]
+    assert "1,000 lines" in definitions["read_file"]
+    assert "500 results" in definitions["glob_files"]
+    assert "200 matching lines" in definitions["grep_files"]
+    assert tools.MAX_READ_BYTES == tools.MAX_TOOL_OUTPUT_CHARS
+    assert tools.MAX_EXEC_OUTPUT_CHARS == tools.MAX_TOOL_OUTPUT_CHARS
+    assert tools.MAX_PROCESS_LOG_TAIL_CHARS == tools.MAX_TOOL_OUTPUT_CHARS
+    assert tools.MAX_WEB_FETCH_CHARS == tools.MAX_TOOL_OUTPUT_CHARS
+
+
+def test_read_file_respects_shared_character_cap(tmp_path):
+    (tmp_path / "large.txt").write_text(("x" * 200 + "\n") * 1000)
+    result = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))._read_file("large.txt")
+
+    assert len(result["content"]) <= tools.MAX_TOOL_OUTPUT_CHARS
+    assert result["truncated"] is True
+    assert result["truncation_reason"] == "character cap"
+    assert "Use offset/limit for more" in result["content"]
+
+
+def test_structured_search_respects_shared_character_cap(tmp_path):
+    for index in range(500):
+        (tmp_path / f"{'x' * 80}-{index}.txt").write_text("match\n")
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+
+    for result in (te._glob_files("*.txt"), te._grep_files("match")):
+        assert len(format_tool_result(result)) <= tools.MAX_TOOL_OUTPUT_CHARS
+        assert result["truncated"] is True
+        assert result["truncation_reason"] == "character cap"
+        assert result["guidance"]
+
+
 def test_read_file_logs_offset_and_limit(tmp_path):
     class Console:
         def __init__(self):

@@ -8,6 +8,7 @@ Three layers of context window management:
 
 from __future__ import annotations
 
+import json
 import re
 import shlex
 import sys
@@ -86,17 +87,26 @@ TOOL_RESULT_DEFAULT_MAX_CHARS = 12_000
 TOOL_RESULT_MAX_CHARS = {
     "read_file": 24_000,
     "inspect_processes": 24_000,
-    "web_fetch": 20_000,
+    "web_fetch": 24_000,
 }
 GENERIC_RESULT_RATIO = 0.1
 GENERIC_RESULT_MIN_CHARS = 8_000
 GENERIC_RESULT_MAX_CHARS = 24_000
 
+# Upper bound on the raw capture fed into the semantic reducers. Well above any
+# ingress budget so diagnostics keep their surrounding context, but small enough
+# that a pathological multi-MiB capture is not scanned in full (the reducers only
+# ever emit a small excerpt and never surface the middle of a huge log).
+COMPACTION_INPUT_MAX_CHARS = 512_000
+
 PROACTIVE_TOOLS = frozenset({
     "read_file", "exec_command", "inspect_processes", "ls", "glob_files", "grep_files",
     "web_fetch", "web_search",
 })
-STRUCTURED_TOOLS = frozenset({"ls", "glob_files", "grep_files", "web_search"})
+PREFIX_TOOLS = frozenset({
+    "read_file", "web_fetch", "ls", "glob_files", "grep_files", "web_search",
+})
+LATEST_TOOLS = frozenset({"exec_command", "inspect_processes"})
 
 _NOTABLE_OUTPUT_RE = re.compile(
     r"(?:traceback|error|exception|fail(?:ed|ure)?|fatal|panic|warning|warn|"
@@ -524,7 +534,7 @@ def _sample_edges(text: str, available: int, head_ratio: float = 0.5) -> str:
 
 
 def _sample_prefix(text: str, available: int) -> str:
-    """Keep one contiguous prefix so a subsequent offset read is unambiguous."""
+    """Keep one contiguous prefix so a subsequent focused call is unambiguous."""
     label = "\n[... remainder omitted ...]\n"
     if available <= len(label):
         return label[:available]
@@ -534,6 +544,56 @@ def _sample_prefix(text: str, available: int) -> str:
     if newline >= 0:
         prefix = prefix[:newline]
     return f"{prefix}{label}"
+
+
+def _sample_suffix(text: str, available: int) -> str:
+    """Keep one contiguous suffix for logs and other latest-first output."""
+    label = "[... earlier output omitted ...]\n"
+    if available <= len(label):
+        return label[-available:]
+    limit = available - len(label)
+    suffix = text[-limit:]
+    newline = suffix.find("\n", 0, int(limit * 0.3))
+    if newline >= 0:
+        suffix = suffix[newline + 1:]
+    return f"{label}{suffix}"
+
+
+def _compact_process_output(result: dict[str, Any], available: int) -> str:
+    """Keep process status metadata plus the latest requested log tail."""
+    processes = result.get("processes")
+    if not isinstance(processes, list):
+        return _sample_suffix(str(result), available)
+
+    status = [
+        {key: value for key, value in process.items() if key != "log_tail"}
+        for process in processes
+    ]
+    status_text = json.dumps({"processes": status}, indent=2)
+    tail = next(
+        (
+            process["log_tail"]
+            for process in processes
+            if isinstance(process, dict) and process.get("log_tail")
+        ),
+        "",
+    )
+    if not tail:
+        return _sample_prefix(status_text, available)
+
+    status_header = "[process status]\n"
+    tail_header = "\n\n[latest log tail]\n"
+    content_budget = available - len(status_header) - len(tail_header)
+    if content_budget <= 0:
+        return _sample_suffix(tail, available)
+    tail_budget = min(len(tail), int(content_budget * 0.65))
+    status_budget = content_budget - tail_budget
+    return (
+        status_header
+        + _sample_prefix(status_text, status_budget)
+        + tail_header
+        + _sample_suffix(tail, tail_budget)
+    )
 
 
 def _compaction_footer(
@@ -585,8 +645,12 @@ def compact_tool_result_envelope(
         if envelope.result.get("artifact_truncated")
         else ()
     )
+    # Preserve the first-level truncation notice (which records the true
+    # pre-cap size) so prefix-sampled compaction keeps an accurate recovery
+    # hint. Only prefix tools append this line at the very end; latest/edge
+    # tools reconstruct their own metrics from the full artifact.
     trailing_notice = ""
-    if tool_name == "read_file":
+    if tool_name in PREFIX_TOOLS:
         last_line = raw_text.rstrip().rsplit("\n", 1)[-1]
         if last_line.startswith("[output truncated:"):
             trailing_notice = f"\n{last_line}"
@@ -635,13 +699,18 @@ def compact_tool_result_envelope(
             stderr_block = f"[stderr excerpt]\n{stderr}\n\n"
             content_budget -= len(stderr_block)
 
-    semantic = _semantic_reduce(envelope, text, content_budget)
+    semantic_budget = int(content_budget * 0.6) if tool_name == "exec_command" else content_budget
+    semantic = _semantic_reduce(envelope, text, semantic_budget)
     reducer = "generic"
     tier = "generic"
     notable_block = ""
     if semantic is not None:
         excerpt, reducer = semantic
         tier = "semantic"
+        latest_header = "\n\n[latest output]\n"
+        latest_budget = content_budget - len(excerpt) - len(latest_header)
+        if latest_budget > 0 and len(text) > latest_budget:
+            excerpt += latest_header + _sample_suffix(text, latest_budget)
     else:
         if tool_name == "exec_command":
             notable_budget = min(1800, max(400, content_budget // 6))
@@ -649,12 +718,14 @@ def compact_tool_result_envelope(
             if notable:
                 notable_block = f"\n\n[Notable lines]\n{notable}"
         excerpt_budget = content_budget - len(notable_block)
-        if tool_name == "read_file":
+        if tool_name in PREFIX_TOOLS:
             excerpt = _sample_prefix(text, excerpt_budget)
-        elif tool_name in STRUCTURED_TOOLS:
-            excerpt = _sample_edges(text, excerpt_budget, head_ratio=0.7)
+        elif tool_name == "inspect_processes":
+            excerpt = _compact_process_output(envelope.result, excerpt_budget)
+        elif tool_name in LATEST_TOOLS:
+            excerpt = _sample_suffix(text, excerpt_budget)
         else:
-            excerpt = _sample_edges(text, excerpt_budget, head_ratio=0.4)
+            excerpt = _sample_edges(text, excerpt_budget)
 
     body = f"{header}{stderr_block}{excerpt}{trailing_notice}{notable_block}"
     retained_tokens = max(1, int((len(body) + len(provisional_footer)) / chars_per_token))
@@ -702,17 +773,27 @@ def build_tool_name_index(messages: list) -> dict[str, str]:
     return index
 
 
-def _soft_trim(text: str) -> str | None:
-    """Return head+tail trimmed text, or None if small enough."""
+def _soft_trim(text: str, tool_name: str) -> str | None:
+    """Trim old tool output using the same retention policy as ingress."""
     if len(text) <= SOFT_TRIM_THRESHOLD:
         return None
-    head = text[:SOFT_TRIM_HEAD]
-    tail = text[-SOFT_TRIM_TAIL:]
-    return (
-        f"{head}\n...\n{tail}"
-        f"\n\n[Trimmed: kept first {SOFT_TRIM_HEAD} and "
-        f"last {SOFT_TRIM_TAIL} chars of {len(text)} total]"
-    )
+    retained = SOFT_TRIM_HEAD + SOFT_TRIM_TAIL
+    if tool_name in PREFIX_TOOLS:
+        excerpt = _sample_prefix(text, retained)
+        policy = "beginning"
+    elif tool_name == "inspect_processes":
+        try:
+            excerpt = _compact_process_output(json.loads(text), retained)
+        except (json.JSONDecodeError, TypeError):
+            excerpt = _sample_suffix(text, retained)
+        policy = "status and latest log"
+    elif tool_name in LATEST_TOOLS:
+        excerpt = _sample_suffix(text, retained)
+        policy = "latest"
+    else:
+        excerpt = _sample_edges(text, retained)
+        policy = "beginning and end"
+    return f"{excerpt}\n[Trimmed: kept {policy} {retained} chars of {len(text)} total]"
 
 
 def _prunable_range(messages: list) -> tuple[int, int]:
@@ -750,7 +831,7 @@ def prune_context(
 ) -> list:
     """Prune old tool results to manage context window usage.
 
-    Phase 1 (soft trim, 30 %): keep head + tail of large prunable results.
+    Phase 1 (soft trim, 30 %): retain each tool's preferred output region.
     Phase 2 (hard clear, 50 %): replace entire results with a placeholder.
 
     Returns the original list when no pruning is needed, or a new list
@@ -771,7 +852,7 @@ def prune_context(
 
     tool_name_index = build_tool_name_index(messages)
 
-    prunable: list[int] = []
+    prunable: list[tuple[int, str]] = []
     for i in range(start, end):
         msg = messages[i]
         if get_role(msg) != "tool":
@@ -779,7 +860,7 @@ def prune_context(
         tc_id = get_tool_call_id(msg)
         name = tool_name_index.get(tc_id) if tc_id else None
         if name and name in PRUNABLE_TOOLS:
-            prunable.append(i)
+            prunable.append((i, name))
 
     if not prunable:
         return messages
@@ -787,9 +868,9 @@ def prune_context(
     result = list(messages)
 
     # Phase 1: soft trim
-    for i in prunable:
+    for i, name in prunable:
         text = get_text(result[i])
-        trimmed = _soft_trim(text)
+        trimmed = _soft_trim(text, name)
         if trimmed is not None:
             result[i] = set_text(result[i], trimmed)
             total_chars += len(trimmed) - len(text)
@@ -799,11 +880,11 @@ def prune_context(
         return result
 
     # Phase 2: hard clear (only if enough prunable content exists)
-    prunable_chars = sum(len(get_text(result[i])) for i in prunable)
+    prunable_chars = sum(len(get_text(result[i])) for i, _ in prunable)
     if prunable_chars < MIN_PRUNABLE_CHARS:
         return result
 
-    for i in prunable:
+    for i, _ in prunable:
         if ratio < HARD_CLEAR_RATIO:
             break
         old_len = len(get_text(result[i]))

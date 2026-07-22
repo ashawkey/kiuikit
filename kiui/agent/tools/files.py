@@ -6,7 +6,8 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from .constants import MAX_READ_BYTES, MAX_READ_LINES, SKIP_DIRS as _SKIP_DIRS
+from .constants import MAX_READ_LINES, MAX_TOOL_OUTPUT_CHARS, SKIP_DIRS as _SKIP_DIRS
+from .formatting import truncate_text_output
 
 
 _IMAGE_SIGNATURES = (
@@ -178,17 +179,29 @@ class FileToolsMixin:
 
         content = "".join(lines)
 
-        truncated_by_bytes = False
-        if len(content.encode("utf-8")) > MAX_READ_BYTES:
-            truncated_by_bytes = True
-            encoded = content.encode("utf-8")[:MAX_READ_BYTES]
-            content = encoded.decode("utf-8", errors="ignore")
-            lines = content.splitlines(keepends=True)
+        content, truncated_by_chars = truncate_text_output(
+            content,
+            "Use offset/limit for more.",
+        )
+        lines_read = len(content.splitlines())
 
-        if truncated_by_lines or truncated_by_bytes:
-            content += f"\n[output truncated: {len(lines)} of {total_lines} lines shown. Use offset/limit for more.]"
+        if truncated_by_lines and not truncated_by_chars:
+            notice = (
+                f"\n[output truncated: {len(lines)} of {total_lines} lines shown. "
+                "Use offset/limit for more.]"
+            )
+            content = content[:MAX_TOOL_OUTPUT_CHARS - len(notice)] + notice
 
-        return {"content": content, "lines_read": len(lines), "success": True}
+        truncated = truncated_by_lines or truncated_by_chars
+        result = {
+            "content": content,
+            "lines_read": lines_read,
+            "truncated": truncated,
+            "success": True,
+        }
+        if truncated:
+            result["truncation_reason"] = "character cap" if truncated_by_chars else "line cap"
+        return result
 
     def _read_image(self, file: str) -> dict[str, Any]:
         """Read an image into an OpenAI-compatible data URL."""
@@ -397,12 +410,20 @@ class FileToolsMixin:
         content = "\n".join(lines) if lines else "(empty)"
         if skipped and not all:
             content += f"\n[{skipped} hidden/ignored entr{'y' if skipped == 1 else 'ies'} omitted; use all=true to show]"
+        content, truncated = truncate_text_output(
+            content,
+            "Use glob_files with a narrower pattern.",
+        )
 
-        return {
+        result = {
             "content": content,
             "count": len(lines),
+            "truncated": truncated,
             "success": True,
         }
+        if truncated:
+            result["truncation_reason"] = "character cap"
+        return result
 
     def _remove_file(self, file: str) -> dict[str, Any]:
         """Remove a file or directory."""

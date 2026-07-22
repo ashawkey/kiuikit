@@ -8,7 +8,12 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from .constants import MAX_GLOB_RESULTS, MAX_GREP_MATCHES, SKIP_DIRS as _SKIP_DIRS
+from .constants import (
+    MAX_GLOB_RESULTS,
+    MAX_GREP_MATCHES,
+    MAX_TOOL_OUTPUT_CHARS,
+    SKIP_DIRS as _SKIP_DIRS,
+)
 
 
 def _decode_bytes(b: bytes | None) -> str:
@@ -20,6 +25,28 @@ def _decode_bytes(b: bytes | None) -> str:
         return b.decode(encoding)
     except UnicodeDecodeError:
         return b.decode("utf-8", errors="replace")
+
+
+def _build_search_result(matches: list, truncated: bool, guidance: str) -> dict[str, Any]:
+    """Build a search result, dropping trailing matches until it fits."""
+    kept = matches.copy()
+    reason = "item cap" if truncated else None
+
+    while True:
+        result: dict[str, Any] = {
+            "matches": kept,
+            "count": len(kept),
+            "truncated": truncated,
+            "success": True,
+        }
+        if truncated:
+            result["truncation_reason"] = reason
+            result["guidance"] = guidance
+        if len(json.dumps(result, indent=2)) <= MAX_TOOL_OUTPUT_CHARS:
+            return result
+        kept.pop()
+        truncated = True
+        reason = "character cap"
 
 
 class SearchToolsMixin:
@@ -70,12 +97,11 @@ class SearchToolsMixin:
             matches.append(str(p.relative_to(base)))
 
         matches.sort()
-        return {
-            "matches": matches,
-            "count": len(matches),
-            "truncated": truncated,
-            "success": True,
-        }
+        return _build_search_result(
+            matches,
+            truncated,
+            "Use a narrower glob pattern or base_dir.",
+        )
 
     def _grep_files(
         self,
@@ -176,12 +202,11 @@ class SearchToolsMixin:
                 rel = file_str
             matches.append({"file": rel, "line": data["line_number"], "text": text[:200]})
 
-        return {
-            "matches": matches,
-            "count": len(matches),
-            "truncated": truncated,
-            "success": True,
-        }
+        return _build_search_result(
+            matches,
+            truncated,
+            "Use a narrower regex, path, or file_glob.",
+        )
 
     def _grep_python(
         self,
@@ -235,9 +260,8 @@ class SearchToolsMixin:
                         break
                     matches.append({"file": rel, "line": lineno, "text": line[:200]})
 
-        return {
-            "matches": matches,
-            "count": len(matches),
-            "truncated": truncated,
-            "success": True,
-        }
+        return _build_search_result(
+            matches,
+            truncated,
+            "Use a narrower regex, path, or file_glob.",
+        )

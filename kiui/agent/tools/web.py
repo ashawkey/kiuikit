@@ -6,10 +6,10 @@ from typing import Any
 
 from .constants import (
     MAX_WEB_FETCH_BYTES,
-    MAX_WEB_FETCH_CHARS,
     MAX_WEB_REDIRECTS,
     IPV6_TRANSITION_NETWORKS,
 )
+from .formatting import truncate_text_output
 
 
 def _resolve_public_addresses(host: str, port: int) -> tuple[str, ...]:
@@ -155,9 +155,16 @@ class WebToolsMixin:
         if title:
             text = f"# {title.get_text().strip()}\n\n{text}"
 
-        truncated = len(text) > MAX_WEB_FETCH_CHARS
-        content = text[:MAX_WEB_FETCH_CHARS]
+        content, truncated = truncate_text_output(
+            text,
+            "Fetch a more specific source or URL.",
+        )
+        result = {
+            "content": content,
+            "url": str(final_url),
+            "truncated": truncated,
+            "success": True,
+        }
         if truncated:
-            content += f"\n[output truncated: showing first {MAX_WEB_FETCH_CHARS} of {len(text)} chars]"
-
-        return {"content": content, "url": str(final_url), "success": True}
+            result["truncation_reason"] = "character cap"
+        return result

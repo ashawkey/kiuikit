@@ -188,10 +188,22 @@ class CommandToolsMixin:
 
         total_len = len(stdout) + len(stderr)
         truncated = total_len > MAX_EXEC_OUTPUT_CHARS
+        truncation_notice = ""
         if truncated:
-            stderr_budget = min(len(stderr), MAX_EXEC_OUTPUT_CHARS // 2)
-            stdout = stdout[-(MAX_EXEC_OUTPUT_CHARS - stderr_budget):]
-            stderr = stderr[-(MAX_EXEC_OUTPUT_CHARS - len(stdout)):]
+            guidance = "Search the saved output or rerun with quiet flags or a targeted filter."
+            while True:
+                output_budget = MAX_EXEC_OUTPUT_CHARS - len(truncation_notice) - 1
+                stderr_budget = min(len(stderr), output_budget // 2)
+                kept_stdout = stdout[-(output_budget - stderr_budget):]
+                kept_stderr = stderr[-(output_budget - len(kept_stdout)):]
+                updated = (
+                    f"[output truncated: showing {len(kept_stdout) + len(kept_stderr):,} of "
+                    f"{total_len:,} characters. {guidance}]"
+                )
+                if updated == truncation_notice:
+                    stdout, stderr = kept_stdout, kept_stderr
+                    break
+                truncation_notice = updated
 
         res: dict[str, Any] = {
             "stdout": stdout,
@@ -205,9 +217,10 @@ class CommandToolsMixin:
             "artifact_truncated": artifact_truncated[0],
         }
         if truncated:
-            res["truncation_notice"] = (
-                f"[output truncated: showing {len(stdout) + len(stderr)} of {total_len} characters]"
-            )
+            res["truncated"] = True
+            res["truncation_reason"] = "character cap"
+            res["guidance"] = "Search the saved output or rerun with quiet flags or a targeted filter."
+            res["truncation_notice"] = truncation_notice
         if artifact_write_error:
             res["artifact_capture_error"] = artifact_write_error[0]
         if readers_incomplete:

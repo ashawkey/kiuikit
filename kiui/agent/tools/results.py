@@ -11,12 +11,30 @@ from typing import Any
 from kiui.agent.utils import get_kia_dir
 
 
-def read_tool_result_text(result: dict[str, Any], formatted: str) -> str:
-    """Read the producer capture when available; otherwise use formatted text."""
+def read_tool_result_text(
+    result: dict[str, Any], formatted: str, max_chars: int | None = None
+) -> str:
+    """Read the producer capture when available; otherwise use formatted text.
+
+    When *max_chars* is set and the capture is larger, only a head and tail
+    slice is returned. Compaction never surfaces the middle of a large capture,
+    so this bounds the work (and memory) of scanning it while the full output
+    stays on disk under the persisted artifact path.
+    """
     producer_path = result.get("_artifact_path")
-    if producer_path:
-        return Path(producer_path).read_text(encoding="utf-8")
-    return formatted
+    if not producer_path:
+        return formatted
+    path = Path(producer_path)
+    if max_chars is None or path.stat().st_size <= max_chars:
+        return path.read_text(encoding="utf-8")
+
+    head_budget = max_chars // 2
+    tail_budget = max_chars - head_budget
+    with path.open("rb") as f:
+        head = f.read(head_budget).decode("utf-8", errors="ignore")
+        f.seek(-tail_budget, os.SEEK_END)
+        tail = f.read().decode("utf-8", errors="ignore")
+    return f"{head}\n[... compaction input truncated; full output on disk ...]\n{tail}"
 
 
 def discard_tool_result_artifact(result: dict[str, Any]) -> OSError | None:

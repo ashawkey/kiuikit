@@ -142,6 +142,8 @@ class ThinkingIndicator:
         progress: bool = False,
         render_terminal: bool = True,
         status_sink: Callable[[list[tuple[str, str]] | None], None] | None = None,
+        indicator_stack: list["ThinkingIndicator"] | None = None,
+        indicator_lock: threading.RLock | None = None,
     ):
         self._console = console
         self._events = events
@@ -155,56 +157,98 @@ class ThinkingIndicator:
         self._started_at: float = 0
         self._running = False
         self._thread: threading.Thread | None = None
+        self._indicator_stack = indicator_stack
+        self._indicator_lock = indicator_lock
 
     def __enter__(self) -> "ThinkingIndicator":
         self._start_time = time.monotonic()
         self._started_at = time.time()
         self._running = True
-        if self._status_sink is not None:
-            self._status_sink(self._prompt_status("⠋", 0.0))
+        if self._indicator_stack is None:
+            self._start_visual(0.0)
+            self._publish_start()
+        else:
+            assert self._indicator_lock is not None
+            with self._indicator_lock:
+                if self._indicator_stack:
+                    self._indicator_stack[-1]._stop_visual(clear_sink=False)
+                self._indicator_stack.append(self)
+                self._start_visual(0.0)
+                self._publish_start()
+        if self._status_sink is not None or self._render_terminal:
             self._thread = threading.Thread(target=self._tick, daemon=True)
             self._thread.start()
-        elif self._render_terminal:
-            self._status = Status(
-                self._label(0.0),
-                spinner="dots",
-                console=self._console,
-                speed=1.5,
-            )
-            self._status.start()
-            self._thread = threading.Thread(target=self._tick, daemon=True)
-            self._thread.start()
-        if self._events is not None:
-            if isinstance(self._status_suffix, ContextStatus):
-                self._events.publish(
-                    "thinking_start",
-                    suffix=self._status_suffix.plain(),
-                    context_tokens=self._status_suffix.tokens,
-                    context_limit=self._status_suffix.limit,
-                    input_tokens=self._status_suffix.input_tokens,
-                    output_tokens=self._status_suffix.output_tokens,
-                    started_at=self._started_at,
-                    label=self._label_text,
-                    progress=self._progress,
-                )
-            else:
-                self._events.publish(
-                    "thinking_start",
-                    suffix=self._status_suffix,
-                    started_at=self._started_at,
-                    label=self._label_text,
-                    progress=self._progress,
-                )
         return self
 
     def __exit__(self, *args) -> None:
         self._running = False
         if self._thread is not None:
             self._thread.join(timeout=1.0)
+        if self._indicator_stack is None:
+            self._stop_visual()
+            self._publish_stop()
+            return
+
+        assert self._indicator_lock is not None
+        with self._indicator_lock:
+            assert self._indicator_stack[-1] is self
+            self._stop_visual(clear_sink=False)
+            self._indicator_stack.pop()
+            if self._indicator_stack:
+                parent = self._indicator_stack[-1]
+                parent._start_visual()
+                parent._publish_start()
+            else:
+                if self._status_sink is not None:
+                    self._status_sink(None)
+                self._publish_stop()
+
+    def _start_visual(self, elapsed: float | None = None) -> None:
+        if elapsed is None:
+            elapsed = time.monotonic() - self._start_time
+        if self._status_sink is not None:
+            self._status_sink(self._prompt_status("⠋", elapsed))
+        elif self._render_terminal:
+            self._status = Status(
+                self._label(elapsed),
+                spinner="dots",
+                console=self._console,
+                speed=1.5,
+            )
+            self._status.start()
+
+    def _stop_visual(self, *, clear_sink: bool = True) -> None:
         if self._status is not None:
             self._status.stop()
-        if self._status_sink is not None:
+            self._status = None
+        if clear_sink and self._status_sink is not None:
             self._status_sink(None)
+
+    def _publish_start(self) -> None:
+        if self._events is None:
+            return
+        if isinstance(self._status_suffix, ContextStatus):
+            self._events.publish(
+                "thinking_start",
+                suffix=self._status_suffix.plain(),
+                context_tokens=self._status_suffix.tokens,
+                context_limit=self._status_suffix.limit,
+                input_tokens=self._status_suffix.input_tokens,
+                output_tokens=self._status_suffix.output_tokens,
+                started_at=self._started_at,
+                label=self._label_text,
+                progress=self._progress,
+            )
+        else:
+            self._events.publish(
+                "thinking_start",
+                suffix=self._status_suffix,
+                started_at=self._started_at,
+                label=self._label_text,
+                progress=self._progress,
+            )
+
+    def _publish_stop(self) -> None:
         if self._events is not None:
             self._events.publish("thinking_stop")
 
@@ -308,14 +352,24 @@ class ThinkingIndicator:
                 continue
             elapsed = time.monotonic() - self._start_time
             try:
-                if self._status_sink is not None:
-                    frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-                    frame = frames[int(elapsed / 0.08) % len(frames)]
-                    self._status_sink(self._prompt_status(frame, elapsed))
-                elif self._status is not None:
-                    self._status.update(self._label(elapsed))
+                if self._indicator_stack is not None:
+                    assert self._indicator_lock is not None
+                    with self._indicator_lock:
+                        if self._indicator_stack[-1] is not self:
+                            continue
+                        self._update_visual(elapsed)
+                else:
+                    self._update_visual(elapsed)
             except Exception:
                 pass  # best-effort; don't crash the agent on a display glitch
+
+    def _update_visual(self, elapsed: float) -> None:
+        if self._status_sink is not None:
+            frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+            frame = frames[int(elapsed / 0.08) % len(frames)]
+            self._status_sink(self._prompt_status(frame, elapsed))
+        elif self._status is not None:
+            self._status.update(self._label(elapsed))
 
 
 class ResponseStream:
@@ -406,6 +460,8 @@ class AgentConsole:
         self.status_sink: (
             Callable[[list[tuple[str, str]] | None], None] | None
         ) = None
+        self._indicator_stack: list[ThinkingIndicator] = []
+        self._indicator_lock = threading.RLock()
 
     def _emit(self, event_type: str, **data) -> None:
         if self.events is not None:
@@ -444,6 +500,8 @@ class AgentConsole:
             progress=progress,
             render_terminal=not self.interactive_input,
             status_sink=self.status_sink if self.interactive_input else None,
+            indicator_stack=self._indicator_stack,
+            indicator_lock=self._indicator_lock,
         )
 
     def stream_response(self, *, show_thinking: bool = False) -> ResponseStream:

@@ -1,11 +1,8 @@
 """Shared context and prompt-building helpers for agent personas."""
 
-import os
 import platform
-import socket
 import subprocess
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 
 
@@ -38,7 +35,7 @@ SAFETY_EXEC_SECTION = """## Safety
 TOOL_USAGE_RULES = (
     "Always check tool results before proceeding.",
     "Do not narrate routine, low-risk tool calls — just call the tool. Narrate only for multi-step work, complex problems, or sensitive actions (e.g., deletions).",
-    "Prefer ls / glob_files / grep_files over exec_command for file discovery and search.",
+    "Prefer dedicated file, search, process, and web tools over shell equivalents, especially ls / glob_files / grep_files for discovery and search. Tool outputs are bounded and may have additional tool-specific limits; use focused calls and follow truncation guidance.",
     "Keep output focused with narrow paths/patterns, read_file offset/limit, and quiet or filtered commands.",
     "If output is compacted, follow its recovery guidance instead of repeating the same broad call.",
 )
@@ -58,7 +55,7 @@ WORKING_STYLE_SECTION = """## Working Style
 - Verify with the smallest relevant check and report only what was actually verified."""
 
 SUBAGENT_SECTION = """## Sub-Agents
-**spawn_subagent** runs a self-contained task and returns its result.
+**spawn_subagent** runs a focused task synchronously in a separate conversation and returns its result. It shares the current working tree, so concurrent file edits are not isolated.
 Delegate only when it materially helps with independent research or analysis. Give a focused task, do not delegate simple work."""
 
 
@@ -95,19 +92,12 @@ def build_project_section(work_dir: str | None = None) -> str:
 
 
 def build_context_section(work_dir: str | None = None) -> str:
-    """Build context section with current environment information."""
+    """Build a minimal context section with task-relevant environment information."""
     cwd = work_dir or str(Path.cwd())
-    hostname = socket.gethostname()
-    ip = socket.gethostbyname(hostname)
     git_info = _get_git_context(cwd)
     return f"""## Current Context
-- Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 - Working Directory: {cwd}
-- Operating System: {platform.system()} {platform.release()}
-- Python: {platform.python_version()}
-- User: {os.getenv("USER") or os.getenv("USERNAME", "unknown")}
-- Host: {hostname}
-- IP: {ip}{git_info}"""
+- Operating System: {platform.system()} {platform.release()}{git_info}"""
 
 
 def _get_git_context(cwd: str) -> str:
@@ -126,9 +116,6 @@ def _get_git_context(cwd: str) -> str:
     lines = []
     if branch:
         lines.append(f"- Git Branch: {branch}")
-    remote = _git_cmd(["git", "remote", "get-url", "origin"], cwd)
-    if remote:
-        lines.append(f"- Git Remote: {remote}")
     status = _git_cmd(["git", "status", "--porcelain"], cwd)
     dirty = "dirty" if status else "clean"
     lines.append(f"- Git Status: {dirty}")

@@ -1,5 +1,6 @@
 """Session-managed background process tools."""
 
+import json
 import os
 import signal
 import subprocess
@@ -12,7 +13,11 @@ from typing import Any
 
 from kiui.agent.utils.interrupt import CancelWatcher
 
-from .constants import MAX_PROCESS_LOG_BYTES, MAX_PROCESS_LOG_TAIL_CHARS
+from .constants import (
+    MAX_PROCESS_LOG_BYTES,
+    MAX_PROCESS_LOG_TAIL_CHARS,
+    MAX_TOOL_OUTPUT_CHARS,
+)
 
 
 def _create_windows_job(proc: subprocess.Popen) -> int:
@@ -429,7 +434,30 @@ class ProcessToolsMixin:
                 decoded = f.read().decode("utf-8", errors="replace")
             processes[0]["log_tail"] = decoded[-log_tail_chars:]
             processes[0]["log_tail_truncated"] = start > 0 or len(decoded) > log_tail_chars
-        return {"processes": processes, "success": True}
+        truncated = bool(log_tail_chars and processes[0].get("log_tail_truncated"))
+        result = {
+            "processes": processes,
+            "count": len(processes),
+            "truncated": truncated,
+            "success": True,
+        }
+        if truncated:
+            result["truncation_reason"] = "log tail limit"
+            result["guidance"] = "Request a different log tail, or read the log file in focused slices."
+
+        if len(json.dumps(result, indent=2)) > MAX_TOOL_OUTPUT_CHARS:
+            result["truncated"] = True
+            result["truncation_reason"] = "character cap"
+            result["guidance"] = "Inspect one process at a time or read its log file in focused slices."
+            if log_tail_chars:
+                tail = processes[0]["log_tail"]
+                overflow = len(json.dumps(result, indent=2)) - MAX_TOOL_OUTPUT_CHARS
+                processes[0]["log_tail"] = tail[overflow:]
+                processes[0]["log_tail_truncated"] = True
+            while processes and len(json.dumps(result, indent=2)) > MAX_TOOL_OUTPUT_CHARS:
+                processes.pop()
+            result["count"] = len(processes)
+        return result
 
     def _stop_process(self, process_id: str) -> dict[str, Any]:
         """Stop one managed process and its process tree."""

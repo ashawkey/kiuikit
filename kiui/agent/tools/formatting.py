@@ -3,8 +3,32 @@
 import json
 from typing import Any
 
+from .constants import MAX_TOOL_OUTPUT_CHARS
+
 TOOL_SUMMARY_MAX_LINES = 4
 TOOL_SUMMARY_MAX_CHARS = 300
+
+
+def truncate_text_output(
+    text: str,
+    guidance: str,
+    limit: int = MAX_TOOL_OUTPUT_CHARS,
+) -> tuple[str, bool]:
+    """Bound model-facing text while preserving a complete recovery notice."""
+    if len(text) <= limit:
+        return text, False
+
+    notice = ""
+    while True:
+        shown = limit - len(notice)
+        updated = (
+            f"\n[output truncated: showing first {shown:,} of {len(text):,} characters. "
+            f"{guidance}]"
+        )
+        if updated == notice:
+            break
+        notice = updated
+    return text[:limit - len(notice)] + notice, True
 
 
 def format_tool_summary(result_text: str, max_lines: int = TOOL_SUMMARY_MAX_LINES, max_chars: int = TOOL_SUMMARY_MAX_CHARS) -> str:

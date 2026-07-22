@@ -43,6 +43,7 @@ from kiui.agent.tools.results import (
 from kiui.agent.permissions import PermissionController, PermissionMode
 from kiui.agent.utils.streaming import consume_stream, message_to_dict
 from kiui.agent.context import (
+    COMPACTION_INPUT_MAX_CHARS,
     ContextManager,
     TokenEstimator,
     ToolResultEnvelope,
@@ -671,7 +672,9 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             )
             if envelope.original_chars > budget:
                 try:
-                    compaction_text = read_tool_result_text(result, result_text)
+                    compaction_text = read_tool_result_text(
+                        result, result_text, max_chars=COMPACTION_INPUT_MAX_CHARS
+                    )
                 except OSError as e:
                     compaction_text = result_text
                     self.console.warn(f"Could not read captured tool output: {e}")

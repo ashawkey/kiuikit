@@ -14,16 +14,13 @@ class SubagentManager:
         self,
         model_alias: str,
         reasoning_effort: str = "high",
-        max_depth: int = 3,
         console: AgentConsole | None = None,
         parent_cancellation: CancellationToken | None = None,
     ):
         self.model_alias = model_alias
         self.reasoning_effort = reasoning_effort
-        self.max_depth = max_depth
         self.console = console or AgentConsole()
         self.parent_cancellation = parent_cancellation
-        self._depth = int(os.environ.get("KIA_SPAWN_DEPTH", "0"))
 
     def spawn(
         self,
@@ -36,9 +33,6 @@ class SubagentManager:
         Returns the result directly from memory.  The sub-agent receives
         *cwd* as its working directory without mutating the global cwd.
         """
-        if self._depth >= self.max_depth:
-            return {"error": f"Max spawn depth reached ({self.max_depth}).", "success": False}
-
         from kiui.config import conf
         from kiui.agent.backend import LLMAgent
         from kiui.agent.permissions import PermissionMode
@@ -52,9 +46,6 @@ class SubagentManager:
 
         label = task[:60]
         self.console.system(f"── sub-agent '{label}' start ──")
-
-        old_depth = os.environ.get("KIA_SPAWN_DEPTH")
-        os.environ["KIA_SPAWN_DEPTH"] = str(self._depth + 1)
 
         agent = None
         try:
@@ -87,9 +78,8 @@ class SubagentManager:
                     "interrupted": True,
                 }
 
-            summary = response[:2000] if response else ""
             return {
-                "message": f"Sub-agent completed.\n{summary}" if summary else "Sub-agent completed with no response.",
+                "message": f"Sub-agent completed.\n{response}" if response else "Sub-agent completed with no response.",
                 "success": True,
             }
 
@@ -100,7 +90,3 @@ class SubagentManager:
         finally:
             if agent is not None:
                 agent.tool_executor.shutdown_processes()
-            if old_depth is None:
-                os.environ.pop("KIA_SPAWN_DEPTH", None)
-            else:
-                os.environ["KIA_SPAWN_DEPTH"] = old_depth

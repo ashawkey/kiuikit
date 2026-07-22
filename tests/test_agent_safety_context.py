@@ -118,7 +118,7 @@ def test_failed_compaction_preserves_original_messages():
     assert result is not messages
 
 
-def test_tool_result_compaction_keeps_edges_diagnostics_and_guidance():
+def test_tool_result_compaction_keeps_latest_diagnostics_and_guidance():
     text = "start\n" + "ordinary log line\n" * 2000 + "ERROR: build failed\n" + "final status\n"
 
     result, compacted = _compact_text(
@@ -130,7 +130,8 @@ def test_tool_result_compaction_keeps_edges_diagnostics_and_guidance():
 
     assert compacted
     assert len(result) <= tool_result_char_budget(16_000, tool_name="exec_command")
-    assert "start" in result and "final status" in result
+    assert "start" not in result
+    assert "final status" in result
     assert "ERROR: build failed" in result
     assert ".kia/tool-results/test.txt" in result
     assert "grep_files/read_file" in result

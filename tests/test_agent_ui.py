@@ -1,5 +1,6 @@
 """Tests for Rich terminal UI helpers."""
 
+import time
 from io import StringIO
 
 from rich.console import Console
@@ -42,6 +43,34 @@ def test_thinking_indicator_publishes_structured_context_status():
         "label": "Working",
         "progress": False,
     }
+
+
+def test_nested_thinking_indicators_only_render_the_innermost_status():
+    events = EventHub()
+    console = AgentConsole(events=events)
+    statuses = []
+    console.interactive_input = True
+    console.status_sink = statuses.append
+
+    with console.thinking(label="Executing", status_suffix="spawn_subagent"):
+        with console.thinking(label="Working"):
+            inner_start = len(statuses) - 1
+            time.sleep(0.2)
+        inner_end = len(statuses) - 1
+        time.sleep(0.1)
+
+    rendered = ["".join(text for _, text in status) if status else None for status in statuses]
+    assert "Executing" in rendered[0]
+    assert all("Working" in status for status in rendered[inner_start:inner_end])
+    assert all("Executing" in status for status in rendered[inner_end:-1])
+    assert rendered[-1] is None
+    events_seen = events.after(0)
+    assert [(event.type, event.data.get("label")) for event in events_seen] == [
+        ("thinking_start", "Executing"),
+        ("thinking_start", "Working"),
+        ("thinking_start", "Executing"),
+        ("thinking_stop", None),
+    ]
 
 
 def test_thinking_indicator_renders_indeterminate_progress():

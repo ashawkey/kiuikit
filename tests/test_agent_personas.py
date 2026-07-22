@@ -4,6 +4,7 @@ from kiui.agent.backend import ContextManager, LLMAgent
 from kiui.agent.models import resolve_model_profile
 from kiui.agent.permissions import PermissionController
 from kiui.agent.personas import PersonaContext, get_persona, list_personas
+from kiui.agent.personas.common import build_context_section
 from kiui.agent.tools import ToolExecutor
 
 
@@ -40,6 +41,35 @@ def test_reviewer_persona_contract(tmp_path):
     assert "human reviewer must verify" in prompt
     assert "**pdf-reading**" in prompt
     assert "load_skill** before" in prompt
+    assert "wait for its result" in prompt
+    assert "while you read" not in prompt
+    assert "otherwise perform it directly" in prompt
+
+
+def test_subagent_prompt_describes_synchronous_shared_worktree(tmp_path):
+    coder = get_persona("coder")
+    prompt = coder.build(PersonaContext(work_dir=str(tmp_path)))
+
+    assert "synchronously in a separate conversation" in prompt
+    assert "shares the current working tree" in prompt
+
+
+def test_context_omits_unnecessary_environment_metadata(tmp_path):
+    context = build_context_section(str(tmp_path))
+
+    assert f"Working Directory: {tmp_path}" in context
+    assert "Operating System:" in context
+    for field in ("Time:", "Python:", "User:", "Host:", "IP:", "Git Remote:"):
+        assert field not in context
+
+
+def test_tool_prompt_states_shared_output_policy(tmp_path):
+    prompt = get_persona("coder").build(PersonaContext(work_dir=str(tmp_path)))
+
+    assert "Prefer dedicated file, search, process, and web tools over shell equivalents" in prompt
+    assert "especially ls / glob_files / grep_files for discovery and search" in prompt
+    assert "Tool outputs are bounded and may have additional tool-specific limits" in prompt
+    assert "use focused calls and follow truncation guidance" in prompt
 
 
 def test_agent_tool_surface_follows_model_capability():

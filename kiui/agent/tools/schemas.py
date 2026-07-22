@@ -2,7 +2,12 @@
 
 from typing import Any
 
-from .constants import MAX_PROCESS_LOG_TAIL_CHARS
+from .constants import (
+    MAX_GLOB_RESULTS,
+    MAX_GREP_MATCHES,
+    MAX_PROCESS_LOG_TAIL_CHARS,
+    MAX_READ_LINES,
+)
 
 
 def get_tool_definitions(
@@ -23,7 +28,10 @@ def get_tool_definitions(
             "type": "function",
             "function": {
                 "name": "read_file",
-                "description": "Read the contents of a file. Defaults to the first 1000 lines. Large results are compacted; use grep_files first and offset/limit for focused reads.",
+                "description": (
+                    f"Read file text, returning at most {MAX_READ_LINES:,} lines. "
+                    "Use grep_files first and offset/limit for focused reads."
+                ),
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -121,7 +129,7 @@ def get_tool_definitions(
                 "description": (
                     "List the contents of a directory (non-recursive). Shows entry names, "
                     "type (file/dir) and size. Respects .gitignore and skips noise dirs by default. "
-                    "Large listings are compacted; use glob_files with a narrow pattern when possible. "
+                    "Use glob_files with a narrow pattern when possible. "
                 ),
                 "parameters": {
                     "type": "object",
@@ -175,7 +183,7 @@ def get_tool_definitions(
                 "name": "inspect_processes",
                 "description": (
                     "Inspect managed background process status after an optional bounded wait. "
-                    "Optionally include a bounded tail of one process's log. "
+                    "Optionally include a bounded tail from one process's log. "
                     "Omit process_id to list all processes."
                 ),
                 "parameters": {
@@ -224,7 +232,8 @@ def get_tool_definitions(
                 "description": (
                     "Find files matching a glob pattern. Preferred over exec_command with find. "
                     "Searches recursively by default. Respects .gitignore and skips noise dirs. "
-                    "Set recursive=false to match only in the immediate directory. Max 500 results."
+                    f"Set recursive=false to match only in the immediate directory. Returns at most "
+                    f"{MAX_GLOB_RESULTS:,} results."
                 ),
                 "parameters": {
                     "type": "object",
@@ -242,7 +251,11 @@ def get_tool_definitions(
             "type": "function",
             "function": {
                 "name": "grep_files",
-                "description": "Search file contents using a regex pattern. Returns up to 200 matching lines with file path and line number.",
+                "description": (
+                    f"Search file contents using a regex pattern. Returns at most {MAX_GREP_MATCHES:,} "
+                    "matching lines with file path and line number; each matching line is clipped to "
+                    "200 characters."
+                ),
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -259,7 +272,7 @@ def get_tool_definitions(
             "type": "function",
             "function": {
                 "name": "web_search",
-                "description": "Search the web for real-time information. Returns summarized results.",
+                "description": "Search the web for real-time information. Returns up to five results with title, URL, and snippet.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -273,7 +286,7 @@ def get_tool_definitions(
             "type": "function",
             "function": {
                 "name": "web_fetch",
-                "description": "Fetch URL content and convert to readable text. Content capped at 20K chars.",
+                "description": "Fetch a public HTTP(S) URL and convert its content to readable text.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -287,7 +300,7 @@ def get_tool_definitions(
             "type": "function",
             "function": {
                 "name": "remove_file",
-                "description": "Remove a file or directory.",
+                "description": "Remove a file or recursively remove a directory.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -302,7 +315,9 @@ def get_tool_definitions(
             "function": {
                 "name": "spawn_subagent",
                 "description": (
-                    "Spawn a sub-agent to run a task. Blocks until the sub-agent completes and returns the result."
+                    "Run a focused task in an isolated agent conversation. Blocks until the sub-agent completes, "
+                    "then returns its full result. The sub-agent shares the current filesystem and working tree "
+                    "and cannot spawn another sub-agent."
                 ),
                 "parameters": {
                     "type": "object",
