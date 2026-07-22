@@ -555,6 +555,66 @@ def test_inspect_process_wait_schema():
     assert wait["type"] == "number"
     assert wait["minimum"] == 0
     assert wait["default"] == 0
+    log_tail = inspect["function"]["parameters"]["properties"]["log_tail_chars"]
+    assert log_tail["type"] == "integer"
+    assert log_tail["minimum"] == 0
+    assert log_tail["maximum"] == process_tools.MAX_PROCESS_LOG_TAIL_CHARS
+    assert log_tail["default"] == 0
+
+
+def test_inspect_process_returns_bounded_log_tail(tmp_path):
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+    started = te._start_process("python -c \"print('0123456789')\"")
+    record = te._processes[started["process_id"]]
+    record["process"].wait(timeout=5)
+    record["capture_thread"].join(timeout=5)
+
+    process = te._inspect_processes(
+        started["process_id"], log_tail_chars=5
+    )["processes"][0]
+
+    assert process["log_tail"] == "6789\n"
+    assert process["log_tail_truncated"] is True
+
+    process = te._inspect_processes(
+        started["process_id"], log_tail_chars=20
+    )["processes"][0]
+    assert process["log_tail"] == "0123456789\n"
+    assert process["log_tail_truncated"] is False
+
+
+def test_inspect_process_log_tail_handles_utf8_and_empty_logs(tmp_path):
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+    printed = te._start_process("python -c \"print('αβγ')\"")
+    printed_record = te._processes[printed["process_id"]]
+    printed_record["process"].wait(timeout=5)
+    printed_record["capture_thread"].join(timeout=5)
+
+    process = te._inspect_processes(
+        printed["process_id"], log_tail_chars=3
+    )["processes"][0]
+    assert process["log_tail"] == "βγ\n"
+    assert process["log_tail_truncated"] is True
+
+    quiet = te._start_process("python -c \"import time; time.sleep(30)\"")
+    try:
+        process = te._inspect_processes(
+            quiet["process_id"], log_tail_chars=10
+        )["processes"][0]
+        assert process["log_tail"] == ""
+        assert process["log_tail_truncated"] is False
+    finally:
+        te.shutdown_processes()
+
+
+def test_inspect_process_log_tail_validation(tmp_path):
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+
+    assert not te._inspect_processes(log_tail_chars=1)["success"]
+    assert not te._inspect_processes(log_tail_chars=-1)["success"]
+    assert not te._inspect_processes(
+        log_tail_chars=process_tools.MAX_PROCESS_LOG_TAIL_CHARS + 1
+    )["success"]
 
 
 def test_inspect_process_wait_can_be_interrupted_without_stopping_process(tmp_path):

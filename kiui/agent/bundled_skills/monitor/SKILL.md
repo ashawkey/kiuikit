@@ -11,8 +11,8 @@ Keep the agentic tool loop alive across checkpoints so you can inspect state, re
 
 1. Establish the target, check interval, corrective actions, and stopping condition from the request. Ask only when a missing detail blocks safe action.
 2. Use `start_process` for a long-running observer, server, job, or monitoring command. Record its `process_id` and `log_path`.
-3. Call `inspect_processes(process_id, wait=<interval seconds>)` to wait for one checkpoint. The call returns one snapshot; it does not schedule another check.
-4. At the checkpoint, inspect new log output and run any other commands needed to determine current state.
+3. Call `inspect_processes(process_id, wait=<interval seconds>, log_tail_chars=<needed characters>)` to wait for one checkpoint and include recent output. Choose the smallest useful tail for the expected output; the call returns one snapshot and does not schedule another check.
+4. At the checkpoint, inspect the returned log tail and run any other commands needed to determine current state.
 5. Diagnose and act. Examples include reporting GPU processes, checking all job IDs, collecting failure details, or relaunching failed jobs with the exact requested configuration.
 6. If the stopping condition is not met, call `inspect_processes` again with the same interval. Repeat from step 4.
 
@@ -30,7 +30,7 @@ Keep the agentic tool loop alive across checkpoints so you can inspect state, re
 
 ## Logs and checkpoint state
 
-- Read only output added since the previous checkpoint when practical. Track the next line offset after each `read_file` call instead of rereading the whole log.
+- Use the returned bounded log tail for one-off or occasional snapshots. For frequent monitoring or when exact incremental output matters, track the next line offset and use `read_file` rather than repeatedly returning overlapping tails.
 - A quiet log does not prove health. Run the authoritative status command when the task requires current state.
 - Preserve stable identifiers such as job names, namespaces, users, clusters, and launch arguments when taking corrective action.
 - Avoid duplicate remediation. Recheck current state immediately before relaunching or mutating external work.

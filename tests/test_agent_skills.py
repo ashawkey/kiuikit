@@ -46,7 +46,11 @@ def test_bundled_monitor_skill_keeps_checkpoint_loop_alive(tmp_path):
     assert "load_skill" not in skill["body"]
     assert "Do not end with a text-only response" in skill["body"]
     assert "progress update must be followed" in skill["body"]
-    assert "inspect_processes(process_id, wait=<interval seconds>)" in skill["body"]
+    assert (
+        "inspect_processes(process_id, wait=<interval seconds>, "
+        "log_tail_chars=<needed characters>)" in skill["body"]
+    )
+    assert "Choose the smallest useful tail" in skill["body"]
     assert "relaunch" in skill["body"]
     assert "ask me to check again" in skill["body"]
 

@@ -2,6 +2,9 @@
 
 from typing import Any
 
+from .constants import MAX_PROCESS_LOG_TAIL_CHARS
+
+
 def get_tool_definitions(
     include_subagent: bool = True,
     allowed: set[str] | frozenset | None = None,
@@ -172,6 +175,7 @@ def get_tool_definitions(
                 "name": "inspect_processes",
                 "description": (
                     "Inspect managed background process status after an optional bounded wait. "
+                    "Optionally include a bounded tail of one process's log. "
                     "Omit process_id to list all processes."
                 ),
                 "parameters": {
@@ -183,6 +187,16 @@ def get_tool_definitions(
                             "minimum": 0,
                             "default": 0,
                             "description": "Seconds to wait before returning a status snapshot (default: 0)",
+                        },
+                        "log_tail_chars": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": MAX_PROCESS_LOG_TAIL_CHARS,
+                            "default": 0,
+                            "description": (
+                                f"Characters of recent log content to return directly (default: 0, max: {MAX_PROCESS_LOG_TAIL_CHARS}). "
+                                "Requires process_id."
+                            ),
                         },
                     },
                     "required": [],

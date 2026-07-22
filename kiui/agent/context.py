@@ -85,6 +85,7 @@ TOOL_RESULT_MIN_CHARS = 3_000
 TOOL_RESULT_DEFAULT_MAX_CHARS = 12_000
 TOOL_RESULT_MAX_CHARS = {
     "read_file": 24_000,
+    "inspect_processes": 24_000,
     "web_fetch": 20_000,
 }
 GENERIC_RESULT_RATIO = 0.1
@@ -92,7 +93,7 @@ GENERIC_RESULT_MIN_CHARS = 8_000
 GENERIC_RESULT_MAX_CHARS = 24_000
 
 PROACTIVE_TOOLS = frozenset({
-    "read_file", "exec_command", "ls", "glob_files", "grep_files",
+    "read_file", "exec_command", "inspect_processes", "ls", "glob_files", "grep_files",
     "web_fetch", "web_search",
 })
 STRUCTURED_TOOLS = frozenset({"ls", "glob_files", "grep_files", "web_search"})
@@ -149,7 +150,7 @@ COMPACTION_TARGET_RATIO = 0.5  # target context usage after compaction
 COMPACTION_SUMMARY_MAX_CHARS = 50_000
 
 PRUNABLE_TOOLS = frozenset({
-    "read_file", "exec_command", "web_fetch",
+    "read_file", "exec_command", "web_fetch", "inspect_processes",
     "web_search", "glob_files", "grep_files", "ls",
 })
 

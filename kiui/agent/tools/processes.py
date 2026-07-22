@@ -12,7 +12,7 @@ from typing import Any
 
 from kiui.agent.utils.interrupt import CancelWatcher
 
-from .constants import MAX_PROCESS_LOG_BYTES
+from .constants import MAX_PROCESS_LOG_BYTES, MAX_PROCESS_LOG_TAIL_CHARS
 
 
 def _create_windows_job(proc: subprocess.Popen) -> int:
@@ -366,12 +366,25 @@ class ProcessToolsMixin:
         }
 
     def _inspect_processes(
-        self, process_id: str | None = None, wait: float = 0
+        self, process_id: str | None = None, wait: float = 0, log_tail_chars: int = 0
     ) -> dict[str, Any]:
-        """Optionally wait, then return status for one or all managed processes."""
-        self.console.tool(f"inspect_processes: {process_id or 'all'} (wait={wait}s)")
+        """Optionally wait, then return status and a bounded log tail."""
+        self.console.tool(
+            f"inspect_processes: {process_id or 'all'} "
+            f"(wait={wait}s, log_tail_chars={log_tail_chars})"
+        )
         if wait < 0:
             return {"error": "wait must be non-negative", "success": False}
+        if log_tail_chars < 0 or log_tail_chars > MAX_PROCESS_LOG_TAIL_CHARS:
+            return {
+                "error": f"log_tail_chars must be between 0 and {MAX_PROCESS_LOG_TAIL_CHARS}",
+                "success": False,
+            }
+        if log_tail_chars and process_id is None:
+            return {
+                "error": "process_id is required when log_tail_chars is non-zero",
+                "success": False,
+            }
 
         record = None
         if process_id is not None:
@@ -404,10 +417,19 @@ class ProcessToolsMixin:
         else:
             with self._process_lock:
                 records = list(self._processes.values())
-        return {
-            "processes": [self._process_info(record) for record in records],
-            "success": True,
-        }
+        processes = [self._process_info(record) for record in records]
+        if log_tail_chars:
+            log_path = self._resolve_path(processes[0]["log_path"])
+            size = log_path.stat().st_size
+            # Read extra bytes so a multibyte UTF-8 boundary does not shorten the requested tail.
+            byte_limit = log_tail_chars * 4
+            start = max(0, size - byte_limit)
+            with log_path.open("rb") as f:
+                f.seek(start)
+                decoded = f.read().decode("utf-8", errors="replace")
+            processes[0]["log_tail"] = decoded[-log_tail_chars:]
+            processes[0]["log_tail_truncated"] = start > 0 or len(decoded) > log_tail_chars
+        return {"processes": processes, "success": True}
 
     def _stop_process(self, process_id: str) -> dict[str, Any]:
         """Stop one managed process and its process tree."""
