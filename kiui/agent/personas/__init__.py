@@ -5,8 +5,11 @@ system prompt, and tool surface:
 
 - ``build_system_prompt(ctx) -> str`` (required): builds the complete system
   prompt from a :class:`~kiui.agent.personas.common.PersonaContext`.
-- ``TOOLS`` (required): whitelist of tool names; ``None`` = all tools,
-  ``[]`` = no tools. Enforced in the advertised tool definitions.
+- ``TOOLS`` (required): whitelist of built-in tool names; ``None`` = all
+  built-ins, ``[]`` = no built-ins. Enforced in the advertised tool set. Tools
+  contributed by loaded skills are advertised whenever the persona can call
+  ``load_skill`` (i.e. it is in ``TOOLS``, or ``TOOLS is None``), since a
+  persona that cannot load skills cannot obtain their tools anyway.
 - ``NAME`` / ``DESCRIPTION`` (required): shown by ``/persona``.
 
 The bundled ``coder`` persona is the default. Select another at startup with
@@ -29,7 +32,7 @@ DEFAULT_PERSONA = "coder"
 class PersonaInfo:
     name: str
     description: str
-    tools: frozenset | None  # None = all tools
+    tools: frozenset | None  # None = all built-in tools
     build: Callable[[PersonaContext], str]
     path: str
 
@@ -40,13 +43,13 @@ def _load_persona(path: Path) -> PersonaInfo:
 
     tools = module.TOOLS
     if tools is not None:
-        from kiui.agent.tools import ToolExecutor
+        from kiui.agent.tools import BUILTIN_TOOL_NAMES
 
-        unknown = set(tools) - set(ToolExecutor._DISPATCH_MAP)
+        unknown = set(tools) - set(BUILTIN_TOOL_NAMES)
         if unknown:
             raise ValueError(
                 f"Persona '{path.stem}' whitelists unknown tool(s): {sorted(unknown)}. "
-                f"Valid tools: {sorted(ToolExecutor._DISPATCH_MAP)}"
+                f"Valid tools: {sorted(BUILTIN_TOOL_NAMES)}"
             )
         tools = frozenset(tools)
 

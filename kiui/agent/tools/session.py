@@ -37,11 +37,18 @@ class SessionToolsMixin:
             self._skill_loads[name] = self._skill_loads.get(name, 0) + 1
             return {"message": f"Skill '{name}' is already loaded.", "success": True}
 
-        self._loaded_skills.add(name)
-        self._skill_loads[name] = self._skill_loads.get(name, 0) + 1
         skill = self._skills[name]
         body = skill["body"]
         skill_dir = skill.get("dir")
+        # Register contributed tools before marking the skill loaded so a
+        # packaging error (e.g. a tool shadowing a built-in) fails the whole
+        # load atomically instead of leaving half-registered state.
+        error = self._register_skill_tools(name, skill_dir)
+        if error is not None:
+            return {"error": error, "success": False}
+
+        self._loaded_skills.add(name)
+        self._skill_loads[name] = self._skill_loads.get(name, 0) + 1
         resources = [
             directory
             for directory in ("references", "scripts", "assets")
@@ -58,6 +65,27 @@ class SessionToolsMixin:
             header = f"[Skill '{name}' loaded.]\n\n"
         body = header + body
         return {"content": body, "success": True}
+
+    def _register_skill_tools(self, name: str, skill_dir: str | None) -> str | None:
+        """Import a loaded skill's tools.py (if any) and register its tools.
+
+        Returns ``None`` on success (including when the skill ships no tools),
+        or an error message string when the tools.py is broken (import error or
+        a tool that shadows a built-in). A broken tools.py fails the whole skill
+        load rather than silently loading a skill whose advertised tools are
+        missing; registration is atomic so no partial state is left behind.
+        """
+        if not skill_dir:
+            return None
+        from kiui.agent.skills import load_skill_tools
+
+        try:
+            entries = load_skill_tools(skill_dir)
+            if entries:
+                self.register_skill_tools(name, entries)
+        except Exception as e:
+            return f"Skill '{name}' tools.py failed to load: {e}"
+        return None
 
     def _report_goal(self, met: bool = False, reason: str = "") -> dict[str, Any]:
         """Record whether the current standing goal is met.

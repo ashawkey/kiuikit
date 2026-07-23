@@ -1,6 +1,6 @@
 ---
 name: skill-creator
-description: Create, structure, and validate new Agent Skills (SKILL.md packs). Use this when the user wants to author a new skill, package reusable domain knowledge or a repeatable workflow, add bundled scripts/references/assets, or fix an existing skill so it follows the Agent Skills format.
+description: Create, structure, and validate new Agent Skills (SKILL.md packs), including kia-specific skills that ship native tools via tools.py. Use this when the user wants to author a new skill, package reusable domain knowledge or a repeatable workflow, add bundled scripts/references/assets, give a skill its own callable tools, or fix an existing skill so it follows the Agent Skills format.
 ---
 
 # Skill Creator
@@ -22,10 +22,15 @@ Use it whenever the user wants to:
 ```
 <skill-name>/
 ├── SKILL.md          # required: frontmatter + instructions
+├── tools.py          # optional (kia extension): native tools injected when the skill loads
 ├── scripts/          # optional: executable code the agent runs (Bash/exec)
 ├── references/       # optional: docs the agent reads on demand
 └── assets/           # optional: templates / data files referenced by path
 ```
+
+`tools.py` is a **kia-specific extension** (not part of the open Agent Skills
+format). See "Native tools (kia extension)" below. Everything else in this
+guide is standard and portable across Agent Skills hosts.
 
 Create the skill under `.kia/skills/<skill-name>/` (kia's own dir) unless the
 user asks for a different location.
@@ -93,6 +98,118 @@ loaded body, so resolve relative paths against that directory using `read_file`
 - `scripts/` — executable code run via `exec_command`. Self-contained, clear errors, handles edge cases.
 - `assets/` — templates/binaries referenced **by path**, not read into context (copy, fill, or emit them).
 
+## Native tools (kia extension)
+
+Standard skills add capability through `scripts/` run via `exec_command`. That is
+portable and should be the **default choice**. kia adds one non-standard option:
+a skill may ship a `tools.py` that injects real, model-callable tools into the
+agent **only while the skill is loaded**. Other Agent Skills hosts ignore
+`tools.py`, so the `SKILL.md` still works everywhere; the extra tools simply do
+not appear there.
+
+### When to use tools.py vs scripts/
+
+Prefer `scripts/` + `exec_command` unless the capability genuinely needs to live
+inside the agent process. Reach for `tools.py` only when the tool must:
+
+- share **session-scoped state** with the executor (e.g. a managed-process
+  registry, long-lived handles) that a one-shot script cannot hold, or
+- present a **structured, schema-validated call** the model invokes directly and
+  repeatedly, rather than a shell command.
+
+The bundled `monitor` skill is the reference example: its
+`start_process` / `inspect_processes` / `stop_process` tools drive a process
+registry the core executor owns, so they must run in-process. Read
+`bundled_skills/monitor/tools.py` before writing your own.
+
+> **Trust:** loading a skill imports and executes its `tools.py` in the agent
+> process. Only add native tools to skills you author and trust. This is
+> appropriate for kia (a personal harness where all skills are user-authored),
+> not for skills fetched from untrusted third parties.
+
+### tools.py contract
+
+`tools.py` exposes a module-level `TOOLS` list. Each entry is a dict:
+
+| Key | Required | Meaning |
+|-----|----------|---------|
+| `schema` | yes | OpenAI function schema (`{"type": "function", "function": {"name", "description", "parameters"}}`). |
+| `run` | yes | Callable invoked as `run(executor, **arguments)`; returns a result dict. |
+| `permission` | no | `"safe"` (never prompts) or `"risky"` (prompts in default mode). Defaults to `"risky"`. |
+
+`tools.py` is loaded as a standalone module (not part of a package), so it MUST
+be **self-contained**: import installed packages absolutely — `kiui.agent.*` is
+available (e.g. `from kiui.agent.tools.constants import ...`), as are numpy,
+torch, etc. — but do NOT import sibling files in the skill folder (`import
+helper` or `from . import helper` will fail). Put all tool code in `tools.py`.
+If a tool needs a bundled file, reference it by **path** and read/run it (as
+`monitor/tools.py` does with `process_supervisor.py`), rather than importing it.
+
+Rules the executor enforces at load time:
+
+- A tool `name` MUST NOT collide with a built-in tool (`read_file`,
+  `exec_command`, …) or with a tool another loaded skill already provides. A
+  collision (or any import error in `tools.py`) fails the whole `load_skill`
+  atomically: the skill is not marked loaded and no tools are registered, so a
+  broken tools.py never leaves the skill half-loaded.
+- Tools are advertised and callable **only while the skill is loaded**. They are
+  injected in the same turn `load_skill` runs, removed on unload / `/clear` /
+  session restart, and re-registered automatically on `--resume`.
+- The active **persona** must be able to load skills. Any persona that can call
+  `load_skill` (the default `coder`, or any persona whose `TOOLS` whitelist
+  includes `load_skill`) advertises a loaded skill's tools; a persona that
+  cannot load skills never sees them.
+- Choose `permission` honestly: read-only inspection is `"safe"`; anything that
+  launches, mutates, or terminates work is `"risky"`. Shell-command safety guards
+  still apply regardless of this flag.
+
+### run(executor, ...) contract
+
+- **First argument is the `ToolExecutor`.** Use it for shared services:
+  `executor.console` (status output via `.tool(...)`), `executor._resolve_path(p)`
+  (resolve a path against the working dir), `executor.cancellation` (honor user
+  interrupts during waits), and any session-scoped registry the tool manages.
+- **Remaining kwargs are exactly the model-supplied arguments**, already parsed
+  from the schema — trust them; do not re-validate types the schema guarantees.
+- **Return a dict and always include a `success` boolean.** On failure return
+  an `error` message with `success` false. Keep payloads small and bounded; large
+  text should be truncated with a clear note, matching built-in tools.
+
+### Minimal template
+
+```python
+# <skill-name>/tools.py
+
+def echo(executor, text=""):
+    executor.console.tool(f"echo: {text[:60]}")
+    if not text:
+        return {"error": "text is required.", "success": False}
+    return {"echoed": text, "success": True}
+
+TOOLS = [
+    {
+        "permission": "safe",
+        "run": echo,
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "echo",
+                "description": "Echo text back. Use to demonstrate a skill tool.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"text": {"type": "string", "description": "Text to echo"}},
+                    "required": ["text"],
+                },
+            },
+        },
+    },
+]
+```
+
+Reference the tools from the `SKILL.md` body so the model knows they exist once
+loaded (e.g. "Loading this skill enables `echo` …"), and put the triggers that
+should pull the skill in into the `description`.
+
 ## Recommended body structure
 
 ```markdown
@@ -127,7 +244,9 @@ Write instructions in imperative voice ("Extract the tables…", not "You should
 1. **Clarify** what task the skill automates and gather 1–2 concrete examples.
 2. **Choose a name** (kebab-case) and create `.kia/skills/<name>/`.
 3. **Write SKILL.md** with valid frontmatter and a focused body.
-4. **Add resources** only if needed; keep each reference file small.
+4. **Add resources** only if needed; keep each reference file small. If the skill
+   needs its own capability, prefer `scripts/` + `exec_command`; add a `tools.py`
+   (see "Native tools (kia extension)") only when the tool must run in-process.
 5. **Validate** the name/description rules below, then confirm with the user.
 
 ## Validation checklist
@@ -137,4 +256,6 @@ Write instructions in imperative voice ("Extract the tables…", not "You should
 - [ ] `description` present, non-empty, ≤1024 chars, says what + when.
 - [ ] Body under ~500 lines; long material moved to `references/`.
 - [ ] File references are relative and one level deep.
-- [ ] Run `/skills reload` in kia to pick up the new skill, then `/skills` to confirm it is discovered without warnings (or `/skills <name>` to load it manually).
+- [ ] If `tools.py` is present: each `TOOLS` entry has `schema` + `run`; tool names do not shadow built-ins; `permission` is set correctly (`safe` for read-only, `risky` otherwise); the `SKILL.md` body mentions the tools it enables.
+- [ ] If `tools.py` is present: it is self-contained — only absolute imports of installed packages (`kiui.agent.*`, numpy, …), no imports of sibling files in the skill folder.
+- [ ] Run `/skills reload` in kia to pick up the new skill, then `/skills` to confirm it is discovered without warnings (or `/skills <name>` to load it manually). After loading a skill with `tools.py`, confirm its tools appear and are callable.

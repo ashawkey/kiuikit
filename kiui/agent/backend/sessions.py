@@ -301,7 +301,7 @@ class SessionMixin:
             except ValueError:
                 self.console.warn(f"Session persona '{saved_persona}' not found; keeping '{self.persona.name}'.")
             else:
-                self.tools = self._get_tool_definitions()
+                # self.tools follows the restored persona via the live property.
                 self.system_prompt = self._build_system_prompt()
                 self.context.system_prompt["content"] = self.system_prompt
 
@@ -322,6 +322,17 @@ class SessionMixin:
         self.tool_executor._loaded_skills = {
             n for n in data.get("loaded_skills", []) if n in available
         }
+        # Re-register tools contributed by restored skills so a resumed session
+        # advertises the same tool surface (self.tools reads the registry live).
+        # If a skill's tools.py broke since the session was saved, drop it from
+        # the loaded set instead of leaving it marked-loaded with missing tools.
+        self.tool_executor.reset_skill_tools()
+        for name in list(self.tool_executor._loaded_skills):
+            skill_dir = self.skills[name].get("dir")
+            error = self.tool_executor._register_skill_tools(name, skill_dir)
+            if error is not None:
+                self.console.warn(error)
+                self.tool_executor._loaded_skills.discard(name)
         saved_loads = data.get("skill_loads")
         if isinstance(saved_loads, dict):
             self.tool_executor._skill_loads = {

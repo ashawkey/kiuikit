@@ -32,7 +32,7 @@ from .formatting import (
     truncate_text_output,
 )
 from .web import _resolve_public_addresses
-from .schemas import get_tool_definitions
+from .registry import BUILTIN_TOOL_NAMES, ToolRegistry, ToolSpec
 from .executor import ToolExecutor
 
 __all__ = [
@@ -52,11 +52,13 @@ __all__ = [
     "MAX_WEB_REDIRECTS",
     "TOOL_SUMMARY_MAX_CHARS",
     "TOOL_SUMMARY_MAX_LINES",
+    "BUILTIN_TOOL_NAMES",
     "ToolExecutor",
+    "ToolRegistry",
+    "ToolSpec",
     "apply_edit",
     "find_match",
     "format_tool_result",
     "format_tool_summary",
-    "get_tool_definitions",
     "truncate_text_output",
 ]

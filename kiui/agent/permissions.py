@@ -20,7 +20,7 @@ import shlex
 import stat
 import sys
 from enum import Enum
-from typing import Any, ClassVar
+from typing import Any, Callable, ClassVar
 
 from kiui.agent.ui import AgentConsole
 
@@ -29,30 +29,6 @@ class PermissionMode(str, Enum):
     AUTO = "auto"
     DEFAULT = "default"
     STRICT = "strict"
-
-
-SAFE_TOOLS = frozenset({
-    "read_file",
-    "read_image",
-    "ls",
-    "glob_files",
-    "grep_files",
-    "web_search",
-    "web_fetch",
-    "load_skill",
-    "inspect_processes",
-})
-
-RISKY_TOOLS = frozenset({
-    "write_file",
-    "edit_file",
-    "multi_edit",
-    "exec_command",
-    "start_process",
-    "stop_process",
-    "remove_file",
-    "spawn_subagent",
-})
 
 
 # ---------------------------------------------------------------------------
@@ -478,6 +454,10 @@ class PermissionController:
         self.console = console or AgentConsole()
         self._session_allowed: set[str] = set()
         self.safety = SafetyGuard(work_dir=work_dir)
+        # Callable returning a tool's permission class ("safe"/"risky") or None
+        # for an unknown tool. Set by LLMAgent to the registry lookup so both
+        # built-in and skill tools share one confirmation policy.
+        self.tool_permission: Callable[[str], str | None] | None = None
 
     @property
     def session_allowed_tools(self) -> frozenset[str]:
@@ -523,8 +503,10 @@ class PermissionController:
     def _needs_prompt(self, tool_name: str) -> bool:
         if self.mode == PermissionMode.STRICT:
             return True
-        # default mode: only risky tools
-        return tool_name in RISKY_TOOLS
+        # default mode: only risky tools (built-in or skill-provided)
+        if self.tool_permission is not None:
+            return self.tool_permission(tool_name) == "risky"
+        return False
 
     def _prompt_user(self, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
         summary = _summarize_call(tool_name, arguments)

@@ -20,7 +20,7 @@ from .constants import (
     MAX_EXEC_OUTPUT_CHARS,
     MAX_STREAMING_BUFFER_CHARS,
 )
-from .processes import _terminate_process
+from .process_util import _terminate_process
 
 
 class CommandToolsMixin:

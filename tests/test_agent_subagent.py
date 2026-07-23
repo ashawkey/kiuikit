@@ -34,7 +34,13 @@ def test_subagent_returns_full_response(monkeypatch, tmp_path):
             return response
 
     monkeypatch.setitem(conf, "openai", {
-        "test": {"model": "model", "api_key": "key", "base_url": "url"}
+        "test": {
+            "model": "model",
+            "api_key": "key",
+            "base_url": "url",
+            "context_length": 200_000,
+            "max_output_tokens": 16_000,
+        }
     })
     monkeypatch.setattr("kiui.agent.backend.LLMAgent", FakeAgent)
 
@@ -46,4 +52,6 @@ def test_subagent_returns_full_response(monkeypatch, tmp_path):
     assert result["message"].endswith("THE END")
     assert created[0].kwargs["is_subagent"] is True
     assert created[0].kwargs["work_dir"] == str(tmp_path)
+    assert created[0].kwargs["context_length"] == 200_000
+    assert created[0].kwargs["max_output_tokens"] == 16_000
     assert created[0].tool_executor.stopped

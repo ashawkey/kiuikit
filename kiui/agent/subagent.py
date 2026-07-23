@@ -59,6 +59,8 @@ class SubagentManager:
                 # clash with the parent's, so they render responses statically.
                 stream=False,
                 reasoning_effort=model_conf.get("reasoning_effort", self.reasoning_effort),
+                context_length=model_conf.get("context_length"),
+                max_output_tokens=model_conf.get("max_output_tokens"),
                 permission_mode=PermissionMode.AUTO,
                 exec_mode=True,
                 is_subagent=True,

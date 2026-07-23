@@ -1,6 +1,12 @@
-"""Built-in tool dispatcher assembled from focused tool mixins."""
+"""Tool dispatcher assembled from focused tool mixins, backed by the registry.
 
-import threading
+The :class:`~kiui.agent.tools.registry.ToolRegistry` is the single source of
+truth for every tool (built-in and skill-provided): its schema, dispatch
+handler, permission class, and advertising gates. The executor holds one
+registry and dispatches through it, so there is no separate built-in/skill
+branch to keep in sync.
+"""
+
 from pathlib import Path
 from typing import Any
 
@@ -9,7 +15,8 @@ from kiui.agent.ui import AgentConsole
 
 from .commands import CommandToolsMixin
 from .files import FileToolsMixin
-from .processes import ProcessToolsMixin
+from .process_manager import ProcessManagerMixin
+from .registry import ToolRegistry
 from .search import SearchToolsMixin
 from .session import SessionToolsMixin
 from .web import WebToolsMixin
@@ -18,33 +25,12 @@ from .web import WebToolsMixin
 class ToolExecutor(
     FileToolsMixin,
     CommandToolsMixin,
-    ProcessToolsMixin,
+    ProcessManagerMixin,
     SearchToolsMixin,
     WebToolsMixin,
     SessionToolsMixin,
 ):
-    """Execute built-in tool calls and return structured results."""
-
-    _DISPATCH_MAP: dict[str, str] = {
-        "read_file": "_read_file",
-        "read_image": "_read_image",
-        "write_file": "_write_file",
-        "edit_file": "_edit_file",
-        "multi_edit": "_multi_edit",
-        "ls": "_ls",
-        "exec_command": "_exec_command",
-        "start_process": "_start_process",
-        "inspect_processes": "_inspect_processes",
-        "stop_process": "_stop_process",
-        "glob_files": "_glob_files",
-        "grep_files": "_grep_files",
-        "web_search": "_web_search",
-        "web_fetch": "_web_fetch",
-        "remove_file": "_remove_file",
-        "spawn_subagent": "_spawn_subagent",
-        "load_skill": "_load_skill",
-        "report_goal": "_report_goal",
-    }
+    """Execute tool calls (built-in or skill-provided) and return results."""
 
     def __init__(
         self,
@@ -71,21 +57,45 @@ class ToolExecutor(
         # Last report_goal() call result: None, or {"met": bool, "reason": str}.
         # Consumed by LLMAgent after each goal-check round.
         self.goal_report: dict | None = None
-        self._processes: dict[str, dict[str, Any]] = {}
-        self._process_lock = threading.Lock()
+        # Single source of truth for all tools (built-ins seeded; skill tools
+        # added/removed as skills load and unload).
+        self.registry = ToolRegistry()
+        self._init_process_registry()
 
     def execute(self, function_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Dispatch and execute a tool call. Returns dict with success key."""
-        method_name = self._DISPATCH_MAP.get(function_name)
-        if not method_name:
-            return {"error": f"Unknown tool: {function_name}", "success": False}
         if self.cancellation is not None and self.cancellation.cancelled:
             return {
                 "error": "Tool call skipped: the user interrupted the turn.",
                 "success": False,
                 "interrupted": True,
             }
+        spec = self.registry.get(function_name)
+        if spec is None:
+            return {"error": f"Unknown tool: {function_name}", "success": False}
         try:
-            return getattr(self, method_name)(**arguments)
+            return spec.handler(self, **arguments)
         except Exception as e:
             return {"error": f"Tool execution failed: {e}", "success": False}
+
+    # -- skill-provided tools ----------------------------------------------
+
+    def register_skill_tools(self, name: str, entries: list[dict[str, Any]]) -> None:
+        """Register the tools contributed by a loaded skill.
+
+        Delegates to the registry, which validates atomically and rejects any
+        name colliding with a built-in or another loaded skill's tool.
+        """
+        self.registry.register_skill(name, entries)
+
+    def unregister_skill_tools(self, name: str) -> None:
+        """Drop all tools contributed by *name* (used when a skill is removed)."""
+        self.registry.unregister_skill(name)
+
+    def skill_tool_schemas(self) -> list[dict[str, Any]]:
+        """Return OpenAI schemas for all currently-registered skill tools."""
+        return self.registry.skill_tool_schemas()
+
+    def reset_skill_tools(self) -> None:
+        """Drop every skill-contributed tool (used on /clear and resume rebuild)."""
+        self.registry.clear_skill_tools()

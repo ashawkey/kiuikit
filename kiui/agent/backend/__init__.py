@@ -32,7 +32,6 @@ from kiui.agent.tools import (
     ToolExecutor,
     format_tool_result,
     format_tool_summary,
-    get_tool_definitions,
 )
 from kiui.agent.subagent import SubagentManager
 from kiui.agent.tools.results import (
@@ -133,6 +132,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         input_broker: InputBroker | None = None,
         prompt_broker: PromptBroker | None = None,
         cancellation: CancellationToken | None = None,
+        max_output_tokens: int | None = None,
     ):
 
         self.model = model
@@ -146,7 +146,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self.show_thinking = self.profile.reasoning is not None
         self.reasoning_effort = reasoning_effort
         self.context_length = context_length if context_length is not None else self.profile.context_length
-        self.max_output_tokens = self.profile.max_output_tokens
+        self.max_output_tokens = max_output_tokens if max_output_tokens is not None else self.profile.max_output_tokens
         self.token_estimator = TokenEstimator()
 
         self.events = events
@@ -199,7 +199,6 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self.work_dir = str(Path(work_dir).absolute()) if work_dir else str(Path.cwd())
         self.persona: PersonaInfo = get_persona(persona or DEFAULT_PERSONA)
         self.system_prompt = self._build_system_prompt()
-        self.tools = self._get_tool_definitions()
 
         self.permissions = PermissionController(
             mode=permission_mode,
@@ -227,6 +226,9 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             skills=self.skills,
             cancellation=cancellation,
         )
+        # Confirmation policy reads permission classes straight from the registry,
+        # so built-in and skill tools share one source of truth.
+        self.permissions.tool_permission = self.tool_executor.registry.permission
 
         self.context = ContextManager(self.system_prompt)
         self._pending_images: list[dict[str, str]] = []
@@ -258,11 +260,19 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         # self.console.system(f"System prompt: {self.system_prompt[:100]}...")
 
 
-    def _get_tool_definitions(self) -> list[dict[str, Any]]:
-        return get_tool_definitions(
+    @property
+    def tools(self) -> list[dict[str, Any]]:
+        """Tool schemas advertised to the API for the current turn.
+
+        Computed live from the registry so it always reflects the persona, the
+        currently-loaded skills, image support, sub-agent status, and whether a
+        standing goal is active — no manual rebuild needed.
+        """
+        return self.tool_executor.registry.advertised(
+            persona_tools=self.persona.tools,
             include_subagent=not self.is_subagent,
-            allowed=self.persona.tools,
-            supports_image_input=self.profile.supports_image_input,
+            supports_image=self.profile.supports_image_input,
+            goal_active=self.goal_active,
         )
 
     def _messages_with_pending_images(self) -> list[dict[str, Any]]:
@@ -810,6 +820,9 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 return content or None
 
             interrupted = self.execute_tool_calls(message["tool_calls"])
+            # A skill loaded this round may contribute tools; `self.tools` is a
+            # live registry view, so the next loop iteration advertises them
+            # automatically with no manual rebuild.
 
             if interrupted:
                 # The user cancelled a tool mid-round. Stop the agentic loop
@@ -878,6 +891,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self.token_totals = {key: 0 for key in self.token_totals}
         self.tool_compaction_totals = {key: 0 for key in self.tool_compaction_totals}
         self.tool_executor.shutdown_processes(clear=True)
+        self.tool_executor.reset_skill_tools()
         self.tool_executor._loaded_skills.clear()
         self.tool_executor._skill_loads.clear()
         self.tool_executor.goal_report = None

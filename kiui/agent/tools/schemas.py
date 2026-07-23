@@ -1,29 +1,19 @@
-"""OpenAI-format definitions for built-in tools."""
+"""OpenAI-format function schemas for the built-in tools.
 
-from typing import Any
+This module owns only the raw schemas. Which schemas are advertised to the API,
+how each tool dispatches, and its permission class are all decided in
+``registry.py`` via :class:`~kiui.agent.tools.registry.ToolSpec`, so there is a
+single source of truth per tool.
+"""
 
 from .constants import (
     MAX_GLOB_RESULTS,
     MAX_GREP_MATCHES,
-    MAX_PROCESS_LOG_TAIL_CHARS,
     MAX_READ_LINES,
 )
 
 
-def get_tool_definitions(
-    include_subagent: bool = True,
-    allowed: set[str] | frozenset | None = None,
-    supports_image_input: bool = False,
-) -> list[dict[str, Any]]:
-    """Return OpenAI-format tool definitions for the built-in tools.
-
-    Set *include_subagent* to False for sub-agents, which must not be able to
-    spawn further sub-agents (keeps spawning a single, sequential level deep).
-    Set *allowed* to a persona's tool whitelist to advertise only those tools;
-    None advertises all tools. ``read_image`` is advertised only when
-    *supports_image_input* is true.
-    """
-    definitions = [
+_BUILTIN_TOOL_SCHEMAS_LIST = [
         {
             "type": "function",
             "function": {
@@ -156,72 +146,6 @@ def get_tool_definitions(
                         "cwd": {"type": "string", "description": "Working directory (optional)"},
                     },
                     "required": ["command"],
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "start_process",
-                "description": (
-                    "Start a managed background process and return immediately. "
-                    "Its combined output is written to a readable log file."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "command": {"type": "string", "description": "Shell command to run in the background"},
-                        "cwd": {"type": "string", "description": "Working directory (optional)"},
-                    },
-                    "required": ["command"],
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "inspect_processes",
-                "description": (
-                    "Inspect managed background process status after an optional bounded wait. "
-                    "Optionally include a bounded tail from one process's log. "
-                    "Omit process_id to list all processes."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "process_id": {"type": "string", "description": "Process ID to inspect (optional)"},
-                        "wait": {
-                            "type": "number",
-                            "minimum": 0,
-                            "default": 0,
-                            "description": "Seconds to wait before returning a status snapshot (default: 0)",
-                        },
-                        "log_tail_chars": {
-                            "type": "integer",
-                            "minimum": 0,
-                            "maximum": MAX_PROCESS_LOG_TAIL_CHARS,
-                            "default": 0,
-                            "description": (
-                                f"Characters of recent log content to return directly (default: 0, max: {MAX_PROCESS_LOG_TAIL_CHARS}). "
-                                "Requires process_id."
-                            ),
-                        },
-                    },
-                    "required": [],
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "stop_process",
-                "description": "Stop a managed background process.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "process_id": {"type": "string", "description": "Managed process ID returned by start_process"},
-                    },
-                    "required": ["process_id"],
                 },
             },
         },
@@ -367,19 +291,8 @@ def get_tool_definitions(
         },
     ]
 
-    if not supports_image_input:
-        definitions = [
-            d for d in definitions
-            if d.get("function", {}).get("name") != "read_image"
-        ]
-    if not include_subagent:
-        definitions = [
-            d for d in definitions
-            if d.get("function", {}).get("name") != "spawn_subagent"
-        ]
-    if allowed is not None:
-        definitions = [
-            d for d in definitions
-            if d.get("function", {}).get("name") in allowed
-        ]
-    return definitions
+
+# Built-in tool schemas keyed by tool name, for the registry to consume.
+BUILTIN_TOOL_SCHEMAS = {
+    schema["function"]["name"]: schema for schema in _BUILTIN_TOOL_SCHEMAS_LIST
+}

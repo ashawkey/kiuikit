@@ -1,9 +1,13 @@
 ---
 name: monitor
-description: Continuously monitor long-running processes, GPU usage, jobs, queues, services, logs, or periodic health checks, including detecting failures and relaunching work. Use when the user asks to monitor continuously, watch, check repeatedly or periodically, run checks on an interval, keep something healthy, or continue until stopped.
+description: Run and manage background processes and continuously monitor long-running processes, servers, GPU usage, jobs, queues, services, logs, or periodic health checks, including detecting failures and relaunching work. Use when the user asks to start a server or long-running/potentially-stuck background command, or to monitor continuously, watch, check repeatedly or periodically, run checks on an interval, keep something healthy, or continue until stopped.
 ---
 
-# Continuous Monitoring
+# Background Processes and Continuous Monitoring
+
+Loading this skill enables three managed-process tools: `start_process` (launch a background process with file-backed output), `inspect_processes` (wait a bounded interval and read status plus a log tail), and `stop_process` (terminate a managed process and its tree).
+
+Use `start_process` for servers and long-running or potentially stuck commands, then `inspect_processes(wait=N)` to wait; request `log_tail_chars` when recent output is needed. Prefer `exec_command` for foreground commands expected to finish reliably.
 
 Keep the agentic tool loop alive across checkpoints so you can inspect state, reason about it, take corrective action, and wait for the next checkpoint.
 

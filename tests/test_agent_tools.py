@@ -13,14 +13,13 @@ import pytest
 
 import kiui.agent.tools as tools
 import kiui.agent.tools.commands as command_tools
-import kiui.agent.tools.processes as process_tools
+from kiui.agent.skills import load_skill_tools
 from kiui.agent.tools import (
     ToolExecutor,
     _human_size,
     apply_edit,
     find_match,
     format_tool_result,
-    get_tool_definitions,
 )
 from kiui.agent.tools.gitignore import build_gitignore_matcher
 from kiui.agent.permissions import SafetyGuard
@@ -36,6 +35,18 @@ class _SilentConsole:
 
     def warn(self, *args, **kwargs):
         pass
+
+
+_MONITOR_SKILL_DIR = (
+    Path(tools.__file__).parent.parent / "bundled_skills" / "monitor"
+)
+
+
+def _executor_with_monitor(tmp_path):
+    """Build an executor with the bundled monitor skill's process tools loaded."""
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+    te.register_skill_tools("monitor", load_skill_tools(_MONITOR_SKILL_DIR))
+    return te
 
 
 # ----- apply_edit ----------------------------------------------------------
@@ -172,9 +183,10 @@ def test_exec_command_captures_full_output_artifact(tmp_path):
 
 
 def test_managed_background_process_lifecycle(tmp_path):
-    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
-    started = te._start_process(
-        "python -u -c \"import time; print('ready'); time.sleep(30)\""
+    te = _executor_with_monitor(tmp_path)
+    started = te.execute(
+        "start_process",
+        {"command": "python -u -c \"import time; print('ready'); time.sleep(30)\""},
     )
     process_id = started["process_id"]
     log_path = tmp_path / started["log_path"]
@@ -187,11 +199,11 @@ def test_managed_background_process_lifecycle(tmp_path):
             time.sleep(0.05)
         assert "ready" in log_path.read_text()
 
-        inspected = te._inspect_processes(process_id)
+        inspected = te.execute("inspect_processes", {"process_id": process_id})
         assert inspected["success"]
         assert inspected["processes"][0]["status"] == "running"
 
-        stopped = te._stop_process(process_id)
+        stopped = te.execute("stop_process", {"process_id": process_id})
         assert stopped["success"]
         assert stopped["status"] == "exited"
         assert stopped["exit_code"] is not None
@@ -201,7 +213,7 @@ def test_managed_background_process_lifecycle(tmp_path):
 
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux subreaper semantics")
 def test_managed_background_process_stops_detached_descendant(tmp_path):
-    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+    te = _executor_with_monitor(tmp_path)
     child_pid_file = tmp_path / "detached.pid"
     child_code = (
         "import os,pathlib,time; os.setsid(); "
@@ -209,14 +221,14 @@ def test_managed_background_process_stops_detached_descendant(tmp_path):
         "time.sleep(30)"
     )
     launcher = f"import subprocess,sys; subprocess.Popen([sys.executable, '-c', {child_code!r}])"
-    started = te._start_process(f"python -c {shlex.quote(launcher)}")
+    started = te.execute("start_process", {"command": f"python -c {shlex.quote(launcher)}"})
     for _ in range(100):
         if child_pid_file.exists():
             break
         time.sleep(0.05)
     assert child_pid_file.exists()
 
-    te._stop_process(started["process_id"])
+    te.execute("stop_process", {"process_id": started["process_id"]})
 
     child_pid = int(child_pid_file.read_text())
     with pytest.raises(ProcessLookupError):

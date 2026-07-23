@@ -2,7 +2,7 @@
 
 from kiui.agent.backend import LLMAgent
 from kiui.agent.personas import get_persona
-from kiui.agent.tools import ToolExecutor, get_tool_definitions
+from kiui.agent.tools import ToolExecutor
 from kiui.agent.ui import AgentConsole
 
 

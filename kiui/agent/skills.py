@@ -28,8 +28,11 @@ explicitly.
 
 from __future__ import annotations
 
+import importlib.util
 import re
+import uuid
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -290,3 +293,37 @@ def get_skill_body(skills: dict[str, dict], name: str) -> str | None:
     """Return the full SKILL.md body for a given skill name, or None if not found."""
     skill = skills.get(name)
     return skill["body"] if skill else None
+
+
+def load_skill_tools(skill_dir: str | Path) -> list[dict[str, Any]]:
+    """Load the tool definitions a skill contributes, or ``[]`` if it has none.
+
+    A skill may ship a ``tools.py`` at its root exposing a module-level
+    ``TOOLS`` list. Each entry must provide an OpenAI function ``schema``, a
+    ``run`` callable (invoked as ``run(executor, **arguments)``), and an
+    optional ``permission`` class (``"safe"`` or ``"risky"``, default risky).
+
+    Since these tools become callable in-process, this is only appropriate for
+    trusted (user-authored and bundled) skills. The module is imported under a
+    unique name so re-loading a skill picks up edits and never collides.
+    """
+    tools_py = Path(skill_dir) / "tools.py"
+    if not tools_py.is_file():
+        return []
+
+    module_name = f"kiui_skill_tools_{uuid.uuid4().hex}"
+    spec = importlib.util.spec_from_file_location(module_name, tools_py)
+    if spec is None or spec.loader is None:
+        raise ValueError(f"could not load tools.py for skill at {skill_dir}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    entries = getattr(module, "TOOLS", None)
+    if not entries:
+        return []
+    for entry in entries:
+        if "schema" not in entry or "run" not in entry:
+            raise ValueError(
+                f"skill tools.py at {skill_dir} has an entry missing 'schema' or 'run'"
+            )
+    return list(entries)

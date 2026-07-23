@@ -311,9 +311,6 @@ The agent has access to the following tools:
 | `multi_edit` | Apply an ordered batch of edits to one file atomically (all-or-nothing) |
 | `ls` | List a directory's immediate contents (gitignore-aware) |
 | `exec_command` | Run foreground shell commands with real-time streaming output |
-| `start_process` | Start a managed background process with file-backed output |
-| `inspect_processes` | Inspect one or all managed background processes, optionally after a bounded wait and with a bounded log tail for one process |
-| `stop_process` | Stop a managed background process and its child process tree |
 | `glob_files` | Find files matching a glob pattern (gitignore-aware) |
 | `grep_files` | Search file contents using regex (prefers ripgrep; gitignore-aware) |
 | `web_search` | Search the web via DuckDuckGo |
@@ -321,3 +318,21 @@ The agent has access to the following tools:
 | `remove_file` | Remove a file or directory |
 | `spawn_subagent` | Delegate a task to a new in-process agent instance |
 | `load_skill` | Load the full prompt instructions for a skill by name |
+
+### Skill-provided tools
+
+A skill may ship a `tools.py` at its root (a module-level `TOOLS` list of
+`{schema, run, permission}` entries). Those tools are registered and advertised
+to the model only while the skill is loaded, and removed when it is unloaded.
+The bundled **`monitor`** skill uses this to provide the managed background
+process tools, so they appear only after `load_skill("monitor")`:
+
+| Tool | Description |
+|------|-------------|
+| `start_process` | Start a managed background process with file-backed output |
+| `inspect_processes` | Inspect one or all managed background processes, optionally after a bounded wait and with a bounded log tail for one process |
+| `stop_process` | Stop a managed background process and its child process tree |
+
+The executor always owns the process *registry* and cleanup, so any background
+processes are terminated on `/clear`, session switch, and exit even when the
+`monitor` skill is not loaded.

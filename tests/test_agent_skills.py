@@ -85,3 +85,128 @@ def test_load_skill_counts(tmp_path):
     r2 = ex._load_skill("alpha")
     assert r2["success"] and "content" not in r2
     assert ex._skill_loads["alpha"] == 2
+
+
+# ----- skill-provided tools ------------------------------------------------
+
+_TOOLS_PY = '''\
+def ping(executor, value="pong"):
+    return {"echo": value, "success": True}
+
+TOOLS = [
+    {
+        "permission": "safe",
+        "run": ping,
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "ping",
+                "description": "Echo a value back.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"value": {"type": "string"}},
+                    "required": [],
+                },
+            },
+        },
+    },
+]
+'''
+
+
+def test_loading_skill_injects_its_tools(tmp_path):
+    d = _write_skill(tmp_path, ".kia", "pinger", _valid("pinger"))
+    (d / "tools.py").write_text(_TOOLS_PY, encoding="utf-8")
+    skills = discover_skills(tmp_path)
+    ex = ToolExecutor(work_dir=str(tmp_path), skills=skills)
+
+    # The tool is neither advertised nor callable before the skill is loaded.
+    assert "ping" not in {s["function"]["name"] for s in ex.skill_tool_schemas()}
+    assert not ex.execute("ping", {})["success"]
+
+    ex._load_skill("pinger")
+
+    names = {s["function"]["name"] for s in ex.skill_tool_schemas()}
+    assert "ping" in names
+    assert ex.registry.permission("ping") == "safe"
+    result = ex.execute("ping", {"value": "hi"})
+    assert result["success"] and result["echo"] == "hi"
+
+    # Unregistering removes both the schema and the dispatch entry.
+    ex.unregister_skill_tools("pinger")
+    assert "ping" not in {s["function"]["name"] for s in ex.skill_tool_schemas()}
+    assert not ex.execute("ping", {})["success"]
+
+
+def test_skill_tool_cannot_shadow_builtin(tmp_path):
+    import pytest
+
+    d = _write_skill(tmp_path, ".kia", "shadow", _valid("shadow"))
+    (d / "tools.py").write_text(
+        _TOOLS_PY.replace('"name": "ping"', '"name": "read_file"'),
+        encoding="utf-8",
+    )
+    skills = discover_skills(tmp_path)
+    ex = ToolExecutor(work_dir=str(tmp_path), skills=skills)
+    with pytest.raises(ValueError):
+        ex.register_skill_tools("shadow", __import__(
+            "kiui.agent.skills", fromlist=["load_skill_tools"]
+        ).load_skill_tools(d))
+
+
+def test_two_skills_cannot_define_same_tool(tmp_path):
+    import pytest
+
+    a = _write_skill(tmp_path, ".kia", "alpha", _valid("alpha"))
+    (a / "tools.py").write_text(_TOOLS_PY, encoding="utf-8")
+    b = _write_skill(tmp_path, ".kia", "bravo", _valid("bravo"))
+    (b / "tools.py").write_text(_TOOLS_PY, encoding="utf-8")  # also defines "ping"
+    skills = discover_skills(tmp_path)
+    ex = ToolExecutor(work_dir=str(tmp_path), skills=skills)
+
+    assert ex._load_skill("alpha")["success"]
+    # bravo's "ping" collides with alpha's; the load fails and leaves alpha intact.
+    result = ex._load_skill("bravo")
+    assert not result["success"]
+    assert "bravo" not in ex._loaded_skills
+    assert ex.registry.get("ping").source == "alpha"
+    assert ex.execute("ping", {"value": "hi"})["echo"] == "hi"
+
+
+# A tools.py whose second tool shadows a built-in: registration must be atomic,
+# so the first (valid) tool must not leak into the surface.
+_TWO_TOOLS_PY = _TOOLS_PY.replace(
+    "TOOLS = [",
+    '''\
+def grab(executor):
+    return {"success": True}
+
+TOOLS = [
+    {
+        "permission": "safe",
+        "run": grab,
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "read_file",
+                "description": "Shadows a built-in.",
+                "parameters": {"type": "object", "properties": {}, "required": []},
+            },
+        },
+    },''',
+)
+
+
+def test_load_skill_with_broken_tools_fails_atomically(tmp_path):
+    d = _write_skill(tmp_path, ".kia", "broken", _valid("broken"))
+    (d / "tools.py").write_text(_TWO_TOOLS_PY, encoding="utf-8")
+    skills = discover_skills(tmp_path)
+    ex = ToolExecutor(work_dir=str(tmp_path), skills=skills)
+
+    result = ex._load_skill("broken")
+    # Load fails, skill is not marked loaded, and no tools leaked in.
+    assert not result["success"]
+    assert "broken" not in ex._loaded_skills
+    assert ex.skill_tool_schemas() == []
+    assert "ping" not in {s["function"]["name"] for s in ex.skill_tool_schemas()}
+    assert not ex.execute("ping", {})["success"]

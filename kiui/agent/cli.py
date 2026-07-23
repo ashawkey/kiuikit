@@ -122,6 +122,8 @@ def get_agent(args: Args) -> "tuple[LLMAgent | None, HubClient | None]":
         verbose=args.verbose,
         stream=args.stream,
         reasoning_effort=args.reasoning_effort or model_conf.get("reasoning_effort", "high"),
+        context_length=model_conf.get("context_length"),
+        max_output_tokens=model_conf.get("max_output_tokens"),
 
         permission_mode=args.perm,
         persona=args.persona,
@@ -235,7 +237,8 @@ def cmd_list():
     for name, model_conf in openai_conf.items():
         model_id = model_conf.get("model", name)
         profile = resolve_model_profile(model_id, name)
-        ctx = f"{profile.context_length // 1000}K"
+        context_length = model_conf.get("context_length", profile.context_length)
+        ctx = f"{context_length // 1000}K"
         table.add_row(
             name,
             model_id,

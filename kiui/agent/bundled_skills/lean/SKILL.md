@@ -1,6 +1,6 @@
 ---
 name: lean
-description: Enforces terse, token-efficient responses and strict YAGNI implementation. Use only when the user explicitly asks to be terse, brief, concise, minimal, token-efficient, simple, YAGNI, or to avoid over-engineering. Do not use for general coding and debugging tasks.
+description: Enforces terse, token-efficient responses and strict YAGNI implementation. Use when the user explicitly asks to be terse, brief, concise, minimal, token-efficient, simple, YAGNI, or to avoid over-engineering.
 ---
 
 # Lean Mode

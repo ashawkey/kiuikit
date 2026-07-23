@@ -112,11 +112,16 @@ class SkillCommandsMixin:
         issues: dict = {}
         self.skills = discover_skills(self.work_dir, issues=issues)
         self.tool_executor._skills = self.skills
-        # Drop loaded-state for skills that no longer exist.
+        # Drop loaded-state and any contributed tools for skills that no longer exist.
+        removed_skills = self.tool_executor._loaded_skills - set(self.skills)
+        for gone in removed_skills:
+            self.tool_executor.unregister_skill_tools(gone)
         self.tool_executor._loaded_skills &= set(self.skills)
         self._report_skill_issues(issues)
 
         # Rebuild the system prompt so the advertised skill list stays current.
+        # The advertised tool surface follows the registry automatically via the
+        # `tools` property, so removed skills' tools stop being advertised.
         self.system_prompt = self._build_system_prompt()
         self.context.system_prompt["content"] = self.system_prompt
         self._report_skills_summary()
@@ -152,6 +157,8 @@ class SkillCommandsMixin:
             "role": "user",
             "content": f"[Manually loaded skill '{name}']\n\n{result['content']}",
         })
+        # Any tools the skill contributes are advertised automatically on the
+        # next turn via the `tools` property.
         self.console.system(
             f"Loaded skill '{name}' into context. It will guide the next response."
         )

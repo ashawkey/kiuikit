@@ -187,7 +187,7 @@ class AgentCommandsMixin:
         # Save and clear while the old persona still owns the conversation.
         self._restart_session()
         self.persona = persona
-        self.tools = self._get_tool_definitions()
+        # self.tools follows the new persona automatically (live registry view).
         self.system_prompt = self._build_system_prompt()
         self.context.system_prompt["content"] = self.system_prompt
         self.console.system(f"Switched to persona: {persona.name}")
@@ -316,7 +316,7 @@ class AgentCommandsMixin:
         self._base_url = model_conf.get("base_url", "")
         self.client = self._request_client()
         self.profile = resolve_model_profile(self.model, self.model_alias)
-        self.tools = self._get_tool_definitions()
+        # self.tools reflects the new model's image support via the live property.
         self.context_length = model_conf.get("context_length", self.profile.context_length)
         self.max_output_tokens = model_conf.get("max_output_tokens", self.profile.max_output_tokens)
         self.reasoning_effort = model_conf.get("reasoning_effort", self.reasoning_effort)
