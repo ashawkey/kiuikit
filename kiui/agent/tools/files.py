@@ -152,7 +152,9 @@ class FileToolsMixin:
 
     def _read_file(self, file: str, offset: int | None = None, limit: int | None = None) -> dict[str, Any]:
         """Read file contents with optional offset and limit."""
-        self.console.tool(f"read_file {file} (offset={offset}, limit={limit})")
+        start = max(1, offset or 1)
+        effective_limit = limit if limit is not None else MAX_READ_LINES
+        self.console.tool(f"read_file {file}:{start}-{start + effective_limit - 1}")
 
         file_path = self._resolve_path(file)
         if not file_path.exists():
@@ -172,7 +174,6 @@ class FileToolsMixin:
         if offset is not None:
             lines = lines[max(0, offset - 1):]
 
-        effective_limit = limit if limit is not None else MAX_READ_LINES
         truncated_by_lines = len(lines) > effective_limit
         if truncated_by_lines:
             lines = lines[:effective_limit]
