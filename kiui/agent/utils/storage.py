@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .paths import KIA_DIR_NAME
 
-CLEANABLE_ENTRIES = ("sessions", "tool-results", "processes", "history")
+PRESERVED_ENTRIES = frozenset({"skills"})
 
 
 @dataclass(frozen=True)
@@ -50,12 +50,17 @@ def storage_entries(cwd: str | Path | None = None) -> list[StorageEntry]:
 
 
 def cleanable_entries(cwd: str | Path | None = None) -> list[StorageEntry]:
-    return [entry for entry in storage_entries(cwd) if entry.name in CLEANABLE_ENTRIES]
+    """Return entries removed by a default clean."""
+    return [entry for entry in storage_entries(cwd) if entry.name not in PRESERVED_ENTRIES]
 
 
-def clean_storage(cwd: str | Path | None = None) -> int:
-    """Delete generated storage and return its measured size in bytes."""
-    entries = cleanable_entries(cwd)
+def clean_storage(
+    cwd: str | Path | None = None,
+    entries: list[StorageEntry] | None = None,
+) -> int:
+    """Delete selected entries, or all default-cleanable entries, and return their size."""
+    if entries is None:
+        entries = cleanable_entries(cwd)
     for entry in entries:
         if entry.is_dir:
             shutil.rmtree(entry.path)

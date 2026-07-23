@@ -60,17 +60,19 @@ kia --model <model_alias> --verbose --perm strict --resume [session_id]
 | `--resume [SESSION_ID]` | Resume a session (bare `--resume` lists saved sessions interactively) |
 | `--list` | List available models with context-window info and exit |
 | `--storage` | Show allocated disk usage for each entry in the project `.kia/` and exit |
-| `--clean` | Remove generated sessions, tool results, process logs, and command history |
+| `--clean [ENTRY ...]` | Remove selected project `.kia/` entries, or all non-preserved entries by default |
 | `--hub` | Run the shared web hub daemon (owns the public port) |
 | `--web-port PORT` | Hub listener port (default: `8765`) |
 
 ### Storage management
 
-`kia --storage` reports usage of every top-level entry in the current project's `.kia/` directory. `kia --clean` immediately removes only generated `sessions/`, `tool-results/`, `processes/`, and `history` data; installed `skills/` and unrecognized entries are preserved.
+`kia --storage` reports every top-level entry in the current project's `.kia/` directory and whether a default clean removes it. Bare `kia --clean` removes every entry except persistent `skills/`. Pass one or more entry names to remove only those entries; explicitly named preserved entries can also be removed.
 
 ```bash
 kia --storage
-kia --clean
+kia --clean                    # everything except skills/
+kia --clean pdf-cache          # one entry
+kia --clean sessions pdf-cache # selected entries
 ```
 
 ## Web UI

@@ -3,7 +3,7 @@
 Usage:
     kia [--model MODEL] [--verbose] [--perm auto|default|strict]
         [--resume [SESSION_ID]]
-        [--list | --storage | --clean]
+        [--list | --storage | --clean [ENTRY ...]]
 """
 
 import os
@@ -44,7 +44,7 @@ class Args:
     resume: str | None = None  # --resume [session_id]
     list: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # --list: show available models and exit
     storage: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # show project .kia usage and exit
-    clean: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # remove generated project .kia data and exit
+    clean: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # --clean [entry ...]: selected entries, or everything except skills
     hub: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # --hub: run the shared web hub daemon
     web_port: int = 8765
 
@@ -272,7 +272,12 @@ def cmd_list():
 
 def cmd_storage():
     """Show allocated disk usage for each entry in the project .kia directory."""
-    from kiui.agent.utils.storage import format_size, kia_storage_dir, storage_entries
+    from kiui.agent.utils.storage import (
+        PRESERVED_ENTRIES,
+        format_size,
+        kia_storage_dir,
+        storage_entries,
+    )
 
     console = AgentConsole()
     root = kia_storage_dir()
@@ -285,25 +290,49 @@ def cmd_storage():
     table.add_column("Entry", style="cyan")
     table.add_column("Type", style="dim")
     table.add_column("Size", justify="right", style="green")
+    table.add_column("Default clean", style="dim")
     for entry in entries:
-        table.add_row(entry.name, "directory" if entry.is_dir else "file", format_size(entry.size))
+        table.add_row(
+            entry.name,
+            "directory" if entry.is_dir else "file",
+            format_size(entry.size),
+            "no" if entry.name in PRESERVED_ENTRIES else "yes",
+        )
     table.add_section()
-    table.add_row("Total", "", format_size(sum(entry.size for entry in entries)), style="bold")
+    table.add_row("Total", "", format_size(sum(entry.size for entry in entries)), "", style="bold")
     console.table(table)
 
 
-def cmd_clean():
-    """Remove generated sessions, tool results, process logs, and command history."""
-    from kiui.agent.utils.storage import clean_storage, cleanable_entries, format_size, kia_storage_dir
+def cmd_clean(names: list[str] | None = None):
+    """Remove selected storage entries, or everything except preserved entries."""
+    from kiui.agent.utils.storage import (
+        clean_storage,
+        cleanable_entries,
+        format_size,
+        kia_storage_dir,
+        storage_entries,
+    )
 
     console = AgentConsole()
-    entries = cleanable_entries()
+    if names:
+        available = {entry.name: entry for entry in storage_entries()}
+        unknown = sorted(set(names) - available.keys())
+        if unknown:
+            console.error(f"Storage entry not found: {', '.join(unknown)}")
+            if available:
+                console.print(f"Available entries: {', '.join(available)}")
+            return
+        entries = [available[name] for name in dict.fromkeys(names)]
+    else:
+        entries = cleanable_entries()
+
     if not entries:
         console.system(f"Nothing to clean in {kia_storage_dir()}")
         return
 
-    removed = clean_storage()
-    console.system(f"Cleaned {format_size(removed)} from {kia_storage_dir()}")
+    removed = clean_storage(entries=entries)
+    cleaned = ", ".join(entry.name for entry in entries)
+    console.system(f"Cleaned {format_size(removed)} ({cleaned}) from {kia_storage_dir()}")
 
 
 def cmd_hub(args: Args):
@@ -366,10 +395,10 @@ def cmd_chat(args: Args):
 def main():
     raw_args = sys.argv[1:]
 
-    # Pre-parse --resume with an optional value, so bare
-    # `--resume` works as well as `--resume <session_id>`.
+    # Pre-parse flags with optional values, which tyro does not support natively.
     cleaned: list[str] = []
     resume_value: str | None = None
+    clean_names: list[str] | None = None
     i = 0
     while i < len(raw_args):
         if raw_args[i] == "--resume":
@@ -378,6 +407,12 @@ def main():
                 i += 2
             else:
                 resume_value = ""  # sentinel for bare --resume
+                i += 1
+        elif raw_args[i] == "--clean":
+            clean_names = []
+            i += 1
+            while i < len(raw_args) and not raw_args[i].startswith("-"):
+                clean_names.append(raw_args[i])
                 i += 1
         else:
             cleaned.append(raw_args[i])
@@ -391,6 +426,8 @@ def main():
     # Patch in the pre-parsed resume value (tyro can't handle optional-value flags natively)
     if resume_value is not None:
         args.resume = resume_value
+    if clean_names is not None:
+        args.clean = True
 
     commands = (args.list, args.storage, args.clean, args.hub)
     if sum(commands) > 1:
@@ -401,7 +438,7 @@ def main():
     elif args.storage:
         cmd_storage()
     elif args.clean:
-        cmd_clean()
+        cmd_clean(clean_names)
     elif args.hub:
         cmd_hub(args)
     else:

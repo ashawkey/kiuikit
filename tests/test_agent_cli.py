@@ -1,6 +1,7 @@
 """Tests for CLI model configuration."""
 
 from kiui.config import conf
+from kiui.agent import cli
 from kiui.agent.cli import Args, get_agent
 
 
@@ -30,3 +31,14 @@ def test_get_agent_passes_token_limits(monkeypatch):
     assert created[0]["provider_name"] == "openai"
     assert created[0]["context_length"] == 200_000
     assert created[0]["max_output_tokens"] == 16_000
+
+
+def test_clean_accepts_entry_names(monkeypatch):
+    cleaned = []
+    monkeypatch.setattr("sys.argv", ["kia", "--clean", "pdf-cache", "sessions"])
+    monkeypatch.setattr(cli.tyro, "cli", lambda *args, **kwargs: Args())
+    monkeypatch.setattr(cli, "cmd_clean", lambda names: cleaned.extend(names))
+
+    cli.main()
+
+    assert cleaned == ["pdf-cache", "sessions"]
