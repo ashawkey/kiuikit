@@ -46,6 +46,16 @@ def test_response_stream_renders_block_markdown_across_chunks():
     assert "```" not in rendered
 
 
+def test_response_stream_keeps_streamed_list_items_compact():
+    output, stream = make_stream()
+
+    stream.on_content("- first\n- second\n- third\n")
+    stream.close()
+
+    lines = output.getvalue().splitlines()
+    assert [line.strip() for line in lines] == ["•  • first", "• second", "• third"]
+
+
 def test_response_stream_preserves_literal_asterisks_and_inline_code():
     output, stream = make_stream()
 

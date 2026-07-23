@@ -235,6 +235,8 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
 
         self.round_id = 0
         self._session_id: str | None = None  # set by chat_loop
+        self._session_store = None
+        self._session_revision_id: str | None = None
         self._last_save_time: float = 0.0  # throttle auto-saves
 
         # ----- /goal auto-iteration state -----
@@ -330,8 +332,10 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             return nullcontext()
         return self.cancellation.operation(label)
 
-    def _create_change_tracker(self, session_id: str, work_dir: str):
-        return ChangeTracker(session_id, work_dir, self.console)
+    def _create_change_tracker(
+        self, session_id: str, work_dir: str, store, code_revision_id: str | None = None
+    ):
+        return ChangeTracker(session_id, work_dir, self.console, store, code_revision_id)
 
     def _kia_dir(self) -> Path:
         return get_kia_dir()
@@ -875,10 +879,12 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         session_id = base_id
         suffix = 2
         sessions_dir = self._sessions_dir()
-        while session_id == self._session_id or (sessions_dir / f"{session_id}.json").exists():
+        while session_id == self._session_id or (sessions_dir / session_id).exists():
             session_id = f"{base_id}_{suffix}"
             suffix += 1
         self._session_id = session_id
+        self._session_store = self._session_store_for(session_id)
+        self._session_revision_id = None
         self._last_save_time = 0.0  # allow immediate save of the new session
         self.context.replace_messages([])
         self._pending_images.clear()
@@ -897,13 +903,9 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self.goal_iterations = 0
         self._pending_auto = None
         self._last_interrupted = False
-        # Create a fresh change tracker for the new session
-        _wd = self.tool_executor._work_dir or os.getcwd()
-        if self.changes is not None:
-            self.changes.close()
-        self.changes = self._create_change_tracker(self._session_id, _wd)
-        self.tool_executor._change_tracker = self.changes
-        self.tool_executor._get_round_id = lambda: self.round_id
+        # Create and persist the branch root before the first round.
+        self._install_change_tracker()
+        self.save_session(self._session_id, reason="initial")
         self.console.system(f"Started new session '{self._session_id}'.")
 
     # ----- main loops -------------------------------------------------------
@@ -1128,12 +1130,10 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             self.get_response()
         self._maybe_continue_goal()
         try:
-            now = time.monotonic()
-            if now - self._last_save_time >= 30:
-                self.save_session(self._session_id)
-                self._last_save_time = now
-        except Exception:
-            pass
+            self.save_session(self._session_id, reason="round")
+            self._last_save_time = time.monotonic()
+        except Exception as e:
+            self.console.warn(f"Could not save session round: {e}")
         return False
 
     def chat_loop(self, resumed_session_id: str | None = None):
@@ -1154,14 +1154,15 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         # Auto-save session id: reuse resumed session or generate a new one.
         self._session_id = resumed_session_id or self._session_timestamp()
 
-        # Initialize change tracker for code+conversation rollback
-        _wd = self.tool_executor._work_dir or os.getcwd()
-        if self.changes is None:
-            self.changes = self._create_change_tracker(self._session_id, _wd)
-        # Wire the tracker into the tool executor for per-operation tracking
-        self.tool_executor._change_tracker = self.changes
-        self.tool_executor._get_round_id = lambda: self.round_id
+        if self._session_store is None or self._session_store.session_id != self._session_id:
+            self._session_store = self._session_store_for(self._session_id)
+            self._session_revision_id = self._session_store.head_id
+        if self.changes is None or self.changes.session_id != self._session_id:
+            self._install_change_tracker()
+        if not self._session_store.exists:
+            self.save_session(self._session_id, reason="initial")
 
+        _wd = self.tool_executor._work_dir or os.getcwd()
         terminal = TerminalInput(history_path=str(self._kia_dir() / "history"), work_dir=_wd)
 
         try:

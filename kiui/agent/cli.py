@@ -6,7 +6,6 @@ Usage:
         [--list | --storage | --clean]
 """
 
-import json
 import os
 import socket
 import sys
@@ -156,6 +155,7 @@ def _last_user_preview(messages: list) -> str:
 
 def _pick_session(console: AgentConsole) -> str | None:
     """List saved sessions and let the user pick one interactively."""
+    from kiui.agent.session_store import SessionStore
     from kiui.agent.utils import get_kia_dir
 
     sessions_dir = get_kia_dir() / "sessions"
@@ -163,7 +163,11 @@ def _pick_session(console: AgentConsole) -> str | None:
         console.error(f"No sessions directory found: {sessions_dir}")
         return None
 
-    files = sorted(sessions_dir.glob("*.json"), reverse=True)
+    files = sorted(
+        (path for path in sessions_dir.iterdir() if path.is_dir() and (path / "history.jsonl").exists()),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
     if not files:
         console.system(f"No saved sessions in {sessions_dir}")
         return None
@@ -171,13 +175,13 @@ def _pick_session(console: AgentConsole) -> str | None:
     entries: list[str] = []
     choice_labels: list[str] = []
     for f in files:
-        stem = f.stem
+        stem = f.name
         try:
-            meta = json.loads(f.read_text(encoding="utf-8"))
-            messages = meta.get("messages", [])
-            n_msgs = len(messages)
-            rnd = meta.get("round_id", "?")
-            model = meta.get("model", "?")
+            meta = SessionStore(sessions_dir, stem).summary()
+            messages = meta["messages"]
+            n_msgs = meta["message_count"]
+            rnd = meta["round_id"]
+            model = meta["model"]
             preview = _last_user_preview(messages)
         except Exception:
             n_msgs, rnd, model, preview = "?", "?", "?", ""

@@ -121,7 +121,7 @@ The agent supports the following slash commands in the CLI:
 | `/usage` | Show token usage for this session |
 | `/perm [auto\|default\|strict]` | Show or change permission mode |
 | `/model [name]` | Show or switch LLM model mid-session |
-| `/rewind [round]` | Roll back conversation and/or code to a previous round |
+| `/rewind [revision-or-round]` | Check out any saved conversation/code revision and branch from it |
 | `/skills` | List installed skills; `/skills reload` to re-scan; `/skills <name>` to load one |
 | `/persona` | List personas; `/persona <name>` to switch (restarts the conversation) |
 | `/goal [text\|clear]` | Set a goal the agent auto-iterates toward until met (see [Goals](#goals)) |
@@ -171,13 +171,13 @@ The agent automatically manages context window usage through three layers:
 
 ## Rewind
 
-The `/rewind` command lets you roll back to any previous round:
+The `/rewind` command checks out any saved session revision. Use the picker, a revision ID prefix, or a round number (which selects that round's newest revision):
 
-- **Conversation only** — keep code changes, roll back messages.
-- **Code + conversation** — restore files and conversation to the chosen round.
-- **Code only** — keep conversation, revert file changes.
+- **Conversation + code** — restore both histories to the selected revision.
+- **Conversation only** — restore messages while keeping current files.
+- **Code only** — restore files while keeping the current conversation.
 
-Each file modification (write, edit, remove) is tracked per round so rollback can precisely invert changes.
+Session messages, revisions, head movements, and code revisions are stored in an append-only JSONL DAG. Rewinding never deletes descendants: the next save creates a branch, so an accidental rewind can be reversed by checking out the former revision. Removed files and directories are stored as immutable, deduplicated content-addressed objects under the session's `objects/` directory.
 
 ## Goals
 

@@ -372,6 +372,19 @@ class ThinkingIndicator:
             self._status.update(self._label(elapsed))
 
 
+class _CompactMarkdown(Markdown):
+    """Markdown without Rich's leading blank line for block elements."""
+
+    def __rich_console__(self, console, options):
+        started = False
+        for segment in super().__rich_console__(console, options):
+            if not started and segment.text == "\n":
+                continue
+            if segment.text:
+                started = True
+            yield segment
+
+
 class _TerminalMarkdownStream:
     """Append-only Markdown renderer that commits completed blocks."""
 
@@ -453,7 +466,7 @@ class _TerminalMarkdownStream:
 
     def _render_ordinary_line(self, line: str) -> None:
         if line.strip():
-            self._print(Markdown(line))
+            self._print(_CompactMarkdown(line))
         elif self._started:
             self._console.print()
 

@@ -72,7 +72,7 @@ class AgentCommandsMixin:
             "  [cyan]/persona[/cyan]     — List personas; /persona <name> to switch (restarts conversation)\n"
             "  [cyan]/goal[/cyan]        — Set a goal the agent auto-iterates toward (/goal <text> | clear)\n"
             "  [cyan]/perm[/cyan]        — Show or change permission mode (/perm auto|default|strict)\n"
-            "  [cyan]/rewind[/cyan]      — Roll back conversation and/or code to a previous round\n"
+            "  [cyan]/rewind[/cyan]      — Check out a saved revision and branch from it\n"
             "  [cyan]/clear[/cyan]       — Clear conversation history (keep system prompt)\n"
             "  [cyan]/resume[/cyan]      — Save current, then resume a previous session (/resume [session_id])\n"
             "  [cyan]/exit[/cyan]        — Exit the agent (also: /quit)\n"
