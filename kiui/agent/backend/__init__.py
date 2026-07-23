@@ -92,12 +92,20 @@ def _is_fatal_api_error(exc: Exception) -> bool:
     Provider errors may declare retryability explicitly. Otherwise HTTP 4xx
     responses other than a few transient ones (rate limit, timeout, conflict)
     are fatal; connection errors, timeouts, and 5xx responses keep retrying.
+
+    Programming errors (TypeError, ValueError, …) are always fatal so the
+    agent does not spin forever retrying a request that can never succeed.
     """
     retryable = getattr(exc, "retryable", None)
     if retryable is not None:
         return not retryable
     status = getattr(exc, "status_code", None)
     if status is None:
+        # No HTTP status and no explicit retryability — the error came from
+        # the local process, not the remote API.  Programming mistakes are
+        # fatal; network / I/O errors remain retryable.
+        if isinstance(exc, (TypeError, ValueError, KeyError, AttributeError, AssertionError)):
+            return True
         return False
     return 400 <= status < 500 and status not in _RETRYABLE_STATUS_CODES
 

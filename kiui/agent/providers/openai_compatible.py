@@ -97,9 +97,14 @@ class OpenAICompatibleProvider(LLMProvider):
 
     def _release(self, client: Any) -> None:
         with self._client_lock:
-            if self._active_client is client:
+            was_active = self._active_client is client
+            if was_active:
                 self._active_client = None
-        client.close()
+        # Only close when the client is still the active one; cancel() already
+        # closed it and cleared the reference, so a late-release from the old
+        # stream skips the double-close.
+        if was_active:
+            client.close()
 
     def _kwargs(self, request: CompletionRequest) -> dict[str, Any]:
         messages = [

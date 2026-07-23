@@ -457,9 +457,11 @@ class OpenAICodexProvider(LLMProvider):
 
     def _release(self, client: httpx.Client) -> None:
         with self._client_lock:
-            if self._active_client is client:
+            was_active = self._active_client is client
+            if was_active:
                 self._active_client = None
-        client.close()
+        if was_active:
+            client.close()
 
     def open_stream(self, request: CompletionRequest) -> CompletionStream:
         credential = self._resolve_credential()
