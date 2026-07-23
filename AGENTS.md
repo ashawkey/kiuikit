@@ -109,7 +109,7 @@ The implementation is split into focused packages; there are no longer top-level
 | Path | Purpose |
 |------|---------|
 | `cli.py` | `kia` entry point and Tyro argument parsing; starts chats or the hub, resumes sessions, lists models, and manages project `.kia` storage. |
-| `backend/__init__.py` | `LLMAgent`: core OpenAI-compatible API loop, retries, streaming, context/tool orchestration, cancellation, and persona setup. |
+| `backend/__init__.py` | `LLMAgent`: provider-neutral API loop, retries, streaming, context/tool orchestration, cancellation, and persona setup. |
 | `backend/commands.py` | Slash-command routing, including model, persona, permission, context, and rewind commands. |
 | `backend/goals.py` | Standing-goal state and automatic goal-check iteration. |
 | `backend/sessions.py` | Session persistence, selection, resume, and replay. |
@@ -122,6 +122,7 @@ The implementation is split into focused packages; there are no longer top-level
 | `subagent.py` | Synchronous, in-process sub-agent spawning with isolated working-directory context. |
 | `permissions.py` | `PermissionMode` (auto/default/strict), confirmation policy, and destructive-command safety guard. |
 | `models.py` | Model capability profiles and provider-specific reasoning configuration. |
+| `providers/` | Provider abstraction and registry. `openai_compatible.py` implements OpenAI-compatible Chat Completions; `openai_codex.py` implements ChatGPT Plus/Pro OAuth over the Codex Responses API, with durable credentials and OAuth flows in the adjacent auth modules. |
 | `ui.py` | Rich terminal rendering (`AgentConsole`), status indicators, and streamed responses. |
 | `terminal.py` | Prompt-toolkit input, file-path completion, history, and keyboard bindings. |
 | `utils/io.py` | Thread-safe `EventHub`, `InputBroker`, `PromptBroker`, and `CancellationToken` shared by terminal and web clients. |

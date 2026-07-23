@@ -11,12 +11,17 @@ from kiui.agent.context import (
     msg_chars,
 )
 from kiui.agent.models import REASONING_EFFORTS, resolve_model_profile
+from kiui.agent.providers import (
+    AuthInteraction,
+    ProviderSettings,
+    create_provider,
+)
 from kiui.agent.permissions import PermissionMode
 from kiui.agent.personas import DEFAULT_PERSONA, PersonaInfo, get_persona, list_personas
 
 
 class AgentCommandsMixin:
-    COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "resume", "perm", "model", "reasoning", "context", "rewind", "skills", "goal", "system_prompt", "persona"}
+    COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "resume", "perm", "model", "reasoning", "context", "rewind", "skills", "goal", "system_prompt", "persona", "login", "logout", "auth"}
 
     def _handle_command(self, raw: str) -> bool:
         """Handle a /command.  Returns True if the agent loop should stop."""
@@ -39,6 +44,12 @@ class AgentCommandsMixin:
             self._cmd_perm(raw)
         elif cmd == "model":
             self._cmd_model(raw)
+        elif cmd == "login":
+            self._cmd_login(raw)
+        elif cmd == "logout":
+            self._cmd_logout(raw)
+        elif cmd == "auth":
+            self._cmd_auth(raw)
         elif cmd == "reasoning":
             self._cmd_reasoning(raw)
         elif cmd == "context":
@@ -67,6 +78,9 @@ class AgentCommandsMixin:
             "  [cyan]/compact[/cyan]     — Force context compaction via LLM summarization\n"
             "  [cyan]/usage[/cyan]       — Show token usage for this session\n"
             "  [cyan]/model[/cyan]       — Show or switch LLM model (/model <name>)\n"
+            "  [cyan]/login[/cyan]       — Log in to an OAuth provider (/login [provider|model-alias])\n"
+            "  [cyan]/logout[/cyan]      — Remove stored OAuth credentials (/logout [provider|model-alias])\n"
+            "  [cyan]/auth[/cyan]        — Show authentication status (/auth [provider|model-alias])\n"
             "  [cyan]/reasoning[/cyan]   — Show or set reasoning effort (none|minimal|low|medium|high|xhigh)\n"
             "  [cyan]/skills[/cyan]      — List skills; /skills <name> to load one, /skills reload to re-scan\n"
             "  [cyan]/persona[/cyan]     — List personas; /persona <name> to switch (restarts conversation)\n"
@@ -94,7 +108,7 @@ class AgentCommandsMixin:
         ):
             self.context.replace_messages(
                 compact_context(
-                    self.context.messages, self.client, self.model,
+                    self.context.messages, self._summarize,
                     console=self.console,
                     context_length=self.context_length,
                     chars_per_token=self.token_estimator.chars_per_token,
@@ -289,13 +303,17 @@ class AgentCommandsMixin:
 
         if len(parts) < 2 or not parts[1].strip():
             lines = [
-                f"[bold blue]Current model:[/bold blue] [cyan]{self.model}[/cyan]"
-                + (f" (alias: {self.model_alias})" if self.model_alias else ""),
+                f"[bold blue]Current model:[/bold blue] [cyan]{self.provider_name}/{self.model}[/cyan]"
+                + (f" (alias: {self.model_alias})" if self.model_alias else "")
+                + f" · {self.provider.auth_status()}",
                 "[bold blue]Available models:[/bold blue]",
             ]
             for name, mc in openai_conf.items():
                 marker = " [green]◀[/green]" if name == self.model_alias else ""
-                lines.append(f"  [cyan]{name}[/cyan] → {mc.get('model', name)}{marker}")
+                provider = mc.get("provider", "openai")
+                lines.append(
+                    f"  [cyan]{name}[/cyan] → {provider}/{mc.get('model', name)}{marker}"
+                )
             lines.append("\n  Usage: [cyan]/model <name>[/cyan]")
             self.console.print("\n".join(lines))
             return
@@ -310,12 +328,28 @@ class AgentCommandsMixin:
             return
 
         model_conf = openai_conf[target]
-        self.model = model_conf.get("model", target)
+        model = model_conf.get("model", target)
+        profile = resolve_model_profile(model, target)
+        provider_name = model_conf.get("provider", "openai")
+        settings = ProviderSettings(
+            api_key=model_conf.get("api_key", ""),
+            base_url=model_conf.get("base_url", ""),
+            reasoning_style=profile.reasoning,
+        )
+        try:
+            provider = create_provider(provider_name, settings)
+        except ValueError as e:
+            self.console.error(str(e))
+            return
+
+        old_provider = self.provider
+        self.model = model
         self.model_alias = target
-        self._api_key = model_conf.get("api_key", "")
-        self._base_url = model_conf.get("base_url", "")
-        self.client = self._request_client()
-        self.profile = resolve_model_profile(self.model, self.model_alias)
+        self.profile = profile
+        self.provider_name = provider_name
+        self._provider_settings = settings
+        self.provider = provider
+        old_provider.close()
         # self.tools reflects the new model's image support via the live property.
         self.context_length = model_conf.get("context_length", self.profile.context_length)
         self.max_output_tokens = model_conf.get("max_output_tokens", self.profile.max_output_tokens)
@@ -327,8 +361,94 @@ class AgentCommandsMixin:
             self.subagent_manager.reasoning_effort = self.reasoning_effort
 
         self.console.system(
-            f"Switched to model: {self.model} "
+            f"Switched to model: {self.model} via {self.provider_name} "
             f"(context: {self.context_length:,} tokens, reasoning: "
-            f"{self.profile.reasoning or 'none'}/{self.reasoning_effort})"
+            f"{self.profile.reasoning or 'none'}/{self.reasoning_effort}, "
+            f"auth: {self.provider.auth_status()})"
         )
+
+    def _auth_provider(self, raw: str):
+        """Resolve an auth command target to the active or a temporary provider."""
+        from kiui.config import conf
+
+        parts = raw.split(maxsplit=1)
+        target = parts[1].strip() if len(parts) > 1 else self.provider_name
+        if target == self.provider_name or target == self.model_alias:
+            return self.provider, self.provider_name, False
+
+        model_conf = conf.get("openai", {}).get(target)
+        if model_conf is not None:
+            provider_name = model_conf.get("provider", "openai")
+            model = model_conf.get("model", target)
+            profile = resolve_model_profile(model, target)
+            settings = ProviderSettings(
+                api_key=model_conf.get("api_key", ""),
+                base_url=model_conf.get("base_url", ""),
+                reasoning_style=profile.reasoning,
+            )
+        else:
+            provider_name = target
+            settings = ProviderSettings()
+        return create_provider(provider_name, settings), provider_name, True
+
+    def _auth_interaction(self) -> AuthInteraction:
+        return AuthInteraction(
+            select=lambda message, choices: self.console.select(message, choices),
+            prompt=lambda message: self.console.ask_text(message),
+            notify=lambda message: self.console.print(message, markup=False),
+            cancelled=lambda: bool(
+                self.cancellation is not None and self.cancellation.cancelled
+            ),
+        )
+
+    def _cmd_login(self, raw: str) -> None:
+        provider = None
+        temporary = False
+        try:
+            provider, provider_name, temporary = self._auth_provider(raw)
+            with self._operation("authentication"):
+                with self.console.thinking(
+                    label="Authenticating",
+                    progress=True,
+                    status_suffix=provider_name,
+                ):
+                    provider.login(self._auth_interaction())
+            self.console.system(
+                f"Logged in to {provider_name}: {provider.auth_status()}"
+            )
+        except KeyboardInterrupt:
+            self.console.system("Login cancelled.")
+        except Exception as e:
+            if getattr(e, "code", None) == "cancelled":
+                self.console.system("Login cancelled.")
+            else:
+                self.console.error(f"Login failed: {e}")
+        finally:
+            if temporary and provider is not None:
+                provider.close()
+
+    def _cmd_logout(self, raw: str) -> None:
+        provider = None
+        temporary = False
+        try:
+            provider, provider_name, temporary = self._auth_provider(raw)
+            provider.logout()
+            self.console.system(f"Logged out of {provider_name}.")
+        except Exception as e:
+            self.console.error(f"Logout failed: {e}")
+        finally:
+            if temporary and provider is not None:
+                provider.close()
+
+    def _cmd_auth(self, raw: str) -> None:
+        provider = None
+        temporary = False
+        try:
+            provider, provider_name, temporary = self._auth_provider(raw)
+            self.console.system(f"{provider_name}: {provider.auth_status()}")
+        except Exception as e:
+            self.console.error(f"Could not read authentication status: {e}")
+        finally:
+            if temporary and provider is not None:
+                provider.close()
 

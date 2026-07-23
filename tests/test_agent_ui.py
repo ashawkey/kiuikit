@@ -89,12 +89,30 @@ def test_response_stream_keeps_text_after_unterminated_table():
     assert "after" in rendered
 
 
-def test_response_stream_terminates_thinking_on_abort():
+def test_response_stream_commits_complete_thinking_lines():
     output = io.StringIO()
     console = Console(file=output, width=80, no_color=True)
     stream = ResponseStream(console, None, show_thinking=True)
 
-    stream.on_thinking("working")
+    stream.on_thinking("first partial")
+    assert output.getvalue() == ""
+
+    stream.on_thinking(" completed\nsecond partial")
+    assert output.getvalue() == "first partial completed\n"
+
+    stream.on_content("answer")
+    assert output.getvalue() == "first partial completed\nsecond partial\n"
+
+    stream.close()
+    assert "answer" in output.getvalue()
+
+
+def test_response_stream_discards_pending_thinking_on_abort():
+    output = io.StringIO()
+    console = Console(file=output, width=80, no_color=True)
+    stream = ResponseStream(console, None, show_thinking=True)
+
+    stream.on_thinking("complete\npending")
     stream.close(render_terminal=False)
 
-    assert output.getvalue().endswith("\n")
+    assert output.getvalue() == "complete\n"

@@ -55,8 +55,8 @@ WORKING_STYLE_SECTION = """## Working Style
 - Verify with the smallest relevant check and report only what was actually verified."""
 
 SUBAGENT_SECTION = """## Sub-Agents
-**spawn_subagent** runs a focused task synchronously in a separate conversation and returns its result. It shares the current working tree, so concurrent file edits are not isolated.
-Delegate only when it materially helps with independent research or analysis. Give a focused task, do not delegate simple work."""
+**spawn_subagent** runs a focused task synchronously in a separate conversation and returns its result.
+Use a sub-agent only when the user explicitly requests delegation or when a task is genuinely independent and context isolation is clearly necessary, such as work unrelated to the current codebase. When delegation is justified, give one focused, self-contained task."""
 
 
 def build_bullet_section(title: str, rules: tuple[str, ...]) -> str:

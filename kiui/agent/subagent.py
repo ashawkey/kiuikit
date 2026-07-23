@@ -53,6 +53,7 @@ class SubagentManager:
                 model=model_conf.get("model", self.model_alias),
                 api_key=model_conf.get("api_key", ""),
                 base_url=model_conf.get("base_url", ""),
+                provider_name=model_conf.get("provider", "openai"),
                 model_alias=self.model_alias,
                 verbose=False,
                 # Sub-agents share the parent console; a nested rich.Live would
@@ -91,4 +92,5 @@ class SubagentManager:
 
         finally:
             if agent is not None:
+                agent.provider.close()
                 agent.tool_executor.shutdown_processes()

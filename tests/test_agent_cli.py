@@ -27,5 +27,6 @@ def test_get_agent_passes_token_limits(monkeypatch):
 
     assert agent is not None
     assert hub_client is None
+    assert created[0]["provider_name"] == "openai"
     assert created[0]["context_length"] == 200_000
     assert created[0]["max_output_tokens"] == 16_000

@@ -76,6 +76,14 @@ def get_agent(args: Args) -> "tuple[LLMAgent | None, HubClient | None]":
         return None, None
 
     model_conf = openai_conf[args.model]
+    provider_name = model_conf.get("provider", "openai")
+    from kiui.agent.providers import provider_names
+
+    if provider_name not in provider_names():
+        console.error(
+            f"Unknown provider '{provider_name}'. Available: {', '.join(provider_names())}"
+        )
+        return None, None
     events = inputs = prompts = cancellation = hub_client = None
 
     from kiui.agent.hub import discover_hub
@@ -98,6 +106,7 @@ def get_agent(args: Args) -> "tuple[LLMAgent | None, HubClient | None]":
             "title": f"{Path(cwd).name} · {args.model}",
             "cwd": cwd,
             "model": args.model,
+            "provider": provider_name,
             "pid": os.getpid(),
             "host": socket.gethostname(),
         }
@@ -113,25 +122,30 @@ def get_agent(args: Args) -> "tuple[LLMAgent | None, HubClient | None]":
             meta=meta,
         )
 
-    agent = LLMAgent(
-        model=model_conf.get("model", args.model),
-        api_key=model_conf.get("api_key", ""),
-        base_url=model_conf.get("base_url", ""),
-        model_alias=args.model,
-        verbose=args.verbose,
-        stream=args.stream,
-        reasoning_effort=args.reasoning_effort or model_conf.get("reasoning_effort", "high"),
-        context_length=model_conf.get("context_length"),
-        max_output_tokens=model_conf.get("max_output_tokens"),
+    try:
+        agent = LLMAgent(
+            model=model_conf.get("model", args.model),
+            api_key=model_conf.get("api_key", ""),
+            base_url=model_conf.get("base_url", ""),
+            provider_name=provider_name,
+            model_alias=args.model,
+            verbose=args.verbose,
+            stream=args.stream,
+            reasoning_effort=args.reasoning_effort or model_conf.get("reasoning_effort", "high"),
+            context_length=model_conf.get("context_length"),
+            max_output_tokens=model_conf.get("max_output_tokens"),
 
-        permission_mode=args.perm,
-        persona=args.persona,
-        console=console,
-        events=events,
-        input_broker=inputs,
-        prompt_broker=prompts,
-        cancellation=cancellation,
-    )
+            permission_mode=args.perm,
+            persona=args.persona,
+            console=console,
+            events=events,
+            input_broker=inputs,
+            prompt_broker=prompts,
+            cancellation=cancellation,
+        )
+    except ValueError as e:
+        console.error(f"Invalid provider configuration for '{args.model}': {e}")
+        return None, None
     return agent, hub_client
 
 
@@ -234,6 +248,7 @@ def cmd_list():
     table = Table(title="Available Models", show_header=True, header_style="bold magenta")
     table.add_column("Name", style="cyan", no_wrap=True)
     table.add_column("Model", style="green")
+    table.add_column("Provider", style="magenta")
     table.add_column("Base URL", style="yellow")
     table.add_column("Context", style="blue", justify="right")
     table.add_column("Thinking", style="magenta")
@@ -246,6 +261,7 @@ def cmd_list():
         table.add_row(
             name,
             model_id,
+            model_conf.get("provider", "openai"),
             model_conf.get("base_url", "N/A"),
             ctx,
             f"{profile.reasoning or '-'} / {model_conf.get('reasoning_effort', 'high')}",

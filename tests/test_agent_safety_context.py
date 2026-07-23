@@ -11,6 +11,7 @@ import pytest
 import kiui.agent.backend as backend
 import kiui.agent.tools.results as tool_results
 from kiui.agent.backend import LLMAgent
+from kiui.agent.providers import CompletionResult, ProviderUsage
 from kiui.agent.context import (
     ContextManager,
     ToolResultEnvelope,
@@ -82,17 +83,35 @@ def test_direct_bash_routes_through_safety_guard(tmp_path):
     assert console.results and console.results[-1][1] is False
 
 
+def test_compaction_uses_provider_neutral_summarizer():
+    messages = [
+        {"role": "user", "content": "first"},
+        {"role": "assistant", "content": "second"},
+        {"role": "user", "content": "third"},
+        {"role": "assistant", "content": "fourth"},
+    ]
+    prompts = []
+
+    def summarize(prompt):
+        prompts.append(prompt)
+        return "condensed history"
+
+    result = compact_context(messages, summarize)
+
+    assert prompts and "first" in prompts[0]
+    assert result[0]["content"] == "[Previous conversation summary]\ncondensed history"
+
+
 def test_failed_compaction_preserves_original_messages():
     messages = [
         {"role": "user", "content": "first"},
         {"role": "assistant", "content": "second"},
         {"role": "user", "content": "third"},
     ]
-    client = NS(
-        chat=NS(completions=NS(create=lambda **kwargs: (_ for _ in ()).throw(RuntimeError("offline"))))
-    )
+    def fail(_prompt):
+        raise RuntimeError("offline")
 
-    result = compact_context(messages, client, "model")
+    result = compact_context(messages, fail)
 
     assert result == messages
     assert result is not messages
@@ -171,11 +190,20 @@ def test_call_api_sets_output_limit_and_rejects_truncated_response():
     kwargs_seen = {}
     added = []
     max_output_tokens = 20_000
-    usage = NS(prompt_tokens=1, completion_tokens=max_output_tokens, total_tokens=max_output_tokens + 1)
+    usage = ProviderUsage(
+        prompt_tokens=1,
+        completion_tokens=max_output_tokens,
+        total_tokens=max_output_tokens + 1,
+    )
 
-    def completion(kwargs):
-        kwargs_seen.update(kwargs)
-        return {"role": "assistant", "content": "partial"}, usage, "length"
+    def completion(request):
+        kwargs_seen.update({
+            "model": request.model,
+            "max_tokens": request.max_output_tokens,
+        })
+        return CompletionResult(
+            {"role": "assistant", "content": "partial"}, usage, "length"
+        )
 
     agent = NS(
         context_length=0,
@@ -185,6 +213,7 @@ def test_call_api_sets_output_limit_and_rejects_truncated_response():
         MAX_BACKOFF=64.0,
         verbose=False,
         round_id=1,
+        _session_id=None,
         _pending_images=[],
         _messages_with_pending_images=lambda: [],
         stream=False,
@@ -206,17 +235,19 @@ def test_call_api_sets_output_limit_and_rejects_truncated_response():
 
 
 def test_stream_is_closed_when_consumption_is_cancelled(monkeypatch):
-    class Stream(list):
+    class Stream:
         close_calls = 0
+
+        def consume(self, **kwargs):
+            return CompletionResult(
+                {"role": "assistant", "content": "partial"}, None, None
+            )
 
         def close(self):
             self.close_calls += 1
 
     stream = Stream()
-    client = NS(
-        close=lambda: None,
-        chat=NS(completions=NS(create=lambda **kwargs: stream)),
-    )
+    provider = NS(open_stream=lambda request: stream, cancel=lambda: None)
 
     def interruptible(fn, cancellation, on_cancel=None):
         fn()
@@ -228,13 +259,55 @@ def test_stream_is_closed_when_consumption_is_cancelled(monkeypatch):
         cancellation=None,
         show_thinking=False,
         _status_suffix=lambda: "",
-        _request_client=lambda: client,
+        provider=provider,
     )
 
+    request = NS(stream=True)
     with pytest.raises(RequestInterrupted):
-        LLMAgent._stream_completion(agent, {})
+        LLMAgent._stream_completion(agent, request)
 
     assert stream.close_calls == 1
+
+
+def test_stream_status_remains_active_while_body_is_consumed(monkeypatch):
+    state = {"thinking": False}
+
+    class Thinking:
+        def __enter__(self):
+            state["thinking"] = True
+
+        def __exit__(self, *args):
+            state["thinking"] = False
+
+    class Console(_Console):
+        def thinking(self, **kwargs):
+            return Thinking()
+
+    class Stream:
+        def consume(self, **kwargs):
+            assert state["thinking"] is True
+            return CompletionResult(
+                {"role": "assistant", "content": "done"}, None, "stop"
+            )
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "kiui.agent.backend.run_interruptible",
+        lambda fn, cancellation, on_cancel=None: fn(),
+    )
+    agent = NS(
+        console=Console(),
+        cancellation=None,
+        show_thinking=False,
+        _status_suffix=lambda: "",
+        provider=NS(open_stream=lambda request: Stream(), cancel=lambda: None),
+    )
+
+    LLMAgent._stream_completion(agent, NS(stream=True))
+
+    assert state["thinking"] is False
 
 
 def _tool_call_msg(name, args_json):

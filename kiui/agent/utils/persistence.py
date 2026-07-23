@@ -25,11 +25,12 @@ def write_immutable(path: Path, data: bytes) -> None:
             os.link(staging, path)
         except FileExistsError:
             pass
-        dir_fd = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(dir_fd)
-        finally:
-            os.close(dir_fd)
+        if os.name == "posix":
+            dir_fd = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
     finally:
         staging.unlink(missing_ok=True)
 

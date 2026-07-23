@@ -239,9 +239,8 @@ _BUILTIN_TOOL_SCHEMAS_LIST = [
             "function": {
                 "name": "spawn_subagent",
                 "description": (
-                    "Run a focused task in an isolated agent conversation. Blocks until the sub-agent completes, "
-                    "then returns its full result. The sub-agent shares the current filesystem and working tree "
-                    "and cannot spawn another sub-agent."
+                    "Run an independent task in a sub-agent and wait for its result. "
+                    "Use only when the user explicitly requests delegation or context isolation is clearly necessary. "
                 ),
                 "parameters": {
                     "type": "object",

@@ -256,6 +256,12 @@ def msg_chars(msg: dict) -> int:
     if get_role(msg) == "assistant":
         for tc in get_tool_calls(msg):
             chars += len(tc.get("function", {}).get("arguments") or "")
+        provider_state = msg.get("provider_state")
+        if provider_state:
+            # Responses providers replay opaque output items instead of the
+            # canonical text/tool projection, so count the larger form once.
+            state_chars = len(json.dumps(provider_state, ensure_ascii=False))
+            chars = max(chars, state_chars)
     return chars
 
 
@@ -976,8 +982,7 @@ def _messages_to_text(messages: list) -> str:
 
 def compact_context(
     messages: list,
-    client: Any,
-    model: str,
+    summarize: Callable[[str], str],
     console: AgentConsole | None = None,
     context_length: int = 0,
     chars_per_token: float = DEFAULT_CHARS_PER_TOKEN,
@@ -989,7 +994,8 @@ def compact_context(
     messages.
 
     *messages* should **not** include the system prompt (it is managed
-    separately by ContextManager).  Returns a new list.
+    separately by ContextManager). *summarize* receives the prepared prompt
+    and returns summary text through the active provider. Returns a new list.
     """
     if len(messages) <= 2:
         return list(messages)
@@ -1030,12 +1036,7 @@ def compact_context(
     prompt = _COMPACTION_PROMPT.format(conversation=conversation_text)
 
     try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            timeout=60,
-        )
-        summary = response.choices[0].message.content.strip()
+        summary = summarize(prompt).strip()
     except Exception:
         if console is not None:
             console.warn("Context compaction LLM call failed; preserving context", exc_info=True)

@@ -8,20 +8,28 @@ pip install kiui[kia]
 
 ## Configuration
 
-The agent uses a YAML configuration file located at `./.kiui.yaml` (current directory) or `~/.kiui.yaml` (home directory). You need to define your model profiles under the `openai` key (OpenAI-compatible API).
+The agent uses a YAML configuration file located at `./.kiui.yaml` (current directory) or `~/.kiui.yaml` (home directory). Model aliases remain under the `openai` key. Each entry may select a provider; omitted `provider` defaults to the currently bundled `openai` provider, which uses the OpenAI-compatible Chat Completions transport.
 
 Example `.kiui.yaml`:
 
 ```yaml
 openai:
   gpt: # model_alias
+    provider: openai # optional; this is the default
     model: gpt-4o # actual model name used in the API
     api_key: sk-proj-...
     base_url: https://api.openai.com/v1
 
+  gpt-5.6-sol:
+    provider: openai-codex
+    model: gpt-5.6-sol
+    # No api_key/base_url: authenticate with /login openai-codex.
+
 kia_web_token: web-secret # optional Web UI access token
 kia_lib: git@github.com:username/kia-skills.git # optional personal skill library repo
 ```
+
+The `openai-codex` provider uses a ChatGPT Plus/Pro subscription through OpenAI OAuth and the Codex Responses endpoint. OAuth credentials are stored globally in `~/.kia/auth.json`, not in project configuration or session history. The file is plaintext and restricted to mode `0600` on Unix. Start kia with the Codex alias and run `/login` (or `/login openai-codex`); browser, pasted-redirect, and device-code flows are available.
 
 ## Usage
 
@@ -121,6 +129,9 @@ The agent supports the following slash commands in the CLI:
 | `/usage` | Show token usage for this session |
 | `/perm [auto\|default\|strict]` | Show or change permission mode |
 | `/model [name]` | Show or switch LLM model mid-session |
+| `/login [provider\|model-alias]` | Authenticate an OAuth provider; defaults to the current provider |
+| `/logout [provider\|model-alias]` | Remove stored OAuth credentials |
+| `/auth [provider\|model-alias]` | Show authentication status |
 | `/rewind [revision-or-round]` | Check out any saved conversation/code revision and branch from it |
 | `/skills` | List installed skills; `/skills reload` to re-scan; `/skills <name>` to load one |
 | `/persona` | List personas; `/persona <name>` to switch (restarts the conversation) |

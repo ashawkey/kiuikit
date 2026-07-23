@@ -7,6 +7,7 @@ available, pruned filesystem walk otherwise).
 
 import os
 import shutil
+import threading
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -45,6 +46,47 @@ def test_markdown_lexer_does_not_reparse_from_start():
     lexer = terminal._session.app.layout.current_control.lexer.get_lexer()
 
     assert not lexer.sync_from_start()
+
+
+def _message_terminal(*, pending=None, status=None):
+    terminal = object.__new__(TerminalInput)
+    terminal._busy = True
+    terminal._status = list(status or [])
+    terminal._status_lock = threading.Lock()
+    terminal._pending_text = lambda: pending
+    terminal._prompt_label = "> "
+    terminal._session = SimpleNamespace(app=SimpleNamespace(
+        output=SimpleNamespace(
+            get_size=lambda: SimpleNamespace(columns=80)
+        )
+    ))
+    return terminal
+
+
+def test_busy_prompt_always_explains_that_new_messages_are_queued():
+    terminal = _message_terminal()
+
+    message = terminal._message()
+    text = "".join(fragment for _, fragment in message)
+
+    assert "Working..." in text
+    assert "messages sent now will be queued" in text
+    assert "queue> " not in text
+    assert ("class:separator.busy", "─" * 79) in message
+    assert ("class:prompt.busy", "> ") in message
+
+
+def test_detailed_status_overrides_busy_fallback_and_shows_pending_message():
+    terminal = _message_terminal(
+        pending="follow up",
+        status=[("class:status.text", "Authenticating...")],
+    )
+
+    text = "".join(fragment for _, fragment in terminal._message())
+
+    assert "Authenticating..." in text
+    assert "Working..." not in text
+    assert "pending: follow up · runs next" in text
 
 
 def test_enter_applies_selected_completion():

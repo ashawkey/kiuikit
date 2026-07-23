@@ -385,6 +385,36 @@ class _CompactMarkdown(Markdown):
             yield segment
 
 
+class _TerminalTextStream:
+    """Append-only styled text renderer that commits completed lines.
+
+    Prompt Toolkit redraws its active prompt after each stdout flush, so an
+    unterminated fragment would be overwritten by the redraw.
+    """
+
+    def __init__(self, console: Console, style: str):
+        self._console = console
+        self._style = style
+        self._pending = ""
+
+    def feed(self, text: str) -> None:
+        self._pending += text
+        while "\n" in self._pending:
+            line, self._pending = self._pending.split("\n", 1)
+            self._console.print(
+                Text(line.removesuffix("\r"), style=self._style),
+                soft_wrap=True,
+            )
+
+    def flush(self) -> None:
+        if self._pending:
+            self._console.print(Text(self._pending, style=self._style), soft_wrap=True)
+            self._pending = ""
+
+    def abort(self) -> None:
+        self._pending = ""
+
+
 class _TerminalMarkdownStream:
     """Append-only Markdown renderer that commits completed blocks."""
 
@@ -543,6 +573,7 @@ class ResponseStream:
         self._thinking = ""
         self._content_visible = False
         self._thinking_visible = False
+        self._thinking_terminal = _TerminalTextStream(console, "thinking")
         self._terminal = _TerminalMarkdownStream(console)
         self._closed = False
         self._lock = threading.Lock()
@@ -564,8 +595,7 @@ class ResponseStream:
                 self._content_visible = True
                 text = self._content
             if self._thinking_visible:
-                if not self._thinking.endswith("\n"):
-                    self._console.print()
+                self._thinking_terminal.flush()
                 self._thinking_visible = False
             self._terminal.feed(text)
             if self._events is not None:
@@ -581,7 +611,7 @@ class ResponseStream:
             if self._closed:
                 return
             self._thinking += text
-            self._console.print(Text(text, style="thinking"), end="", soft_wrap=True)
+            self._thinking_terminal.feed(text)
             self._thinking_visible = True
             if self._events is not None:
                 self._events.publish("thinking_delta", text=text)
@@ -594,14 +624,12 @@ class ResponseStream:
             thinking = self._thinking
             content = self._content if self._content_visible else ""
         if render_terminal:
+            self._thinking_terminal.flush()
             if content:
                 self._terminal.close()
-            elif self._thinking_visible and not thinking.endswith("\n"):
-                self._console.print()
         else:
+            self._thinking_terminal.abort()
             self._terminal.abort()
-            if self._thinking_visible and not thinking.endswith("\n"):
-                self._console.print()
         if self._events is not None:
             if thinking:
                 self._events.publish("thinking", text=thinking)

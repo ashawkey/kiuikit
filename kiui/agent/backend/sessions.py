@@ -191,6 +191,8 @@ class SessionMixin:
     def _session_data(self) -> dict:
         return {
             "model": self.model,
+            "model_alias": self.model_alias,
+            "provider": self.provider_name,
             "round_id": self.round_id,
             "token_totals": self.token_totals,
             "tool_compaction_totals": self.tool_compaction_totals,
@@ -248,9 +250,11 @@ class SessionMixin:
 
     def _restore_session_data(self, data: dict) -> None:
         saved_model = data.get("model", "")
-        if saved_model != self.model:
+        saved_provider = data.get("provider", "openai")
+        if saved_model != self.model or saved_provider != self.provider_name:
             self.console.system(
-                f"Note: session was saved with model '{saved_model}', current model is '{self.model}'"
+                f"Note: session was saved with '{saved_provider}/{saved_model}', "
+                f"current model is '{self.provider_name}/{self.model}'"
             )
 
         saved_persona = data.get("persona")

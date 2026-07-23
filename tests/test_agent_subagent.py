@@ -1,5 +1,7 @@
 """Tests for synchronous sub-agent execution."""
 
+from types import SimpleNamespace as NS
+
 from kiui.config import conf
 from kiui.agent.subagent import SubagentManager
 
@@ -25,6 +27,7 @@ def test_subagent_returns_full_response(monkeypatch, tmp_path):
         def __init__(self, **kwargs):
             self.kwargs = kwargs
             self._last_interrupted = False
+            self.provider = NS(close=lambda: None)
             self.tool_executor = _ToolExecutor()
             created.append(self)
 
@@ -50,6 +53,7 @@ def test_subagent_returns_full_response(monkeypatch, tmp_path):
     assert result["success"]
     assert result["message"] == f"Sub-agent completed.\n{response}"
     assert result["message"].endswith("THE END")
+    assert created[0].kwargs["provider_name"] == "openai"
     assert created[0].kwargs["is_subagent"] is True
     assert created[0].kwargs["work_dir"] == str(tmp_path)
     assert created[0].kwargs["context_length"] == 200_000

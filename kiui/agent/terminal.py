@@ -414,6 +414,7 @@ class TerminalInput:
         self._edit_pending: Callable[[], str | None] | None = None
         self.style = Style.from_dict({
             "prompt": "bold ansiyellow",
+            "prompt.busy": "bold ansicyan",
             "status.spinner": "bold ansigreen",
             "status.text": "ansiwhite",
             "status.detail": "ansibrightblack",
@@ -424,6 +425,7 @@ class TerminalInput:
             "status.context.high": "ansired",
             "status.track": "ansibrightblack",
             "separator": "ansibrightblack",
+            "separator.busy": "ansicyan",
             "": "ansiyellow",
         })
 
@@ -524,20 +526,33 @@ class TerminalInput:
         pending = self._pending_text() if self._pending_text is not None else None
         with self._status_lock:
             status = list(self._status)
+        if self._busy and not status:
+            status = [
+                ("class:status.spinner", "⠋ "),
+                ("class:status.text", "Working..."),
+            ]
+        if self._busy and pending is None:
+            status.append(("class:status.detail", " · messages sent now will be queued"))
         if pending is not None:
             preview = pending.replace("\n", " ")
             if len(preview) > 20:
                 preview = preview[:20] + "..."
-            label = f"(pending: {preview})"
+            label = f"pending: {preview} · runs next"
             if status:
-                status.append(("class:status.pending", f" {label}"))
+                status.append(("class:status.pending", f" · {label}"))
             else:
                 status = [("class:status.pending", label)]
         width = max(1, self._session.app.output.get_size().columns - 1)
         prompt = [
-            ("class:separator", "─" * width),
+            (
+                "class:separator.busy" if self._busy else "class:separator",
+                "─" * width,
+            ),
             ("", "\n"),
-            ("class:prompt", self._prompt_label),
+            (
+                "class:prompt.busy" if self._busy else "class:prompt",
+                self._prompt_label,
+            ),
         ]
         if status:
             return [*status, ("", "\n"), *prompt]

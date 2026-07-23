@@ -40,7 +40,12 @@ from kiui.agent.tools.results import (
     read_tool_result_text,
 )
 from kiui.agent.permissions import PermissionController, PermissionMode
-from kiui.agent.utils.streaming import consume_stream, message_to_dict
+from kiui.agent.providers import (
+    CompletionRequest,
+    ProviderSettings,
+    ProviderUsage,
+    create_provider,
+)
 from kiui.agent.context import (
     COMPACTION_INPUT_MAX_CHARS,
     ContextManager,
@@ -63,7 +68,6 @@ from kiui.agent.utils.rewind import ChangeTracker
 from kiui.agent.models import (
     REASONING_EFFORTS,
     ReasoningEffort,
-    reasoning_kwargs,
     resolve_model_profile,
 )
 from kiui.agent.utils.interrupt import run_interruptible, RequestInterrupted
@@ -85,10 +89,13 @@ _RETRYABLE_STATUS_CODES = frozenset({408, 409, 425, 429})
 def _is_fatal_api_error(exc: Exception) -> bool:
     """Whether *exc* is a permanent client error that retrying cannot fix.
 
-    Only HTTP 4xx responses other than a few transient ones (rate limit,
-    timeout, conflict) are fatal. Connection errors, timeouts, and 5xx server
-    errors have no ``status_code`` or a retryable one, so they keep retrying.
+    Provider errors may declare retryability explicitly. Otherwise HTTP 4xx
+    responses other than a few transient ones (rate limit, timeout, conflict)
+    are fatal; connection errors, timeouts, and 5xx responses keep retrying.
     """
+    retryable = getattr(exc, "retryable", None)
+    if retryable is not None:
+        return not retryable
     status = getattr(exc, "status_code", None)
     if status is None:
         return False
@@ -117,6 +124,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         model: str,
         api_key: str,
         base_url: str,
+        provider_name: str = "openai",
         model_alias: str = "",
         verbose: bool = True,
         stream: bool = True,
@@ -138,9 +146,13 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self.model = model
         self.model_alias = model_alias
         self.profile = resolve_model_profile(model, model_alias)
-        self._api_key = api_key
-        self._base_url = base_url
-        self._client = None
+        self.provider_name = provider_name
+        self._provider_settings = ProviderSettings(
+            api_key=api_key,
+            base_url=base_url,
+            reasoning_style=self.profile.reasoning,
+        )
+        self.provider = create_provider(provider_name, self._provider_settings)
         self.verbose = verbose
         self.stream = stream
         self.show_thinking = self.profile.reasoning is not None
@@ -301,15 +313,13 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         )
         return self.persona.build(ctx)
 
-    def _accumulate_usage(self, usage):
-        """Add token counts from an API response to session totals."""
+    def _accumulate_usage(self, usage: ProviderUsage) -> None:
+        """Add provider-neutral token counts to session totals."""
         self.token_totals["total"] += usage.total_tokens
         self.token_totals["prompt"] += usage.prompt_tokens
         self.token_totals["completion"] += usage.completion_tokens
-        if usage.prompt_tokens_details and usage.prompt_tokens_details.cached_tokens:
-            self.token_totals["cached_prompt"] += usage.prompt_tokens_details.cached_tokens
-        if usage.completion_tokens_details and usage.completion_tokens_details.reasoning_tokens:
-            self.token_totals["reasoning"] += usage.completion_tokens_details.reasoning_tokens
+        self.token_totals["cached_prompt"] += usage.cached_prompt_tokens
+        self.token_totals["reasoning"] += usage.reasoning_tokens
 
     def _status_suffix(self) -> ContextStatus:
         """Context-window progress shown in the 'Working...' status bar."""
@@ -376,25 +386,21 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 before_tokens = self.token_estimator.chars_to_tokens(before_chars)
                 self.console.system("Context window pressure — compacting via LLM summarization")
                 t_compact = time.monotonic()
-                compact_client = self._request_client()
-                try:
-                    with self.console.thinking(
-                        label="Compacting",
-                        progress=True,
-                        status_suffix=f"{before_msgs} messages, ~{before_tokens:,} tokens",
-                    ):
-                        compacted = run_interruptible(
-                            lambda: compact_context(
-                                self.context.messages, compact_client, self.model,
-                                console=self.console,
-                                context_length=self.context_length,
-                                chars_per_token=cpt,
-                            ),
-                            self.cancellation,
-                            on_cancel=compact_client.close,
-                        )
-                finally:
-                    compact_client.close()
+                with self.console.thinking(
+                    label="Compacting",
+                    progress=True,
+                    status_suffix=f"{before_msgs} messages, ~{before_tokens:,} tokens",
+                ):
+                    compacted = run_interruptible(
+                        lambda: compact_context(
+                            self.context.messages, self._summarize,
+                            console=self.console,
+                            context_length=self.context_length,
+                            chars_per_token=cpt,
+                        ),
+                        self.cancellation,
+                        on_cancel=self.provider.cancel,
+                    )
                 if self.cancellation is not None and self.cancellation.cancelled:
                     raise RequestInterrupted()
                 self.context.replace_messages(compacted)
@@ -422,21 +428,15 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         had_pending_images = bool(self._pending_images)
         messages = sanitize_unicode(self._messages_with_pending_images())
 
-        kwargs = {
-            "model": self.model,
-            "messages": messages,
-            "stream": self.stream,
-            "max_tokens": self.max_output_tokens,
-        }
-        if self.stream:
-            # Ask the server to emit a final usage-only chunk so streamed turns
-            # still get accurate token accounting.
-            kwargs["stream_options"] = {"include_usage": True}
-
-        if self.tools:
-            kwargs["tools"] = self.tools
-        
-        kwargs.update(reasoning_kwargs(self.profile.reasoning, self.reasoning_effort))
+        request = CompletionRequest(
+            model=self.model,
+            messages=messages,
+            tools=self.tools,
+            stream=self.stream,
+            max_output_tokens=self.max_output_tokens,
+            reasoning_effort=self.reasoning_effort,
+            session_id=self._session_id,
+        )
 
         # ---- retry loop with exponential backoff ----
         t_api = time.monotonic()
@@ -444,10 +444,11 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         wait_time = self.INITIAL_BACKOFF
         while True:
             try:
-                if self.stream:
-                    message, usage, finish_reason = self._stream_completion(kwargs)
-                else:
-                    message, usage, finish_reason = self._blocking_completion(kwargs)
+                result = (
+                    self._stream_completion(request)
+                    if self.stream
+                    else self._blocking_completion(request)
+                )
                 break
             except RequestInterrupted:
                 raise  # user cancelled — never retry, let get_response roll back
@@ -461,13 +462,21 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 self.console.system(
                     f"[Retry {retry_count}] {e} — retrying in {wait_time:.1f}s…"
                 )
-                self._interruptible_sleep(wait_time)
+                with self.console.thinking(
+                    label="Waiting to retry",
+                    progress=True,
+                    status_suffix=f"{wait_time:.1f}s",
+                ):
+                    self._interruptible_sleep(wait_time)
                 wait_time = min(wait_time * 2, self.MAX_BACKOFF)
         api_elapsed = time.monotonic() - t_api
 
         if self.cancellation is not None and self.cancellation.cancelled:
             raise RequestInterrupted()
 
+        message = result.message
+        usage = result.usage or self._estimate_usage(message)
+        finish_reason = result.finish_reason
         self._pending_images.clear()
         self._accumulate_usage(usage)
         if not had_pending_images:
@@ -476,13 +485,13 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             )
 
         if self.verbose:
-            cached = usage.prompt_tokens_details.cached_tokens if usage.prompt_tokens_details else None
-            reasoning = usage.completion_tokens_details.reasoning_tokens if usage.completion_tokens_details else None
             self.console.debug(
                 f"API response in {api_elapsed:.1f}s — finish_reason: {finish_reason or 'N/A'}, "
                 f"total_tokens: {usage.total_tokens} = "
-                f"output: {usage.completion_tokens} (reasoning: {reasoning or 'N/A'}) "
-                f"input: {usage.prompt_tokens} (cached: {cached or 'N/A'})"
+                f"output: {usage.completion_tokens} "
+                f"(reasoning: {usage.reasoning_tokens or 'N/A'}) "
+                f"input: {usage.prompt_tokens} "
+                f"(cached: {usage.cached_prompt_tokens or 'N/A'})"
             )
             tool_calls = get_tool_calls(message)
             if tool_calls:
@@ -498,53 +507,36 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self.context.add(message)
         return message
 
+    def _summarize(self, prompt: str) -> str:
+        """Run a provider-neutral non-streaming compaction request."""
+        result = self.provider.complete(CompletionRequest(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            stream=False,
+            timeout=60,
+        ))
+        summary = get_text(result.message)
+        if not summary:
+            raise RuntimeError("Compaction provider returned no summary text")
+        return summary
 
+    def _blocking_completion(self, request: CompletionRequest):
+        """Execute a non-streaming provider request with cancellation."""
+        with self.console.thinking(status_suffix=self._status_suffix()):
+            return run_interruptible(
+                lambda: self.provider.complete(request),
+                self.cancellation,
+                on_cancel=self.provider.cancel,
+            )
 
-    @property
-    def client(self):
-        if self._client is None:
-            self._client = self._request_client()
-        return self._client
-
-    @client.setter
-    def client(self, client) -> None:
-        self._client = client
-
-    def _request_client(self):
-        from openai import OpenAI
-
-        return OpenAI(
-            api_key=self._api_key,
-            base_url=self._base_url,
-            max_retries=0,
-        )
-
-    def _blocking_completion(self, kwargs: dict):
-        """Non-streaming call: show a spinner, return ``(message, usage)``."""
-        client = self._request_client()
-        try:
-            with self.console.thinking(status_suffix=self._status_suffix()):
-                response = run_interruptible(
-                    lambda: client.chat.completions.create(**kwargs),
-                    self.cancellation,
-                    on_cancel=client.close,
-                )
-        finally:
-            client.close()
-        choice = response.choices[0]
-        return message_to_dict(choice.message), response.usage, choice.finish_reason
-
-    def _stream_completion(self, kwargs: dict):
-        """Stream the completion to terminal and web, returning message metadata."""
-        client = self._request_client()
-
+    def _stream_completion(self, request: CompletionRequest):
+        """Stream a provider request to the terminal and web sinks."""
         with self.console.stream_response(show_thinking=self.show_thinking) as sink:
-            def request():
-                with self.console.thinking(status_suffix=self._status_suffix()):
-                    stream = client.chat.completions.create(**kwargs)
+            def consume():
+                stream = None
                 try:
-                    return consume_stream(
-                        stream,
+                    stream = self.provider.open_stream(request)
+                    return stream.consume(
                         on_content=sink.on_content,
                         on_thinking=sink.on_thinking,
                         should_stop=lambda: (
@@ -553,31 +545,23 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                         ),
                     )
                 finally:
-                    stream.close()
+                    if stream is not None:
+                        stream.close()
 
-            try:
-                message, usage, finish_reason = run_interruptible(
-                    request, self.cancellation, on_cancel=client.close
+            with self.console.thinking(status_suffix=self._status_suffix()):
+                return run_interruptible(
+                    consume, self.cancellation, on_cancel=self.provider.cancel
                 )
-            finally:
-                client.close()
-        if usage is None:
-            # Some proxies omit the usage chunk; fall back to an estimate so
-            # accounting/calibration still works.
-            usage = self._estimate_usage(message)
-        return message, usage, finish_reason
 
-    def _estimate_usage(self, message) -> Any:
-        """Build a rough usage object when the stream omits the usage chunk."""
-        from openai.types import CompletionUsage
-
+    def _estimate_usage(self, message) -> ProviderUsage:
+        """Build rough provider-neutral usage when an API omits it."""
         prompt_chars = estimate_context_chars(self.context.get())
         prompt_tokens = self.token_estimator.chars_to_tokens(prompt_chars)
         completion_chars = len(message.get("content") or "")
         for tc in message.get("tool_calls") or []:
             completion_chars += len(tc["function"].get("arguments") or "")
         completion_tokens = self.token_estimator.chars_to_tokens(completion_chars)
-        return CompletionUsage(
+        return ProviderUsage(
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=prompt_tokens + completion_tokens,
@@ -952,7 +936,11 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             input_ready = asyncio.Event()
 
             def wake_input() -> None:
-                ui_loop.call_soon_threadsafe(input_ready.set)
+                def refresh() -> None:
+                    input_ready.set()
+                    terminal.app.invalidate()
+
+                ui_loop.call_soon_threadsafe(refresh)
 
             self.input_broker.add_listener(wake_input)
             prompt_resumed = asyncio.Event()
@@ -1142,7 +1130,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         if reasoning != "none":
             reasoning += f" · {self.reasoning_effort} effort"
         self.console.startup_panel(
-            model=self.model,
+            model=f"{self.provider_name}/{self.model}",
             context=f"{self.context_length:,} tokens",
             reasoning=reasoning,
             permission=self.permissions.mode.value,
@@ -1176,6 +1164,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 self.console.warn(f"Could not save session before exit: {e}")
             if self.changes is not None:
                 self.changes.close()
+            self.provider.close()
             self.tool_executor.shutdown_processes()
             self._print_token_summary(resume=self._session_id if session_saved else None)
 
