@@ -531,37 +531,32 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         return message_to_dict(choice.message), response.usage, choice.finish_reason
 
     def _stream_completion(self, kwargs: dict):
-        """Streaming call: buffer terminal output, return ``(message, usage)``.
-
-        The blocking network request and stream consumption remain
-        interruptible. Fragments are sent to web clients immediately, while
-        terminal Markdown is rendered once after the response is complete.
-        """
+        """Stream the completion to terminal and web, returning message metadata."""
         client = self._request_client()
 
         with self.console.stream_response(show_thinking=self.show_thinking) as sink:
-            with self.console.thinking(status_suffix=self._status_suffix()):
-                def request():
+            def request():
+                with self.console.thinking(status_suffix=self._status_suffix()):
                     stream = client.chat.completions.create(**kwargs)
-                    try:
-                        return consume_stream(
-                            stream,
-                            on_content=sink.on_content,
-                            on_thinking=sink.on_thinking,
-                            should_stop=lambda: (
-                                self.cancellation is not None
-                                and self.cancellation.cancelled
-                            ),
-                        )
-                    finally:
-                        stream.close()
-
                 try:
-                    message, usage, finish_reason = run_interruptible(
-                        request, self.cancellation, on_cancel=client.close
+                    return consume_stream(
+                        stream,
+                        on_content=sink.on_content,
+                        on_thinking=sink.on_thinking,
+                        should_stop=lambda: (
+                            self.cancellation is not None
+                            and self.cancellation.cancelled
+                        ),
                     )
                 finally:
-                    client.close()
+                    stream.close()
+
+            try:
+                message, usage, finish_reason = run_interruptible(
+                    request, self.cancellation, on_cancel=client.close
+                )
+            finally:
+                client.close()
         if usage is None:
             # Some proxies omit the usage chunk; fall back to an estimate so
             # accounting/calibration still works.

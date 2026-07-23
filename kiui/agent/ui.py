@@ -14,9 +14,11 @@ from typing import TYPE_CHECKING, Callable
 
 import questionary
 from rich.console import Console
+from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.progress_bar import ProgressBar
 from rich.status import Status
+from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme
@@ -77,8 +79,6 @@ def _compact_tokens(value: int) -> str:
 
 
 def _print_markdown_response(console: Console, content: str) -> None:
-    from rich.markdown import Markdown
-
     row = Table.grid(padding=0, expand=True)
     row.add_column(width=2, no_wrap=True)
     row.add_column(ratio=1)
@@ -372,14 +372,148 @@ class ThinkingIndicator:
             self._status.update(self._label(elapsed))
 
 
-class ResponseStream:
-    """Buffered terminal sink for a streamed assistant turn.
+class _TerminalMarkdownStream:
+    """Append-only Markdown renderer that commits completed blocks."""
 
-    Rich Live cannot safely update content taller than the terminal: old frames
-    enter scrollback and cannot be erased, repeating the response. Terminal
-    output is therefore buffered and rendered once on close. Web clients still
-    receive fragment events in real time, followed by consolidated events for
-    late-joining clients.
+    def __init__(self, console: Console):
+        self._console = console
+        self._pending = ""
+        self._table_candidate: str | None = None
+        self._table_lines: list[str] = []
+        self._code_fence = ""
+        self._code_language = "text"
+        self._started = False
+
+    def _print(self, renderable) -> None:
+        row = Table.grid(padding=0, expand=True)
+        row.add_column(width=2, no_wrap=True)
+        row.add_column(ratio=1)
+        prefix = f"{_DOT} " if not self._started else ""
+        row.add_row(Text(prefix), renderable)
+        self._console.print(row)
+        self._started = True
+
+    @staticmethod
+    def _fence(line: str) -> tuple[str, str] | None:
+        stripped = line.lstrip()
+        if not stripped.startswith(("```", "~~~")):
+            return None
+        marker = stripped[0]
+        length = len(stripped) - len(stripped.lstrip(marker))
+        return marker * length, stripped[length:].strip() or "text"
+
+    def _is_closing_fence(self, line: str) -> bool:
+        stripped = line.strip()
+        return (
+            bool(stripped)
+            and not stripped.strip(self._code_fence[0])
+            and len(stripped) >= len(self._code_fence)
+        )
+
+    @staticmethod
+    def _is_table_separator(line: str) -> bool:
+        cells = line.strip().strip("|").split("|")
+        if len(cells) < 2:
+            return False
+        for cell in cells:
+            rule = cell.strip().strip(":")
+            if len(rule) < 3 or set(rule) != {"-"}:
+                return False
+        return True
+
+    def _open_code(self, fence: str, language: str) -> None:
+        self._flush_table_candidate()
+        self._flush_table()
+        self._code_fence = fence
+        self._code_language = language
+        label = "code" if language == "text" else language
+        self._print(Text(f"┌─ {label}", style="dim cyan"))
+
+    def _render_code_line(self, line: str) -> None:
+        highlighted = Syntax(line, self._code_language, word_wrap=True).highlight(line)
+        highlighted.rstrip()
+        rendered = Text("│ ", style="dim cyan")
+        rendered.append(highlighted)
+        self._print(rendered)
+
+    def _close_code(self) -> None:
+        self._print(Text("└─", style="dim cyan"))
+        self._code_fence = ""
+        self._code_language = "text"
+
+    def _flush_table_candidate(self) -> None:
+        if self._table_candidate is not None:
+            self._render_ordinary_line(self._table_candidate)
+            self._table_candidate = None
+
+    def _flush_table(self) -> None:
+        if self._table_lines:
+            self._print(Markdown("\n".join(self._table_lines)))
+            self._table_lines.clear()
+
+    def _render_ordinary_line(self, line: str) -> None:
+        if line.strip():
+            self._print(Markdown(line))
+        elif self._started:
+            self._console.print()
+
+    def _render_line(self, line: str) -> None:
+        if self._code_fence:
+            if self._is_closing_fence(line):
+                self._close_code()
+            else:
+                self._render_code_line(line)
+            return
+
+        if self._table_lines:
+            if "|" in line and line.strip():
+                self._table_lines.append(line)
+                return
+            self._flush_table()
+
+        if self._table_candidate is not None:
+            if self._is_table_separator(line):
+                self._table_lines.extend((self._table_candidate, line))
+                self._table_candidate = None
+                return
+            self._flush_table_candidate()
+
+        fence = self._fence(line)
+        if fence is not None:
+            self._open_code(*fence)
+        elif "|" in line and line.strip():
+            self._table_candidate = line
+        else:
+            self._render_ordinary_line(line)
+
+    def feed(self, text: str) -> None:
+        self._pending += text
+        while "\n" in self._pending:
+            line, self._pending = self._pending.split("\n", 1)
+            self._render_line(line.removesuffix("\r"))
+
+    def close(self) -> None:
+        if self._pending:
+            self._render_line(self._pending)
+            self._pending = ""
+        self._flush_table_candidate()
+        self._flush_table()
+        if self._code_fence:
+            self._close_code()
+
+    def abort(self) -> None:
+        self._pending = ""
+        self._table_candidate = None
+        self._table_lines.clear()
+
+
+class ResponseStream:
+    """Append-only terminal sink for a streamed assistant turn.
+
+    Completed Markdown lines are rendered as they arrive. Tables and fenced
+    code use small block buffers, and no committed terminal rows are rewritten,
+    so tall responses remain correct in scrollback. Web clients receive token
+    fragments plus consolidated events for late joiners.
     """
 
     def __init__(
@@ -395,6 +529,8 @@ class ResponseStream:
         self._content = ""
         self._thinking = ""
         self._content_visible = False
+        self._thinking_visible = False
+        self._terminal = _TerminalMarkdownStream(console)
         self._closed = False
         self._lock = threading.Lock()
 
@@ -414,6 +550,11 @@ class ResponseStream:
                     return
                 self._content_visible = True
                 text = self._content
+            if self._thinking_visible:
+                if not self._thinking.endswith("\n"):
+                    self._console.print()
+                self._thinking_visible = False
+            self._terminal.feed(text)
             if self._events is not None:
                 self._events.publish("assistant_delta", text=text)
 
@@ -427,6 +568,8 @@ class ResponseStream:
             if self._closed:
                 return
             self._thinking += text
+            self._console.print(Text(text, style="thinking"), end="", soft_wrap=True)
+            self._thinking_visible = True
             if self._events is not None:
                 self._events.publish("thinking_delta", text=text)
 
@@ -438,10 +581,14 @@ class ResponseStream:
             thinking = self._thinking
             content = self._content if self._content_visible else ""
         if render_terminal:
-            if thinking:
-                self._console.print(Text(thinking, style="thinking"))
             if content:
-                _print_markdown_response(self._console, content)
+                self._terminal.close()
+            elif self._thinking_visible and not thinking.endswith("\n"):
+                self._console.print()
+        else:
+            self._terminal.abort()
+            if self._thinking_visible and not thinking.endswith("\n"):
+                self._console.print()
         if self._events is not None:
             if thinking:
                 self._events.publish("thinking", text=thinking)
@@ -505,7 +652,7 @@ class AgentConsole:
         )
 
     def stream_response(self, *, show_thinking: bool = False) -> ResponseStream:
-        """Return a buffered terminal sink for a streamed assistant turn.
+        """Return an append-only terminal sink for a streamed assistant turn.
 
         Usage::
 
