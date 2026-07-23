@@ -26,7 +26,7 @@ openai:
     # No api_key/base_url: authenticate with /login openai-codex.
 
 kia_web_token: web-secret # optional Web UI access token
-kia_lib: git@github.com:username/kia-skills.git # optional personal skill library repo
+kia_lib: git@github.com:username/kia-skills.git # optional personal skill/persona library repo
 ```
 
 The `openai-codex` provider uses a ChatGPT Plus/Pro subscription through OpenAI OAuth and the Codex Responses endpoint. OAuth credentials are stored globally in `~/.kia/auth.json`, not in project configuration or session history. The file is plaintext and restricted to mode `0600` on Unix. Start kia with the Codex alias and run `/login` (or `/login openai-codex`); browser, pasted-redirect, and device-code flows are available.
@@ -245,12 +245,9 @@ Skill commands:
 
 Discovery is non-silent: skills whose `SKILL.md` cannot be read or parsed (bad YAML, missing `description`) and skills **shadowed** by a higher-precedence copy of the same name are reported as warnings at startup and on `/skills reload`, rather than vanishing quietly. Skill load activity is tracked per session — `/skills` shows a per-skill load count, `/usage` and the end-of-run summary list which skills were loaded, and the loaded-skill set is persisted so `--resume` does not re-load skills whose instructions are already in the replayed conversation.
 
-### Personal skill library
+### Personal resource library
 
-`kib` manages a GitHub-backed library of skills that can be shared between
-projects. Configure an accessible repository URL in `.kiui.yaml`; authentication
-is delegated to your current Git/SSH environment. The repository uses the
-`main` branch and stores skills under `skills/<name>/`.
+`kib` manages a Git-backed library of skills and personas shared between projects. Configure an accessible repository URL in `.kiui.yaml`; authentication is delegated to your current Git/SSH environment. The repository uses `main` and stores resources under `skills/<name>/` and `personas/<name>/`.
 
 ```yaml
 kia_lib: git@github.com:username/kia-skills.git
@@ -266,18 +263,18 @@ kib upload <name> [<name> ...]   # upload one or more local skills
 kib remove <name> [<name> ...]   # remove one or more remote skills
 kib remove <names...> --local    # remove project copies only
 kib upload <names...> --force    # replace existing remote skills
+
+# Add --kind persona to any command to operate on personas:
+kib list --kind persona
+kib install my-coder --kind persona
+kib upload my-coder --kind persona
 ```
 
-Remote skills are not loaded or advertised to the agent until installed.
+Remote resources are not available to the agent until installed.
 The repository is cached under `~/.kia/library/`; each configured URL has an
-isolated checkout, so changing `kia_lib` selects a different cache. Each skill's
-last synchronized tree is recorded in its committed `.kib.json`, so update works
-across machines and does not depend on the cache. Install never overwrites an
-existing local skill. Update uploads local-only changes and downloads remote-only changes.
+isolated checkout, so changing `kia_lib` selects a different cache. Each resource's last synchronized tree is recorded in its committed `.kib.json`, so update works across machines and does not depend on the cache. Install never overwrites an existing local resource. Update uploads local-only changes and downloads remote-only changes.
 Conflicting changes fail until `--prefer local` or `--prefer remote` is given.
-`kib` only manages project skills under `./.kia/skills/`; it does not list or
-otherwise special-case bundled skills.
-Upload validates the skill, rejects symlinks, creates a normal commit, and never
+`kib` only manages project resources under `./.kia/skills/` and `./.kia/personas/`; it does not special-case bundled resources. Upload validates the resource, rejects symlinks, creates a normal commit, and never
 force-pushes. An empty repository is initialized on the first upload.
 
 ### Bundled skills
@@ -286,30 +283,42 @@ kia ships a few common skills, including `skill-creator` for authoring spec-comp
 
 ## Personas
 
-A persona owns the agent's identity, system prompt, and tool surface. Personas are Python modules bundled in `kiui/agent/personas/`:
+A persona owns the agent's identity, complete system prompt, and tool surface. Bundled personas live under `kiui/agent/bundled_personas/`; custom personas are discovered from `./.kia/personas/` and `~/.kia/personas/`. Bundled names are reserved, and project personas take precedence over personal personas.
 
 | Persona | Tools | Purpose |
 |---------|-------|---------|
 | `coder` | all | The default coding agent (project-aware, full tool access) |
-| `chatter` | `web_search`, `web_fetch` | General chatbot without file/shell access or environment context |
-| `reviewer` | paper/file, web, skill, and sub-agent tools | Evidence-grounded academic paper reviewer with venue-template support |
+| `chatter` | `web_search`, `web_fetch` | General chatbot without file/shell access |
+| `reviewer` | paper/file, web, skill, and sub-agent tools | Evidence-grounded academic paper reviewer |
 
-Select one at startup, or switch mid-session (switching **restarts the conversation**, like `/clear`):
+Each persona is a directory containing `PERSONA.md`:
+
+```markdown
+---
+name: my-coder
+description: A concise project coding assistant.
+tools: all
+---
+You are a terminal-based coding assistant.
+
+{{kia:skills}}
+{{kia:project-instructions}}
+{{kia:current-context}}
+```
+
+`tools` is required and is either `all` or a YAML list of built-in tool names; use `[]` for no tools. Supported whole-line markers are `autonomous-mode`, `sub-agents`, `skills`, `project-instructions`, and `current-context`, each prefixed with `kia:` as above. Markers are expanded once, so marker-like text inside project instructions is not interpreted.
 
 ```bash
 kia --persona reviewer
 ```
 
-For `reviewer`, provide the paper PDF and preferably the venue, track, and exact review template or form. It uses the bundled `pdf-reading` skill for page-aware extraction, treats document content as untrusted, analyzes the submission before drafting, and audits the final review for evidence and score consistency. Generated reviews are decision-support drafts and must be verified by a human reviewer before submission.
-
 | Command | Effect |
 |---------|--------|
-| `/persona` | List installed personas (with their tool surface) |
+| `/persona` | List discovered personas, sources, and tool surfaces |
 | `/persona <name>` | Switch persona and restart the conversation |
+| `/persona reload` | Re-scan persona directories; restart if the active persona changed |
 
-The active persona is saved with the session and re-applied on `--resume`.
-
-Each persona module defines `build_system_prompt(ctx)` — the complete system prompt, composed from the shared blocks and builders in `kiui/agent/personas/common.py` — plus a `TOOLS` whitelist that controls which tools are advertised to the model. This is capability guidance, not a security boundary: interactive commands such as `!<command>` and `/skills` remain available to the user and are governed by the normal permission and safety checks. To add a persona, drop a new module into `kiui/agent/personas/` following the same contract.
+The active persona name and content digest are saved with the session. Resume warns if its content changed and fails clearly if it is no longer installed. Tool whitelists guide the advertised model capabilities; interactive user commands remain governed by normal permission and safety checks.
 
 ## Tools
 

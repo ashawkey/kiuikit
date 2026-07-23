@@ -7,16 +7,22 @@ import subprocess
 
 import pytest
 
+from kiui.agent.personas import read_persona
 from kiui.agent.skills import read_skill
 from kiui.agent.library import (
     LibraryError,
     _validate_repo,
+    install_resource,
     install_skill,
     list_local_skills,
+    list_resources,
     list_skills,
     remove_local_skill,
+    remove_resource,
     remove_skill,
+    update_resource,
     update_skill,
+    upload_resource,
     upload_skill,
 )
 
@@ -65,6 +71,17 @@ def _skill(root: Path, name: str, description: str = "Useful skill") -> Path:
     return path
 
 
+def _persona(root: Path, name: str, description: str = "Useful persona") -> Path:
+    path = root / ".kia" / "personas" / name
+    path.mkdir(parents=True)
+    (path / "PERSONA.md").write_text(
+        f"---\nname: {name}\ndescription: {description}\n"
+        "tools: []\n---\nYou are useful.\n",
+        encoding="utf-8",
+    )
+    return path
+
+
 def _remote(tmp_path: Path) -> Path:
     tmp_path.mkdir(parents=True, exist_ok=True)
     remote = tmp_path / "library.git"
@@ -93,6 +110,34 @@ def test_upload_list_and_install_skill(tmp_path):
     assert skills["alpha"]["description"] == "Alpha description"
     assert errors == []
     assert (dest / "references" / "notes.md").read_text() == "notes"
+
+
+def test_upload_list_and_install_persona(tmp_path):
+    remote = _remote(tmp_path)
+    source = tmp_path / "source"
+    _persona(source, "helper", "Helpful persona")
+
+    commit = upload_resource(str(remote), "helper", "persona", source)
+    personas, errors = list_resources(str(remote), "persona")
+    dest = install_resource(str(remote), "helper", "persona", tmp_path / "target")
+
+    assert len(commit) == 40
+    assert personas["helper"]["description"] == "Helpful persona"
+    assert errors == []
+    assert (dest / "PERSONA.md").is_file()
+
+    persona = source / ".kia" / "personas" / "helper" / "PERSONA.md"
+    persona.write_text(
+        "---\nname: helper\ndescription: Updated\n"
+        "tools: []\n---\nYou are updated.\n",
+        encoding="utf-8",
+    )
+    upload_resource(str(remote), "helper", "persona", source, force=True)
+    assert update_resource(str(remote), "helper", "persona", tmp_path / "target") == "pulled"
+    assert read_persona(dest).description == "Updated"
+
+    remove_resource(str(remote), "helper", "persona")
+    assert list_resources(str(remote), "persona")[0] == {}
 
 
 def test_remove_skill(tmp_path):

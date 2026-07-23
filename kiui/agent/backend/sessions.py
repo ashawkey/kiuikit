@@ -198,6 +198,7 @@ class SessionMixin:
             "tool_compaction_totals": self.tool_compaction_totals,
             "system_prompt": self.context.system_prompt,
             "persona": self.persona.name,
+            "persona_digest": self.persona.digest,
             "goal": self.goal,
             "goal_active": self.goal_active,
             "goal_iterations": self.goal_iterations,
@@ -237,10 +238,15 @@ class SessionMixin:
             self.console.error(f"Failed to read session: {e}")
             return False
 
+        try:
+            self._restore_session_data(data)
+        except ValueError as e:
+            self.console.error(f"Failed to restore session: {e}")
+            return False
+
         self._session_store = store
         self._session_revision_id = store.head_id
         self._session_id = name
-        self._restore_session_data(data)
         self.console.system(
             f"Loaded session '{name}' ({len(self.context.messages)} messages, round {self.round_id}, "
             f"revision {self._session_revision_id[:10]})"
@@ -258,10 +264,17 @@ class SessionMixin:
             )
 
         saved_persona = data.get("persona")
-        if saved_persona and saved_persona != self.persona.name:
-            self.persona = get_persona(saved_persona)
-            self.system_prompt = self._build_system_prompt()
-            self.context.system_prompt["content"] = self.system_prompt
+        if saved_persona:
+            persona = get_persona(saved_persona, personas=self.personas)
+            saved_digest = data.get("persona_digest")
+            if saved_digest and saved_digest != persona.digest:
+                self.console.warn(
+                    f"Persona '{saved_persona}' changed since this session was saved."
+                )
+            if persona != self.persona:
+                self.persona = persona
+                self.system_prompt = self._build_system_prompt()
+                self.context.system_prompt["content"] = self.system_prompt
 
         self.context.replace_messages(data["messages"])
         self.round_id = data.get("round_id", 0)

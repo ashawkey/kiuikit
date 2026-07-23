@@ -1,4 +1,4 @@
-"""Command-line interface for the Git-backed kia skill library."""
+"""Command-line interface for the Git-backed kia resource library."""
 
 from __future__ import annotations
 
@@ -13,13 +13,13 @@ from rich.text import Text
 from kiui.config import conf
 from kiui.agent.library import (
     LibraryError,
-    install_skill,
-    list_local_skills,
-    list_skills,
-    remove_local_skill,
-    remove_skill,
-    update_skill,
-    upload_skill,
+    install_resource,
+    list_local_resources,
+    list_resources,
+    remove_local_resource,
+    remove_resource,
+    update_resource,
+    upload_resource,
 )
 
 
@@ -51,39 +51,44 @@ def _add_verbose(parser: argparse.ArgumentParser, *, global_option: bool = False
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="kib",
-        description="Manage skills in a personal GitHub-backed library.",
+        description="Manage skills and personas in a personal Git-backed library.",
     )
     _add_verbose(parser, global_option=True)
     commands = parser.add_subparsers(dest="command", required=True)
-    list_command = commands.add_parser("list", help="list available skills")
+    list_command = commands.add_parser("list", help="list available resources")
     _add_verbose(list_command)
-    list_command.add_argument("pattern", nargs="?", help="filter skill names by substring")
+    list_command.add_argument("pattern", nargs="?", help="filter resource names by substring")
+    list_command.add_argument("--kind", choices=("skill", "persona"), default="skill")
     list_command.add_argument(
-        "--local", action="store_true", help="list skills installed in this project"
+        "--local", action="store_true", help="list resources installed in this project"
     )
 
-    install = commands.add_parser("install", help="install library skills into this project")
+    install = commands.add_parser("install", help="install library resources into this project")
     _add_verbose(install)
     install.add_argument("names", nargs="+", metavar="name")
+    install.add_argument("--kind", choices=("skill", "persona"), default="skill")
 
-    update = commands.add_parser("update", help="sync installed skills with the library")
+    update = commands.add_parser("update", help="sync installed resources with the library")
     _add_verbose(update)
     update.add_argument("names", nargs="*", metavar="name")
+    update.add_argument("--kind", choices=("skill", "persona"), default="skill")
     update.add_argument(
         "--prefer",
         choices=("local", "remote"),
         help="resolve conflicts by keeping the local or remote copy",
     )
 
-    remove = commands.add_parser("remove", help="remove skills from the library or project")
+    remove = commands.add_parser("remove", help="remove resources from the library or project")
     _add_verbose(remove)
     remove.add_argument("names", nargs="+", metavar="name")
+    remove.add_argument("--kind", choices=("skill", "persona"), default="skill")
     remove.add_argument("--local", action="store_true", help="remove from this project")
 
-    upload = commands.add_parser("upload", help="upload project skills to the library")
+    upload = commands.add_parser("upload", help="upload project resources to the library")
     _add_verbose(upload)
     upload.add_argument("names", nargs="+", metavar="name")
-    upload.add_argument("--force", action="store_true", help="replace an existing library skill")
+    upload.add_argument("--kind", choices=("skill", "persona"), default="skill")
+    upload.add_argument("--force", action="store_true", help="replace an existing library resource")
     return parser
 
 
@@ -108,21 +113,21 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "list":
             if not args.local:
                 repo = _repo()
-                skills, errors = list_skills(repo)
-                local_names = set(list_local_skills()[0])
-                title = "Skill Library"
+                skills, errors = list_resources(repo, args.kind)
+                local_names = set(list_local_resources(args.kind)[0])
+                title = f"{args.kind.title()} Library"
                 console.print(f"[bold]{title}[/bold] ({repo})")
             else:
-                skills, errors = list_local_skills()
+                skills, errors = list_local_resources(args.kind)
                 repo = _configured_repo()
                 if repo is not None:
                     try:
-                        remote_names = set(list_skills(repo)[0])
+                        remote_names = set(list_resources(repo, args.kind)[0])
                     except LibraryError as exc:
                         Console(stderr=True).print(
                             f"[yellow]Warning:[/yellow] could not check uploaded status: {exc}"
                         )
-                title = "Local Skills"
+                title = f"Local {args.kind.title()}s"
                 console.print(f"[bold]{title}[/bold]")
             if args.pattern is not None:
                 skills = {name: info for name, info in skills.items() if args.pattern in name}
@@ -144,14 +149,14 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.command == "remove" and args.local:
             for name in args.names:
-                path = remove_local_skill(name)
+                path = remove_local_resource(name, args.kind)
                 console.print(f"Removed local [cyan]{name}[/cyan] from {path}")
             return 0
 
         repo = _repo()
         if args.command == "install":
             for name in args.names:
-                dest = install_skill(repo, name)
+                dest = install_resource(repo, name, args.kind)
                 console.print(f"Installed [cyan]{name}[/cyan] to {dest}")
             return 0
 
@@ -159,13 +164,13 @@ def main(argv: list[str] | None = None) -> int:
             if args.names:
                 names = args.names
             else:
-                skills, errors = list_local_skills()
+                skills, errors = list_local_resources(args.kind)
                 if errors:
                     detail = ", ".join(issue["name"] for issue in errors)
-                    raise LibraryError(f"cannot update invalid local skills: {detail}")
+                    raise LibraryError(f"cannot update invalid local {args.kind}s: {detail}")
                 names = sorted(skills)
             for name in names:
-                action = update_skill(repo, name, prefer=args.prefer)
+                action = update_resource(repo, name, args.kind, prefer=args.prefer)
                 if action == "current":
                     console.print(f"[cyan]{name}[/cyan] is already up to date.")
                 elif action == "pulled":
@@ -176,12 +181,12 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.command == "remove":
             for name in args.names:
-                commit = remove_skill(repo, name)
+                commit = remove_resource(repo, name, args.kind)
                 console.print(f"Removed [cyan]{name}[/cyan] ({commit[:12]})")
             return 0
 
         for name in args.names:
-            commit = upload_skill(repo, name, force=args.force)
+            commit = upload_resource(repo, name, args.kind, force=args.force)
             if commit is None:
                 console.print(f"[cyan]{name}[/cyan] is already up to date.")
             else:

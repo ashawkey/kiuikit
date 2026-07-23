@@ -47,7 +47,7 @@ kia
 
 What makes it different:
 - Native terminal + synchronized web UI, remote access from any browser.
-- Personal skill library `kib`: upload your own skills, download in any projects later.
+- Personal resource library `kib`: share skills and personas across projects.
 - Fully customizable personas.
 
 See the [agent documentation](https://kit.kiui.moe/agent.html) for full details.

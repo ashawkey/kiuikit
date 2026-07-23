@@ -20,7 +20,7 @@ Defined in `pyproject.toml` `[project.scripts]`:
 | `kiss` | `kiui.sys:main` | System information (OS, GPU, torch, etc.) |
 | `ks` | `kiui.slurm:main` | Slurm job management |
 | `kia` | `kiui.agent.cli:main` | Terminal AI agent (LLM + tools + web) |
-| `kib` | `kiui.agent.library_cli:main` | Git-backed personal skill library manager |
+| `kib` | `kiui.agent.library_cli:main` | Git-backed skill/persona library manager |
 
 ---
 
@@ -102,7 +102,7 @@ A collection of **standalone PyTorch NN building blocks** — not a framework, j
 | `src/` | CUDA C++ kernel (`gridencoder.cu`, `.h`, `bindings.cpp`) |
 
 #### AI Agent (`kiui/agent/`)
-A self-contained **terminal AI agent** (comparable to Claude Code / Codex CLI). Features include file and shell tools, managed background processes, web access, sub-agents, skills and a Git-backed skill library, personas, standing goals, context compaction, rewind, three-tier permissions, and a shared Web UI. See `kiui/agent/readme.md` for full docs.
+A self-contained **terminal AI agent** (comparable to Claude Code / Codex CLI). Features include file and shell tools, managed background processes, web access, sub-agents, skills, personas, and a Git-backed resource library, personas, standing goals, context compaction, rewind, three-tier permissions, and a shared Web UI. See `kiui/agent/readme.md` for full docs.
 
 The implementation is split into focused packages; there are no longer top-level `backend.py`, `tools.py`, `prompts.py`, `io.py`, `interrupt.py`, or `rewind.py` modules.
 
@@ -116,9 +116,9 @@ The implementation is split into focused packages; there are no longer top-level
 | `backend/skill_commands.py` | Skill listing, reload, and manual loading commands. |
 | `tools/` | Tool subsystem. `registry.py` is the single source of truth: each tool (built-in or skill-provided) is one `ToolSpec` (schema + `run` handler + permission class + advertising gate), and `ToolRegistry` resolves the advertised set in one pass from the persona whitelist (skill tools ride along when the persona can `load_skill`) and gates (image / sub-agent / goal). `schemas.py` holds only the raw built-in schemas; `executor.py` dispatches through the registry to focused file, shell, search, web, and agent-session mixins. A loaded skill's `tools.py` injects extra `ToolSpec`s (advertised only while the skill is loaded; name collisions with a built-in or another skill fail the load atomically). `process_manager.py`/`process_util.py` own the managed-process registry and cleanup, while the LLM-facing `start_process`/`inspect_processes`/`stop_process` tools live in the bundled `monitor` skill. Also contains result formatting/artifact storage and limits. |
 | `context.py` | Conversation representation, token estimation, tool-result ingress compaction, context pruning, and LLM compaction. |
-| `personas/` | Persona registry and prompt ownership. `coder.py`, `chatter.py`, and `reviewer.py` define complete system prompts and a built-in `TOOLS` whitelist; `common.py` provides shared prompt builders. A loaded skill's native tools are advertised whenever the persona can call `load_skill`. |
+| `personas.py` / `bundled_personas/` | Declarative persona parser, discovery, marker rendering, and bundled `PERSONA.md` packs. Project and personal personas are discovered from `.kia/personas/`; bundled names are reserved. A loaded skill's native tools are advertised whenever the persona can call `load_skill`. |
 | `skills.py` / `bundled_skills/` | Agent Skills discovery, validation, progressive loading, and bundled skill packs. Project and personal skills live under `.kia/skills/`. |
-| `library.py` / `library_cli.py` | Git-backed personal skill library and its `kib` CLI (`list`, `install`, `update`, `upload`, and `remove`). |
+| `library.py` / `library_cli.py` | Git-backed skill/persona library and its `kib` CLI (`list`, `install`, `update`, `upload`, and `remove`). |
 | `subagent.py` | Synchronous, in-process sub-agent spawning with isolated working-directory context. |
 | `permissions.py` | `PermissionMode` (auto/default/strict), confirmation policy, and destructive-command safety guard. |
 | `models.py` | Model capability profiles and provider-specific reasoning configuration. |
@@ -128,7 +128,7 @@ The implementation is split into focused packages; there are no longer top-level
 | `utils/io.py` | Thread-safe `EventHub`, `InputBroker`, `PromptBroker`, and `CancellationToken` shared by terminal and web clients. |
 | `utils/interrupt.py` | Cancellation of in-flight API calls, retry waits, and foreground commands via Escape/Ctrl+C. |
 | `utils/rewind.py` | Per-round file change tracking, backups, and rollback; conversation rewind is coordinated by `backend/commands.py`. |
-| `utils/paths.py`, `utils/storage.py`, `utils/streaming.py` | `.kia` path/storage helpers and OpenAI-compatible streamed-response accumulation. |
+| `utils/frontmatter.py`, `utils/paths.py`, `utils/storage.py`, `utils/streaming.py` | Shared YAML-frontmatter parsing, `.kia` path/storage helpers, and OpenAI-compatible streamed-response accumulation. |
 | `hub.py` | `kia --hub` web daemon: browser authentication, agent/session registry, API/WebSockets, and multiplexing many agents into one UI. |
 | `hubclient.py` | Agent-side client. A normal terminal `kia` automatically links to a reachable hub, forwards events, and injects browser actions through the shared brokers. |
 | `frontend/` | React + TypeScript/Vite Web UI; FastAPI serves the committed production build from `frontend/dist/`. |

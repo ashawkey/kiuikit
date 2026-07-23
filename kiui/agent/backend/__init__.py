@@ -18,8 +18,8 @@ from kiui.agent.personas import (
     DEFAULT_PERSONA,
     PersonaContext,
     PersonaInfo,
+    discover_personas,
     get_persona,
-    list_personas,
 )
 from kiui.agent.backend.sessions import SessionMixin
 from kiui.agent.backend.skill_commands import SkillCommandsMixin
@@ -203,21 +203,23 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
 
             self.prompt_broker.set_terminal_adapter(terminal_ask_async)
 
-        # Discover bundled skills directly from the installed package, followed
-        # by project and personal skills.
-        skill_issues: dict = {}
-        self.skills = discover_skills(work_dir, issues=skill_issues)
-        if not is_subagent:
-            self._report_skill_issues(skill_issues)
-
-        # persona owns the system prompt and the tool surface; the bundled
-        # "coder" persona is the default.
-        # A sub-agent must not spawn further sub-agents: spawning stays a
-        # single, sequential level deep and always returns.
         self.is_subagent = is_subagent
         self.exec_mode = exec_mode
         self.work_dir = str(Path(work_dir).absolute()) if work_dir else str(Path.cwd())
-        self.persona: PersonaInfo = get_persona(persona or DEFAULT_PERSONA)
+
+        skill_issues: dict = {}
+        self.skills = discover_skills(self.work_dir, issues=skill_issues)
+        persona_issues: dict = {}
+        self.personas = discover_personas(self.work_dir, issues=persona_issues)
+        if not is_subagent:
+            self._report_skill_issues(skill_issues)
+            self._report_persona_issues(persona_issues)
+
+        # A sub-agent must not spawn further sub-agents: spawning stays a
+        # single, sequential level deep and always returns.
+        self.persona: PersonaInfo = get_persona(
+            persona or DEFAULT_PERSONA, personas=self.personas
+        )
         self.system_prompt = self._build_system_prompt()
 
         self.permissions = PermissionController(

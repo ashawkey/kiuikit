@@ -17,7 +17,7 @@ from kiui.agent.providers import (
     create_provider,
 )
 from kiui.agent.permissions import PermissionMode
-from kiui.agent.personas import DEFAULT_PERSONA, PersonaInfo, get_persona, list_personas
+from kiui.agent.personas import DEFAULT_PERSONA, PersonaInfo, discover_personas, get_persona
 
 
 class AgentCommandsMixin:
@@ -83,7 +83,7 @@ class AgentCommandsMixin:
             "  [cyan]/auth[/cyan]        — Show authentication status (/auth [provider|model-alias])\n"
             "  [cyan]/reasoning[/cyan]   — Show or set reasoning effort (none|minimal|low|medium|high|xhigh)\n"
             "  [cyan]/skills[/cyan]      — List skills; /skills <name> to load one, /skills reload to re-scan\n"
-            "  [cyan]/persona[/cyan]     — List personas; /persona <name> to switch (restarts conversation)\n"
+            "  [cyan]/persona[/cyan]     — List/switch personas; /persona reload to re-scan\n"
             "  [cyan]/goal[/cyan]        — Set a goal the agent auto-iterates toward (/goal <text> | clear)\n"
             "  [cyan]/perm[/cyan]        — Show or change permission mode (/perm auto|default|strict)\n"
             "  [cyan]/rewind[/cyan]      — Check out a saved revision and branch from it\n"
@@ -154,17 +154,12 @@ class AgentCommandsMixin:
     def _cmd_persona(self, raw: str = "/persona"):
         """List personas, or switch to one (switching restarts the conversation).
 
-        Usage: ``/persona`` (list) | ``/persona <name>`` (switch + restart).
+        Usage: ``/persona`` (list) | ``/persona reload`` | ``/persona <name>``.
         """
         parts = raw.split(maxsplit=1)
         if len(parts) < 2 or not parts[1].strip():
-            try:
-                personas = list_personas()
-            except ValueError as e:
-                self.console.error(str(e))
-                return
-            self.console.print(f"[bold blue]Installed personas ({len(personas)}):[/bold blue]\n")
-            for name, info in personas.items():
+            self.console.print(f"[bold blue]Installed personas ({len(self.personas)}):[/bold blue]\n")
+            for name, info in self.personas.items():
                 current = " [green](current)[/green]" if name == self.persona.name else ""
                 default = " [dim](default)[/dim]" if name == DEFAULT_PERSONA else ""
                 tools = "all tools" if info.tools is None else (
@@ -173,23 +168,56 @@ class AgentCommandsMixin:
                 self.console.print(f"  [cyan]{name}[/cyan]{default}{current}")
                 if info.description:
                     self.console.print(f"    {info.description}")
-                self.console.print(f"    [dim]{tools}[/dim]")
+                self.console.print(f"    [dim]{tools} · {info.source} · {info.path}[/dim]")
             self.console.print(
-                "\n[dim]/persona <name> to switch (restarts the conversation)[/dim]"
+                "\n[dim]/persona <name> to switch · /persona reload to re-scan[/dim]"
             )
             return
 
         target = parts[1].strip()
+        if target.lower() == "reload":
+            self._reload_personas()
+            return
         if target == self.persona.name:
             self.console.system(f"Already using persona '{target}'.")
             return
         try:
-            persona = get_persona(target)
+            persona = get_persona(target, personas=self.personas)
         except ValueError as e:
             self.console.error(str(e))
             return
 
         self._switch_persona(persona)
+
+    def _report_persona_issues(self, issues: dict):
+        for error in issues.get("errors", []):
+            self.console.warn(
+                f"persona '{error['name']}' ignored ({error['reason']}): {error['path']}"
+            )
+        shadowed = issues.get("shadowed", [])
+        if shadowed:
+            names = ", ".join(sorted({item["name"] for item in shadowed}))
+            self.console.warn(f"lower-precedence duplicate persona(s) ignored: {names}")
+
+    def _reload_personas(self):
+        issues: dict = {}
+        personas = discover_personas(self.work_dir, issues=issues)
+        self._report_persona_issues(issues)
+        if self.persona.name not in personas:
+            self.console.error(
+                f"Active persona '{self.persona.name}' is no longer available; reload aborted."
+            )
+            return
+
+        previous = self.persona
+        self.personas = personas
+        current = personas[previous.name]
+        if current.digest != previous.digest:
+            self._switch_persona(current)
+            self.console.system(f"Reloaded personas; active persona '{current.name}' changed.")
+        else:
+            self.persona = current
+            self.console.system(f"Reloaded personas ({len(personas)} available).")
 
     def _switch_persona(self, persona: PersonaInfo):
         """Apply a new persona (prompt + tool surface) and restart the conversation.

@@ -43,7 +43,7 @@ pip install -U "kiui[kia] @ git+https://github.com/ashawkey/kiuikit.git"
 This installs two commands:
 
 - `kia` — the coding agent and shared Web UI hub.
-- `kib` — the optional Git-backed personal skill library.
+- `kib` — the optional Git-backed skill/persona library.
 
 ## Configure a model
 
@@ -181,9 +181,9 @@ Useful commands:
 `kia` ships with `skill-creator` for drafting and validating skill packs and `pdf-reading` for converting PDFs to Markdown and structured data with the external [MinerU](https://github.com/opendatalab/MinerU) CLI. The PDF skill reads extracted text, LaTeX, tables, and captions; direct image-pixel inspection requires a vision-capable tool. Bundled skills are loaded directly from the installed package rather than copied into `.kia`, so upgrading `kiui` also updates them. Create custom skills under a different name.
 
 
-### Personal skill library
+### Personal resource library
 
-Configure a Git repository to share skills between projects:
+Configure a Git repository to share skills and personas between projects:
 
 ```yaml
 kia_lib: git@github.com:username/kia-skills.git
@@ -201,22 +201,40 @@ kib upload pdf-processing
 kib upload pdf-processing --force
 kib remove pdf-processing
 kib remove pdf-processing --local
+kib list --kind persona
+kib install my-coder --kind persona
+kib upload my-coder --kind persona
 kib --verbose list  # show operation, Git command, and timing details
 ```
 
-Remote skills are not exposed to the agent until installed. `kib update` safely synchronizes all installed skills, or only the optional names: local-only changes are uploaded, remote-only changes are downloaded, and conflicts require `--prefer local` or `--prefer remote`. The committed `.kib.json` in each skill records its last synchronized tree, so this works across machines without relying on a local cache. `kib remove` deletes from the library; `--local` deletes only from the project. `kib` only manages project skills under `./.kia/skills/` and does not list or special-case bundled skills. Upload validates the pack and rejects symlinks; `kib install` never overwrites existing local skills.
+Remote resources are unavailable until installed. `kib update` safely synchronizes all installed resources of the selected kind; conflicts require `--prefer local` or `--prefer remote`. The committed `.kib.json` records the last synchronized tree. `--kind persona` applies any command to `personas/<name>/` and `./.kia/personas/<name>/`; skill remains the default kind. Upload validates packs and rejects symlinks, and install never overwrites an existing local resource.
 
 ## Personas
 
-A persona owns the agent's identity, system prompt, and tool surface — unlike skills, which add instructions, a persona replaces them. Personas are Python modules bundled in `kiui/agent/personas/`; `coder` (the default) is the full coding agent, while `chatter` is a general chatbot limited to `web_search` and `web_fetch`, with no file/shell access and no environment context in its prompt.
+A persona replaces the agent's identity, complete system prompt, and tool surface. Bundled personas live under `kiui/agent/bundled_personas/`; custom personas are discovered from `./.kia/personas/` and `~/.kia/personas/`. Bundled names are reserved, while project personas take precedence over personal personas.
 
-```bash
-kia --persona chatter   # start as another persona
+A persona pack contains `PERSONA.md` with YAML frontmatter and a Markdown prompt:
+
+```markdown
+---
+name: my-coder
+description: A concise project coding assistant.
+tools: all
+---
+You are a terminal coding assistant.
+
+{{kia:skills}}
+{{kia:project-instructions}}
+{{kia:current-context}}
 ```
+
+`tools` accepts `all`, `[]`, or a list of built-in tool names. Supported whole-line markers are `autonomous-mode`, `sub-agents`, `skills`, `project-instructions`, and `current-context`, prefixed with `kia:`. They expand exactly once.
 
 ```text
-/persona                list installed personas and their tool surface
-/persona chatter        switch persona (restarts the conversation, like /clear)
+kia --persona chatter   start as another persona
+/persona                list personas, sources, and tool surfaces
+/persona chatter        switch persona and restart the conversation
+/persona reload         re-scan custom personas
 ```
 
-Each persona module defines `build_system_prompt(ctx)` — composed from the shared blocks and builders in `kiui/agent/personas/common.py` — and a `TOOLS` whitelist that controls which tools are advertised to the model. This is capability guidance, not a security boundary: interactive commands such as `!<command>` and `/skills` remain available to the user and are governed by the normal permission and safety checks.
+Persona identity and a content digest are stored with sessions, so resume warns when a custom persona changed. Tool selection controls what is advertised to the model; normal permission checks still apply.

@@ -34,7 +34,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-import yaml
+from kiui.agent.utils.frontmatter import split_frontmatter
 
 SKILL_DIRS = (".kia",)
 
@@ -166,45 +166,11 @@ def _parse_skill(raw: str) -> tuple[dict, str] | None:
     Requires a leading YAML frontmatter block delimited by ``---`` lines.
     Field-level specification validation is performed by :func:`validate_skill`.
     """
-    frontmatter, body = _split_frontmatter(raw)
+    frontmatter, body = split_frontmatter(raw)
     if frontmatter is None:
         return None
 
     return frontmatter, body.strip()
-
-
-def _split_frontmatter(raw: str) -> tuple[dict | None, str]:
-    """Split raw SKILL.md text into (frontmatter dict, body).
-
-    The frontmatter is a YAML block bounded by a leading ``---`` line and a
-    following ``---`` line. Returns (None, raw) when no valid frontmatter block
-    is present or the YAML does not parse to a mapping.
-    """
-    # Normalize newlines; allow an optional BOM / leading whitespace-only lines.
-    text = raw.lstrip("\ufeff")
-    lines = text.splitlines()
-
-    # First non-empty line must be the opening fence.
-    idx = 0
-    while idx < len(lines) and not lines[idx].strip():
-        idx += 1
-    if idx >= len(lines) or lines[idx].strip() != "---":
-        return None, raw
-
-    # Find the closing fence.
-    for end in range(idx + 1, len(lines)):
-        if lines[end].strip() == "---":
-            yaml_text = "\n".join(lines[idx + 1 : end])
-            body = "\n".join(lines[end + 1 :])
-            try:
-                data = yaml.safe_load(yaml_text)
-            except yaml.YAMLError:
-                return None, raw
-            if not isinstance(data, dict):
-                return None, raw
-            return data, body
-
-    return None, raw  # no closing fence
 
 
 def validate_skill(name: str, frontmatter: dict) -> list[str]:
