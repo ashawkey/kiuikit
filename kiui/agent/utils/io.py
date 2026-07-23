@@ -163,11 +163,14 @@ class InputBroker:
         self._notify(listeners)
         return item
 
-    def get_nowait(self) -> UserSubmission:
+    def get_nowait(self, submission_id: str | None = None) -> UserSubmission:
+        """Consume the pending submission, optionally only when its ID matches."""
         with self._lock:
-            if self._submission is None:
-                raise queue.Empty
             item = self._submission
+            if item is None or (
+                submission_id is not None and item.id != submission_id
+            ):
+                raise queue.Empty
             self._submission = None
             self.events.publish("pending_cleared", id=item.id, reason="consumed")
             listeners = tuple(self._listeners)

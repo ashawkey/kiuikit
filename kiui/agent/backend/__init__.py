@@ -123,6 +123,10 @@ def _strip_at_marks(query: str) -> str:
     return _AT_PATH_RE.sub(r"\1", query)
 
 
+def _is_local_query(query: str) -> bool:
+    return query.lower() in ("exit", "quit") or query.startswith(("!", "/"))
+
+
 class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
     INITIAL_BACKOFF = 1.0   # seconds
     MAX_BACKOFF = 64.0      # seconds
@@ -763,6 +767,30 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 msg += f" (truncated to {MAX_GREP_MATCHES})"
         self.console.tool_result(msg, success=True)
 
+    def _inject_pending_steer(self) -> bool:
+        """Add pending conversational input before the next agentic iteration."""
+        if self.input_broker is None:
+            return False
+
+        submission = self.input_broker.submission
+        if submission is None:
+            return False
+        query = _strip_at_marks(submission.text.strip())
+        if not query or _is_local_query(query):
+            return False
+        try:
+            submission = self.input_broker.get_nowait(submission.id)
+        except queue.Empty:
+            return False
+
+        self.console.user_input(
+            query,
+            source=submission.source,
+            submission_id=submission.id,
+        )
+        self.context.add({"role": "user", "content": query})
+        return True
+
     def get_response(self):
         """Process the context and update the current response.
 
@@ -825,6 +853,8 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 self.console.system("Turn interrupted.")
                 self._last_interrupted = True
                 return None
+
+            self._inject_pending_steer()
 
             if self.verbose:
                 iter_elapsed = time.monotonic() - t_iter

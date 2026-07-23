@@ -21,6 +21,7 @@ from kiui.agent.context import (
     tool_result_char_budget,
 )
 from kiui.agent.utils.interrupt import RequestInterrupted
+from kiui.agent.utils.io import EventHub, InputBroker
 from kiui.agent.permissions import PermissionController, PermissionMode
 from kiui.agent.tools import ToolExecutor
 
@@ -184,6 +185,120 @@ def test_large_tool_result_is_persisted_before_context(tmp_path):
     assert artifact.read_text() == result_text
     if os.name == "posix":  # Windows has no Unix permission bits
         assert artifact.stat().st_mode & 0o077 == 0
+
+
+def test_pending_message_steers_next_agentic_iteration():
+    context = ContextManager("system")
+    context.add({"role": "user", "content": "start"})
+    broker = InputBroker(EventHub())
+    user_inputs = []
+    request_contexts = []
+    tool_call = {
+        "id": "call-1",
+        "type": "function",
+        "function": {"name": "read_file", "arguments": '{"file": "a.py"}'},
+    }
+    responses = [
+        {"role": "assistant", "content": None, "tool_calls": [tool_call]},
+        {"role": "assistant", "content": "done"},
+    ]
+
+    def call_api():
+        request_contexts.append(list(context.messages))
+        message = responses.pop(0)
+        context.add(message)
+        return message
+
+    def execute_tool_calls(_tool_calls):
+        context.add({
+            "role": "tool",
+            "tool_call_id": "call-1",
+            "content": "file contents",
+        })
+        broker.submit("use @config.py instead", source="web")
+        return False
+
+    console = NS(
+        response=lambda text: None,
+        user_input=lambda text, **kwargs: user_inputs.append((text, kwargs)),
+    )
+    agent = NS(
+        verbose=False,
+        stream=False,
+        context=context,
+        input_broker=broker,
+        console=console,
+        call_api=call_api,
+        execute_tool_calls=execute_tool_calls,
+        _last_interrupted=False,
+        round_id=4,
+    )
+    agent._inject_pending_steer = lambda: LLMAgent._inject_pending_steer(agent)
+
+    assert LLMAgent.get_response(agent) == "done"
+    assert [message["role"] for message in request_contexts[1]] == [
+        "user", "assistant", "tool", "user",
+    ]
+    assert request_contexts[1][-1]["content"] == "use config.py instead"
+    assert broker.submission is None
+    assert user_inputs[0][0] == "use config.py instead"
+    assert user_inputs[0][1]["source"] == "web"
+    assert agent.round_id == 4
+
+
+@pytest.mark.parametrize("query", ["/help", "!git status", "exit", "quit"])
+def test_pending_local_query_waits_for_round_completion(query):
+    broker = InputBroker(EventHub())
+    submission = broker.submit(query)
+    context = ContextManager("system")
+    agent = NS(
+        input_broker=broker,
+        context=context,
+        console=NS(user_input=lambda *args, **kwargs: None),
+    )
+
+    assert not LLMAgent._inject_pending_steer(agent)
+    assert broker.submission == submission
+    assert context.messages == []
+
+
+def test_interrupted_tool_iteration_does_not_consume_pending_message():
+    context = ContextManager("system")
+    context.add({"role": "user", "content": "start"})
+    broker = InputBroker(EventHub())
+    pending = None
+    tool_call = {
+        "id": "call-1",
+        "type": "function",
+        "function": {"name": "read_file", "arguments": '{"file": "a.py"}'},
+    }
+
+    def call_api():
+        message = {"role": "assistant", "content": None, "tool_calls": [tool_call]}
+        context.add(message)
+        return message
+
+    def execute_tool_calls(_tool_calls):
+        nonlocal pending
+        pending = broker.submit("steer later")
+        return True
+
+    agent = NS(
+        verbose=False,
+        stream=False,
+        context=context,
+        input_broker=broker,
+        console=NS(response=lambda text: None, system=lambda text: None),
+        call_api=call_api,
+        execute_tool_calls=execute_tool_calls,
+        _pending_images=[],
+        _last_interrupted=False,
+    )
+    agent._inject_pending_steer = lambda: LLMAgent._inject_pending_steer(agent)
+
+    assert LLMAgent.get_response(agent) is None
+    assert broker.submission == pending
+    assert agent._last_interrupted
 
 
 def test_call_api_sets_output_limit_and_rejects_truncated_response():

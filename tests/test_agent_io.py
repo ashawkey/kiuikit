@@ -1,5 +1,6 @@
 import asyncio
 import json
+import queue
 import threading
 import time
 from pathlib import Path
@@ -40,6 +41,22 @@ def test_input_broker_accepts_only_one_pending_submission():
         broker.submit("second")
 
     assert broker.get_nowait() == first
+    assert [(e.type, e.data.get("reason")) for e in hub.after(0)] == [
+        ("pending_set", None),
+        ("pending_cleared", "consumed"),
+    ]
+
+
+def test_input_broker_consumes_only_the_expected_submission():
+    hub = EventHub()
+    broker = InputBroker(hub)
+    first = broker.submit("first")
+
+    with pytest.raises(queue.Empty):
+        broker.get_nowait("different-id")
+    assert broker.submission == first
+    assert broker.get_nowait(first.id) == first
+    assert broker.submission is None
     assert [(e.type, e.data.get("reason")) for e in hub.after(0)] == [
         ("pending_set", None),
         ("pending_cleared", "consumed"),
