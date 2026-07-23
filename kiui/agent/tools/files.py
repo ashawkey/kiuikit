@@ -6,6 +6,8 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+import pathspec
+
 from .constants import MAX_READ_LINES, MAX_TOOL_OUTPUT_CHARS, SKIP_DIRS as _SKIP_DIRS
 from .formatting import truncate_text_output
 
@@ -373,29 +375,34 @@ class FileToolsMixin:
         if not base.is_dir():
             return {"error": f"Not a directory: {path}", "success": False}
 
-        matcher = None
+        ignore_spec = None
         if not all:
-            from kiui.agent.tools.gitignore import build_gitignore_matcher
-            matcher = build_gitignore_matcher(base)
+            try:
+                lines = (base / ".gitignore").read_text(
+                    encoding="utf-8", errors="ignore"
+                ).splitlines()
+            except OSError:
+                lines = []
+            ignore_spec = pathspec.PathSpec.from_lines("gitwildmatch", lines)
 
         try:
-            entries = sorted(base.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))
+            with os.scandir(base) as scan:
+                entries = [(entry, entry.is_dir()) for entry in scan]
+            entries.sort(key=lambda item: (not item[1], item[0].name.lower()))
         except OSError as e:
             return {"error": f"Cannot list directory: {e}", "success": False}
 
         dirs: list[str] = []
         files: list[str] = []
         skipped = 0
-        for entry in entries:
-            is_dir = entry.is_dir()
+        for entry, is_dir in entries:
             if not all:
-                if entry.name.startswith("."):
-                    skipped += 1
-                    continue
-                if is_dir and entry.name in _SKIP_DIRS:
-                    skipped += 1
-                    continue
-                if matcher is not None and matcher.is_ignored(entry.resolve(), is_dir):
+                ignored_path = entry.name + ("/" if is_dir else "")
+                if (
+                    entry.name.startswith(".")
+                    or (is_dir and entry.name in _SKIP_DIRS)
+                    or ignore_spec.match_file(ignored_path)
+                ):
                     skipped += 1
                     continue
             if is_dir:

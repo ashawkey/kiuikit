@@ -1,53 +1,46 @@
 ---
 name: code-review
-description: Review source code, patches, pull requests, diffs, commits, and implementation designs for bugs, regressions, security risks, inefficiency, maintainability problems, incorrect comments, and code quality. Use whenever the user asks to review, audit, inspect, critique, or assess code or a code change.
+description: Find actionable bugs, regressions, security risks, performance problems, and maintainability issues in source code, diffs, commits, pull requests, or implementation designs. Use when the user asks for a code review, audit, critique, inspection, or risk assessment.
 ---
+
 # Code Review
 
-Perform a correctness-first review and report only the information most useful to the user.
+Review for concrete risk, not stylistic preference. Unless the user asks for changes, inspect and report without modifying code.
 
-## Review process
+## Workflow
 
-1. Establish the scope from the request and repository state. Inspect the relevant diff, surrounding code, callers, tests, configuration, and contracts before drawing conclusions. Do not guess from an isolated snippet when context is available.
-2. Look for concrete, user-impacting issues:
-   - functional bugs, regressions, edge cases, invalid assumptions, and error-handling failures;
+1. Establish the review target and baseline from the request and repository state. If scope is ambiguous, identify the smallest likely diff and state the assumption.
+2. Inspect the complete relevant diff plus enough surrounding context to understand contracts and behavior: callers, data flow, tests, configuration, and platform constraints. Do not infer behavior from an isolated hunk when the repository can answer it.
+3. Look for user-impacting problems:
+   - incorrect behavior, regressions, edge cases, and broken error handling;
    - security, privacy, concurrency, resource-lifetime, and data-integrity risks;
-   - unnecessary work, poor algorithms, repeated I/O, excessive allocation, or other meaningful inefficiency;
-   - brittle APIs, excessive coupling, misplaced responsibilities, duplication, and designs that make correct maintenance difficult;
-   - missing or inadequate tests for important changed behavior.
-3. Check clarity and accuracy:
-   - ensure names, types, control flow, and abstractions communicate the actual behavior;
-   - verify comments and documentation against the code; flag stale, misleading, redundant, or unclear comments;
-   - identify confusing or needlessly complex code, but avoid subjective style complaints already handled by formatters or linters.
-4. Validate each finding. Trace the execution path and state the conditions that trigger it. Use focused tests or static checks when practical. Do not present speculation as a confirmed bug.
-5. Prioritize ruthlessly. Prefer a few high-confidence, actionable findings over an exhaustive list. Do not bury important defects under minor cleanup suggestions.
+   - meaningful algorithmic, allocation, or I/O inefficiency;
+   - brittle interfaces, misplaced responsibility, duplication, or complexity that makes defects likely;
+   - missing tests for important changed behavior;
+   - comments or documentation that no longer match the code.
+4. Validate every candidate finding. Trace a concrete failure path and run the smallest useful test or static check when practical. Separate confirmed defects from concerns that need evidence.
+5. Keep only findings that are specific, actionable, and worth the user's attention. Omit formatter issues, cosmetic preferences, generic advice, and speculative future concerns.
 
-## Finding criteria
+## Findings
 
-Report a finding only when it is specific and actionable. For each finding, include:
+For each finding, provide:
 
 - severity: `Critical`, `High`, `Medium`, or `Low`;
-- a concise title;
-- the exact file and line or smallest relevant range;
-- why it matters and the concrete failure or maintenance cost;
+- a concise title and exact `file:line` location;
+- the triggering conditions and resulting impact;
 - a brief fix direction when it is not obvious.
 
-Use severity according to impact, not ease of repair:
+Assign severity by impact:
 
 - `Critical`: likely catastrophic security, data-loss, or broad outage risk.
-- `High`: serious correctness/security issue affecting common or important paths.
-- `Medium`: real defect or significant design/performance issue under plausible conditions.
-- `Low`: limited-impact defect or worthwhile maintainability problem. Omit cosmetic nits by default.
+- `High`: serious correctness or security failure on an important path.
+- `Medium`: real defect or significant design/performance problem under plausible conditions.
+- `Low`: limited-impact defect or substantial maintainability issue.
 
-If evidence is incomplete, label the concern as needing verification and say what evidence is missing. Do not invent file paths, line numbers, behavior, or test results.
+Do not invent paths, line numbers, behavior, or test results. Label incomplete evidence explicitly and say what would verify it.
 
-## Output format
+## Output
 
-Keep the final review concise and accurate:
+Start with **Findings**, ordered by severity and impact; usually include no more than five. End with a brief **Summary** of overall risk and the most important next step.
 
-1. Start with **Findings**, ordered by severity and then impact. Usually report no more than five; include more only when independently important.
-2. Write each finding as a compact paragraph or bullet with its severity and location. Include enough evidence to understand the issue, not a full investigation log.
-3. End with a one- or two-sentence **Summary** describing overall risk and the most important next step.
-4. If no actionable findings exist, say so explicitly and briefly mention any material review gaps or untested risk.
-
-Do not output every detail inspected, long walkthroughs, generic praise, or a large list of minor suggestions. Offer to expand on findings if the user wants details. Unless explicitly asked, review the code without modifying it.
+If there are no actionable findings, say so and mention any material scope or verification gap. Report only checks actually run; omit investigation logs, generic praise, and minor suggestion lists.

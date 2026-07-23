@@ -334,7 +334,7 @@ The agent has access to the following tools:
 | `ls` | List a directory's immediate contents (gitignore-aware) |
 | `exec_command` | Run foreground shell commands with real-time streaming output |
 | `glob_files` | Find files matching a glob pattern (gitignore-aware) |
-| `grep_files` | Search file contents using regex (prefers ripgrep; gitignore-aware) |
+| `grep_files` | Search file contents using ripgrep regex (gitignore-aware) |
 | `web_search` | Search the web via DuckDuckGo |
 | `web_fetch` | Fetch and parse content from a URL |
 | `remove_file` | Remove a file or directory |

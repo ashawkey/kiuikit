@@ -2,18 +2,25 @@
 
 import json
 import locale
-import re
+import os
+import queue
 import shutil
 import subprocess
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
+import pathspec
+
 from .constants import (
+    GLOB_TIMEOUT_SECONDS,
     MAX_GLOB_RESULTS,
     MAX_GREP_MATCHES,
     MAX_TOOL_OUTPUT_CHARS,
     SKIP_DIRS as _SKIP_DIRS,
 )
+from .process_util import _terminate_process
 
 
 def _decode_bytes(b: bytes | None) -> str:
@@ -57,13 +64,6 @@ class SearchToolsMixin:
         base = self._resolve_path(base_dir or ".")
         if not base.is_dir():
             return {"error": f"Not a directory: {base}", "success": False}
-
-        matcher = None
-        if not include_ignored:
-            from kiui.agent.tools.gitignore import build_gitignore_matcher
-            matcher = build_gitignore_matcher(base)
-        base_resolved = base.resolve()
-
         if not recursive:
             if "**" in pattern:
                 return {
@@ -71,37 +71,185 @@ class SearchToolsMixin:
                     "Use recursive=True for recursive globbing, or remove '**' for a flat search.",
                     "success": False,
                 }
-            iterator = base.glob(pattern)
-        elif "**" in pattern:
-            iterator = base.glob(pattern)
-        else:
-            iterator = base.rglob(pattern)
+            return self._glob_flat(pattern, base, include_ignored)
+        if not shutil.which("rg"):
+            return {
+                "error": "glob_files requires ripgrep (rg). Install ripgrep and retry.",
+                "success": False,
+            }
+        return self._glob_ripgrep(pattern, base, include_ignored)
 
-        matches = []
-        truncated = False
-        for p in iterator:
-            if any(part in _SKIP_DIRS for part in p.parts):
-                continue
-            if matcher is not None:
-                try:
-                    is_dir = p.is_dir()
-                except OSError:
-                    is_dir = False
-                if matcher.is_ignored((base_resolved / p.relative_to(base)), is_dir):
-                    continue
-            # Stop once one match beyond the cap is seen, so an exact-cap result
-            # (with no further matches) is not falsely flagged as truncated.
-            if len(matches) >= MAX_GLOB_RESULTS:
-                truncated = True
-                break
-            matches.append(str(p.relative_to(base)))
+    def _glob_spec(self, pattern: str) -> pathspec.PathSpec:
+        if pattern.startswith("!"):
+            pattern = "\\" + pattern
+        return pathspec.PathSpec.from_lines("gitwildmatch", [pattern])
 
+    def _glob_result(self, matches: list[str], truncated: bool) -> dict[str, Any]:
         matches.sort()
         return _build_search_result(
             matches,
             truncated,
             "Use a narrower glob pattern or base_dir.",
         )
+
+    def _glob_flat(self, pattern: str, base: Path, include_ignored: bool) -> dict[str, Any]:
+        ignore_spec = None
+        if not include_ignored:
+            try:
+                lines = (base / ".gitignore").read_text(
+                    encoding="utf-8", errors="ignore"
+                ).splitlines()
+            except OSError:
+                lines = []
+            ignore_spec = pathspec.PathSpec.from_lines("gitwildmatch", lines)
+
+        spec = self._glob_spec(pattern)
+        matches = []
+        truncated = False
+        deadline = time.monotonic() + GLOB_TIMEOUT_SECONDS
+        try:
+            entries = os.scandir(base)
+        except OSError as e:
+            return {"error": f"Cannot scan directory: {e}", "success": False}
+        with entries:
+            for entry in entries:
+                if self.cancellation is not None and self.cancellation.cancelled:
+                    return {"error": "Glob search interrupted.", "success": False, "interrupted": True}
+                if time.monotonic() >= deadline:
+                    return {
+                        "error": f"Glob search timed out after {GLOB_TIMEOUT_SECONDS}s. Use a narrower pattern or base_dir.",
+                        "success": False,
+                    }
+                if entry.name in _SKIP_DIRS:
+                    continue
+                try:
+                    if not entry.is_file(follow_symlinks=True):
+                        continue
+                except OSError:
+                    continue
+                if ignore_spec is not None and ignore_spec.match_file(entry.name):
+                    continue
+                if not spec.match_file(entry.name):
+                    continue
+                if len(matches) >= MAX_GLOB_RESULTS:
+                    truncated = True
+                    break
+                matches.append(entry.name)
+        return self._glob_result(matches, truncated)
+
+    def _glob_ripgrep(self, pattern: str, base: Path, include_ignored: bool) -> dict[str, Any]:
+        cmd = ["rg", "--files", "--null", "--hidden", "--no-ignore-parent"]
+        if include_ignored:
+            cmd.append("--no-ignore")
+        for directory in _SKIP_DIRS:
+            cmd.extend(["--glob", f"!**/{directory}/**"])
+        match_spec = self._glob_spec(pattern)
+
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=base,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                start_new_session=os.name != "nt",
+                creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0),
+            )
+        except FileNotFoundError:
+            return {
+                "error": "glob_files requires ripgrep (rg). Install ripgrep and retry.",
+                "success": False,
+            }
+
+        output: queue.Queue[str | None] = queue.Queue(maxsize=256)
+        stop_reader = threading.Event()
+
+        def emit(value: str | None) -> bool:
+            while not stop_reader.is_set():
+                try:
+                    output.put(value, timeout=0.05)
+                    return True
+                except queue.Full:
+                    pass
+            return False
+
+        def read_stdout() -> None:
+            pending = b""
+            while not stop_reader.is_set():
+                chunk = proc.stdout.read(8192)
+                if not chunk:
+                    break
+                fields = (pending + chunk).split(b"\0")
+                pending = fields.pop()
+                for field in fields:
+                    if not emit(os.fsdecode(field)):
+                        return
+            if pending:
+                emit(os.fsdecode(pending))
+            emit(None)
+
+        stderr_parts: list[bytes] = []
+        stderr_size = 0
+
+        def read_stderr() -> None:
+            nonlocal stderr_size
+            while chunk := proc.stderr.read(8192):
+                if stderr_size < MAX_TOOL_OUTPUT_CHARS:
+                    stderr_parts.append(chunk)
+                    stderr_size += len(chunk)
+
+        reader = threading.Thread(target=read_stdout, daemon=True)
+        error_reader = threading.Thread(target=read_stderr, daemon=True)
+        reader.start()
+        error_reader.start()
+        matches = []
+        truncated = False
+        error = None
+        deadline = time.monotonic() + GLOB_TIMEOUT_SECONDS
+        try:
+            while True:
+                if self.cancellation is not None and self.cancellation.cancelled:
+                    error = {
+                        "error": "Glob search interrupted.",
+                        "success": False,
+                        "interrupted": True,
+                    }
+                    break
+                if time.monotonic() >= deadline:
+                    error = {
+                        "error": f"Glob search timed out after {GLOB_TIMEOUT_SECONDS}s. Use a narrower pattern or base_dir.",
+                        "success": False,
+                    }
+                    break
+                try:
+                    line = output.get(timeout=0.05)
+                except queue.Empty:
+                    continue
+                if line is None:
+                    break
+                if not match_spec.match_file(line):
+                    continue
+                if len(matches) >= MAX_GLOB_RESULTS:
+                    truncated = True
+                    break
+                matches.append(line)
+        finally:
+            stop_reader.set()
+            if proc.poll() is None:
+                _terminate_process(proc)
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+            reader.join(timeout=1)
+            error_reader.join(timeout=1)
+            stderr = _decode_bytes(b"".join(stderr_parts))
+
+        if error is not None:
+            return error
+        if not truncated and proc.returncode not in (0, 1):
+            return {"error": f"ripgrep error: {stderr.strip()}", "success": False}
+        return self._glob_result(matches, truncated)
 
     def _grep_files(
         self,
@@ -123,9 +271,12 @@ class SearchToolsMixin:
 
         base = self._resolve_path(path or ".")
 
-        if shutil.which("rg"):
-            return self._grep_ripgrep(pattern, base, file_glob, case_insensitive)
-        return self._grep_python(pattern, base, file_glob, case_insensitive)
+        if not shutil.which("rg"):
+            return {
+                "error": "grep_files requires ripgrep (rg). Install ripgrep and retry.",
+                "success": False,
+            }
+        return self._grep_ripgrep(pattern, base, file_glob, case_insensitive)
 
     def _grep_ripgrep(
         self,
@@ -161,7 +312,10 @@ class SearchToolsMixin:
         except subprocess.TimeoutExpired:
             return {"error": "ripgrep timed out after 30s", "success": False}
         except FileNotFoundError:
-            return self._grep_python(pattern, base, file_glob, case_insensitive)
+            return {
+                "error": "grep_files requires ripgrep (rg). Install ripgrep and retry.",
+                "success": False,
+            }
 
         if result.returncode not in (0, 1):  # 1 = no matches
             stderr = _decode_bytes(result.stderr).strip()
@@ -201,64 +355,6 @@ class SearchToolsMixin:
             else:
                 rel = file_str
             matches.append({"file": rel, "line": data["line_number"], "text": text[:200]})
-
-        return _build_search_result(
-            matches,
-            truncated,
-            "Use a narrower regex, path, or file_glob.",
-        )
-
-    def _grep_python(
-        self,
-        pattern: str,
-        base: Path,
-        file_glob: str | None,
-        case_insensitive: bool,
-    ) -> dict[str, Any]:
-        """Pure-Python fallback when ripgrep is not available."""
-        flags = re.IGNORECASE if case_insensitive else 0
-        try:
-            compiled = re.compile(pattern, flags)
-        except re.error as e:
-            return {"error": f"Invalid regex: {e}", "success": False}
-
-        matcher = None
-        base_resolved = base
-        if base.is_dir():
-            from kiui.agent.tools.gitignore import build_gitignore_matcher
-            matcher = build_gitignore_matcher(base)
-            base_resolved = base.resolve()
-
-        def _candidate_files():
-            if base.is_file():
-                yield base
-            else:
-                glob_pat = file_glob or "*"
-                for p in base.rglob(glob_pat):
-                    if not p.is_file() or any(part in _SKIP_DIRS for part in p.parts):
-                        continue
-                    if matcher is not None and matcher.is_ignored((base_resolved / p.relative_to(base)), False):
-                        continue
-                    yield p
-
-        matches = []
-        truncated = False
-        for file_path in _candidate_files():
-            if truncated:
-                break
-            try:
-                text = file_path.read_text(encoding="utf-8", errors="strict")
-            except (UnicodeDecodeError, OSError):
-                continue
-            rel = str(file_path.relative_to(base)) if not base.is_file() else str(file_path)
-            for lineno, line in enumerate(text.splitlines(), 1):
-                if compiled.search(line):
-                    # Stop once a match beyond the cap is seen, so an exact-cap
-                    # result is not falsely flagged as truncated.
-                    if len(matches) >= MAX_GREP_MATCHES:
-                        truncated = True
-                        break
-                    matches.append({"file": rel, "line": lineno, "text": line[:200]})
 
         return _build_search_result(
             matches,

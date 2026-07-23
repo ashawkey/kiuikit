@@ -21,6 +21,7 @@ time instead of silently shadowing.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Any, Callable
 
 from .schemas import BUILTIN_TOOL_SCHEMAS
@@ -28,6 +29,8 @@ from .schemas import BUILTIN_TOOL_SCHEMAS
 # Tool source marker for built-in (executor-owned) tools; skill tools use their
 # skill name as the source.
 BUILTIN_SOURCE = "builtin"
+_TOOL_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+_VALID_PERMISSIONS = frozenset({"safe", "risky"})
 
 # Advertising gates. A gated tool is advertised only when its condition holds:
 #   "image"         -> the model supports image input
@@ -43,8 +46,9 @@ class ToolSpec:
     """A single callable tool exposed to the model.
 
     ``handler`` is invoked as ``handler(executor, **arguments)`` and returns a
-    result dict. ``permission`` is ``"safe"`` (never prompts) or ``"risky"``
-    (prompts in default mode). ``source`` is :data:`BUILTIN_SOURCE` for built-in
+    result dict. ``permission`` is ``"safe"`` (no default-mode prompt) or
+    ``"risky"`` (prompts in default mode); strict mode prompts for both.
+    ``source`` is :data:`BUILTIN_SOURCE` for built-in
     tools or the owning skill name. ``gate`` is one of the ``GATE_*`` constants
     or ``None``.
     """
@@ -94,6 +98,45 @@ def _builtin_handler(method_name: str) -> Callable[..., dict[str, Any]]:
     return handler
 
 
+def validate_tool_schema(schema: Any, context: str = "Tool") -> str:
+    """Validate kia's supported OpenAI function-schema contract and return its name.
+
+    This checks the structure kia relies on, not the complete JSON Schema
+    specification. Providers may support additional JSON Schema keywords.
+    """
+    if not isinstance(schema, dict) or schema.get("type") != "function":
+        raise ValueError(f"{context} schema must be a function schema.")
+    function = schema.get("function")
+    if not isinstance(function, dict):
+        raise ValueError(f"{context} schema.function must be a dictionary.")
+    name = function.get("name")
+    if not isinstance(name, str) or _TOOL_NAME_RE.fullmatch(name) is None:
+        raise ValueError(
+            f"{context} tool name must be 1-64 letters, digits, underscores, or hyphens."
+        )
+    description = function.get("description")
+    if not isinstance(description, str) or not description.strip():
+        raise ValueError(f"{context} tool '{name}' must have a non-empty description.")
+    parameters = function.get("parameters")
+    if not isinstance(parameters, dict) or parameters.get("type") != "object":
+        raise ValueError(f"{context} tool '{name}' parameters must be an object schema.")
+    properties = parameters.get("properties")
+    if not isinstance(properties, dict):
+        raise ValueError(
+            f"{context} tool '{name}' parameters.properties must be a dictionary."
+        )
+    required = parameters.get("required", [])
+    if (
+        not isinstance(required, list)
+        or any(not isinstance(item, str) for item in required)
+        or any(item not in properties for item in required)
+    ):
+        raise ValueError(
+            f"{context} tool '{name}' required must list names from properties."
+        )
+    return name
+
+
 def build_builtin_specs() -> dict[str, ToolSpec]:
     """Build the built-in ToolSpec table (name -> spec)."""
     specs: dict[str, ToolSpec] = {}
@@ -135,9 +178,27 @@ class ToolRegistry:
         already-registered skill's tool aborts the whole registration before any
         entry is committed, so a skill is never left partially registered.
         """
+        if not isinstance(entries, list):
+            raise ValueError(f"Skill '{skill}' TOOLS must be a list.")
+
         prepared: dict[str, ToolSpec] = {}
-        for entry in entries:
-            name = entry["schema"]["function"]["name"]
+        for index, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                raise ValueError(f"Skill '{skill}' TOOLS[{index}] must be a dictionary.")
+            handler = entry.get("run")
+            if not callable(handler):
+                raise ValueError(f"Skill '{skill}' TOOLS[{index}] run must be callable.")
+            permission = entry.get("permission", "risky")
+            if permission not in _VALID_PERMISSIONS:
+                raise ValueError(
+                    f"Skill '{skill}' TOOLS[{index}] permission must be 'safe' or 'risky'."
+                )
+
+            schema = entry.get("schema")
+            name = validate_tool_schema(schema, f"Skill '{skill}' TOOLS[{index}]")
+            if name in prepared:
+                raise ValueError(f"Skill '{skill}' defines tool '{name}' more than once.")
+
             existing = self._specs.get(name)
             if existing is not None and existing.source != skill:
                 where = (
@@ -150,9 +211,9 @@ class ToolRegistry:
                 )
             prepared[name] = ToolSpec(
                 name=name,
-                schema=entry["schema"],
-                handler=entry["run"],
-                permission=entry.get("permission", "risky"),
+                schema=schema,
+                handler=handler,
+                permission=permission,
                 source=skill,
             )
         self._specs.update(prepared)

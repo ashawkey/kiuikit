@@ -3,6 +3,8 @@ and per-session skill load-count tracking (kiui.agent.skills / tools)."""
 
 from pathlib import Path
 
+import pytest
+
 from kiui.agent import skills as skills_module
 from kiui.agent.skills import build_skills_prompt_section, discover_skills
 from kiui.agent.tools import ToolExecutor
@@ -139,8 +141,6 @@ def test_loading_skill_injects_its_tools(tmp_path):
 
 
 def test_skill_tool_cannot_shadow_builtin(tmp_path):
-    import pytest
-
     d = _write_skill(tmp_path, ".kia", "shadow", _valid("shadow"))
     (d / "tools.py").write_text(
         _TOOLS_PY.replace('"name": "ping"', '"name": "read_file"'),
@@ -155,8 +155,6 @@ def test_skill_tool_cannot_shadow_builtin(tmp_path):
 
 
 def test_two_skills_cannot_define_same_tool(tmp_path):
-    import pytest
-
     a = _write_skill(tmp_path, ".kia", "alpha", _valid("alpha"))
     (a / "tools.py").write_text(_TOOLS_PY, encoding="utf-8")
     b = _write_skill(tmp_path, ".kia", "bravo", _valid("bravo"))
@@ -195,6 +193,49 @@ TOOLS = [
         },
     },''',
 )
+
+
+@pytest.mark.parametrize(
+    ("replacement", "message"),
+    [
+        ('"permission": "risk"', "permission must be 'safe' or 'risky'"),
+        ('"run": "ping"', "run must be callable"),
+        ('"description": ""', "non-empty description"),
+        ('"type": "object",\n                    "properties"', "schema must be a function schema"),
+    ],
+)
+def test_skill_tool_definition_is_validated(tmp_path, replacement, message):
+    d = _write_skill(tmp_path, ".kia", "broken", _valid("broken"))
+    if replacement.startswith('"permission"'):
+        tools = _TOOLS_PY.replace('"permission": "safe"', replacement)
+    elif replacement.startswith('"run"'):
+        tools = _TOOLS_PY.replace('"run": ping', replacement)
+    elif replacement.startswith('"description"'):
+        tools = _TOOLS_PY.replace('"description": "Echo a value back."', replacement)
+    else:
+        tools = _TOOLS_PY.replace('"type": "function",\n            "function"', replacement)
+    (d / "tools.py").write_text(tools, encoding="utf-8")
+    ex = ToolExecutor(work_dir=str(tmp_path), skills=discover_skills(tmp_path))
+
+    result = ex._load_skill("broken")
+
+    assert not result["success"]
+    assert message in result["error"]
+    assert "broken" not in ex._loaded_skills
+    assert ex.skill_tool_schemas() == []
+
+
+def test_skill_cannot_define_duplicate_tool_names(tmp_path):
+    d = _write_skill(tmp_path, ".kia", "duplicate", _valid("duplicate"))
+    duplicate = _TOOLS_PY.replace("\n]\n", "\n] * 2\n")
+    (d / "tools.py").write_text(duplicate, encoding="utf-8")
+    ex = ToolExecutor(work_dir=str(tmp_path), skills=discover_skills(tmp_path))
+
+    result = ex._load_skill("duplicate")
+
+    assert not result["success"]
+    assert "more than once" in result["error"]
+    assert ex.skill_tool_schemas() == []
 
 
 def test_load_skill_with_broken_tools_fails_atomically(tmp_path):

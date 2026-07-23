@@ -285,11 +285,8 @@ def load_skill_tools(skill_dir: str | Path) -> list[dict[str, Any]]:
     spec.loader.exec_module(module)
 
     entries = getattr(module, "TOOLS", None)
-    if not entries:
+    if entries is None:
         return []
-    for entry in entries:
-        if "schema" not in entry or "run" not in entry:
-            raise ValueError(
-                f"skill tools.py at {skill_dir} has an entry missing 'schema' or 'run'"
-            )
-    return list(entries)
+    if not isinstance(entries, list):
+        raise ValueError(f"skill tools.py at {skill_dir} must define TOOLS as a list")
+    return entries

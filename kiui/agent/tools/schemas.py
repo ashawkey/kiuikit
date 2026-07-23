@@ -154,10 +154,10 @@ _BUILTIN_TOOL_SCHEMAS_LIST = [
             "function": {
                 "name": "glob_files",
                 "description": (
-                    "Find files matching a glob pattern. Preferred over exec_command with find. "
-                    "Searches recursively by default. Respects .gitignore and skips noise dirs. "
-                    f"Set recursive=false to match only in the immediate directory. Returns at most "
-                    f"{MAX_GLOB_RESULTS:,} results."
+                    "Find files matching a glob pattern. Prefer this to exec_command with find. "
+                    "Recursive by default; use the narrowest known base_dir and avoid ambiguous workspace-wide globs. "
+                    "Requires ripgrep for recursive searches. Respects .gitignore and skips noise dirs. "
+                    f"Set recursive=false for a flat search. Returns at most {MAX_GLOB_RESULTS:,} results."
                 ),
                 "parameters": {
                     "type": "object",
@@ -176,7 +176,7 @@ _BUILTIN_TOOL_SCHEMAS_LIST = [
             "function": {
                 "name": "grep_files",
                 "description": (
-                    f"Search file contents using a regex pattern. Returns at most {MAX_GREP_MATCHES:,} "
+                    f"Search file contents using ripgrep regex. Returns at most {MAX_GREP_MATCHES:,} "
                     "matching lines with file path and line number; each matching line is clipped to "
                     "200 characters."
                 ),

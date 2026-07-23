@@ -1,9 +1,9 @@
-"""Tests for the core file tools: apply_edit, multi_edit, ls, and
-gitignore-aware glob/grep (kiui.agent.tools / kiui.agent.tools.gitignore)."""
+"""Tests for core file, glob, grep, and process tools."""
 
 import base64
 import os
 import shlex
+import shutil
 import sys
 import threading
 import time
@@ -13,6 +13,7 @@ import pytest
 
 import kiui.agent.tools as tools
 import kiui.agent.tools.commands as command_tools
+import kiui.agent.tools.search as search_tools
 from kiui.agent.skills import load_skill_tools
 from kiui.agent.tools import (
     ToolExecutor,
@@ -21,7 +22,6 @@ from kiui.agent.tools import (
     find_match,
     format_tool_result,
 )
-from kiui.agent.tools.gitignore import build_gitignore_matcher
 from kiui.agent.permissions import SafetyGuard
 from kiui.agent.utils.io import CancellationToken, EventHub
 
@@ -51,33 +51,70 @@ def _executor_with_monitor(tmp_path):
 
 # ----- apply_edit ----------------------------------------------------------
 
-# ----- gitignore matcher ---------------------------------------------------
-
 @pytest.fixture
-def repo(tmp_path):
-    (tmp_path / ".gitignore").write_text("*.log\nbuild/\n/secret.txt\n")
-    (tmp_path / "a.log").write_text("x")
-    (tmp_path / "a.py").write_text("x")
-    (tmp_path / "secret.txt").write_text("x")
-    (tmp_path / "build").mkdir()
-    (tmp_path / "build" / "out.o").write_text("x")
-    (tmp_path / "sub").mkdir()
-    (tmp_path / "sub" / "b.log").write_text("x")
-    (tmp_path / "sub" / "secret.txt").write_text("x")  # anchored rule → NOT ignored
+def glob_tree(tmp_path):
+    (tmp_path / "a.py").write_text("")
+    (tmp_path / ".hidden.py").write_text("")
+    (tmp_path / "note.txt").write_text("")
+    (tmp_path / "!important").write_text("")
+    (tmp_path / "ignored.py").write_text("")
+    (tmp_path / ".gitignore").write_text("ignored.py\nignored/\n")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "b.py").write_text("")
+    (tmp_path / "src" / "nested-ignored.py").write_text("")
+    (tmp_path / "src" / ".gitignore").write_text("nested-ignored.py\n")
+    (tmp_path / "ignored").mkdir()
+    (tmp_path / "ignored" / "c.py").write_text("")
+    (tmp_path / "node_modules").mkdir()
+    (tmp_path / "node_modules" / "d.py").write_text("")
     return tmp_path
 
 
-def _assert_gitignore(m, repo):
-    assert m.is_ignored((repo / "a.log").resolve(), False)
-    assert not m.is_ignored((repo / "a.py").resolve(), False)
-    assert m.is_ignored((repo / "secret.txt").resolve(), False)
-    assert m.is_ignored((repo / "sub" / "b.log").resolve(), False)
-    assert m.is_ignored((repo / "build").resolve(), True)
-    assert m.is_ignored((repo / "build" / "out.o").resolve(), False)
-    assert not m.is_ignored((repo / "sub" / "secret.txt").resolve(), False)
+def _assert_glob_semantics(te):
+    result = te._glob_files("*.py")
+    assert result["success"]
+    assert result["matches"] == [".hidden.py", "a.py", "src/b.py"]
+    assert te._glob_files("src/**/*.py")["matches"] == ["src/b.py"]
+    assert te._glob_files("!important")["matches"] == ["!important"]
+    assert te._glob_files("*.py", recursive=False)["matches"] == [".hidden.py", "a.py"]
+    assert "ignored.py" in te._glob_files("*.py", include_ignored=True)["matches"]
+    assert "ignored/c.py" in te._glob_files("*.py", include_ignored=True)["matches"]
+    assert "node_modules/d.py" not in te._glob_files("*.py", include_ignored=True)["matches"]
+    assert not te._glob_files("**/*.py", recursive=False)["success"]
 
 
 # ----- file / ls / glob / multi_edit tools --------------------------------
+
+
+def test_glob_ripgrep_semantics(glob_tree):
+    if not shutil.which("rg"):
+        pytest.skip("ripgrep is not installed")
+    _assert_glob_semantics(ToolExecutor(console=_SilentConsole(), work_dir=str(glob_tree)))
+
+
+def test_search_tools_require_ripgrep(glob_tree, monkeypatch):
+    monkeypatch.setattr(search_tools.shutil, "which", lambda _: None)
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(glob_tree))
+    assert "requires ripgrep" in te._glob_files("*.py")["error"]
+    assert "requires ripgrep" in te._grep_files("x")["error"]
+
+
+def test_ls_filters_locally_without_recursive_scan(glob_tree):
+    result = ToolExecutor(console=_SilentConsole(), work_dir=str(glob_tree))._ls()
+    assert result["success"]
+    assert "src/" in result["content"]
+    assert "ignored.py" not in result["content"]
+    assert "ignored/" not in result["content"]
+    assert "node_modules/" not in result["content"]
+
+
+def test_glob_truncates_without_returning_extra_match(tmp_path, monkeypatch):
+    for index in range(4):
+        (tmp_path / f"{index}.txt").write_text("")
+    monkeypatch.setattr(search_tools, "MAX_GLOB_RESULTS", 3)
+    result = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))._glob_files("*.txt")
+    assert result["success"] and result["truncated"]
+    assert len(result["matches"]) == 3
 
 
 def test_relative_paths_resolve_against_work_dir(tmp_path, monkeypatch):
