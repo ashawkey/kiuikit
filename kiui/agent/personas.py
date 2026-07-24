@@ -227,7 +227,10 @@ def _build_project_section(work_dir: str | None) -> str:
 def _build_context_section(work_dir: str | None) -> str:
     cwd = work_dir or str(Path.cwd())
     git_info = _get_git_context(cwd)
-    return f"## Current Context\n- Working Directory: {cwd}\n- Operating System: {platform.system()} {platform.release()}{git_info}"
+    os_line = f"- Operating System: {platform.system()} {platform.release()}"
+    if platform.system() == "Windows":
+        os_line += "\n- Shell: PowerShell"
+    return f"## Current Context\n- Working Directory: {cwd}\n{os_line}{git_info}"
 
 
 def _get_git_context(cwd: str) -> str:
