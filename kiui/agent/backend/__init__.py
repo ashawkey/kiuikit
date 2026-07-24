@@ -645,6 +645,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                     result = self.tool_executor.execute(function_name, function_args)
             exec_elapsed = time.monotonic() - t_exec
             image_url = result.pop("image_url", None)
+            ui_summary = result.pop("_ui_summary", None)
             if image_url and result.get("success"):
                 self._pending_images.append({
                     "file": function_args["file"],
@@ -668,6 +669,8 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 self._display_read_result(result, success)
             elif function_name in ("glob_files", "grep_files"):
                 self._display_search_result(function_name, result, success)
+            elif ui_summary and success:
+                self.console.tool_result(ui_summary, success=True)
             else:
                 self.console.tool_result(format_tool_summary(result_text), success=success)
 
@@ -1210,6 +1213,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 self.changes.close()
             self.provider.close()
             self.tool_executor.shutdown_processes()
+            self.tool_executor.shutdown_tool_resources(clear=True)
             self._print_token_summary(resume=self._session_id if session_saved else None)
 
     def execute(self, query: str, *, manage_operation: bool = True):

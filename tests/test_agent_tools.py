@@ -15,6 +15,7 @@ import kiui.agent.tools as tools
 import kiui.agent.tools.commands as command_tools
 import kiui.agent.tools.search as search_tools
 from kiui.agent.skills import load_skill_tools
+from kiui.agent.bundled_skills.browser import tools as browser_tools
 from kiui.agent.tools import (
     ToolExecutor,
     _human_size,
@@ -47,6 +48,36 @@ def _executor_with_monitor(tmp_path):
     te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
     te.register_skill_tools("monitor", load_skill_tools(_MONITOR_SKILL_DIR))
     return te
+
+
+def test_native_tool_resource_cleanup(tmp_path):
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+    closed = []
+
+    te.register_tool_resource("browser", lambda: closed.append("first"))
+    te.register_tool_resource("browser", lambda: closed.append("second"))
+    assert closed == ["first"]
+
+    te.shutdown_tool_resources(clear=True)
+    assert closed == ["first", "second"]
+    assert te._tool_resource_cleanups == {}
+
+
+def test_browser_connection_reused_for_same_cdp_server(monkeypatch, tmp_path):
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+
+    class Connection:
+        endpoint = "ws://127.0.0.1:9222/devtools/browser/session-id"
+
+    connection = Connection()
+    te._browser_connection = connection
+    monkeypatch.setattr(
+        browser_tools,
+        "_resolve_endpoint",
+        lambda _: pytest.fail("same CDP server should reuse the existing connection"),
+    )
+
+    assert browser_tools._connection(te, "http://127.0.0.1:9222") is connection
 
 
 # ----- apply_edit ----------------------------------------------------------

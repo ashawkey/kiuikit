@@ -60,6 +60,7 @@ class ToolExecutor(
         # Single source of truth for all tools (built-ins seeded; skill tools
         # added/removed as skills load and unload).
         self.registry = ToolRegistry()
+        self._tool_resource_cleanups: dict[str, Any] = {}
         self._init_process_registry()
 
     def execute(self, function_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -80,6 +81,26 @@ class ToolExecutor(
 
     # -- skill-provided tools ----------------------------------------------
 
+    def register_tool_resource(self, name: str, cleanup) -> None:
+        """Register cleanup for session-scoped state owned by a native skill."""
+        previous = self._tool_resource_cleanups.get(name)
+        if previous is not None and previous is not cleanup:
+            previous()
+        self._tool_resource_cleanups[name] = cleanup
+
+    def close_tool_resource(self, name: str) -> None:
+        """Close and forget one native skill's session-scoped resource."""
+        cleanup = self._tool_resource_cleanups.pop(name, None)
+        if cleanup is not None:
+            cleanup()
+
+    def shutdown_tool_resources(self, clear: bool = False) -> None:
+        """Close native skill resources, optionally forgetting their callbacks."""
+        for cleanup in list(self._tool_resource_cleanups.values()):
+            cleanup()
+        if clear:
+            self._tool_resource_cleanups.clear()
+
     def register_skill_tools(self, name: str, entries: list[dict[str, Any]]) -> None:
         """Register the tools contributed by a loaded skill.
 
@@ -89,7 +110,8 @@ class ToolExecutor(
         self.registry.register_skill(name, entries)
 
     def unregister_skill_tools(self, name: str) -> None:
-        """Drop all tools contributed by *name* (used when a skill is removed)."""
+        """Drop a skill's tools and close its session-scoped resource."""
+        self.close_tool_resource(name)
         self.registry.unregister_skill(name)
 
     def skill_tool_schemas(self) -> list[dict[str, Any]]:
@@ -97,5 +119,6 @@ class ToolExecutor(
         return self.registry.skill_tool_schemas()
 
     def reset_skill_tools(self) -> None:
-        """Drop every skill-contributed tool (used on /clear and resume rebuild)."""
+        """Drop skill tools and close their session-scoped resources."""
+        self.shutdown_tool_resources(clear=True)
         self.registry.clear_skill_tools()

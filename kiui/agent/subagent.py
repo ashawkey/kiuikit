@@ -94,3 +94,4 @@ class SubagentManager:
             if agent is not None:
                 agent.provider.close()
                 agent.tool_executor.shutdown_processes()
+                agent.tool_executor.shutdown_tool_resources(clear=True)
