@@ -1191,7 +1191,11 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             self.save_session(self._session_id, reason="initial")
 
         _wd = self.tool_executor._work_dir or os.getcwd()
-        terminal = TerminalInput(history_path=str(self._kia_dir() / "history"), work_dir=_wd)
+        terminal = TerminalInput(
+            history_path=str(self._kia_dir() / "history"),
+            work_dir=_wd,
+            commands=self.COMMAND_HELP,
+        )
 
         try:
             self._run_terminal_loop(terminal)

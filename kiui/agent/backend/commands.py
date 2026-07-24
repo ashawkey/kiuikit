@@ -21,7 +21,30 @@ from kiui.agent.personas import DEFAULT_PERSONA, PersonaInfo, discover_personas,
 
 
 class AgentCommandsMixin:
-    COMMANDS = {"help", "compact", "usage", "exit", "quit", "clear", "resume", "perm", "model", "reasoning", "context", "rewind", "skills", "goal", "system_prompt", "persona", "login", "logout", "auth"}
+    # Single source of truth for slash commands: name → help line.
+    # Drives dispatch (COMMANDS), /help output, and terminal auto-completion.
+    COMMAND_HELP = {
+        "help": "Show this help message",
+        "context": "Show a concise one-line-per-message context log",
+        "system_prompt": "Print the current full system prompt",
+        "compact": "Force context compaction via LLM summarization",
+        "usage": "Show token usage for this session",
+        "model": "Show or switch LLM model (/model <name>)",
+        "login": "Log in to an OAuth provider (/login [provider|model-alias])",
+        "logout": "Remove stored OAuth credentials (/logout [provider|model-alias])",
+        "auth": "Show authentication status (/auth [provider|model-alias])",
+        "reasoning": "Show or set reasoning effort (none|minimal|low|medium|high|xhigh)",
+        "skills": "List skills; /skills <name> to load one, /skills reload to re-scan",
+        "persona": "List/switch personas; /persona reload to re-scan",
+        "goal": "Set a goal the agent auto-iterates toward (/goal <text> | clear)",
+        "perm": "Show or change permission mode (/perm auto|default|strict)",
+        "rewind": "Check out a saved revision and branch from it",
+        "clear": "Clear conversation history (keep system prompt)",
+        "resume": "Save current, then resume a previous session (/resume [session_id])",
+        "exit": "Exit the agent (also: /quit)",
+        "quit": "Exit the agent (alias of /exit)",
+    }
+    COMMANDS = set(COMMAND_HELP)
 
     def _handle_command(self, raw: str) -> bool:
         """Handle a /command.  Returns True if the agent loop should stop."""
@@ -68,29 +91,17 @@ class AgentCommandsMixin:
         return False
 
     def _cmd_help(self):
+        width = max(len(name) for name in self.COMMAND_HELP) + 1  # +1 for the slash
+        lines = ["  [cyan]!<cmd>[/cyan]" + " " * (width - 5) + "— Run a shell command directly (e.g. !ls, !git diff)"]
+        for name, desc in self.COMMAND_HELP.items():
+            if name == "quit":  # alias of /exit, already mentioned there
+                continue
+            lines.append(f"  [cyan]/{name}[/cyan]{' ' * (width - len(name))}— {desc}")
         self.console.print(
             "[bold blue]Available commands:[/bold blue]\n"
             "\n"
-            "  [cyan]!<cmd>[/cyan]       — Run a shell command directly (e.g. !ls, !git diff)\n"
-            "  [cyan]/help[/cyan]        — Show this help message\n"
-            "  [cyan]/context[/cyan]     — Show a concise one-line-per-message context log\n"
-            "  [cyan]/system_prompt[/cyan] — Print the current full system prompt\n"
-            "  [cyan]/compact[/cyan]     — Force context compaction via LLM summarization\n"
-            "  [cyan]/usage[/cyan]       — Show token usage for this session\n"
-            "  [cyan]/model[/cyan]       — Show or switch LLM model (/model <name>)\n"
-            "  [cyan]/login[/cyan]       — Log in to an OAuth provider (/login [provider|model-alias])\n"
-            "  [cyan]/logout[/cyan]      — Remove stored OAuth credentials (/logout [provider|model-alias])\n"
-            "  [cyan]/auth[/cyan]        — Show authentication status (/auth [provider|model-alias])\n"
-            "  [cyan]/reasoning[/cyan]   — Show or set reasoning effort (none|minimal|low|medium|high|xhigh)\n"
-            "  [cyan]/skills[/cyan]      — List skills; /skills <name> to load one, /skills reload to re-scan\n"
-            "  [cyan]/persona[/cyan]     — List/switch personas; /persona reload to re-scan\n"
-            "  [cyan]/goal[/cyan]        — Set a goal the agent auto-iterates toward (/goal <text> | clear)\n"
-            "  [cyan]/perm[/cyan]        — Show or change permission mode (/perm auto|default|strict)\n"
-            "  [cyan]/rewind[/cyan]      — Check out a saved revision and branch from it\n"
-            "  [cyan]/clear[/cyan]       — Clear conversation history (keep system prompt)\n"
-            "  [cyan]/resume[/cyan]      — Save current, then resume a previous session (/resume [session_id])\n"
-            "  [cyan]/exit[/cyan]        — Exit the agent (also: /quit)\n"
-            "\n"
+            + "\n".join(lines)
+            + "\n\n"
             "  Press [bold]Enter[/bold] to send, [bold]Escape → Enter[/bold] for a newline."
         )
 

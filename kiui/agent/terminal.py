@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import os
+import re
 import subprocess
 import threading
 import time
@@ -11,7 +12,7 @@ from typing import AsyncGenerator, Callable, Iterable
 from filelock import FileLock
 from prompt_toolkit import PromptSession
 from prompt_toolkit.application import run_in_terminal
-from prompt_toolkit.completion import Completer, Completion
+from prompt_toolkit.completion import Completer, Completion, merge_completers
 from prompt_toolkit.filters import is_searching
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.key_binding.bindings.search import accept_search
@@ -24,6 +25,35 @@ from prompt_toolkit.validation import Validator, ValidationError
 from pygments.lexers.markup import MarkdownLexer
 
 from kiui.agent.utils.io import sanitize_unicode
+
+
+class SlashCommandCompleter(Completer):
+    """Auto-complete slash commands when the input starts with ``/``.
+
+    Triggers only while the buffer holds a single ``/word`` token (the
+    dispatcher in the backend recognizes commands only at the very start
+    of a message).  Each completion shows the command's help line as its
+    meta text.
+    """
+
+    def __init__(self, commands: dict[str, str]):
+        self._commands = commands
+
+    def get_completions(self, document, complete_event):
+        text = document.text_before_cursor
+        if not re.fullmatch(r"/\w*", text):
+            return
+        partial = text[1:].lower()
+        matches = [name for name in self._commands if name.startswith(partial)]
+        if matches == [partial]:
+            return  # exact and unambiguous — let Enter submit directly
+        for name in matches:
+            yield Completion(
+                text=f"/{name}",
+                start_position=-len(text),
+                display=f"/{name}",
+                display_meta=self._commands[name],
+            )
 
 
 class AtFileCompleter(Completer):
@@ -403,6 +433,7 @@ class TerminalInput:
         history_path: str | Path | None = None,
         prompt_label: str = "> ",
         work_dir: str | Path | None = None,
+        commands: dict[str, str] | None = None,
     ):
         self._prompt_label = prompt_label
         self._last_ctrl_c = 0.0  # timestamp of last Ctrl+C on an empty buffer
@@ -444,7 +475,10 @@ class TerminalInput:
             lexer=PygmentsLexer(MarkdownLexer, sync_from_start=False),
             validator=MessageValidator(self._has_pending),
             validate_while_typing=False,
-            completer=AtFileCompleter(work_dir),
+            completer=merge_completers(
+                ([SlashCommandCompleter(commands)] if commands else [])
+                + [AtFileCompleter(work_dir)]
+            ),
             erase_when_done=True,
             output=output,
         )
