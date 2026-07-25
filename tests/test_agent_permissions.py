@@ -53,6 +53,9 @@ windows_only = pytest.mark.skipif(
         "git restore .",
         "systemctl reboot",
         "zpool destroy tank",
+        # Dangerous command following a substitution with nested quotes must
+        # still be caught (the tokenizer no longer desyncs on the quoting).
+        "user=\"$(awk '/^u:/{print $2}' f)\"; rm -rf /etc",
     ],
 )
 def test_safety_blocks_dangerous_commands(command):
@@ -83,6 +86,11 @@ def test_safety_blocks_dangerous_commands(command):
         "$CMD --all",
         "echo ok > /tmp/log",
         "if true; then echo ok; fi",
+        # Quotes nested inside a command substitution: valid shell that a flat
+        # tokenizer misreads as an unterminated quote (regression guard).
+        "user=\"$(awk -F: '/^u:/ {gsub(/[ \"[:space:]]/, \"\", $2); print $2}' f)\"; echo \"$user\"",
+        "x=$(grep \"a;b\" file); echo \"$x\"",
+        "echo \"$(cat 'weird\\\"name')\"",
     ],
 )
 def test_safety_allows_normal_commands(command):
