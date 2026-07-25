@@ -242,14 +242,16 @@ class SessionMixin:
 
     def _pick_revision(self, candidates: list[dict]) -> str | None:
         """Show the revision table, then select one of its rows."""
-        self.console.table(self._revision_table(candidates))
-        labels = [
-            f"{index:>2}. {revision['id'][:10]}  │  round {revision['round_id']}  │  "
-            f"{_relative_time(revision['created_at'])}  │  {_file_label(revision['files'])}  │  "
-            f"{_shorten(revision['prompt'] or _reason_label(revision['reason']), self.REWIND_PROMPT_WIDTH)}"
-            f"{'  [current]' if revision['current'] else ''}"
-            for index, revision in enumerate(candidates, start=1)
-        ]
+        labels = []
+        for index, revision in enumerate(candidates, start=1):
+            marker = "[current]" if revision["current"] else ""
+            round_label = f"round {revision['round_id']}"
+            prompt = revision["prompt"] or _reason_label(revision["reason"])
+            labels.append(
+                f"{index:>2}. {marker:<9}  {round_label:<9} · {revision['reason']:<11} · "
+                f"{_relative_time(revision['created_at']):<9} · {_file_label(revision['files']):<8} · "
+                f"{_shorten(prompt, self.REWIND_PROMPT_WIDTH)}"
+            )
         picked = self.console.select(message="Pick a session revision", choices=labels)
         if picked is None:
             return None

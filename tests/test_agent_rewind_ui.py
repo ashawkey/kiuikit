@@ -143,6 +143,21 @@ def test_picker_and_preview_describe_the_conversation_and_the_files(tmp_path: Pa
     assert agent.round_id == 1 and agent.replayed == 1
 
 
+def test_picker_options_are_the_listing_and_name_the_revision_type(tmp_path: Path):
+    """No table precedes the picker, so every option must stand on its own."""
+    agent, _, console = _build(tmp_path, [" 3.", "5."])
+    agent.context.messages.append({"role": "user", "content": "one more thought"})
+    agent.save_session(reason="pre-compaction")
+    agent._cmd_rewind("/rewind")
+
+    picker = console.prompts[0]
+    assert "[current]" in picker[0] and "pre-compaction" in picker[0]
+    assert "round 2" in picker[1] and "2 files" in picker[1]
+    assert "make the parser handle floats and drop util" in picker[1]
+    # The options replace the table rather than repeating it.
+    assert "Session revisions" not in console.text
+
+
 def test_conversation_only_rewind_leaves_the_files_alone(tmp_path: Path):
     agent, work, console = _build(tmp_path, [" 2.", "2."])
     agent._cmd_rewind("/rewind")

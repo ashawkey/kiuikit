@@ -200,19 +200,7 @@ Two guards keep an unproductive pass from repeating every round. Before the roun
 
 ## Rewind
 
-The `/rewind` command checks out any saved session revision. Use the picker, a revision ID prefix, or a round number (which selects that round's newest revision); `/rewind list` prints the same table without touching anything.
-
-Every revision is listed with the prompt that produced it, how the message count moved, and how many files it changed, so a revision can be recognised by what was asked for rather than by its ID:
-
-```
-┌───┬─────────────┬───────┬──────────┬────────┬───────┬──────────┬──────────────────────────────────┐
-│ # │ Revision    │ Round │ When     │   Msgs │ Files │ Saved as │ Prompt                           │
-├───┼─────────────┼───────┼──────────┼────────┼───────┼──────────┼──────────────────────────────────┤
-│ 1 │ 282d4292b6  │     3 │ just now │ 5 (+2) │     1 │ round    │ drop util.py, it is unused       │
-│ 2 │ f7b188cf5b  │     2 │ 4m ago   │ 3 (+2) │     2 │ round    │ make the parser handle floats    │
-│ 3 │ a80161e46f  │     1 │ 9m ago   │ 1 (+1) │     2 │ round    │ set up the parser module         │
-└───┴─────────────┴───────┴──────────┴────────┴───────┴──────────┴──────────────────────────────────┘
-```
+The `/rewind` command checks out any saved session revision. Use the picker, a revision ID prefix, or a round number (which selects that round's newest revision); `/rewind list` prints the same revisions as a table without touching anything.
 
 Picking one previews the checkout before anything is applied — the rounds that would be dropped, and every file the move would create, modify, or delete with its line counts. A file edited outside the agent since it was recorded is called out, because a rewind would overwrite it:
 
