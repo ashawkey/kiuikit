@@ -13,28 +13,21 @@ import kiui.agent.tools.results as tool_results
 from kiui.agent.backend import LLMAgent
 from kiui.agent.providers import CompletionResult, ProviderUsage
 from kiui.agent.context import (
+    SUMMARY_MARKER,
     ContextManager,
+    TokenEstimator,
     ToolResultEnvelope,
+    _artifact_path_in,
     compact_context,
     compact_tool_result_envelope,
     estimate_context_chars,
+    get_text,
     tool_result_char_budget,
 )
 from kiui.agent.utils.interrupt import RequestInterrupted
 from kiui.agent.utils.io import EventHub, InputBroker
 from kiui.agent.permissions import PermissionController, PermissionMode
 from kiui.agent.tools import ToolExecutor
-
-
-def _compact_text(
-    text, tool_name, context_length=16_000, artifact_path=None, arguments=None
-):
-    result = compact_tool_result_envelope(
-        ToolResultEnvelope(tool_name, arguments or {"command": ""}, {}, text),
-        context_length,
-        artifact_path=artifact_path,
-    )
-    return result.text, result.compacted
 
 
 class _Console:
@@ -97,13 +90,21 @@ def test_compaction_uses_provider_neutral_summarizer():
         prompts.append(prompt)
         return "condensed history"
 
-    result = compact_context(messages, summarize)
+    result, _ = compact_context(messages, summarize)
 
     assert prompts and "first" in prompts[0]
-    assert result[0]["content"] == "[Previous conversation summary]\ncondensed history"
+    content = result[0]["content"]
+    assert content.startswith("[Previous conversation summary]")
+    assert "## Original request\nfirst" in content
+    assert "condensed history" in content
 
 
-def test_failed_compaction_preserves_original_messages():
+def test_failed_compaction_is_reported_as_no_compaction():
+    """A failed summarization must be indistinguishable from 'nothing to do'.
+
+    ``_run_compaction`` reads identity to decide whether the context shrank, so
+    handing back a copy would make it announce a successful 0 % compaction.
+    """
     messages = [
         {"role": "user", "content": "first"},
         {"role": "assistant", "content": "second"},
@@ -112,10 +113,67 @@ def test_failed_compaction_preserves_original_messages():
     def fail(_prompt):
         raise RuntimeError("offline")
 
-    result = compact_context(messages, fail)
+    result, _ = compact_context(messages, fail)
 
-    assert result == messages
-    assert result is not messages
+    assert result is messages
+
+
+def test_cancelling_a_compaction_is_not_reported_as_a_failure():
+    """Escape tears down the request; that is the user's doing, not an error."""
+    messages = [
+        {"role": "user", "content": "first"},
+        {"role": "assistant", "content": "second"},
+        {"role": "user", "content": "third"},
+    ]
+    warnings = []
+    console = _Console()
+    console.warn = lambda msg, **kwargs: warnings.append(msg)
+
+    def cancel(_prompt):
+        raise RequestInterrupted()
+
+    with pytest.raises(RequestInterrupted):
+        compact_context(messages, cancel, console=console)
+
+    assert warnings == []
+
+
+@pytest.mark.parametrize(
+    "error",
+    [RequestInterrupted(), RuntimeError("400 prompt is too long")],
+    ids=["cancelled", "rejected"],
+)
+def test_a_failed_request_keeps_the_context_management_it_paid_for(error):
+    """Eviction and compaction are window maintenance, not turn state.
+
+    Rolling them back would discard a summarization round-trip already spent —
+    and on the overflow-retry path, the exact remediation the next attempt needs.
+    """
+    context = ContextManager("system prompt")
+    for i in range(4):
+        context.add({"role": "user", "content": f"message {i}"})
+
+    console = _Console()
+    console.system = lambda *args, **kwargs: None
+    console.error = lambda *args, **kwargs: None
+
+    def call_api():
+        # Stands in for the eviction + compaction call_api runs before the
+        # request; the assistant message is only ever appended on success.
+        context.replace_messages([{"role": "user", "content": SUMMARY_MARKER}])
+        raise error
+
+    agent = NS(
+        console=console,
+        context=context,
+        verbose=False,
+        call_api=call_api,
+        _pending_images=[],
+        _last_interrupted=False,
+    )
+
+    assert LLMAgent.get_response(agent) is None
+    assert [get_text(m) for m in context.messages] == [SUMMARY_MARKER]
 
 
 def test_actual_failed_exec_capture_is_compacted_and_persisted(tmp_path):
@@ -153,6 +211,64 @@ def test_actual_failed_exec_capture_is_compacted_and_persisted(tmp_path):
     )
     captured = artifact.read_text()
     assert "HEAD" in captured and "brief stderr" in captured and len(captured) > 5_000
+
+
+def test_midsize_exec_capture_survives_for_eviction(tmp_path):
+    """Output too small to compact but big enough to trim must stay recoverable.
+
+    A result between SOFT_TRIM_THRESHOLD and the ingress budget enters history
+    whole, so nothing is persisted for it — and layer 2 later cuts it to ~3k
+    chars. A command's output cannot be produced again, so the capture is kept
+    and pointed at even though no ingress compaction happens.
+    """
+    console = _Console()
+    console.system = lambda *args, **kwargs: None
+    executor = ToolExecutor(console=console, work_dir=str(tmp_path))
+    command = "python -c \"print('HEAD'); print('x' * 8000); print('TAIL')\""
+    tool_call = {"id": "call-mid", "type": "function", "function": {"name": "exec_command", "arguments": json.dumps({"command": command})}}
+    agent = NS(
+        verbose=False,
+        console=console,
+        permissions=NS(check=lambda *args: (True, "")),
+        tool_executor=executor,
+        context_length=200_000,  # exec budget 12k, so 8k of output is not compacted
+        token_estimator=NS(chars_per_token=3.3),
+        context=NS(messages=[], add=lambda message: agent.context.messages.append(message)),
+        cancellation=None,
+        work_dir=str(tmp_path),
+        _session_id="midsize",
+        round_id=4,
+        tool_compaction_totals={"calls": 0, "original_chars": 0, "retained_chars": 0},
+    )
+
+    LLMAgent.execute_tool_calls(agent, [tool_call])
+
+    stored = agent.context.messages[-1]["content"]
+    assert "Large exec_command result compacted" not in stored  # entered whole
+    assert "HEAD" in stored and "TAIL" in stored
+
+    # Layer 2 recovers the capture by parsing the pointer out of the message.
+    pointer = _artifact_path_in(stored)
+    assert pointer is not None
+    captured = (tmp_path / pointer).read_text()
+    assert "HEAD" in captured and "TAIL" in captured and len(captured) > 8_000
+
+
+def test_old_session_captures_are_pruned(tmp_path):
+    root = tmp_path / ".kia" / "tool-results"
+    for i in range(5):
+        session = root / f"s{i}"
+        session.mkdir(parents=True)
+        (session / "r0-call-exec_command.txt").write_text("captured")
+        os.utime(session, (i, i))  # s0 oldest … s4 newest
+    live = root / "live"
+    live.mkdir()
+    os.utime(live, (0, 0))  # oldest on disk, but it is the running session
+
+    removed = tool_results.prune_tool_result_artifacts(str(tmp_path), "live", keep=2)
+
+    assert removed == 3
+    assert {path.name for path in root.iterdir()} == {"live", "s3", "s4"}
 
 
 def test_large_tool_result_is_persisted_before_context(tmp_path):
@@ -338,7 +454,7 @@ def test_call_api_sets_output_limit_and_rejects_truncated_response():
         _blocking_completion=completion,
         cancellation=None,
         _accumulate_usage=lambda value: None,
-        token_estimator=NS(calibrate=lambda *args: None),
+        token_estimator=NS(observe=lambda *args: None),
         context=NS(add=added.append),
     )
 
@@ -347,6 +463,192 @@ def test_call_api_sets_output_limit_and_rejects_truncated_response():
 
     assert kwargs_seen["max_tokens"] == max_output_tokens
     assert added == []
+
+
+def _compaction_agent(token_readings):
+    """Agent stub for :meth:`LLMAgent._run_compaction`, driven by token readings.
+
+    Messages are bulky on purpose: the history has to reach past the protected
+    recent window (15 % of the 100k window) *and* leave a split big enough to
+    clear the yield bar, otherwise compaction is a no-op and never reaches the
+    floor bookkeeping these tests are about.
+    """
+    console = _Console()
+    console.system = lambda *args, **kwargs: None
+    context = ContextManager("system prompt")
+    for i in range(10):
+        context.add({"role": "user", "content": f"request {i} " + "x" * 6_000})
+        context.add({"role": "assistant", "content": f"reply {i} " + "y" * 6_000})
+    readings = iter(token_readings)
+    return NS(
+        console=console,
+        context=context,
+        context_length=100_000,
+        max_output_tokens=0,
+        token_estimator=TokenEstimator(),
+        cancellation=None,
+        provider=NS(cancel=lambda: None),
+        compaction_totals={"count": 0, "tokens_before": 0, "tokens_after": 0},
+        _compaction_floor_tokens=None,
+        _context_tokens=lambda: next(readings),
+        _snapshot_before_compaction=lambda: None,
+        _summarize=lambda prompt: "## Goal\nsummary",
+    )
+
+
+def test_ineffective_compaction_sets_a_floor_against_repeating():
+    agent = _compaction_agent([90_000, 89_000])
+
+    assert LLMAgent._run_compaction(agent, "pressure") is True
+    # Freed 1k of a 100k window, under the 5% yield bar: hold off until the
+    # context has actually grown again.
+    assert agent._compaction_floor_tokens == 94_000
+    assert agent.compaction_totals["count"] == 1
+
+
+def test_effective_compaction_still_holds_off_the_next_one():
+    """Even a good pass must not leave the marginal pass behind it unguarded."""
+    agent = _compaction_agent([90_000, 40_000])
+    agent._compaction_floor_tokens = 94_000
+
+    assert LLMAgent._run_compaction(agent, "pressure") is True
+    # Freed 50k, well past the yield bar — but the floor still moves to where
+    # this pass landed, so the next one waits for 5% of real growth instead of
+    # firing again on the very next tool result.
+    assert agent._compaction_floor_tokens == 45_000
+
+
+def test_compaction_is_skipped_while_the_floor_holds():
+    context = ContextManager("system prompt")
+    for i in range(6):
+        context.add({"role": "user", "content": "x" * 5_000})
+        context.add({"role": "assistant", "content": "y" * 5_000})
+
+    compactions = []
+    usage = ProviderUsage(prompt_tokens=10, completion_tokens=1, total_tokens=11)
+    console = _Console()
+    console.system = lambda *args, **kwargs: None
+
+    agent = NS(
+        console=console,
+        context=context,
+        context_length=1_000,  # far below usage: compaction would normally fire
+        token_estimator=TokenEstimator(),
+        _compaction_floor_tokens=10**9,
+        _run_compaction=lambda reason: compactions.append(reason) or True,
+        model="test-model",
+        max_output_tokens=100,
+        INITIAL_BACKOFF=0.01,
+        MAX_BACKOFF=0.02,
+        verbose=False,
+        round_id=1,
+        _session_id=None,
+        _pending_images=[],
+        stream=False,
+        tools=[],
+        profile=NS(reasoning=None),
+        reasoning_effort="high",
+        cancellation=None,
+        _accumulate_usage=lambda value: None,
+        _blocking_completion=lambda request: CompletionResult(
+            {"role": "assistant", "content": "ok"}, usage, "stop"
+        ),
+    )
+    agent._context_tokens = lambda: agent.token_estimator.prompt_tokens(
+        agent.context.total_chars
+    )
+    agent._messages_with_pending_images = lambda: agent.context.get()
+
+    LLMAgent.call_api(agent)
+
+    assert compactions == []
+
+
+class _OverflowError(Exception):
+    status_code = 400
+
+
+def _overflow_agent(completion, compactions):
+    console = _Console()
+    console.system = lambda *args, **kwargs: None
+    return NS(
+        console=console,
+        _interruptible_sleep=lambda seconds: None,
+        context_length=0,
+        model="test-model",
+        max_output_tokens=1_000,
+        INITIAL_BACKOFF=0.01,
+        MAX_BACKOFF=0.02,
+        verbose=False,
+        round_id=1,
+        _session_id=None,
+        _pending_images=[],
+        _messages_with_pending_images=lambda: [],
+        stream=False,
+        tools=[],
+        profile=NS(reasoning=None),
+        reasoning_effort="high",
+        _blocking_completion=completion,
+        cancellation=None,
+        _accumulate_usage=lambda value: None,
+        token_estimator=NS(observe=lambda *args: None),
+        context=NS(add=lambda message: None),
+        _run_compaction=lambda reason: compactions.append(reason) or True,
+    )
+
+
+def test_context_overflow_compacts_and_retries_instead_of_failing():
+    compactions = []
+    calls = []
+    usage = ProviderUsage(prompt_tokens=10, completion_tokens=1, total_tokens=11)
+
+    def completion(request):
+        calls.append(request)
+        if len(calls) == 1:
+            raise _OverflowError("maximum context length is 200000 tokens")
+        return CompletionResult({"role": "assistant", "content": "ok"}, usage, "stop")
+
+    message = LLMAgent.call_api(_overflow_agent(completion, compactions))
+
+    assert compactions == ["Context overflow reported by the API"]
+    assert len(calls) == 2
+    assert message["content"] == "ok"
+
+
+def test_context_overflow_recovery_is_attempted_only_once():
+    compactions = []
+    calls = []
+
+    def completion(request):
+        calls.append(request)
+        raise _OverflowError("maximum context length is 200000 tokens")
+
+    with pytest.raises(RuntimeError, match="API request rejected"):
+        LLMAgent.call_api(_overflow_agent(completion, compactions))
+
+    assert len(compactions) == 1
+    assert len(calls) == 2
+
+
+def test_rate_limit_mentioning_tokens_is_not_treated_as_overflow():
+    """A retryable 429 must keep retrying, not trigger compaction."""
+    compactions = []
+    calls = []
+    usage = ProviderUsage(prompt_tokens=10, completion_tokens=1, total_tokens=11)
+
+    class _RateLimit(Exception):
+        status_code = 429
+
+    def completion(request):
+        calls.append(request)
+        if len(calls) == 1:
+            raise _RateLimit("rate limit: too many tokens per minute")
+        return CompletionResult({"role": "assistant", "content": "ok"}, usage, "stop")
+
+    LLMAgent.call_api(_overflow_agent(completion, compactions))
+
+    assert compactions == []
+    assert len(calls) == 2
 
 
 def test_stream_is_closed_when_consumption_is_cancelled(monkeypatch):

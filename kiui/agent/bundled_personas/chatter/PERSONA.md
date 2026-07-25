@@ -2,6 +2,15 @@
 name: chatter
 description: General chatbot — conversation and web lookup only, no file/shell access.
 tools:
+  - read_file
+  - read_image
+  - write_file
+  - edit_file
+  - multi_edit
+  - remove_file
+  - ls
+  - glob_files
+  - grep_files
   - web_search
   - web_fetch
 ---

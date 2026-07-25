@@ -37,6 +37,7 @@ from kiui.agent.subagent import SubagentManager
 from kiui.agent.tools.results import (
     discard_tool_result_artifact,
     persist_tool_result_artifact,
+    prune_tool_result_artifacts,
     read_tool_result_text,
 )
 from kiui.agent.permissions import PermissionController, PermissionMode
@@ -48,12 +49,16 @@ from kiui.agent.providers import (
 )
 from kiui.agent.context import (
     COMPACTION_INPUT_MAX_CHARS,
+    COMPACTION_MIN_YIELD_RATIO,
+    COMPACTION_SUMMARY_MAX_TOKENS,
     ContextManager,
     TokenEstimator,
+    SOFT_TRIM_THRESHOLD,
+    UNREPEATABLE_TOOLS,
+    CompactionState,
     ToolResultEnvelope,
     compact_context,
     compact_tool_result_envelope,
-    build_tool_name_index,
     estimate_context_chars,
     get_role,
     get_text,
@@ -84,6 +89,24 @@ from kiui.agent.utils.io import (
 # though they are 4xx. Everything else in the 4xx range is a permanent client
 # error (bad key, bad request, unknown model, …) and must not be retried.
 _RETRYABLE_STATUS_CODES = frozenset({408, 409, 425, 429})
+
+
+# Providers report an oversized prompt as a plain 400, which is otherwise
+# fatal. Matched on message text because no provider gives it a distinct code.
+_CONTEXT_OVERFLOW_MARKERS = (
+    "context_length_exceeded",
+    "context length exceeded",
+    "maximum context length",
+    "prompt is too long",
+    "reduce the length of the messages",
+    "exceeds the context window",
+)
+
+
+def _is_context_overflow_error(exc: Exception) -> bool:
+    """Whether *exc* says the request exceeded the model's context window."""
+    text = str(exc).lower()
+    return any(marker in text for marker in _CONTEXT_OVERFLOW_MARKERS)
 
 
 def _is_fatal_api_error(exc: Exception) -> bool:
@@ -284,6 +307,15 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             "original_chars": 0,
             "retained_chars": 0,
         }
+        self.compaction_totals = {
+            "count": 0,
+            "tokens_before": 0,
+            "tokens_after": 0,
+        }
+        # Usage below which another compaction is not worth attempting; set
+        # after every pass, so the next one waits for real growth rather than
+        # firing again on the tool result that follows it.
+        self._compaction_floor_tokens: int | None = None
 
         # self.console.system(f"System prompt: {self.system_prompt[:100]}...")
 
@@ -335,11 +367,19 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self.token_totals["cached_prompt"] += usage.cached_prompt_tokens
         self.token_totals["reasoning"] += usage.reasoning_tokens
 
+    def _context_tokens(self) -> int:
+        """Live prompt-token estimate for the next request.
+
+        Anchored on the last count the API actually reported, so it includes
+        the system prompt, tool schemas, and provider framing that character
+        counting alone cannot see.
+        """
+        return self.token_estimator.prompt_tokens(self.context.total_chars)
+
     def _status_suffix(self) -> ContextStatus:
         """Context-window progress shown in the 'Working...' status bar."""
-        ctx_chars = self.context.estimated_chars
         return ContextStatus(
-            tokens=self.token_estimator.chars_to_tokens(ctx_chars),
+            tokens=self._context_tokens(),
             limit=self.context_length,
             input_tokens=self.token_totals["prompt"],
             output_tokens=self.token_totals["completion"],
@@ -374,65 +414,46 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         retried indefinitely with capped exponential backoff. Permanent client
         errors (auth, malformed request, unknown model, …) are re-raised as
         ``RuntimeError`` so ``get_response`` can end the turn gracefully.
+
+        Atomic with respect to the conversation: the assistant message is
+        appended as the last step, so every failure path leaves the history
+        exactly as it was found — apart from eviction and compaction, which are
+        window maintenance rather than turn state and are meant to persist.
         """
 
-        # context management: prune old tool results, then compact if needed
+        # context management: evict old tool results, then compact if needed
         if self.context_length > 0:
             t_prune = time.monotonic()
             cpt = self.token_estimator.chars_per_token
-            # Reuse the incrementally maintained char total to skip a full scan.
             self.context.replace_messages(
                 prune_context(
                     self.context.messages, self.context_length, cpt,
-                    total_chars=self.context.estimated_chars,
+                    used_tokens=self._context_tokens(),
+                    max_output_tokens=self.max_output_tokens,
                 )
             )
             prune_elapsed = time.monotonic() - t_prune
             if self.verbose and prune_elapsed > 0.1:
-                self.console.debug(f"Context pruning took {prune_elapsed:.2f}s")
+                self.console.debug(f"Context eviction took {prune_elapsed:.2f}s")
 
+            used_tokens = self._context_tokens()
             if needs_compaction(
                 self.context.messages, self.context_length, cpt,
-                total_chars=self.context.estimated_chars,
+                used_tokens=used_tokens,
+                max_output_tokens=self.max_output_tokens,
             ):
-                before_chars = self.context.estimated_chars
-                before_msgs = len(self.context.messages)
-                before_tokens = self.token_estimator.chars_to_tokens(before_chars)
-                self.console.system("Context window pressure — compacting via LLM summarization")
-                t_compact = time.monotonic()
-                with self.console.thinking(
-                    label="Compacting",
-                    progress=True,
-                    status_suffix=f"{before_msgs} messages, ~{before_tokens:,} tokens",
-                ):
-                    compacted = run_interruptible(
-                        lambda: compact_context(
-                            self.context.messages, self._summarize,
-                            console=self.console,
-                            context_length=self.context_length,
-                            chars_per_token=cpt,
-                        ),
-                        self.cancellation,
-                        on_cancel=self.provider.cancel,
-                    )
-                if self.cancellation is not None and self.cancellation.cancelled:
-                    raise RequestInterrupted()
-                self.context.replace_messages(compacted)
-                compact_elapsed = time.monotonic() - t_compact
-                after_chars = self.context.estimated_chars
-                after_msgs = len(self.context.messages)
-                after_tokens = self.token_estimator.chars_to_tokens(after_chars)
-                saved_pct = (1 - after_chars / before_chars) * 100 if before_chars else 0
-                self.console.system(
-                    f"Compaction complete ({compact_elapsed:.1f}s): "
-                    f"{before_msgs} messages → {after_msgs} messages, "
-                    f"~{before_tokens:,} tokens → ~{after_tokens:,} tokens "
-                    f"(saved {saved_pct:.0f}%)"
-                )
+                floor = self._compaction_floor_tokens
+                if floor is not None and used_tokens < floor:
+                    if self.verbose:
+                        self.console.debug(
+                            f"Skipping compaction: waiting for growth since the "
+                            f"last pass (~{used_tokens:,} tok, floor ~{floor:,})"
+                        )
+                else:
+                    self._run_compaction("Context window pressure")
 
         if self.verbose:
-            ctx_chars = self.context.estimated_chars
-            ctx_tokens = self.token_estimator.chars_to_tokens(ctx_chars)
+            ctx_tokens = self._context_tokens()
             ctx_pct = ctx_tokens / self.context_length * 100 if self.context_length else 0
             self.console.debug(
                 f"Calling API (round: {self.round_id}, "
@@ -440,21 +461,25 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             )
 
         had_pending_images = bool(self._pending_images)
-        messages = sanitize_unicode(self._messages_with_pending_images())
 
-        request = CompletionRequest(
-            model=self.model,
-            messages=messages,
-            tools=self.tools,
-            stream=self.stream,
-            max_output_tokens=self.max_output_tokens,
-            reasoning_effort=self.reasoning_effort,
-            session_id=self._session_id,
-        )
+        def build_request() -> tuple[list, CompletionRequest]:
+            payload = sanitize_unicode(self._messages_with_pending_images())
+            return payload, CompletionRequest(
+                model=self.model,
+                messages=payload,
+                tools=self.tools,
+                stream=self.stream,
+                max_output_tokens=self.max_output_tokens,
+                reasoning_effort=self.reasoning_effort,
+                session_id=self._session_id,
+            )
+
+        messages, request = build_request()
 
         # ---- retry loop with exponential backoff ----
         t_api = time.monotonic()
         retry_count = 0
+        overflow_recovered = False
         wait_time = self.INITIAL_BACKOFF
         while True:
             try:
@@ -468,6 +493,15 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 raise  # user cancelled — never retry, let get_response roll back
             except Exception as e:
                 if _is_fatal_api_error(e):
+                    # An oversized prompt is the one permanent error the client
+                    # can fix by itself: the estimate was wrong. Compact once
+                    # and retry. Checked inside the fatal branch so a retryable
+                    # rate limit that happens to mention tokens cannot match.
+                    if not overflow_recovered and _is_context_overflow_error(e):
+                        overflow_recovered = True
+                        if self._run_compaction("Context overflow reported by the API"):
+                            messages, request = build_request()
+                            continue
                     # Permanent client error — retrying cannot help. Surface it
                     # as RuntimeError so get_response ends the turn gracefully.
                     status = getattr(e, "status_code", "?")
@@ -493,8 +527,10 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         finish_reason = result.finish_reason
         self._pending_images.clear()
         self._accumulate_usage(usage)
-        if not had_pending_images:
-            self.token_estimator.calibrate(
+        # Only a real provider count is worth anchoring on; images are excluded
+        # because their token cost is invisible to character counting.
+        if result.usage is not None and not had_pending_images:
+            self.token_estimator.observe(
                 estimate_context_chars(messages), usage.prompt_tokens
             )
 
@@ -521,14 +557,117 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self.context.add(message)
         return message
 
+    def _snapshot_before_compaction(self) -> None:
+        """Save a revision so /rewind can undo a compaction that lost too much."""
+        if not self._session_id or self._session_store is None:
+            return
+        try:
+            self.save_session(self._session_id, reason="pre-compaction")
+        except Exception as e:
+            # A missing rewind point is not worth failing the turn over.
+            self.console.warn(f"Could not snapshot before compaction: {e}")
+
+    def _run_compaction(self, reason: str) -> bool:
+        """LLM-compact the history now. Returns whether the context shrank.
+
+        Used both when usage crosses the threshold and when the API rejects a
+        request as too long, so the caller can decide whether a retry is worth
+        attempting.
+        """
+        if len(self.context.messages) <= 2:
+            return False
+
+        before_tokens = self._context_tokens()
+        before_msgs = len(self.context.messages)
+        self.console.system(f"{reason} — compacting via LLM summarization")
+        self._snapshot_before_compaction()
+        t_compact = time.monotonic()
+        with self.console.thinking(
+            label="Compacting",
+            progress=True,
+            status_suffix=f"{before_msgs} messages, ~{before_tokens:,} tokens",
+        ):
+            compacted, state = run_interruptible(
+                lambda: compact_context(
+                    self.context.messages, self._summarize,
+                    console=self.console,
+                    context_length=self.context_length,
+                    chars_per_token=self.token_estimator.chars_per_token,
+                    used_tokens=before_tokens,
+                    max_output_tokens=self.max_output_tokens,
+                    state=self.context.compaction_state,
+                ),
+                self.cancellation,
+                on_cancel=self.provider.cancel,
+            )
+        if self.cancellation is not None and self.cancellation.cancelled:
+            raise RequestInterrupted()
+
+        if compacted is self.context.messages:
+            # Identity means no pass happened: everything old enough sits inside
+            # the protected recent window, the split could not free enough to pay
+            # for the round-trip, or the summarization failed (which warns on its
+            # own). Either way the context is untouched.
+            self.console.system("Nothing worth compacting — context unchanged.")
+            if self.context_length > 0:
+                self._compaction_floor_tokens = (
+                    before_tokens + int(self.context_length * COMPACTION_MIN_YIELD_RATIO)
+                )
+            return False
+
+        self.context.replace_messages(compacted)
+        self.context.compaction_state = state
+        after_tokens = self._context_tokens()
+        after_msgs = len(self.context.messages)
+        saved_pct = (1 - after_tokens / before_tokens) * 100 if before_tokens else 0
+        self.console.system(
+            f"Compaction complete ({time.monotonic() - t_compact:.1f}s): "
+            f"{before_msgs} messages → {after_msgs} messages, "
+            f"~{before_tokens:,} tokens → ~{after_tokens:,} tokens "
+            f"(saved {saved_pct:.0f}%)"
+        )
+
+        self.compaction_totals["count"] += 1
+        self.compaction_totals["tokens_before"] += before_tokens
+        self.compaction_totals["tokens_after"] += after_tokens
+
+        # Never compact again until the context has grown by at least the yield a
+        # pass has to produce to be worth its round-trip. Set unconditionally: a
+        # pass that clears the bar by a hair used to reset the floor to None,
+        # leaving the marginal pass right behind it unguarded.
+        if self.context_length > 0:
+            self._compaction_floor_tokens = (
+                after_tokens + int(self.context_length * COMPACTION_MIN_YIELD_RATIO)
+            )
+        return before_tokens > after_tokens
+
     def _summarize(self, prompt: str) -> str:
-        """Run a provider-neutral non-streaming compaction request."""
-        result = self.provider.complete(CompletionRequest(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            stream=False,
-            timeout=60,
-        ))
+        """Run a provider-neutral non-streaming compaction request.
+
+        Deliberately not run at the session's reasoning effort: rewriting a
+        conversation into a fixed section structure is a transcription task, and
+        at the default "high" it costs far more latency than the summary is
+        worth. The output cap bounds what the pass writes back into the window.
+        """
+        try:
+            result = self.provider.complete(CompletionRequest(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                stream=False,
+                timeout=60,
+                max_output_tokens=COMPACTION_SUMMARY_MAX_TOKENS,
+                reasoning_effort="low",
+            ))
+        except Exception:
+            # Escape calls provider.cancel(), which tears down the in-flight
+            # request and surfaces here as a transport error on the summarization
+            # worker thread. Translate it, so compaction unwinds quietly instead
+            # of reporting a failure the user caused on purpose.
+            if self.cancellation is not None and self.cancellation.cancelled:
+                raise RequestInterrupted() from None
+            raise
+        if result.usage is not None:
+            self._accumulate_usage(result.usage)
         summary = get_text(result.message)
         if not summary:
             raise RuntimeError("Compaction provider returned no summary text")
@@ -715,9 +854,31 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 self.tool_compaction_totals["retained_chars"] += compacted.retained_chars
                 notice = f"; full captured output: {artifact_path}" if artifact_path else ""
                 self.console.system(
-                    f"Compacted {function_name} result with {compacted.reducer} "
-                    f"({compacted.tier}){notice}"
+                    f"Compacted {function_name} result "
+                    f"({compacted.original_chars:,}→{compacted.retained_chars:,} chars){notice}"
                 )
+            elif (
+                function_name in UNREPEATABLE_TOOLS
+                and envelope.original_chars > SOFT_TRIM_THRESHOLD
+            ):
+                # Small enough to enter history whole, big enough for layer 2 to
+                # trim later — and this output cannot be produced a second time.
+                # The pointer goes in the message text rather than a side table
+                # so it survives eviction and session save/resume alike.
+                try:
+                    artifact_path = persist_tool_result_artifact(
+                        function_name,
+                        result_text,
+                        result,
+                        tool_call["id"],
+                        self.work_dir,
+                        self._session_id,
+                        self.round_id,
+                    )
+                except (OSError, ValueError) as e:
+                    self.console.warn(f"Could not save tool output: {e}")
+                else:
+                    result_text += f"\n[Captured output: {artifact_path}.]"
             else:
                 cleanup_error = discard_tool_result_artifact(result)
                 if cleanup_error:
@@ -811,24 +972,23 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             if self.verbose and iteration > 1:
                 self.console.debug(f"--- Agentic loop iteration {iteration} ---")
 
-            snapshot = self.context.checkpoint()
-
+            # No rollback on failure: call_api appends the assistant message only
+            # on success, so a failed attempt leaves no partial turn behind. What
+            # it *does* leave is eviction and compaction, and those must survive —
+            # undoing them would discard a summarization round-trip already paid
+            # for, and on the overflow-retry path would throw away the exact
+            # remediation the next attempt needs.
             try:
                 message = self.call_api()
             except RequestInterrupted:
-                # Roll back to the state before this request was sent.
-                self.context.rollback(snapshot)
                 self._pending_images.clear()
                 self.console.system("Request cancelled.")
                 self._last_interrupted = True
                 return None
             except RuntimeError as e:
-                self.context.rollback(snapshot)
                 self._pending_images.clear()
                 self.console.error(f"API call failed: {e}")
                 return None
-            except Exception:
-                raise
 
             content = message.get("content")
             if content:
@@ -914,10 +1074,13 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self._session_revision_id = None
         self._last_save_time = 0.0  # allow immediate save of the new session
         self.context.replace_messages([])
+        self.context.compaction_state = CompactionState()
         self._pending_images.clear()
         self.round_id = 0
         self.token_totals = {key: 0 for key in self.token_totals}
         self.tool_compaction_totals = {key: 0 for key in self.tool_compaction_totals}
+        self.compaction_totals = {key: 0 for key in self.compaction_totals}
+        self._compaction_floor_tokens = None
         self.tool_executor.shutdown_processes(clear=True)
         self.tool_executor.reset_skill_tools()
         self.tool_executor._loaded_skills.clear()
@@ -1193,6 +1356,17 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         if not self._session_store.exists:
             self.save_session(self._session_id, reason="initial")
 
+        try:
+            pruned = prune_tool_result_artifacts(self.work_dir, self._session_id)
+        except OSError as e:
+            # Stale captures cost disk, not correctness — never fail startup.
+            self.console.warn(f"Could not prune old tool-result captures: {e}")
+        else:
+            if pruned and self.verbose:
+                self.console.debug(
+                    f"Pruned tool-result captures from {pruned} old session(s)"
+                )
+
         _wd = self.tool_executor._work_dir or os.getcwd()
         terminal = TerminalInput(
             history_path=str(self._kia_dir() / "history"),
@@ -1261,6 +1435,17 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         return (
             f"{totals['calls']} result(s), ~{original_tokens:,}→{retained_tokens:,} "
             f"tokens (-{saved}%)"
+        )
+
+    def _compaction_summary(self) -> str:
+        totals = self.compaction_totals
+        if not totals["count"]:
+            return "none"
+        before = totals["tokens_before"]
+        after = totals["tokens_after"]
+        saved = max(0, round((1 - after / before) * 100)) if before else 0
+        return (
+            f"{totals['count']}×, ~{before:,}→{after:,} tokens (-{saved}%) cumulative"
         )
 
     def _print_token_summary(self, resume: str | None = None):

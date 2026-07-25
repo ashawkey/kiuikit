@@ -11,6 +11,37 @@ from typing import Any
 from kiui.agent.utils import get_kia_dir
 
 
+# Session artifact directories kept on disk, newest first. A capture is only
+# useful while the transcript that points at it is still around, and a single
+# exec_command capture can reach MAX_EXEC_ARTIFACT_BYTES, so old sessions are
+# dropped instead of accumulating for the life of the project.
+ARTIFACT_SESSION_RETENTION = 20
+
+
+def prune_tool_result_artifacts(
+    work_dir: str | None, session_id: str, keep: int = ARTIFACT_SESSION_RETENTION
+) -> int:
+    """Delete all but the *keep* newest session artifact directories.
+
+    *session_id* is the live session and is never pruned, however old its
+    directory looks. A resumed session whose captures have been dropped degrades
+    on its own: its recovery pointers simply fail to read, the same outcome as a
+    user clearing `.kia` by hand.
+    """
+    root = get_kia_dir(Path(work_dir) if work_dir else Path.cwd()) / "tool-results"
+    if not root.is_dir():
+        return 0
+
+    sessions = sorted(
+        (path for path in root.iterdir() if path.is_dir() and path.name != session_id),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    for path in sessions[keep:]:
+        shutil.rmtree(path)
+    return max(0, len(sessions) - keep)
+
+
 def read_tool_result_text(
     result: dict[str, Any], formatted: str, max_chars: int | None = None
 ) -> str:

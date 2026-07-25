@@ -2,8 +2,6 @@
 
 from kiui.agent.context import (
     build_tool_name_index,
-    compact_context,
-    estimate_context_chars,
     get_role,
     get_text,
     get_tool_call_id,
@@ -18,6 +16,7 @@ from kiui.agent.providers import (
 )
 from kiui.agent.permissions import PermissionMode
 from kiui.agent.personas import DEFAULT_PERSONA, PersonaInfo, discover_personas, get_persona
+from kiui.agent.utils.interrupt import RequestInterrupted
 
 
 class AgentCommandsMixin:
@@ -109,46 +108,28 @@ class AgentCommandsMixin:
         if len(self.context.messages) <= 2:
             self.console.system("Not enough messages to compact.")
             return
-        before_chars = estimate_context_chars(self.context.messages)
-        before_msgs = len(self.context.messages)
-        before_tokens = self.token_estimator.chars_to_tokens(before_chars)
-        with self.console.thinking(
-            label="Compacting",
-            progress=True,
-            status_suffix=f"{before_msgs} messages, ~{before_tokens:,} tokens",
-        ):
-            self.context.replace_messages(
-                compact_context(
-                    self.context.messages, self._summarize,
-                    console=self.console,
-                    context_length=self.context_length,
-                    chars_per_token=self.token_estimator.chars_per_token,
-                )
-            )
-        after_chars = estimate_context_chars(self.context.messages)
-        after_msgs = len(self.context.messages)
-        after_tokens = self.token_estimator.chars_to_tokens(after_chars)
-        saved_pct = (1 - after_chars / before_chars) * 100 if before_chars else 0
-        self.console.system(
-            f"Compaction complete: "
-            f"{before_msgs} messages → {after_msgs} messages, "
-            f"~{before_tokens:,} tokens → ~{after_tokens:,} tokens "
-            f"(saved {saved_pct:.0f}%)"
-        )
+        # Inside an operation so Escape can cancel the summarization round-trip;
+        # CancellationToken.cancel() is a no-op when no operation is active.
+        with self._operation("manual compaction"):
+            try:
+                self._run_compaction("Manual compaction requested")
+            except RequestInterrupted:
+                self.console.system("Compaction cancelled.")
 
     def _cmd_usage(self):
-        ctx_chars = estimate_context_chars(self.context.messages)
-        ctx_tokens = self.token_estimator.chars_to_tokens(ctx_chars)
+        ctx_tokens = self._context_tokens()
         ctx_pct = ctx_tokens / self.context_length * 100 if self.context_length else 0
+        basis = "measured" if self.token_estimator.anchored else "estimated"
 
         self.console.print(
             f"[bold blue]Session usage (round {self.round_id}):[/bold blue]\n"
             f"  Total tokens   : {self.token_totals['total']}\n"
             f"  Prompt tokens  : {self.token_totals['prompt']}  (cached: {self.token_totals['cached_prompt']})\n"
             f"  Output tokens  : {self.token_totals['completion']}  (reasoning: {self.token_totals['reasoning']})\n"
-            f"  Context window : ~{ctx_tokens} / {self.context_length} tokens [{ctx_pct:.0f}%]\n"
+            f"  Context window : ~{ctx_tokens} / {self.context_length} tokens [{ctx_pct:.0f}%, {basis}]\n"
             f"  Messages       : {len(self.context.messages)}\n"
-            f"  Tool compaction: {self._tool_compaction_summary()}"
+            f"  Tool compaction: {self._tool_compaction_summary()}\n"
+            f"  Compactions    : {self._compaction_summary()}"
         )
 
         skill_loads = self.tool_executor._skill_loads

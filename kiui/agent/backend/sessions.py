@@ -3,9 +3,10 @@
 import json
 import os
 import time
+from dataclasses import asdict
 from pathlib import Path
 
-from kiui.agent.context import get_role, get_text, get_tool_calls
+from kiui.agent.context import CompactionState, get_role, get_text, get_tool_calls
 from kiui.agent.personas import get_persona
 from kiui.agent.session_store import SessionStore
 from kiui.agent.tools import format_tool_summary
@@ -196,6 +197,7 @@ class SessionMixin:
             "round_id": self.round_id,
             "token_totals": self.token_totals,
             "tool_compaction_totals": self.tool_compaction_totals,
+            "compaction_totals": self.compaction_totals,
             "system_prompt": self.context.system_prompt,
             "persona": self.persona.name,
             "persona_digest": self.persona.digest,
@@ -205,6 +207,7 @@ class SessionMixin:
             "loaded_skills": sorted(self.tool_executor._loaded_skills),
             "skill_loads": self.tool_executor._skill_loads,
             "messages": self.context.messages,
+            "compaction_state": asdict(self.context.compaction_state),
         }
 
     def save_session(self, name: str | None = None, *, reason: str = "autosave") -> Path:
@@ -277,9 +280,19 @@ class SessionMixin:
                 self.context.system_prompt["content"] = self.system_prompt
 
         self.context.replace_messages(data["messages"])
+        # Sessions saved before compaction state was carried structurally simply
+        # start empty; the next pass rebuilds it from whatever history remains.
+        carried = data.get("compaction_state") or {}
+        self.context.compaction_state = CompactionState(
+            original_request=carried.get("original_request", ""),
+            read_files=tuple(carried.get("read_files", ())),
+            modified_files=tuple(carried.get("modified_files", ())),
+            skills=tuple(carried.get("skills", ())),
+        )
         self.round_id = data.get("round_id", 0)
         self.token_totals.update(data.get("token_totals") or {})
         self.tool_compaction_totals.update(data.get("tool_compaction_totals") or {})
+        self.compaction_totals.update(data.get("compaction_totals") or {})
 
         available = set(self.skills)
         self.tool_executor._loaded_skills = {

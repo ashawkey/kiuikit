@@ -178,9 +178,25 @@ However, this is not a security boundary: arbitrary shell syntax can evade stati
 
 The agent automatically manages context window usage through three layers:
 
-1. **Proactive tool-result compaction** — before a result enters conversation history, oversized output is reduced with a tool-aware pipeline. Full command output is teed during execution and saved under `.kia/tool-results/<session>/`.
-2. **Context pruning** — old tool results from read/exec/web tools are trimmed (head+tail) at 30% usage, then hard-cleared at 50%.
-3. **LLM compaction** — when context exceeds 75%, the oldest messages are summarized via an LLM call and replaced with a compact summary.
+1. **Proactive tool-result compaction** — before a result enters conversation history, oversized output is cut to an excerpt taken from whichever end carries the signal: a file or listing from the top, a log from the bottom, a process snapshot keeps its status and latest tail, anything else both ends. Full command output is teed during execution and saved under `.kia/tool-results/<session>/`, and the excerpt carries a pointer to it — so the excerpt only has to be enough to decide whether to go and read the rest, which is why no heuristic tries to guess the "interesting" lines. A capture is also kept for command output that is small enough to enter history whole but large enough for eviction to trim later: a file read can simply be repeated, a command cannot. The pointer to a capture lives in the message text, so it survives eviction and session save/resume alike. Captures for all but the 20 most recent sessions are dropped at startup.
+2. **Context eviction** — past 55% usage, old tool results from read/exec/web tools are trimmed to their per-tool retention policy, and fully cleared when the complete output is recoverable from disk. Results a later call superseded (a re-read, or a write to a file that was read earlier) go first. The newest 25% of the window — capped at 40k tokens, and never fewer than three turns — is never touched, and a pass that cannot free 8% of the window is skipped entirely, so the provider's cached prefix is invalidated rarely and in bulk. Eviction always stays below the compaction trigger, so a model whose output reserve pulls that trigger down (gpt-5 reserves 128k of a 258k window) gets a cheap deterministic pass before an LLM round-trip is spent.
+3. **LLM compaction** — near the end of the window (85%, or sooner if the model's output limit needs the room), the oldest messages are summarized and replaced with a structured handoff. A pass always aims to land at least 15% of the window *below* the trigger that woke it: on a model whose output reserve drags the trigger down to its floor (gpt-5 puts both at 129k of a 258k window) a pass that merely hit a flat 50% target would land back on the trigger and be fired again by the very next tool result. If a request overflows anyway, the agent compacts and retries once instead of failing the turn.
+
+Usage is measured against the token count the API last reported, plus an estimate of what has been added since — so the system prompt, tool schemas, and provider framing that character counting cannot see are all accounted for.
+
+### What survives a compaction
+
+The summary follows a fixed section structure (goal, constraints, progress, key decisions, next steps, critical context). Around the model's summary, several things are carried **deterministically** rather than trusted to survive re-summarization:
+
+- **The original request**, verbatim, through every subsequent compaction.
+- **Files read and modified**, as a list of paths — never their contents, since re-reading them is what makes compaction refill the window and cascade into compacting again.
+- **Loaded skills**, so the agent knows to call `load_skill` again for the full instructions.
+
+The newest 15% of the window (capped at 20k tokens) is never summarized away, and when the summarization input itself has to be cut it drops the *middle* — the oldest messages anchor the task, the newest carry the current state. Compacting an already-compacted session updates the previous summary instead of re-compressing it, so history does not degrade with each pass.
+
+A `pre-compaction` session revision is saved before the history is replaced, so `/rewind` can undo a compaction that lost too much.
+
+Two guards keep an unproductive pass from repeating every round. Before the round-trip, a split that would free less than it writes back — the summary is the one part of a compaction that *adds* context — is abandoned without calling the model at all. After it, every pass sets a floor that suppresses the next one until the context has actually grown by 5% of the window, whether or not the pass went well: a pass that clears the yield bar by a hair used to reset that floor, leaving the marginal pass right behind it unguarded. Summarization runs at low reasoning effort under a fixed output cap, since rewriting a conversation into a fixed section structure is transcription rather than reasoning.
 
 ## Rewind
 
