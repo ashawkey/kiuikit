@@ -16,7 +16,6 @@ from __future__ import annotations
 import glob
 import os
 import re
-import shlex
 import stat
 import sys
 from enum import Enum
@@ -184,10 +183,7 @@ class SafetyGuard:
             if pattern.search(command):
                 return False, f"Blocked: {desc}."
 
-        try:
-            tokens = self._tokenize(command)
-        except ValueError as e:
-            return False, f"Blocked: cannot safely parse shell command ({e})."
+        tokens = self._tokenize(command)
 
         for idx, token in enumerate(tokens[:-1]):
             if ">" in token and self._is_device_path(tokens[idx + 1]):
@@ -201,15 +197,119 @@ class SafetyGuard:
 
         return True, ""
 
-    @staticmethod
-    def _tokenize(command: str) -> list[str]:
-        lexer = shlex.shlex(
-            command, posix=True, punctuation_chars=";&|()<>{}\n"
-        )
-        lexer.whitespace = " \t\r"
-        lexer.whitespace_split = True
-        lexer.commenters = ""
-        return list(lexer)
+    _PUNCT_CHARS: ClassVar[frozenset[str]] = frozenset(";&|()<>{}\n")
+
+    @classmethod
+    def _tokenize(cls, command: str) -> list[str]:
+        """Split a shell command into word and operator tokens.
+
+        Unlike ``shlex``'s flat quoting model, this tracks nested quoting and
+        substitution contexts (``'...'``, ``"..."``, ``$(...)``, ``${...}``,
+        `` `...` ``) so quotes inside a command substitution do not desync the
+        parser. It applies shell quote removal to words and groups maximal runs
+        of operator characters into one token (matching ``shlex`` with
+        ``punctuation_chars``). It never raises on unbalanced input, degrading
+        to a best-effort split — appropriate for a heuristic guard that must not
+        block valid commands it cannot fully parse.
+        """
+        punct = cls._PUNCT_CHARS
+        tokens: list[str] = []
+        word: list[str] = []
+        started = False
+        stack: list[str] = []  # nesting: 'sq' 'dq' 'paren' 'brace' 'backtick'
+        i, n = 0, len(command)
+
+        def in_subst() -> bool:
+            return any(s in ("paren", "brace", "backtick") for s in stack)
+
+        def flush() -> None:
+            nonlocal started
+            if started:
+                tokens.append("".join(word))
+                word.clear()
+            started = False
+
+        while i < n:
+            c = command[i]
+            ctx = stack[-1] if stack else None
+            sub = in_subst()
+
+            if ctx == "sq":  # single quotes: literal until the closing quote
+                if c == "'":
+                    stack.pop()
+                    if sub:
+                        word.append(c)
+                else:
+                    word.append(c)
+                started = True
+                i += 1
+                continue
+
+            if c == "\\":  # backslash escape (inert inside single quotes)
+                started = True
+                nxt = command[i + 1] if i + 1 < n else ""
+                if sub or ctx == "dq":
+                    word.append(c)
+                    if nxt:
+                        word.append(nxt)
+                elif nxt:
+                    word.append(nxt)
+                else:
+                    word.append(c)
+                i += 2 if nxt else 1
+                continue
+
+            if c == "$" and i + 1 < n and command[i + 1] == "(":
+                word.append("$("); stack.append("paren"); started = True; i += 2; continue
+            if c == "$" and i + 1 < n and command[i + 1] == "{":
+                word.append("${"); stack.append("brace"); started = True; i += 2; continue
+            if c == "`":
+                word.append(c); started = True
+                stack.pop() if ctx == "backtick" else stack.append("backtick")
+                i += 1; continue
+
+            if ctx == "dq":  # double quotes
+                if c == '"':
+                    stack.pop()
+                    if sub:
+                        word.append(c)
+                else:
+                    word.append(c)
+                started = True
+                i += 1
+                continue
+
+            if sub:  # inside a substitution: emit verbatim, track nesting
+                word.append(c)
+                if c == "'": stack.append("sq")
+                elif c == '"': stack.append("dq")
+                elif c == "(" and ctx == "paren": stack.append("paren")
+                elif c == ")" and ctx == "paren": stack.pop()
+                elif c == "{" and ctx == "brace": stack.append("brace")
+                elif c == "}" and ctx == "brace": stack.pop()
+                started = True
+                i += 1
+                continue
+
+            # Top-level context.
+            if c == "'":
+                stack.append("sq"); started = True; i += 1; continue
+            if c == '"':
+                stack.append("dq"); started = True; i += 1; continue
+            if c in " \t\r":
+                flush(); i += 1; continue
+            if c in punct:
+                flush()
+                j = i + 1
+                while j < n and command[j] in punct:
+                    j += 1
+                tokens.append(command[i:j])
+                i = j
+                continue
+            word.append(c); started = True; i += 1
+
+        flush()
+        return tokens
 
     @classmethod
     def _command_segments(cls, tokens: list[str]) -> list[list[str]]:
