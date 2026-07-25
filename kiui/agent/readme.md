@@ -134,7 +134,7 @@ The agent supports the following slash commands in the CLI:
 | `/login [provider\|model-alias]` | Authenticate an OAuth provider; defaults to the current provider |
 | `/logout [provider\|model-alias]` | Remove stored OAuth credentials |
 | `/auth [provider\|model-alias]` | Show authentication status |
-| `/rewind [list\|revision\|round]` | Preview and check out any saved conversation/code revision, then branch from it |
+| `/rewind` | Pick, preview, and check out any saved conversation/code revision, then branch from it |
 | `/skills` | List installed skills; `/skills reload` to re-scan; `/skills <name>` to load one |
 | `/persona` | List personas; `/persona <name>` to switch (restarts the conversation) |
 | `/goal [text\|clear]` | Set a goal the agent auto-iterates toward until met (see [Goals](#goals)) |
@@ -200,7 +200,7 @@ Two guards keep an unproductive pass from repeating every round. Before the roun
 
 ## Rewind
 
-The `/rewind` command checks out any saved session revision. Use the picker, a revision ID prefix, or a round number (which selects that round's newest revision); `/rewind list` prints the same revisions as a table without touching anything.
+The `/rewind` command checks out any saved session revision. It takes no arguments — `/rewind` opens a picker whose options are the listing: each names which revision is checked out, its round, why it was saved, when, how many files it changed, and the prompt that produced it, so a revision is recognised by what was asked for rather than by an ID.
 
 Picking one previews the checkout before anything is applied — the rounds that would be dropped, and every file the move would create, modify, or delete with its line counts. A file edited outside the agent since it was recorded is called out, because a rewind would overwrite it:
 

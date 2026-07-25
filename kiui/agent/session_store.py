@@ -329,22 +329,6 @@ class SessionStore:
             self.head_id = revision_id
             return self.materialize(revision_id)
 
-    def resolve_revision(self, value: str) -> str:
-        """Resolve a full/prefix revision ID, or the newest revision for a round number."""
-        if value.isdigit():
-            round_id = int(value)
-            matches = [
-                rid for rid in self.revision_order
-                if self.revisions[rid]["state"].get("round_id") == round_id
-            ]
-        else:
-            matches = [rid for rid in self.revision_order if rid.startswith(value)]
-        if not matches:
-            raise ValueError(f"No revision matches {value!r}")
-        if not value.isdigit() and len(matches) > 1:
-            raise ValueError(f"Revision prefix {value!r} is ambiguous")
-        return matches[-1]
-
     def code_walk(self, from_id: str | None, to_id: str | None) -> list[tuple[dict[str, Any], bool]]:
         """Ordered ``(change record, forward)`` steps moving code from *from_id* to *to_id*.
 

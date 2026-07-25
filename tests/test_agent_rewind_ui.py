@@ -111,19 +111,9 @@ def _build(tmp_path: Path, answers: list[str]) -> tuple[_Agent, Path, _Console]:
     return agent, work, console
 
 
-def test_revision_list_shows_the_prompt_and_file_count_of_each_round(tmp_path: Path):
-    agent, _, console = _build(tmp_path, [])
-    agent._cmd_rewind("/rewind list")
-
-    assert "set up the parser module" in console.text
-    assert "make the parser handle floats and drop util" in console.text
-    # Listing must not checkpoint or move anything.
-    assert len(agent._session_store.candidates()) == 2
-
-
 def test_picker_and_preview_describe_the_conversation_and_the_files(tmp_path: Path):
     agent, work, console = _build(tmp_path, [" 2.", "1."])
-    agent._cmd_rewind("/rewind")
+    agent._cmd_rewind()
 
     picker, modes = console.prompts
     assert "set up the parser module" in picker[1]
@@ -148,7 +138,7 @@ def test_picker_options_are_the_listing_and_name_the_revision_type(tmp_path: Pat
     agent, _, console = _build(tmp_path, [" 3.", "5."])
     agent.context.messages.append({"role": "user", "content": "one more thought"})
     agent.save_session(reason="pre-compaction")
-    agent._cmd_rewind("/rewind")
+    agent._cmd_rewind()
 
     picker = console.prompts[0]
     assert "[current]" in picker[0] and "pre-compaction" in picker[0]
@@ -160,7 +150,7 @@ def test_picker_options_are_the_listing_and_name_the_revision_type(tmp_path: Pat
 
 def test_conversation_only_rewind_leaves_the_files_alone(tmp_path: Path):
     agent, work, console = _build(tmp_path, [" 2.", "2."])
-    agent._cmd_rewind("/rewind")
+    agent._cmd_rewind()
 
     assert (work / "parser.py").read_text() == "def parse(text):\n    return float(text)\n"
     assert not (work / "util.py").exists()
@@ -169,7 +159,7 @@ def test_conversation_only_rewind_leaves_the_files_alone(tmp_path: Path):
 
 def test_diffs_can_be_reviewed_before_choosing_a_mode(tmp_path: Path):
     agent, work, console = _build(tmp_path, [" 2.", "4.", "5."])
-    agent._cmd_rewind("/rewind")
+    agent._cmd_rewind()
 
     assert "diff parser.py@1" in console.text
     assert "diff util.py@1" in console.text
@@ -182,7 +172,7 @@ def test_diffs_can_be_reviewed_before_choosing_a_mode(tmp_path: Path):
 def test_preview_warns_about_files_edited_outside_the_agent(tmp_path: Path):
     agent, work, console = _build(tmp_path, [" 2.", "5."])
     (work / "parser.py").write_text("hand edited\n")
-    agent._cmd_rewind("/rewind")
+    agent._cmd_rewind()
 
     assert "changed on disk" in console.text
     assert "parser.py" in console.text
@@ -213,13 +203,13 @@ def test_replay_shows_tool_calls_the_way_the_live_view_does(tmp_path: Path):
 
 
 def test_preview_states_when_a_revision_touches_no_files(tmp_path: Path):
-    # With nothing to revert the menu offers no diff view, so Cancel is item 4.
-    agent, _, console = _build(tmp_path, ["4."])
+    # Round 3 changed no files, so rewinding to round 2 reverts none either, and
+    # with nothing to revert the mode menu offers no diff view: Cancel is item 4.
+    agent, _, console = _build(tmp_path, [" 2.", "4."])
     agent.round_id = 3
     agent.context.messages.append({"role": "user", "content": "just talking"})
     agent.save_session(reason="round")
-    target = agent._session_store.candidates()[1]["id"]
-    agent._cmd_rewind(f"/rewind {target[:8]}")
+    agent._cmd_rewind()
 
     assert "no files will change" in console.text
-    assert "no file changes" in console.prompts[0][0]
+    assert "no file changes" in console.prompts[1][0]

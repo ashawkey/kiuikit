@@ -147,24 +147,13 @@ class SessionMixin:
         self.tool_executor.shutdown_processes(clear=True)
         self._install_change_tracker()
 
-    def _cmd_rewind(self, raw: str):
+    def _cmd_rewind(self):
         """Move to any saved revision; subsequent work creates a branch."""
         if not self._session_id or not self.changes or self._session_store is None:
             self.console.warn("Rewind is only available in interactive chat mode with a session.")
             return
 
-        parts = raw.split(maxsplit=1)
-        argument = parts[1].strip() if len(parts) > 1 else ""
         store = self._session_store
-
-        if argument.lower() == "list":
-            candidates = store.candidates()
-            if not candidates:
-                self.console.system("No saved revisions yet.")
-                return
-            self.console.table(self._revision_table(candidates))
-            return
-
         try:
             self.save_session(self._session_id, reason="pre-rewind")
         except Exception as e:
@@ -176,17 +165,10 @@ class SessionMixin:
             self.console.system("No earlier revisions to rewind to.")
             return
 
-        if argument:
-            try:
-                target_id = store.resolve_revision(argument)
-            except ValueError as e:
-                self.console.error(str(e))
-                return
-        else:
-            target_id = self._pick_revision(candidates)
-            if target_id is None:
-                self.console.system("Rewind cancelled.")
-                return
+        target_id = self._pick_revision(candidates)
+        if target_id is None:
+            self.console.system("Rewind cancelled.")
+            return
 
         if target_id == self._session_revision_id:
             self.console.system("That revision is already checked out.")
@@ -241,7 +223,7 @@ class SessionMixin:
             self.console.system("Code already matched that revision; no files changed.")
 
     def _pick_revision(self, candidates: list[dict]) -> str | None:
-        """Show the revision table, then select one of its rows."""
+        """Select a revision; each option carries the whole listing for its row."""
         labels = []
         for index, revision in enumerate(candidates, start=1):
             marker = "[current]" if revision["current"] else ""
@@ -256,35 +238,6 @@ class SessionMixin:
         if picked is None:
             return None
         return candidates[labels.index(picked)]["id"]
-
-    def _revision_table(self, candidates: list[dict]) -> Table:
-        """Tabulate revisions with the conversation and file context to judge them."""
-        table = Table(title=f"Session revisions: {self._session_id}", title_style="bold blue")
-        table.add_column("#", justify="right", style="dim")
-        table.add_column("Revision", style="cyan", no_wrap=True)
-        table.add_column("Round", justify="right", style="blue")
-        table.add_column("When", style="dim", no_wrap=True)
-        table.add_column("Msgs", justify="right", style="dim")
-        table.add_column("Files", justify="right", style="green")
-        table.add_column("Saved as", style="magenta")
-        table.add_column(
-            "Prompt", style="white", no_wrap=True, overflow="ellipsis",
-            max_width=self.REWIND_PROMPT_WIDTH,
-        )
-        for index, revision in enumerate(candidates, start=1):
-            delta = revision["new_messages"]
-            messages = f"{revision['messages']}" + (f" ({delta:+d})" if delta else "")
-            table.add_row(
-                str(index),
-                revision["id"][:10] + (" [current]" if revision["current"] else ""),
-                str(revision["round_id"]),
-                _relative_time(revision["created_at"]),
-                messages,
-                str(revision["files"]) if revision["files"] else "-",
-                revision["reason"],
-                Text(_shorten(revision["prompt"] or _reason_label(revision["reason"]), self.REWIND_PROMPT_WIDTH)),
-            )
-        return table
 
     def _print_rewind_preview(self, target_id: str, target: dict, plan: CheckoutPlan) -> None:
         """Show what checking out *target_id* would do to history and to files."""
