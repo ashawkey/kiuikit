@@ -301,3 +301,59 @@ def test_managed_background_process_stops_detached_descendant(tmp_path):
     child_pid = int(child_pid_file.read_text())
     with pytest.raises(ProcessLookupError):
         os.kill(child_pid, 0)
+
+
+class _RecordingConsole(_SilentConsole):
+    def __init__(self):
+        self.labels = []
+
+    def tool(self, msg, *args, **kwargs):
+        self.labels.append(msg)
+
+
+@pytest.mark.parametrize(
+    "name, args",
+    [
+        ("read_file", {"file": "a.txt"}),
+        ("read_file", {"file": "a.txt", "offset": 5, "limit": 20}),
+        ("write_file", {"file": "a.txt", "content": "hi\n"}),
+        ("edit_file", {"file": "a.txt", "old_text": "hi", "new_text": "yo"}),
+        ("multi_edit", {"file": "a.txt", "edits": [{"old_text": "hi", "new_text": "yo"}]}),
+        ("remove_file", {"file": "a.txt"}),
+        ("ls", {}),
+        ("ls", {"path": "sub", "all": True}),
+        ("glob_files", {"pattern": "*.txt"}),
+        ("glob_files", {"pattern": "*.txt", "recursive": False}),
+        ("grep_files", {"pattern": "needle"}),
+        ("grep_files", {"pattern": "needle", "path": "sub", "file_glob": "*.py", "case_insensitive": True}),
+        ("load_skill", {"name": "monitor"}),
+    ],
+)
+def test_replayed_tool_calls_render_like_live_ones(tmp_path, name, args):
+    """A replayed call must print the label the live handler prints."""
+    (tmp_path / "a.txt").write_text("hi\n")
+    (tmp_path / "sub").mkdir()
+    console = _RecordingConsole()
+    te = ToolExecutor(console=console, work_dir=str(tmp_path))
+    te.execute(name, dict(args))
+
+    assert console.labels == [tools.describe_tool_call(name, args)]
+
+
+def test_unknown_and_malformed_calls_still_describe_compactly():
+    describe = tools.describe_tool_call
+    assert describe("browser_click", {"index": 3}) == "browser_click(index=3)"
+    assert describe("browser_stop", {}) == "browser_stop"
+    assert describe("edit_file", {"file": "a.txt"}) == "edit_file a.txt"
+    # Missing required arguments fall back instead of failing the render.
+    assert describe("edit_file", {"path": "a.txt"}) == "edit_file(path=a.txt)"
+    long_value = describe("web_fetch", {"note": "x " * 60})
+    assert long_value.endswith("…)") and len(long_value) < 120
+
+
+def test_replay_only_calls_a_result_failed_when_it_is_formatted_as_one():
+    failed = tools.result_text_failed
+    assert failed(format_tool_result({"success": False, "error": "boom"}))
+    assert failed(format_tool_result({"success": False, "error": "boom", "stdout": "out"}))
+    assert not failed("grep hit: raise ValueError('error')")
+    assert not failed("")

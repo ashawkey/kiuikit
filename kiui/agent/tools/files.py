@@ -9,7 +9,7 @@ from typing import Any
 import pathspec
 
 from .constants import MAX_READ_LINES, MAX_TOOL_OUTPUT_CHARS, SKIP_DIRS as _SKIP_DIRS
-from .formatting import truncate_text_output
+from .formatting import describe_tool_call, truncate_text_output
 
 
 _IMAGE_SIGNATURES = (
@@ -156,7 +156,9 @@ class FileToolsMixin:
         """Read file contents with optional offset and limit."""
         start = max(1, offset or 1)
         effective_limit = limit if limit is not None else MAX_READ_LINES
-        self.console.tool(f"read_file {file}:{start}-{start + effective_limit - 1}")
+        self.console.tool(
+            describe_tool_call("read_file", {"file": file, "offset": start, "limit": effective_limit})
+        )
 
         file_path = self._resolve_path(file)
         if not file_path.exists():
@@ -208,7 +210,7 @@ class FileToolsMixin:
 
     def _read_image(self, file: str) -> dict[str, Any]:
         """Read an image into an OpenAI-compatible data URL."""
-        self.console.tool(f"read_image {file}")
+        self.console.tool(describe_tool_call("read_image", {"file": file}))
 
         file_path = self._resolve_path(file)
         if not file_path.exists():
@@ -235,7 +237,7 @@ class FileToolsMixin:
 
     def _write_file(self, file: str, content: str) -> dict[str, Any]:
         """Write content to file, creating parent directories."""
-        self.console.tool(f"write_file {file}")
+        self.console.tool(describe_tool_call("write_file", {"file": file}))
 
         file_path = self._resolve_path(file)
         if self._change_tracker and self._get_round_id:
@@ -259,7 +261,7 @@ class FileToolsMixin:
 
     def _edit_file(self, file: str, old_text: str, new_text: str, replace_all: bool = False) -> dict[str, Any]:
         """Make a surgical edit to a file (whitespace-tolerant matching)."""
-        self.console.tool(f"edit_file {file}")
+        self.console.tool(describe_tool_call("edit_file", {"file": file}))
 
         file_path = self._resolve_path(file)
         if not file_path.exists():
@@ -304,7 +306,7 @@ class FileToolsMixin:
         if not edits:
             return {"error": "No edits provided.", "success": False}
 
-        self.console.tool(f"multi_edit {file} ({len(edits)} edits)")
+        self.console.tool(describe_tool_call("multi_edit", {"file": file, "edits": edits}))
 
         file_path = self._resolve_path(file)
         if not file_path.exists():
@@ -367,7 +369,7 @@ class FileToolsMixin:
 
     def _ls(self, path: str | None = None, all: bool = False) -> dict[str, Any]:
         """List a directory's immediate contents (gitignore-aware)."""
-        self.console.tool(f"ls {path or '.'}" + (" (all)" if all else ""))
+        self.console.tool(describe_tool_call("ls", {"path": path, "all": all}))
 
         base = self._resolve_path(path or ".")
         if not base.exists():
@@ -435,7 +437,7 @@ class FileToolsMixin:
 
     def _remove_file(self, file: str) -> dict[str, Any]:
         """Remove a file or directory."""
-        self.console.tool(f"remove_file {file}")
+        self.console.tool(describe_tool_call("remove_file", {"file": file}))
 
         target = self._resolve_path(file)
         if not target.exists():

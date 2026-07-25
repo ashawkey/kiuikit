@@ -134,7 +134,7 @@ The agent supports the following slash commands in the CLI:
 | `/login [provider\|model-alias]` | Authenticate an OAuth provider; defaults to the current provider |
 | `/logout [provider\|model-alias]` | Remove stored OAuth credentials |
 | `/auth [provider\|model-alias]` | Show authentication status |
-| `/rewind [revision-or-round]` | Check out any saved conversation/code revision and branch from it |
+| `/rewind [list\|revision\|round]` | Preview and check out any saved conversation/code revision, then branch from it |
 | `/skills` | List installed skills; `/skills reload` to re-scan; `/skills <name>` to load one |
 | `/persona` | List personas; `/persona <name>` to switch (restarts the conversation) |
 | `/goal [text\|clear]` | Set a goal the agent auto-iterates toward until met (see [Goals](#goals)) |
@@ -200,13 +200,52 @@ Two guards keep an unproductive pass from repeating every round. Before the roun
 
 ## Rewind
 
-The `/rewind` command checks out any saved session revision. Use the picker, a revision ID prefix, or a round number (which selects that round's newest revision):
+The `/rewind` command checks out any saved session revision. Use the picker, a revision ID prefix, or a round number (which selects that round's newest revision); `/rewind list` prints the same table without touching anything.
+
+Every revision is listed with the prompt that produced it, how the message count moved, and how many files it changed, so a revision can be recognised by what was asked for rather than by its ID:
+
+```
+┌───┬─────────────┬───────┬──────────┬────────┬───────┬──────────┬──────────────────────────────────┐
+│ # │ Revision    │ Round │ When     │   Msgs │ Files │ Saved as │ Prompt                           │
+├───┼─────────────┼───────┼──────────┼────────┼───────┼──────────┼──────────────────────────────────┤
+│ 1 │ 282d4292b6  │     3 │ just now │ 5 (+2) │     1 │ round    │ drop util.py, it is unused       │
+│ 2 │ f7b188cf5b  │     2 │ 4m ago   │ 3 (+2) │     2 │ round    │ make the parser handle floats    │
+│ 3 │ a80161e46f  │     1 │ 9m ago   │ 1 (+1) │     2 │ round    │ set up the parser module         │
+└───┴─────────────┴───────┴──────────┴────────┴───────┴──────────┴──────────────────────────────────┘
+```
+
+Picking one previews the checkout before anything is applied — the rounds that would be dropped, and every file the move would create, modify, or delete with its line counts. A file edited outside the agent since it was recorded is called out, because a rewind would overwrite it:
+
+```
+Revision     a80161e46f  ·  round 1  ·  9m ago  ·  saved as round
+Prompt       set up the parser module
+Conversation 5 → 1 messages, round 3 → 1
+             2 round(s) will be dropped:
+               round 3  drop util.py, it is unused
+               round 2  make the parser handle floats and add tests
+Files        3 will change  (+3 / -8)
+             modify  parser.py   +2 -6
+             delete  test_parser.py   -2
+             create  util.py   +1
+             ! 1 file(s) changed on disk since they were recorded and would be overwritten: parser.py
+```
+
+The mode prompt then restates that effect on each option, and can show the full diffs first:
 
 - **Conversation + code** — restore both histories to the selected revision.
 - **Conversation only** — restore messages while keeping current files.
 - **Code only** — restore files while keeping the current conversation.
+- **Show the file diffs** — render every hunk the checkout would apply, then ask again.
+
+The preview and the checkout consume the same walk through the code DAG, so what is shown is exactly what is applied, and paths a walk touches but leaves byte-identical are dropped from both — `no files will change` means the rewind is conversation-only in practice.
 
 Session messages, revisions, head movements, and code revisions are stored in an append-only JSONL DAG. Rewinding never deletes descendants: the next save creates a branch, so an accidental rewind can be reversed by checking out the former revision. Removed files and directories are stored as immutable, deduplicated content-addressed objects under the session's `objects/` directory.
+
+### Replay
+
+Restoring a conversation — after a rewind, `/resume`, or `--resume` — reprints it. Tool calls are described by the same function that labels them live (`read_file a.txt:1-1000`, not `read_file({"file": "a.txt"})`), so a replayed transcript reads like the session did.
+
+Results are the part that cannot be fully reproduced: the live view renders them from the result object (a coloured diff for an edit, an exit code for a command, a line count for a read), and only the formatted text is persisted. A replayed result is therefore its text summary, marked as a failure only when the text is formatted as one.
 
 ## Goals
 

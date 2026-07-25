@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import datetime
 import os
 import re
 import subprocess
 import threading
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator, Callable, Iterable
 
@@ -636,3 +638,65 @@ class TerminalInput:
     @property
     def text(self) -> str:
         return self._session.default_buffer.text
+
+
+class PromptDriver:
+    """Own the one prompt task a terminal session may have at a time.
+
+    ``PromptSession`` reuses a single prompt_toolkit ``Application``, so starting
+    a second prompt while one is alive raises "Application is already running".
+    Suspending the editor to ask something else (a permission prompt, a rewind
+    picker) therefore has to stop the current prompt, ask, and start the next one
+    as one indivisible step: a browser or Escape answer resolves the prompt
+    broker from another thread, which returns to the caller *before* this loop
+    has finished tearing the editor down, so back-to-back asks used to overlap.
+    """
+
+    def __init__(self, terminal: TerminalInput):
+        self.terminal = terminal
+        self.task: asyncio.Task | None = None
+        self.suspended = False
+        self._lock = asyncio.Lock()
+        self._resumed = asyncio.Event()
+        self._resumed.set()
+
+    def start(self, default: str = "") -> None:
+        """Begin a prompt; the previous one must already have finished."""
+        if self.task is not None and not self.task.done():
+            raise RuntimeError("A terminal prompt is already running")
+        self.task = asyncio.create_task(self.terminal.prompt_async(default))
+
+    async def stop(self) -> None:
+        """Cancel the live prompt and wait for its application to shut down."""
+        task, self.task = self.task, None
+        if task is None:
+            return
+        task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, EOFError, KeyboardInterrupt):
+            pass
+
+    async def restart(self, default: str = "") -> None:
+        """Replace a finished prompt with the next one."""
+        async with self._lock:
+            await self.stop()
+            self.start(default)
+
+    @asynccontextmanager
+    async def paused(self) -> AsyncGenerator[None, None]:
+        """Hold the editor closed for the body, then reopen it with its draft."""
+        async with self._lock:
+            self.suspended = True
+            self._resumed.clear()
+            draft = self.terminal.text
+            await self.stop()
+            try:
+                yield
+            finally:
+                self.start(draft)
+                self.suspended = False
+                self._resumed.set()
+
+    async def wait_resumed(self) -> None:
+        await self._resumed.wait()

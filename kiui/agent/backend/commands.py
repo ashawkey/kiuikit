@@ -37,7 +37,7 @@ class AgentCommandsMixin:
         "persona": "List/switch personas; /persona reload to re-scan",
         "goal": "Set a goal the agent auto-iterates toward (/goal <text> | clear)",
         "perm": "Show or change permission mode (/perm auto|default|strict)",
-        "rewind": "Check out a saved revision and branch from it",
+        "rewind": "Check out a saved revision and branch from it (/rewind [list|revision|round])",
         "clear": "Clear conversation history (keep system prompt)",
         "resume": "Save current, then resume a previous session (/resume [session_id])",
         "exit": "Exit the agent (also: /quit)",

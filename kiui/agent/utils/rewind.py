@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from kiui.agent.session_store import SessionStore
+from kiui.agent.session_store import PathDelta, SessionStore
 from kiui.agent.ui import AgentConsole
 
 
@@ -22,6 +22,25 @@ class ChangeRecord:
     op: str
     before: dict[str, Any] | None = None
     after: dict[str, Any] | None = None
+
+
+@dataclass
+class CheckoutPlan:
+    """What moving code to another revision would do, before doing it."""
+
+    target_id: str | None
+    steps: list[tuple[dict[str, Any], bool]]
+    deltas: list[PathDelta]
+    dirty: tuple[str, ...]
+    added: int
+    removed: int
+
+    def __bool__(self) -> bool:
+        return bool(self.deltas)
+
+    @property
+    def files(self) -> int:
+        return len(self.deltas)
 
 
 class ChangeTracker:
@@ -98,45 +117,53 @@ class ChangeTracker:
         before = self.store.store_path(abs_path)
         self._pending.append(ChangeRecord(round_id, stored_path, "remove", before, None))
 
-    def checkout_code(self, target_id: str | None) -> int:
-        """Move code from the current revision to *target_id* through their LCA."""
+    def plan_checkout(self, target_id: str | None) -> CheckoutPlan:
+        """Describe moving code to *target_id* without touching the filesystem."""
         if self._pending:
             raise RuntimeError("Save the session before checking out a code revision")
-        if target_id == self.code_revision_id:
-            return 0
 
-        current_chain = self._ancestor_chain(self.code_revision_id)
-        target_chain = self._ancestor_chain(target_id)
-        target_set = set(target_chain)
-        lca = next((revision for revision in current_chain if revision in target_set), None)
+        steps = self.store.code_walk(self.code_revision_id, target_id)
+        deltas = self.store.code_delta(self.code_revision_id, target_id)
+        _, added, removed = self.store.delta_stats(deltas)
+        dirty = tuple(delta.path for delta in deltas if self._is_dirty(delta))
+        return CheckoutPlan(target_id, steps, deltas, dirty, added, removed)
+
+    def apply_plan(self, plan: CheckoutPlan) -> int:
+        """Execute a plan built by :meth:`plan_checkout`."""
+        if self._pending:
+            raise RuntimeError("Save the session before checking out a code revision")
 
         changed = 0
-        cursor = self.code_revision_id
-        while cursor != lca:
-            revision = self.store.code_revisions[cursor]
-            for raw in reversed(revision["changes"]):
-                changed += self._apply(ChangeRecord(**raw), forward=False)
-            cursor = revision["parentId"]
-
-        forward_ids: list[str] = []
-        cursor = target_id
-        while cursor != lca:
-            forward_ids.append(cursor)
-            cursor = self.store.code_revisions[cursor]["parentId"]
-        for revision_id in reversed(forward_ids):
-            for raw in self.store.code_revisions[revision_id]["changes"]:
-                changed += self._apply(ChangeRecord(**raw), forward=True)
-
-        self.code_revision_id = target_id
+        for record, forward in plan.steps:
+            changed += self._apply(ChangeRecord(**record), forward=forward)
+        self.code_revision_id = plan.target_id
         return changed
 
-    def _ancestor_chain(self, revision_id: str | None) -> list[str | None]:
-        chain: list[str | None] = []
-        while True:
-            chain.append(revision_id)
-            if revision_id is None:
-                return chain
-            revision_id = self.store.code_revisions[revision_id]["parentId"]
+    def checkout_code(self, target_id: str | None) -> int:
+        """Move code from the current revision to *target_id* through their LCA."""
+        return self.apply_plan(self.plan_checkout(target_id))
+
+    def _is_dirty(self, delta: PathDelta) -> bool:
+        """Whether the working tree at *delta.path* no longer matches the record.
+
+        A dirty path means a rewind would overwrite edits made outside the agent
+        (or by a tool that does not track changes), so it is worth warning about.
+        Text files are compared decoded: tools write them in text mode, so the
+        line endings on disk are platform-dependent while the stored bytes are not.
+        """
+        path = self._absolute(delta.path)
+        if delta.before is None:
+            # The path is expected to be absent; anything there would be clobbered.
+            return path.exists() or path.is_symlink()
+        if not path.exists() and not path.is_symlink():
+            return True
+        recorded = self.store.read_text(delta.before)
+        if recorded is not None and path.is_file() and not path.is_symlink():
+            try:
+                return path.read_text(encoding="utf-8") != recorded
+            except (UnicodeDecodeError, OSError):
+                return True
+        return self.store.hash_path(path) != delta.before["id"]
 
     def _apply(self, record: ChangeRecord, *, forward: bool) -> int:
         path = self._absolute(record.path)
@@ -148,25 +175,3 @@ class ChangeTracker:
         if descriptor is not None:
             self.store.restore_object(descriptor, path)
         return 1
-
-    def round_stats(self, round_id: int) -> tuple[int, int, int]:
-        """Return file and line statistics for pending changes in a round."""
-        files: set[str] = set()
-        added = removed = 0
-        for record in self._pending:
-            if record.round_id != round_id:
-                continue
-            files.add(record.path)
-            old_lines = self._line_count(record.before)
-            new_lines = self._line_count(record.after)
-            added += max(0, new_lines - old_lines)
-            removed += max(0, old_lines - new_lines)
-        return len(files), added, removed
-
-    def _line_count(self, descriptor: dict[str, Any] | None) -> int:
-        if descriptor is None or descriptor["kind"] != "file":
-            return 0
-        try:
-            return len(self.store._read_object(descriptor).decode("utf-8").splitlines())
-        except UnicodeDecodeError:
-            return 0

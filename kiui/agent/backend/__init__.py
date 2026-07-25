@@ -23,7 +23,7 @@ from kiui.agent.personas import (
 )
 from kiui.agent.backend.sessions import SessionMixin
 from kiui.agent.backend.skill_commands import SkillCommandsMixin
-from kiui.agent.terminal import TerminalInput
+from kiui.agent.terminal import PromptDriver, TerminalInput
 from kiui.agent.ui import AgentConsole, ContextStatus
 from kiui.agent.utils import get_kia_dir
 from kiui.agent.skills import discover_skills
@@ -1107,10 +1107,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         active: Future | None = None
         exit_requested = False
         should_exit = False
-        prompt_task: asyncio.Task | None = None
-        prompt_suspended = False
-        prompt_resumed: asyncio.Event | None = None
-        draft = ""
+        prompts: PromptDriver | None = None
 
         def cancel() -> None:
             if self.cancellation is not None:
@@ -1137,7 +1134,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self.console.status_sink = terminal.set_status
 
         async def loop() -> None:
-            nonlocal active, exit_requested, should_exit, prompt_task, prompt_suspended, prompt_resumed, draft
+            nonlocal active, exit_requested, should_exit, prompts
             ui_loop = asyncio.get_running_loop()
             input_ready = asyncio.Event()
 
@@ -1149,21 +1146,11 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 ui_loop.call_soon_threadsafe(refresh)
 
             self.input_broker.add_listener(wake_input)
-            prompt_resumed = asyncio.Event()
-            prompt_resumed.set()
-            prompt_task = asyncio.create_task(terminal.prompt_async())
+            prompts = PromptDriver(terminal)
+            prompts.start()
 
             async def show_prompt(prompt):
-                nonlocal prompt_task, prompt_suspended, draft
-                prompt_suspended = True
-                prompt_resumed.clear()
-                draft = terminal.text
-                prompt_task.cancel()
-                try:
-                    try:
-                        await prompt_task
-                    except asyncio.CancelledError:
-                        pass
+                async with prompts.paused():
                     terminal_message = prompt.message.splitlines()[0]
                     if prompt.kind == "select":
                         return await self.console.select_terminal_async(
@@ -1174,11 +1161,6 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                     return await self.console.ask_text_terminal_async(
                         terminal_message, default=prompt.default
                     )
-                finally:
-                    prompt_task = asyncio.create_task(terminal.prompt_async(draft))
-                    draft = ""
-                    prompt_suspended = False
-                    prompt_resumed.set()
 
             async def terminal_ask(prompt):
                 future = asyncio.run_coroutine_threadsafe(
@@ -1192,7 +1174,10 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             try:
                 while True:
                     input_task = asyncio.create_task(input_ready.wait())
-                    wait = {prompt_task, input_task}
+                    prompt_task = prompts.task
+                    wait = {input_task}
+                    if prompt_task is not None:
+                        wait.add(prompt_task)
                     if active is not None:
                         wait.add(asyncio.wrap_future(active))
                     done, _ = await asyncio.wait(
@@ -1218,43 +1203,47 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                         active = executor.submit(self._process_next_submission)
                         terminal.set_busy(True)
 
-                    if prompt_task in done:
+                    # Only act on the prompt this iteration waited on: a pause
+                    # that started meanwhile owns the editor and will restart it.
+                    if prompt_task is not None and prompt_task in done and prompts.task is prompt_task:
                         try:
                             text = prompt_task.result()
                         except asyncio.CancelledError:
-                            if prompt_suspended:
-                                await prompt_resumed.wait()
-                                continue
-                            raise
+                            if prompts.suspended:
+                                await prompts.wait_resumed()
+                            else:
+                                # Cancelled with no pause owning it; reopen the
+                                # editor so the loop cannot spin on a done task.
+                                await prompts.restart()
+                            continue
                         except (EOFError, KeyboardInterrupt):
                             if active is None:
                                 return
                             exit_requested = True
                             cancel()
-                            prompt_task = asyncio.create_task(terminal.prompt_async())
+                            await prompts.restart()
                             continue
 
                         text = text.strip()
                         if not text:
-                            prompt_task = asyncio.create_task(terminal.prompt_async())
+                            await prompts.restart()
                             continue
                         try:
                             self.input_broker.submit(text, source="terminal")
                         except ValueError as exc:
-                            prompt_task = asyncio.create_task(
-                                terminal.prompt_async(text)
-                            )
+                            await prompts.restart(text)
                             self.console.warn(str(exc))
                             continue
-                        prompt_task = asyncio.create_task(terminal.prompt_async())
+                        await prompts.restart()
                         terminal.app.invalidate()
                         if active is None:
                             active = executor.submit(self._process_next_submission)
                             terminal.set_busy(True)
+                    elif prompt_task is not None and prompt_task in done:
+                        await prompts.wait_resumed()
             finally:
                 self.input_broker.remove_listener(wake_input)
-                if prompt_task is not None:
-                    prompt_task.cancel()
+                await prompts.stop()
                 if active is not None:
                     await asyncio.wrap_future(active)
 

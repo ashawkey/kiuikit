@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import difflib
 import hashlib
 import json
 import os
@@ -9,11 +10,13 @@ import re
 import stat
 import time
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from filelock import FileLock
 
+from kiui.agent.context import get_role, get_text
 from kiui.agent.utils.persistence import (
     append_jsonl,
     read_jsonl,
@@ -25,6 +28,38 @@ from kiui.agent.utils.persistence import (
 def _message_id(message: dict[str, Any]) -> str:
     raw = json.dumps(message, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
+
+
+def _object_id(kind: str, data: bytes) -> str:
+    return hashlib.sha256(kind.encode("ascii") + b"\0" + data).hexdigest()
+
+
+def _object_key(descriptor: dict[str, Any] | None) -> tuple[str, int] | None:
+    """Identity of a stored object: content plus permissions, or ``None`` if absent."""
+    if descriptor is None:
+        return None
+    return descriptor["id"], descriptor["mode"]
+
+
+# Above this many lines, line-by-line matching costs more than the stat is worth.
+DIFF_LINE_LIMIT = 20000
+
+
+@dataclass(frozen=True)
+class PathDelta:
+    """Net effect on one path of moving between two code revisions."""
+
+    path: str
+    before: dict[str, Any] | None
+    after: dict[str, Any] | None
+
+    @property
+    def op(self) -> str:
+        if self.before is None:
+            return "create"
+        if self.after is None:
+            return "delete"
+        return "modify"
 
 
 class SessionStore:
@@ -43,6 +78,7 @@ class SessionStore:
         self.code_revisions: dict[str, dict[str, Any]] = {}
         self.revision_order: list[str] = []
         self.head_id: str | None = None
+        self._text_stats: dict[tuple[tuple[str, int] | None, ...], tuple[int, int]] = {}
         self._load()
 
     def _load(self) -> None:
@@ -112,7 +148,7 @@ class SessionStore:
             raise ValueError(f"Unknown object kind: {kind!r}")
 
     def _store_object(self, kind: str, data: bytes, mode: int) -> dict[str, Any]:
-        object_id = hashlib.sha256(kind.encode("ascii") + b"\0" + data).hexdigest()
+        object_id = _object_id(kind, data)
         write_immutable(self._object_path(object_id), data)
         return {"id": object_id, "kind": kind, "mode": mode}
 
@@ -120,10 +156,55 @@ class SessionStore:
         object_id = descriptor["id"]
         kind = descriptor["kind"]
         data = self._object_path(object_id).read_bytes()
-        actual = hashlib.sha256(kind.encode("ascii") + b"\0" + data).hexdigest()
-        if actual != object_id:
+        if _object_id(kind, data) != object_id:
             raise ValueError(f"Corrupted session object: {object_id}")
         return data
+
+    def read_text(self, descriptor: dict[str, Any] | None) -> str | None:
+        """Return a stored file's text, or ``None`` for a missing or binary object.
+
+        Line endings are normalized: tools write files in text mode, so the same
+        content is stored with CRLF when captured from disk and LF when captured
+        from a tool argument. Restoring uses the raw bytes and is unaffected.
+        """
+        if descriptor is None or descriptor["kind"] != "file":
+            return None
+        try:
+            return self._read_object(descriptor).decode("utf-8").replace("\r\n", "\n")
+        except UnicodeDecodeError:
+            return None
+
+    def hash_path(self, path: Path) -> str | None:
+        """Content-addressed ID of *path* as it is on disk, without storing it.
+
+        Returns ``None`` for a missing path or one that cannot be stored, so
+        callers comparing against a recorded descriptor treat it as a mismatch.
+        """
+        if not path.exists() and not path.is_symlink():
+            return None
+        if path.is_symlink():
+            return _object_id("symlink", os.readlink(path).encode("utf-8"))
+        if path.is_file():
+            return _object_id("file", path.read_bytes())
+        if path.is_dir():
+            entries = []
+            for child in sorted(path.iterdir(), key=lambda child: child.name):
+                child_id = self.hash_path(child)
+                if child_id is None:
+                    return None
+                info = child.lstat()
+                kind = (
+                    "symlink" if child.is_symlink()
+                    else "tree" if child.is_dir()
+                    else "file"
+                )
+                entries.append({
+                    "name": child.name,
+                    "object": {"id": child_id, "kind": kind, "mode": stat.S_IMODE(info.st_mode)},
+                })
+            manifest = json.dumps(entries, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            return _object_id("tree", manifest)
+        return None
 
     def _object_path(self, object_id: str) -> Path:
         if not re.fullmatch(r"[0-9a-f]{64}", object_id):
@@ -264,19 +345,177 @@ class SessionStore:
             raise ValueError(f"Revision prefix {value!r} is ambiguous")
         return matches[-1]
 
+    def code_walk(self, from_id: str | None, to_id: str | None) -> list[tuple[dict[str, Any], bool]]:
+        """Ordered ``(change record, forward)`` steps moving code from *from_id* to *to_id*.
+
+        The walk first undoes the current branch down to the lowest common
+        ancestor, then replays the target branch forward. Applying and previewing
+        a checkout both consume this sequence, so they cannot disagree.
+        """
+        if from_id == to_id:
+            return []
+
+        current_chain = self._code_ancestors(from_id)
+        target_chain = self._code_ancestors(to_id)
+        target_set = set(target_chain)
+        lca = next((revision for revision in current_chain if revision in target_set), None)
+
+        steps: list[tuple[dict[str, Any], bool]] = []
+        cursor = from_id
+        while cursor != lca:
+            revision = self.code_revisions[cursor]
+            steps.extend((raw, False) for raw in reversed(revision["changes"]))
+            cursor = revision["parentId"]
+
+        forward_ids: list[str] = []
+        cursor = to_id
+        while cursor != lca:
+            forward_ids.append(cursor)
+            cursor = self.code_revisions[cursor]["parentId"]
+        for revision_id in reversed(forward_ids):
+            steps.extend((raw, True) for raw in self.code_revisions[revision_id]["changes"])
+        return steps
+
+    def _code_ancestors(self, revision_id: str | None) -> list[str | None]:
+        chain: list[str | None] = []
+        while True:
+            chain.append(revision_id)
+            if revision_id is None:
+                return chain
+            revision_id = self.code_revisions[revision_id]["parentId"]
+
+    def code_delta(self, from_id: str | None, to_id: str | None) -> list[PathDelta]:
+        """Net per-path effect of moving code from *from_id* to *to_id*.
+
+        Paths that a walk touches but ends up leaving byte-identical are dropped,
+        so an empty result means the move really would not touch the filesystem.
+        """
+        source: dict[str, dict[str, Any] | None] = {}
+        target: dict[str, dict[str, Any] | None] = {}
+        for record, forward in self.code_walk(from_id, to_id):
+            path = record["path"]
+            before, after = record["before"], record["after"]
+            step_source, step_target = (before, after) if forward else (after, before)
+            source.setdefault(path, step_source)
+            target[path] = step_target
+        return [
+            PathDelta(path, source[path], target[path])
+            for path in sorted(target)
+            if _object_key(source[path]) != _object_key(target[path])
+        ]
+
+    def revision_changes(self, revision_id: str) -> list[PathDelta]:
+        """Net file changes a revision introduced relative to its parent revision."""
+        revision = self.revisions[revision_id]
+        parent_id = revision["parentId"]
+        parent_code = self.revisions[parent_id].get("codeRevisionId") if parent_id else None
+        return self.code_delta(parent_code, revision.get("codeRevisionId"))
+
+    def delta_stats(self, deltas: list[PathDelta]) -> tuple[int, int, int]:
+        """Return ``(files, lines added, lines removed)`` for *deltas*."""
+        added = removed = 0
+        for delta in deltas:
+            delta_added, delta_removed = self.text_stats(delta.before, delta.after)
+            added += delta_added
+            removed += delta_removed
+        return len(deltas), added, removed
+
+    def text_stats(
+        self, before: dict[str, Any] | None, after: dict[str, Any] | None
+    ) -> tuple[int, int]:
+        """Return ``(added, removed)`` line counts between two stored objects.
+
+        Binary files and directory trees have no line diff and count as zero.
+        """
+        key = (_object_key(before), _object_key(after))
+        cached = self._text_stats.get(key)
+        if cached is not None:
+            return cached
+        old_lines = (self.read_text(before) or "").splitlines()
+        new_lines = (self.read_text(after) or "").splitlines()
+        if max(len(old_lines), len(new_lines)) > DIFF_LINE_LIMIT:
+            # Line-by-line matching is quadratic; fall back to net size for huge files.
+            stats = (
+                max(0, len(new_lines) - len(old_lines)),
+                max(0, len(old_lines) - len(new_lines)),
+            )
+        else:
+            added = removed = 0
+            matcher = difflib.SequenceMatcher(None, old_lines, new_lines, autojunk=False)
+            for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+                if tag in ("replace", "delete"):
+                    removed += i2 - i1
+                if tag in ("replace", "insert"):
+                    added += j2 - j1
+            stats = (added, removed)
+        self._text_stats[key] = stats
+        return stats
+
+    def text_hunks(
+        self, before: dict[str, Any] | None, after: dict[str, Any] | None
+    ) -> list[tuple[int, str, str]]:
+        """Return ``(start line, removed text, added text)`` for each changed hunk.
+
+        Empty when either side is binary or a directory tree.
+        """
+        old_text = self.read_text(before)
+        new_text = self.read_text(after)
+        if (old_text is None and before is not None) or (new_text is None and after is not None):
+            return []
+        old_lines = (old_text or "").splitlines()
+        new_lines = (new_text or "").splitlines()
+        if max(len(old_lines), len(new_lines)) > DIFF_LINE_LIMIT:
+            # Too large to align cheaply; hand back one whole-file hunk instead.
+            return [(1, old_text or "", new_text or "")]
+        matcher = difflib.SequenceMatcher(None, old_lines, new_lines, autojunk=False)
+        return [
+            (i1 + 1, "\n".join(old_lines[i1:i2]), "\n".join(new_lines[j1:j2]))
+            for tag, i1, i2, j1, j2 in matcher.get_opcodes()
+            if tag != "equal"
+        ]
+
+    def revision_prompt(self, revision_id: str) -> str:
+        """Last user message in a revision, collapsed to a single line."""
+        for message_id in reversed(self.revisions[revision_id]["messageIds"]):
+            message = self.messages.get(message_id)
+            if message is None or get_role(message) != "user":
+                continue
+            return " ".join(get_text(message).split())
+        return ""
+
+    def revision_ancestors(self, revision_id: str) -> list[str]:
+        """Revision IDs from *revision_id* back to the root, newest first."""
+        chain: list[str] = []
+        cursor: str | None = revision_id
+        while cursor is not None:
+            chain.append(cursor)
+            cursor = self.revisions[cursor]["parentId"]
+        return chain
+
     def candidates(self) -> list[dict[str, Any]]:
-        """Return all revisions newest-first for branch-aware rewind selection."""
+        """Return all revisions newest-first for branch-aware rewind selection.
+
+        Carries the conversation and file-change context the picker needs. Line
+        counts are deliberately left out: they read stored objects, while
+        everything here comes from records already in memory.
+        """
         result = []
         for rid in reversed(self.revision_order):
             revision = self.revisions[rid]
             state = revision["state"]
+            parent_id = revision["parentId"]
+            parent = self.revisions.get(parent_id) if parent_id else None
             result.append({
                 "id": rid,
-                "parent_id": revision["parentId"],
+                "parent_id": parent_id,
                 "round_id": state.get("round_id", 0),
                 "reason": revision["reason"],
                 "created_at": revision["createdAt"],
                 "messages": len(revision["messageIds"]),
+                "new_messages": len(revision["messageIds"]) - (len(parent["messageIds"]) if parent else 0),
+                "prompt": self.revision_prompt(rid),
+                "files": len(self.revision_changes(rid)),
+                "code_revision_id": revision.get("codeRevisionId"),
                 "current": rid == self.head_id,
             })
         return result

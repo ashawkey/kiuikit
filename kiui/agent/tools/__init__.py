@@ -27,8 +27,10 @@ from .constants import (
 from .formatting import (
     TOOL_SUMMARY_MAX_CHARS,
     TOOL_SUMMARY_MAX_LINES,
+    describe_tool_call,
     format_tool_result,
     format_tool_summary,
+    result_text_failed,
     truncate_text_output,
 )
 from .web import _resolve_public_addresses
@@ -57,8 +59,10 @@ __all__ = [
     "ToolRegistry",
     "ToolSpec",
     "apply_edit",
+    "describe_tool_call",
     "find_match",
     "format_tool_result",
     "format_tool_summary",
+    "result_text_failed",
     "truncate_text_output",
 ]
