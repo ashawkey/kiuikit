@@ -1199,9 +1199,14 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                             active = executor.submit(self._process_next_submission)
                             terminal.set_busy(True)
 
-                    if active is None and self.input_broker.pending:
-                        active = executor.submit(self._process_next_submission)
-                        terminal.set_busy(True)
+                    if self.input_broker.pending:
+                        if active is None:
+                            active = executor.submit(self._process_next_submission)
+                            terminal.set_busy(True)
+                        else:
+                            # The round owns the conversation, not this loop, so
+                            # a command that stays clear of it answers now.
+                            self._run_instant_command()
 
                     # Only act on the prompt this iteration waited on: a pause
                     # that started meanwhile owns the editor and will restart it.
@@ -1275,6 +1280,41 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             return False
         return self._process_query(submission)
 
+    def _run_command(self, query: str) -> bool:
+        """Dispatch a /command. Returns True when the chat loop should stop."""
+        cmd_word = query.split()[0][1:].lower()
+        if cmd_word in self.COMMANDS:
+            return self._handle_command(query)
+        self.console.warn(
+            f"Unknown command: /{cmd_word}. Type /help for available commands."
+        )
+        return False
+
+    def _run_instant_command(self) -> bool:
+        """Run the pending submission now when it is safe to run mid-round.
+
+        Called on the UI thread while a round runs on the worker thread, from
+        either terminal or web input. Commands the round cannot conflict with
+        (see :attr:`INSTANT_COMMANDS`) answer straight away; everything else
+        stays pending and runs once the round ends. Returns whether one ran.
+        """
+        assert self.input_broker is not None
+        submission = self.input_broker.submission
+        if submission is None:
+            return False
+        query = submission.text.strip()
+        if not query.startswith("/") or not self.is_instant_command(query):
+            return False
+        try:
+            submission = self.input_broker.get_nowait(submission.id)
+        except queue.Empty:
+            return False  # withdrawn for editing while we were reading it
+        self.console.user_input(
+            query, source=submission.source, submission_id=submission.id
+        )
+        self._run_command(query)
+        return True
+
     def _process_query(self, submission: UserSubmission) -> bool:
         """Process one user submission. Return True when chat should exit."""
         query = _strip_at_marks(submission.text.strip())
@@ -1297,13 +1337,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 self.console.warn("Usage: !<shell command>")
             return False
         if query.startswith("/"):
-            cmd_word = query.split()[0][1:].lower()
-            if cmd_word in self.COMMANDS:
-                return self._handle_command(query)
-            self.console.warn(
-                f"Unknown command: /{cmd_word}. Type /help for available commands."
-            )
-            return False
+            return self._run_command(query)
 
         self.context.add({"role": "user", "content": query})
         self.round_id += 1

@@ -110,7 +110,7 @@ The implementation is split into focused packages; there are no longer top-level
 |------|---------|
 | `cli.py` | `kia` entry point and Tyro argument parsing; starts chats or the hub, resumes sessions, lists models, and manages project `.kia` storage. |
 | `backend/__init__.py` | `LLMAgent`: provider-neutral API loop, retries, streaming, context/tool orchestration, cancellation, and persona setup. |
-| `backend/commands.py` | Slash-command routing, including model, persona, permission, context, and rewind commands. |
+| `backend/commands.py` | Slash-command routing, including model, persona, permission, context, and rewind commands, plus which commands may answer while a round is still running. |
 | `backend/goals.py` | Standing-goal state and automatic goal-check iteration. |
 | `backend/sessions.py` | Session persistence, selection, resume, replay, and the `/rewind` picker, checkout preview, and mode selection. |
 | `backend/skill_commands.py` | Skill listing, reload, and manual loading commands. |

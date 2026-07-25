@@ -70,7 +70,8 @@ def test_busy_prompt_always_explains_that_new_messages_are_queued():
     text = "".join(fragment for _, fragment in message)
 
     assert "Working..." in text
-    assert "messages sent now will be queued" in text
+    assert "messages are queued" in text
+    assert "/commands run now" in text
     assert "queue> " not in text
     assert ("class:separator.busy", "─" * 79) in message
     assert ("class:prompt.busy", "> ") in message

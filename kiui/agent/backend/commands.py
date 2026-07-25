@@ -45,6 +45,28 @@ class AgentCommandsMixin:
     }
     COMMANDS = set(COMMAND_HELP)
 
+    # Commands that answer while an agent round is in flight instead of queueing
+    # behind it. A round owns the conversation, the provider, and the terminal
+    # prompt, so only commands that read session state or take effect on the
+    # *next* API call qualify.
+    INSTANT_COMMANDS = frozenset({
+        "help", "usage", "context", "system_prompt", "auth", "perm", "reasoning", "goal",
+    })
+    # The same, but only in their bare listing form: given an argument these
+    # switch model or persona, or load a skill into the running conversation.
+    INSTANT_LISTING_COMMANDS = frozenset({"model", "persona", "skills"})
+
+    def is_instant_command(self, raw: str) -> bool:
+        """Whether ``raw`` can run now rather than queue behind a live round."""
+        parts = raw.split(maxsplit=1)
+        cmd = parts[0][1:].lower()
+        if cmd not in self.COMMANDS:
+            # A typo is worth reporting immediately rather than after the round.
+            return True
+        if cmd in self.INSTANT_COMMANDS:
+            return True
+        return cmd in self.INSTANT_LISTING_COMMANDS and len(parts) == 1
+
     def _handle_command(self, raw: str) -> bool:
         """Handle a /command.  Returns True if the agent loop should stop."""
         cmd = raw.split()[0][1:].lower()
@@ -101,7 +123,9 @@ class AgentCommandsMixin:
             "\n"
             + "\n".join(lines)
             + "\n\n"
-            "  Press [bold]Enter[/bold] to send, [bold]Escape → Enter[/bold] for a newline."
+            "  Press [bold]Enter[/bold] to send, [bold]Escape → Enter[/bold] for a newline.\n"
+            "  While the agent is working, messages queue; commands that do not touch\n"
+            "  the conversation (such as /usage, /context, /perm) run right away."
         )
 
     def _cmd_compact(self):

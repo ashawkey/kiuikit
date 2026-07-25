@@ -142,6 +142,8 @@ The agent supports the following slash commands in the CLI:
 | `/resume [session_id]` | Save the current session, then resume a previous one (bare `/resume` picks interactively) |
 | `/exit` or `/quit` | Exit the agent |
 
+A message sent while the agent is working is queued and runs as the next round, but a command does not have to wait for one: a round owns the conversation, the provider, and the terminal prompt, so any command that merely reads session state (`/help`, `/usage`, `/context`, `/system_prompt`, `/auth`, and the bare listing form of `/model`, `/persona`, `/skills`) or takes effect on the next API call (`/perm`, `/reasoning`, `/goal`) is answered immediately — from the terminal and the Web UI alike. Commands that rewrite the conversation or swap what runs it (`/clear`, `/compact`, `/rewind`, `/resume`, `/login`, a `/model` or `/persona` switch, `/skills <name>`) stay queued until the round ends.
+
 ### Bash shortcut
 
 Prefix a command with `!` to run it directly without involving the model:

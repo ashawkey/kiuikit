@@ -568,7 +568,9 @@ class TerminalInput:
                 ("class:status.text", "Working..."),
             ]
         if self._busy and pending is None:
-            status.append(("class:status.detail", " · messages sent now will be queued"))
+            status.append(
+                ("class:status.detail", " · messages are queued · /commands run now")
+            )
         if pending is not None:
             preview = pending.replace("\n", " ")
             if len(preview) > 20:
