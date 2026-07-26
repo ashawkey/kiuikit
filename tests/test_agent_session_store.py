@@ -68,6 +68,61 @@ def test_revisions_are_delta_encoded_but_materialize_in_full(tmp_path: Path):
     assert fresh.revisions == store.revisions
 
 
+def test_revision_state_is_snapshotted_not_aliased(tmp_path: Path):
+    """A revision records the state it was written with, not a live reference.
+
+    Callers pass their own mutable session state (token totals, the system
+    prompt dict), which keeps changing after the commit returns.
+    """
+    store = SessionStore(tmp_path, "session")
+    totals = {"total": 0}
+    system = {"role": "system", "content": "persona A"}
+    messages = [{"role": "user", "content": "m1"}]
+
+    first, _, _ = store.commit(
+        {"messages": list(messages), "round_id": 1, "token_totals": totals,
+         "system_prompt": system},
+        parent_id=None, code_parent_id=None, changes=[], reason="initial",
+    )
+    totals["total"] = 12345
+    system["content"] = "persona B"
+    messages.append({"role": "assistant", "content": "m2"})
+    second, _, _ = store.commit(
+        {"messages": list(messages), "round_id": 2, "token_totals": totals,
+         "system_prompt": system},
+        parent_id=first, code_parent_id=None, changes=[], reason="round",
+    )
+
+    reloaded = SessionStore(tmp_path, "session")
+    assert reloaded.materialize(first)["token_totals"] == {"total": 0}
+    assert reloaded.materialize(first)["system_prompt"]["content"] == "persona A"
+    assert reloaded.materialize(second)["token_totals"] == {"total": 12345}
+    assert reloaded.materialize(second)["system_prompt"]["content"] == "persona B"
+
+
+def test_commit_picks_up_history_written_by_another_process(tmp_path: Path):
+    """Saving reloads only when the file moved, but must never miss a change."""
+    first_agent = SessionStore(tmp_path, "session")
+    root, _, _ = first_agent.commit(
+        _state(1, "root"), parent_id=None, code_parent_id=None, changes=[], reason="initial"
+    )
+
+    other_agent = SessionStore(tmp_path, "session")
+    theirs, _, _ = other_agent.commit(
+        _state(2, "theirs"), parent_id=root, code_parent_id=None, changes=[], reason="round"
+    )
+
+    mine, _, _ = first_agent.commit(
+        _state(2, "mine"), parent_id=root, code_parent_id=None, changes=[], reason="round"
+    )
+    assert theirs in first_agent.revisions
+
+    reloaded = SessionStore(tmp_path, "session")
+    assert reloaded.materialize(theirs)["messages"][0]["content"] == "theirs"
+    assert reloaded.materialize(mine)["messages"][0]["content"] == "mine"
+    assert reloaded.head_id == mine
+
+
 def test_delta_revisions_survive_branching_and_replacement(tmp_path: Path):
     """Rewind branches and compaction replace messages rather than appending."""
     store = SessionStore(tmp_path, "session")

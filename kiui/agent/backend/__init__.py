@@ -1194,12 +1194,12 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                             return
                         self._queue_pending_auto()
                         if self.input_broker.pending:
-                            active = executor.submit(self._process_next_submission)
+                            active = executor.submit(self._run_round)
                             terminal.set_busy(True)
 
                     if self.input_broker.pending:
                         if active is None:
-                            active = executor.submit(self._process_next_submission)
+                            active = executor.submit(self._run_round)
                             terminal.set_busy(True)
                         else:
                             # The round owns the conversation, not this loop, so
@@ -1240,7 +1240,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                         await prompts.restart()
                         terminal.app.invalidate()
                         if active is None:
-                            active = executor.submit(self._process_next_submission)
+                            active = executor.submit(self._run_round)
                             terminal.set_busy(True)
                     elif prompt_task is not None and prompt_task in done:
                         await prompts.wait_resumed()
@@ -1259,6 +1259,20 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 self.cancellation.watch_keyboard = True
             self.console.interactive_input = False
             self.console.status_sink = None
+
+    def _run_round(self) -> bool:
+        """Run one queued submission, absorbing an unexpected failure.
+
+        Rounds execute on a worker thread whose future the UI loop reads. An
+        exception escaping here would tear the whole chat session down over a
+        single bad turn, so it is reported and the session stays at the prompt —
+        matching how get_response already handles API failures.
+        """
+        try:
+            return self._process_next_submission()
+        except Exception as e:
+            self.console.warn(f"Round failed: {e}", exc_info=self.verbose)
+            return False
 
     def _queue_pending_auto(self) -> None:
         if self._pending_auto is None or self.input_broker is None:

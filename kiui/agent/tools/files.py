@@ -166,21 +166,27 @@ class FileToolsMixin:
         if not file_path.is_file():
             return {"error": f"Path is not a file: {file}", "success": False}
 
+        # Read only the requested window plus one probe line: the result is
+        # capped either way, so materializing a whole large file would cost
+        # memory proportional to the file rather than to the answer.
+        skip = max(0, (offset or 1) - 1)
+        wanted = effective_limit + 1
+        lines: list[str] = []
+        remaining_lines = 0
         try:
             with open(file_path, encoding="utf-8") as f:
-                all_lines = f.readlines()
+                for index, line in enumerate(f):
+                    if index < skip:
+                        continue
+                    lines.append(line)
+                    if len(lines) >= wanted:
+                        break
+                truncated_by_lines = len(lines) > effective_limit
+                if truncated_by_lines:
+                    lines.pop()
+                    remaining_lines = sum(1 for _ in f) + 1
         except UnicodeDecodeError:
             return {"error": f"Cannot read binary file: {file}", "success": False}
-
-        total_lines = len(all_lines)
-        lines = all_lines
-
-        if offset is not None:
-            lines = lines[max(0, offset - 1):]
-
-        truncated_by_lines = len(lines) > effective_limit
-        if truncated_by_lines:
-            lines = lines[:effective_limit]
 
         content = "".join(lines)
 
@@ -191,6 +197,7 @@ class FileToolsMixin:
         lines_read = len(content.splitlines())
 
         if truncated_by_lines and not truncated_by_chars:
+            total_lines = skip + len(lines) + remaining_lines
             notice = (
                 f"\n[output truncated: {len(lines)} of {total_lines} lines shown. "
                 "Use offset/limit for more.]"

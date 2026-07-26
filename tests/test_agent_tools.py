@@ -7,6 +7,7 @@ import shutil
 import sys
 import threading
 import time
+import tracemalloc
 from pathlib import Path
 
 import pytest
@@ -297,6 +298,119 @@ def test_grep_stops_reading_at_match_cap(tmp_path):
     assert res["success"] and res["truncated"]
     assert res["count"] <= search_tools.MAX_GREP_MATCHES
     assert res["truncation_reason"] in ("item cap", "character cap")
+
+
+def test_read_file_reads_only_the_requested_window(tmp_path):
+    """A bounded read must not materialize the whole file.
+
+    Regression: readlines() loaded every line before slicing, so reading 20
+    lines out of a large log cost memory proportional to the file.
+    """
+    path = tmp_path / "big.txt"
+    with path.open("w", encoding="utf-8") as f:
+        for i in range(1, 200_001):
+            f.write(f"line{i}\n")
+
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+
+    tracemalloc.start()
+    try:
+        result = te._read_file("big.txt", offset=10, limit=5)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    # The file is ~2.3 MB; a bounded read must stay far below holding it all.
+    assert peak < 500_000, f"read_file allocated {peak} bytes for 5 lines"
+
+    assert result["content"].startswith("line10\nline11\n")
+    assert result["lines_read"] == 5
+    assert result["truncated"] and result["truncation_reason"] == "line cap"
+    # The notice still reports the true total, which requires counting the rest.
+    assert "of 200000 lines shown" in result["content"]
+
+    # Reading past the end yields nothing rather than failing.
+    assert te._read_file("big.txt", offset=999_999)["content"] == ""
+    # An exact-limit read is not falsely marked truncated.
+    assert not te._read_file("big.txt", offset=199_996, limit=5)["truncated"]
+
+
+def test_read_file_handles_missing_trailing_newline(tmp_path):
+    path = tmp_path / "noeol.txt"
+    path.write_text("a\nb\nc", encoding="utf-8")
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+    assert te._read_file("noeol.txt")["content"] == "a\nb\nc"
+    limited = te._read_file("noeol.txt", limit=2)
+    assert limited["truncated"] and "of 3 lines shown" in limited["content"]
+
+
+def _slow_silent_rg(tmp_path: Path) -> Path:
+    """A stand-in ripgrep that runs long while emitting nothing on stdout."""
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    script = fake / "rg"
+    script.write_text("#!/bin/sh\nsleep 30\n", encoding="utf-8")
+    script.chmod(0o755)
+    return fake
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX shell stub")
+def test_grep_timeout_applies_while_ripgrep_is_silent(tmp_path, monkeypatch):
+    """A search that matches nothing must still honour its deadline.
+
+    Regression: the deadline used to be checked only when ripgrep emitted a
+    line, so a long scan with no matches blocked until the process finished.
+    """
+    monkeypatch.setenv("PATH", str(_slow_silent_rg(tmp_path)) + os.pathsep + os.environ["PATH"])
+    monkeypatch.setattr(search_tools, "GREP_TIMEOUT_SECONDS", 1)
+
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+    started = time.monotonic()
+    res = te._grep_files("anything")
+    assert not res["success"] and "timed out" in res["error"]
+    assert time.monotonic() - started < 10
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX shell stub")
+def test_grep_cancellation_applies_while_ripgrep_is_silent(tmp_path, monkeypatch):
+    """Escape must abort a search that has produced no output yet."""
+    monkeypatch.setenv("PATH", str(_slow_silent_rg(tmp_path)) + os.pathsep + os.environ["PATH"])
+    monkeypatch.setattr(search_tools, "GREP_TIMEOUT_SECONDS", 30)
+
+    cancellation = CancellationToken(EventHub())
+    cancellation.watch_keyboard = False
+    operation = cancellation.begin("grep")
+    te = ToolExecutor(
+        console=_SilentConsole(), work_dir=str(tmp_path), cancellation=cancellation
+    )
+    timer = threading.Timer(0.3, lambda: cancellation.cancel(operation))
+    timer.start()
+    try:
+        started = time.monotonic()
+        res = te._grep_files("anything")
+    finally:
+        timer.cancel()
+    assert res["interrupted"] and not res["success"]
+    assert time.monotonic() - started < 10
+
+
+def test_search_honors_gitignore_outside_a_git_repository(tmp_path):
+    """glob/grep must respect .gitignore even when the tree is not a git repo.
+
+    ripgrep applies .gitignore only inside a repository unless told otherwise,
+    which silently disagreed with `ls` and with both tools' documented contract.
+    """
+    if not shutil.which("rg"):
+        pytest.skip("ripgrep is required")
+    (tmp_path / "a.txt").write_text("needle\n", encoding="utf-8")
+    (tmp_path / "hidden.txt").write_text("needle\n", encoding="utf-8")
+    (tmp_path / ".gitignore").write_text("hidden.txt\n", encoding="utf-8")
+    assert not (tmp_path / ".git").exists()
+
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+    assert te._glob_files("*.txt")["matches"] == ["a.txt"]
+    assert [m["file"] for m in te._grep_files("needle")["matches"]] == ["a.txt"]
+    # Opting in still reaches the ignored file.
+    assert "hidden.txt" in te._glob_files("*.txt", include_ignored=True)["matches"]
 
 
 def test_managed_background_process_lifecycle(tmp_path):

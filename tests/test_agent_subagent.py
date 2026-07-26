@@ -14,9 +14,13 @@ class _Console:
 class _ToolExecutor:
     def __init__(self):
         self.stopped = False
+        self.resources_closed = False
 
     def shutdown_processes(self):
         self.stopped = True
+
+    def shutdown_tool_resources(self, clear=False):
+        self.resources_closed = True
 
 
 def test_subagent_returns_full_response(monkeypatch, tmp_path):

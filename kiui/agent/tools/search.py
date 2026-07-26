@@ -140,7 +140,12 @@ class SearchToolsMixin:
         return self._glob_result(matches, truncated)
 
     def _glob_ripgrep(self, pattern: str, base: Path, include_ignored: bool) -> dict[str, Any]:
-        cmd = ["rg", "--files", "--null", "--hidden", "--no-ignore-parent"]
+        # --no-require-git: outside a git repository rg ignores .gitignore
+        # entirely, which would contradict this tool's gitignore-aware contract.
+        cmd = [
+            "rg", "--files", "--null", "--hidden",
+            "--no-ignore-parent", "--no-require-git",
+        ]
         if include_ignored:
             cmd.append("--no-ignore")
         for directory in _SKIP_DIRS:
@@ -294,6 +299,7 @@ class SearchToolsMixin:
         cmd = [
             "rg", "--json",
             "--path-separator", "/",
+            "--no-require-git",
         ]
         if case_insensitive:
             cmd.append("--ignore-case")
@@ -331,18 +337,49 @@ class SearchToolsMixin:
         error_reader = threading.Thread(target=read_stderr, daemon=True)
         error_reader.start()
 
+        # Lines are handed over by a reader thread rather than iterated here:
+        # a search that matches nothing for minutes produces no output at all,
+        # and blocking on the pipe would ignore the deadline and Escape until
+        # ripgrep decided to speak.
+        output: queue.Queue[bytes | None] = queue.Queue(maxsize=256)
+        stop_reader = threading.Event()
+
+        def emit(value: bytes | None) -> bool:
+            while not stop_reader.is_set():
+                try:
+                    output.put(value, timeout=0.05)
+                    return True
+                except queue.Full:
+                    pass
+            return False
+
+        def read_stdout() -> None:
+            for line in proc.stdout:
+                if not emit(line):
+                    return
+            emit(None)
+
+        reader = threading.Thread(target=read_stdout, daemon=True)
+        reader.start()
+
         matches: list[dict[str, Any]] = []
         truncated = False
         interrupted = False
         timed_out = False
         deadline = time.monotonic() + GREP_TIMEOUT_SECONDS
         try:
-            for raw_line in proc.stdout:
+            while True:
                 if self.cancellation is not None and self.cancellation.cancelled:
                     interrupted = True
                     break
                 if time.monotonic() >= deadline:
                     timed_out = True
+                    break
+                try:
+                    raw_line = output.get(timeout=0.05)
+                except queue.Empty:
+                    continue
+                if raw_line is None:
                     break
                 try:
                     event = json.loads(raw_line)
@@ -376,7 +413,7 @@ class SearchToolsMixin:
                     rel = file_str
                 matches.append({"file": rel, "line": data["line_number"], "text": text[:200]})
         finally:
-            proc.stdout.close()
+            stop_reader.set()
             if proc.poll() is None:
                 _terminate_process(proc)
             try:
@@ -384,7 +421,12 @@ class SearchToolsMixin:
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.wait()
+            reader.join(timeout=1)
             error_reader.join(timeout=1)
+            if not reader.is_alive():
+                # Closing while the reader still holds the pipe would raise in
+                # that thread; the process is dead either way, so it ends soon.
+                proc.stdout.close()
             stderr = _decode_bytes(b"".join(stderr_parts))
 
         if interrupted:

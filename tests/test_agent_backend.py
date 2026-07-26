@@ -205,7 +205,9 @@ def test_terminal_loop_answers_a_command_without_waiting_for_the_round(monkeypat
         console = NS(user_input=lambda text, **kwargs: None, warn=lambda *a, **k: None)
         cancellation = None
         prompt_broker = None
+        verbose = False
         _run_instant_command = LLMAgent._run_instant_command
+        _run_round = LLMAgent._run_round
 
         def _process_next_submission(self) -> bool:
             text = broker.get_nowait().text
@@ -250,6 +252,55 @@ def test_terminal_loop_answers_a_command_without_waiting_for_the_round(monkeypat
     assert _wait_until(lambda: dispatched == ["/usage", "/clear"])
 
     terminal.lines.put("exit")
+    loop.join(timeout=5)
+    assert not loop.is_alive()
+
+
+def test_terminal_loop_survives_a_failing_round(monkeypatch):
+    """One bad turn is reported and the session stays at the prompt.
+
+    Regression: an exception escaping the worker thread propagated out of the
+    UI loop, killing the whole chat session (and raising a second time from the
+    loop's own cleanup).
+    """
+    monkeypatch.setattr(backend, "patch_stdout", lambda **kwargs: nullcontext())
+    broker = InputBroker(EventHub())
+    warnings: list[str] = []
+
+    class Agent(AgentCommandsMixin):
+        input_broker = broker
+        console = NS(
+            user_input=lambda text, **kwargs: None,
+            warn=lambda msg, **kwargs: warnings.append(msg),
+        )
+        cancellation = None
+        prompt_broker = None
+        verbose = False
+        _run_instant_command = LLMAgent._run_instant_command
+        _run_round = LLMAgent._run_round
+
+        def _process_next_submission(self) -> bool:
+            if broker.get_nowait().text == "exit":
+                return True
+            raise RuntimeError("round blew up")
+
+        def _queue_pending_auto(self) -> None:
+            pass
+
+        def _run_command(self, query: str) -> bool:
+            return False
+
+    terminal = _ScriptedTerminal()
+    loop = threading.Thread(
+        target=lambda: LLMAgent._run_terminal_loop(Agent(), terminal), daemon=True
+    )
+    loop.start()
+
+    terminal.lines.put("do some work")
+    assert _wait_until(lambda: any("round blew up" in w for w in warnings))
+    assert loop.is_alive()  # the session outlived the failure
+
+    terminal.lines.put("exit")  # and still accepts input
     loop.join(timeout=5)
     assert not loop.is_alive()
 

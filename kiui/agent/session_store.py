@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import difflib
 import hashlib
 import json
@@ -145,9 +146,44 @@ class SessionStore:
         self.revision_order: list[str] = []
         self.head_id: str | None = None
         self._text_stats: dict[tuple[tuple[str, int] | None, ...], tuple[int, int]] = {}
+        # id(message) -> (message, content hash). A message that has entered the
+        # history is never mutated in place — rewrites (compaction, eviction)
+        # build new dicts — so hashing one twice is pure waste. Without this a
+        # save, which names every message in the conversation, rehashes the whole
+        # transcript once per round. The message object is kept in the entry so a
+        # recycled id() cannot return another message's hash.
+        self._message_ids: dict[int, tuple[dict[str, Any], str]] = {}
+        # (size, mtime_ns) of history.jsonl as of the last read or write.
+        self._history_stat: tuple[int, int] | None = None
         self._load()
 
+    def _message_id(self, message: dict[str, Any]) -> str:
+        entry = self._message_ids.get(id(message))
+        if entry is not None and entry[0] is message:
+            return entry[1]
+        digest = _message_id(message)
+        self._message_ids[id(message)] = (message, digest)
+        return digest
+
+    def _stat_history(self) -> tuple[int, int] | None:
+        try:
+            info = self.history_path.stat()
+        except OSError:
+            return None
+        return info.st_size, info.st_mtime_ns
+
+    def _sync(self) -> None:
+        """Reload the history only when it changed outside this store.
+
+        Every write records the resulting stat, so the common case — one live
+        agent saving each round — skips a full re-parse whose cost would grow
+        with the length of the session.
+        """
+        if self._stat_history() != self._history_stat:
+            self._load_fresh()
+
     def _load(self) -> None:
+        self._history_stat = self._stat_history()
         for record in read_jsonl(self.history_path):
             kind = record.get("type")
             if kind == "message":
@@ -318,12 +354,17 @@ class SessionStore:
     ) -> tuple[str, str | None, bool]:
         """Append a conversation revision and optional code revision."""
         messages = data["messages"]
-        state = {key: value for key, value in data.items() if key != "messages"}
-        message_ids = [_message_id(message) for message in messages]
+        # Callers pass their live state (token totals, the system prompt dict,
+        # …), which keeps mutating after this returns; a revision must record
+        # what was true when it was written.
+        state = copy.deepcopy(
+            {key: value for key, value in data.items() if key != "messages"}
+        )
+        message_ids = [self._message_id(message) for message in messages]
 
         self.path.mkdir(parents=True, exist_ok=True)
         with self.lock:
-            self._load_fresh()
+            self._sync()
             truncate_torn_jsonl_tail(self.history_path)
             records: list[dict[str, Any]] = []
             for mid, message in zip(message_ids, messages):
@@ -377,6 +418,7 @@ class SessionStore:
             parent = self.revisions.get(parent_id) if parent_id else None
             records.extend((_encode_revision(revision, parent), head))
             append_jsonl(self.history_path, records)
+            self._history_stat = self._stat_history()
             self.revisions[revision_id] = revision
             self.revision_order.append(revision_id)
             self.head_id = revision_id
@@ -386,7 +428,7 @@ class SessionStore:
         """Move the durable head to an existing revision without deleting descendants."""
         self.path.mkdir(parents=True, exist_ok=True)
         with self.lock:
-            self._load_fresh()
+            self._sync()
             truncate_torn_jsonl_tail(self.history_path)
             if revision_id not in self.revisions:
                 raise ValueError(f"Unknown session revision: {revision_id}")
@@ -398,6 +440,7 @@ class SessionStore:
                 "createdAt": time.time(),
             }
             append_jsonl(self.history_path, [head])
+            self._history_stat = self._stat_history()
             self.head_id = revision_id
             return self.materialize(revision_id)
 
