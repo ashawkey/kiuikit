@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 
 from kiui.agent import skills as skills_module
+from kiui.agent.backend.skill_commands import SkillCommandsMixin
+from kiui.agent.context import TokenEstimator
 from kiui.agent.skills import build_skills_prompt_section, discover_skills
 from kiui.agent.tools import ToolExecutor
 
@@ -69,6 +71,26 @@ def test_discover_reports_malformed(tmp_path):
     assert "broken" not in skills
     assert len(issues["errors"]) == 1
     assert issues["errors"][0]["name"] == "broken"
+
+
+# ----- prompt summary ------------------------------------------------------
+
+class _SummaryAgent(SkillCommandsMixin):
+    def __init__(self, skills, system_prompt):
+        self.skills = skills
+        self.system_prompt = system_prompt
+        self.token_estimator = TokenEstimator()
+
+
+def test_skills_summary_counts_only_registry_in_persona_prompt():
+    skills = {"alpha": {"description": "Use for alpha tasks."}}
+    section = build_skills_prompt_section(skills)
+
+    included = _SummaryAgent(skills, f"Persona instructions.\n\n{section}")
+    excluded = _SummaryAgent(skills, "Short persona without the skills marker.")
+
+    assert "~0 tokens (0.0% of prompt)" in excluded._skills_summary()
+    assert "~0 tokens" not in included._skills_summary()
 
 
 # ----- load-count tracking -------------------------------------------------

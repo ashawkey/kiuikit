@@ -48,7 +48,8 @@ class SkillCommandsMixin:
 
         skills_section = build_skills_prompt_section(self.skills)
         total_tokens = self.token_estimator.chars_to_tokens(len(self.system_prompt))
-        skill_tokens = self.token_estimator.chars_to_tokens(len(skills_section))
+        skill_chars = len(skills_section) if skills_section in self.system_prompt else 0
+        skill_tokens = self.token_estimator.chars_to_tokens(skill_chars)
         percent = 100 * skill_tokens / total_tokens if total_tokens else 0
         return f"{len(self.skills)} available · ~{skill_tokens:,} tokens ({percent:.1f}% of prompt)"
 
