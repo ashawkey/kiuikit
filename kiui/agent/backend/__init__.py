@@ -286,7 +286,6 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self._session_id: str | None = None  # set by chat_loop
         self._session_store = None
         self._session_revision_id: str | None = None
-        self._last_save_time: float = 0.0  # throttle auto-saves
 
         # ----- /goal auto-iteration state -----
         self.goal: str | None = None       # standing goal text (persists across rounds)
@@ -1072,7 +1071,6 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self._session_id = session_id
         self._session_store = self._session_store_for(session_id)
         self._session_revision_id = None
-        self._last_save_time = 0.0  # allow immediate save of the new session
         self.context.replace_messages([])
         self.context.compaction_state = CompactionState()
         self._pending_images.clear()
@@ -1348,7 +1346,6 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self._maybe_continue_goal()
         try:
             self.save_session(self._session_id, reason="round")
-            self._last_save_time = time.monotonic()
         except Exception as e:
             self.console.warn(f"Could not save session round: {e}")
         return False

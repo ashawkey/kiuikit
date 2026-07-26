@@ -39,6 +39,106 @@ def test_session_revisions_branch_without_losing_descendants(tmp_path: Path):
     assert not (store.path / "snapshot.json").exists()
 
 
+def test_revisions_are_delta_encoded_but_materialize_in_full(tmp_path: Path):
+    """Appending a round must not rewrite the whole message list and state."""
+    store = SessionStore(tmp_path, "session")
+    system = {"role": "system", "content": "UNIQUE_PROMPT_MARKER " + "x" * 2000}
+    messages = []
+    parent = None
+    for round_id in range(1, 21):
+        messages = messages + [{"role": "user", "content": f"m{round_id}"}]
+        parent, _, _ = store.commit(
+            {"messages": list(messages), "round_id": round_id, "system_prompt": system},
+            parent_id=parent, code_parent_id=None, changes=[], reason="round",
+        )
+
+    history = (store.path / "history.jsonl").read_text(encoding="utf-8")
+    # The unchanging system prompt is written once (with the root revision),
+    # not once per round.
+    assert history.count("UNIQUE_PROMPT_MARKER") == 1
+    # Likewise each message ID is named once by the revision that added it,
+    # instead of being repeated by every later revision.
+    first_id = store.revisions[parent]["messageIds"][0]
+    assert history.count(first_id) == 2  # the message record, and the root revision
+
+    fresh = SessionStore(tmp_path, "session")
+    data = fresh.materialize()
+    assert data["messages"] == messages
+    assert data["system_prompt"] == system and data["round_id"] == 20
+    assert fresh.revisions == store.revisions
+
+
+def test_delta_revisions_survive_branching_and_replacement(tmp_path: Path):
+    """Rewind branches and compaction replace messages rather than appending."""
+    store = SessionStore(tmp_path, "session")
+    base = [{"role": "user", "content": "a"}]
+    root, _, _ = store.commit(
+        {"messages": list(base), "round_id": 1, "goal": "g"},
+        parent_id=None, code_parent_id=None, changes=[], reason="round",
+    )
+    appended = base + [{"role": "assistant", "content": "b"}]
+    tip, _, _ = store.commit(
+        {"messages": list(appended), "round_id": 2, "goal": "g"},
+        parent_id=root, code_parent_id=None, changes=[], reason="round",
+    )
+    # Divergent branch from the root.
+    branched = base + [{"role": "assistant", "content": "other"}]
+    branch, _, _ = store.commit(
+        {"messages": list(branched), "round_id": 2, "goal": "g2"},
+        parent_id=root, code_parent_id=None, changes=[], reason="round",
+    )
+    # Compaction: messages replaced wholesale and a state key disappears.
+    compacted = [{"role": "user", "content": "[summary]"}]
+    summary, _, _ = store.commit(
+        {"messages": list(compacted), "round_id": 3},
+        parent_id=tip, code_parent_id=None, changes=[], reason="round",
+    )
+
+    fresh = SessionStore(tmp_path, "session")
+    assert fresh.materialize(root)["messages"] == base
+    assert fresh.materialize(tip)["messages"] == appended
+    assert fresh.materialize(branch)["messages"] == branched
+    assert fresh.materialize(branch)["goal"] == "g2"
+    assert fresh.materialize(summary)["messages"] == compacted
+    assert "goal" not in fresh.materialize(summary)
+
+
+def test_legacy_full_form_revisions_still_load(tmp_path: Path):
+    """Histories written before delta encoding must remain readable."""
+    store = SessionStore(tmp_path, "session")
+    root, _, _ = store.commit(
+        _state(1, "root"), parent_id=None, code_parent_id=None, changes=[], reason="round"
+    )
+    tip, _, _ = store.commit(
+        _state(2, "tip"), parent_id=root, code_parent_id=None, changes=[], reason="round"
+    )
+    # Rewrite every revision record in the old full form (no delta keys).
+    import json
+
+    lines = []
+    for line in (store.path / "history.jsonl").read_text(encoding="utf-8").splitlines():
+        record = json.loads(line)
+        if record.get("type") == "revision":
+            revision = store.revisions[record["id"]]
+            record = {
+                key: value for key, value in record.items()
+                if key not in ("baseCount", "addedIds", "stateChanged", "stateRemoved")
+            }
+            record["messageIds"] = revision["messageIds"]
+            record["state"] = revision["state"]
+        lines.append(json.dumps(record))
+    (store.path / "history.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    fresh = SessionStore(tmp_path, "session")
+    assert fresh.materialize(tip)["messages"][0]["content"] == "tip"
+    assert fresh.revisions == store.revisions
+    # A new delta-encoded revision can still extend a legacy history.
+    extended, _, _ = fresh.commit(
+        _state(3, "next"), parent_id=tip, code_parent_id=None, changes=[], reason="round"
+    )
+    assert SessionStore(tmp_path, "session").materialize(extended)["round_id"] == 3
+
+
 def test_session_history_ignores_only_a_torn_final_record(tmp_path: Path):
     store = SessionStore(tmp_path, "session")
     revision, _, _ = store.commit(

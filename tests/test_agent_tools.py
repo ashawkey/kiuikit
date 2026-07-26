@@ -250,6 +250,55 @@ def test_exec_command_captures_full_output_artifact(tmp_path):
         artifact.unlink(missing_ok=True)
 
 
+def test_exec_command_output_is_not_parsed_as_markup(tmp_path):
+    """Command output is data: rich markup in it must not be interpreted."""
+    from kiui.agent.ui import AgentConsole
+
+    console = AgentConsole()
+    console._console.file = open(os.devnull, "w")
+    try:
+        te = ToolExecutor(console=console, work_dir=str(tmp_path))
+        # "[/bad]" is a closing tag with no opening tag: parsed as markup it
+        # raises MarkupError, and "[dim]" would silently vanish from display.
+        res = te._exec_command("printf '%s\\n' one '[/bad] markup' '[dim]tag' two")
+    finally:
+        console._console.file.close()
+    assert res["exit_code"] == 0
+    assert res["stdout"] == "one\n[/bad] markup\n[dim]tag\ntwo\n"
+
+
+def test_exec_command_display_is_batched(tmp_path, monkeypatch):
+    """Output is rendered in batches, not once per line."""
+    calls = []
+
+    class _CountingConsole(_SilentConsole):
+        def print(self, *args, **kwargs):
+            calls.append(args[0] if args else "")
+
+    te = ToolExecutor(console=_CountingConsole(), work_dir=str(tmp_path))
+    res = te._exec_command("seq 1 5000")
+    assert res["exit_code"] == 0
+    # One print per line would be 5000 calls; batching keeps it far lower while
+    # still emitting something for the user to watch.
+    assert 0 < len(calls) < 200
+    assert res["original_output_chars"] > 20_000
+
+
+def test_grep_stops_reading_at_match_cap(tmp_path):
+    """grep streams and terminates ripgrep at the cap instead of buffering all output."""
+    if not shutil.which("rg"):
+        pytest.skip("ripgrep is required")
+    # Far more matches than the cap, so the search must stop early.
+    big = tmp_path / "big.txt"
+    big.write_text("needle\n" * 20_000, encoding="utf-8")
+
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+    res = te._grep_files("needle")
+    assert res["success"] and res["truncated"]
+    assert res["count"] <= search_tools.MAX_GREP_MATCHES
+    assert res["truncation_reason"] in ("item cap", "character cap")
+
+
 def test_managed_background_process_lifecycle(tmp_path):
     te = _executor_with_monitor(tmp_path)
     started = te.execute(

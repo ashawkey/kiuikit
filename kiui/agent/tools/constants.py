@@ -11,11 +11,17 @@ MAX_EXEC_ARTIFACT_BYTES = 100 * 1024 * 1024
 MAX_PROCESS_LOG_BYTES = 100 * 1024 * 1024
 MAX_PROCESS_LOG_TAIL_CHARS = MAX_TOOL_OUTPUT_CHARS
 EXEC_READER_JOIN_TIMEOUT = 5
+# How often streamed command output is rendered, and how many lines one flush
+# may echo. Together these bound the cost of rich rendering by elapsed time
+# instead of by line count; the full output always reaches the artifact file.
+EXEC_DISPLAY_FLUSH_SECONDS = 0.1
+EXEC_DISPLAY_FLUSH_LINES = 200
 MAX_WEB_FETCH_CHARS = MAX_TOOL_OUTPUT_CHARS
 MAX_WEB_FETCH_BYTES = 2 * 1024 * 1024
 MAX_WEB_REDIRECTS = 5
 MAX_GLOB_RESULTS = 500
 GLOB_TIMEOUT_SECONDS = 15
+GREP_TIMEOUT_SECONDS = 30
 MAX_GREP_MATCHES = 200
 
 SKIP_DIRS = frozenset({

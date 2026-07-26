@@ -56,6 +56,17 @@ windows_only = pytest.mark.skipif(
         # Dangerous command following a substitution with nested quotes must
         # still be caught (the tokenizer no longer desyncs on the quoting).
         "user=\"$(awk '/^u:/{print $2}' f)\"; rm -rf /etc",
+        # The tokenizer groups maximal runs of punctuation into one token, so a
+        # separator can combine several operator characters. Matching those
+        # against a fixed set of operators used to hide the second command from
+        # the per-command checks entirely (regression guard).
+        "echo hi |& chmod -R 000 /etc",
+        "echo hi;\nchmod -R 000 /etc",
+        "echo hi &&\nrm -rf /etc",
+        "echo hi ;& git reset --hard",
+        "(echo hi);zpool destroy tank",
+        "echo hi |& systemctl reboot",
+        "echo hi;\nrm -rf /etc",
     ],
 )
 def test_safety_blocks_dangerous_commands(command):
@@ -91,6 +102,13 @@ def test_safety_blocks_dangerous_commands(command):
         "user=\"$(awk -F: '/^u:/ {gsub(/[ \"[:space:]]/, \"\", $2); print $2}' f)\"; echo \"$user\"",
         "x=$(grep \"a;b\" file); echo \"$x\"",
         "echo \"$(cat 'weird\\\"name')\"",
+        # Redirections attach to the command they follow and must not be read
+        # as separators that start a new (unchecked or misparsed) command.
+        "echo ok 2>&1 | tee log.txt",
+        "sort < in.txt > out.txt",
+        "cmd <<< 'here string'",
+        "make -j4 &",
+        "(cd sub && ls)",
     ],
 )
 def test_safety_allows_normal_commands(command):

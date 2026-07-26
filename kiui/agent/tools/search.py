@@ -15,6 +15,7 @@ import pathspec
 
 from .constants import (
     GLOB_TIMEOUT_SECONDS,
+    GREP_TIMEOUT_SECONDS,
     MAX_GLOB_RESULTS,
     MAX_GREP_MATCHES,
     MAX_TOOL_OUTPUT_CHARS,
@@ -300,59 +301,104 @@ class SearchToolsMixin:
             cmd.extend(["--glob", file_glob])
         cmd.extend(["--", pattern, str(base)])
 
+        # Streamed rather than buffered: a broad pattern can make ripgrep emit
+        # hundreds of megabytes of JSON, of which only MAX_GREP_MATCHES entries
+        # are ever kept. Reading line by line and killing rg at the cap bounds
+        # memory by the result size instead of by the repository size.
         try:
-            result = subprocess.run(
+            proc = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                timeout=30,
+                start_new_session=os.name != "nt",
+                creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0),
             )
-        except subprocess.TimeoutExpired:
-            return {"error": "ripgrep timed out after 30s", "success": False}
         except FileNotFoundError:
             return {
                 "error": "grep_files requires ripgrep (rg). Install ripgrep and retry.",
                 "success": False,
             }
 
-        if result.returncode not in (0, 1):  # 1 = no matches
-            stderr = _decode_bytes(result.stderr).strip()
-            return {"error": f"ripgrep error: {stderr}", "success": False}
+        stderr_parts: list[bytes] = []
 
-        matches = []
+        def read_stderr() -> None:
+            size = 0
+            while chunk := proc.stderr.read(8192):
+                if size < MAX_TOOL_OUTPUT_CHARS:
+                    stderr_parts.append(chunk)
+                    size += len(chunk)
+
+        error_reader = threading.Thread(target=read_stderr, daemon=True)
+        error_reader.start()
+
+        matches: list[dict[str, Any]] = []
         truncated = False
-        for raw_line in _decode_bytes(result.stdout).splitlines():
-            try:
-                event = json.loads(raw_line)
-            except json.JSONDecodeError:
-                continue
-            if event.get("type") != "match":
-                continue
-            data = event["data"]
-            # ripgrep emits {"text": ...} for valid UTF-8 or {"bytes": <base64>}
-            # for non-UTF-8 paths/lines; skip the latter rather than guess.
-            path_obj = data["path"]
-            if "text" not in path_obj:
-                continue
-            # Stop once a match beyond the cap is seen, so an exact-cap result
-            # (with no further matches) is not falsely flagged as truncated.
-            if len(matches) >= MAX_GREP_MATCHES:
-                truncated = True
-                break
-            file_str = path_obj["text"]
-            lines_obj = data["lines"]
-            text = lines_obj.get("text", "").rstrip("\n")
-
-            # make path relative to base when base is a directory; when base is
-            # a single file, rg reports that file's own path, so keep it as-is.
-            if base.is_dir():
+        interrupted = False
+        timed_out = False
+        deadline = time.monotonic() + GREP_TIMEOUT_SECONDS
+        try:
+            for raw_line in proc.stdout:
+                if self.cancellation is not None and self.cancellation.cancelled:
+                    interrupted = True
+                    break
+                if time.monotonic() >= deadline:
+                    timed_out = True
+                    break
                 try:
-                    rel = str(Path(file_str).relative_to(base))
-                except ValueError:
+                    event = json.loads(raw_line)
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    continue
+                if event.get("type") != "match":
+                    continue
+                data = event["data"]
+                # ripgrep emits {"text": ...} for valid UTF-8 or {"bytes": <base64>}
+                # for non-UTF-8 paths/lines; skip the latter rather than guess.
+                path_obj = data["path"]
+                if "text" not in path_obj:
+                    continue
+                # Stop once a match beyond the cap is seen, so an exact-cap result
+                # (with no further matches) is not falsely flagged as truncated.
+                if len(matches) >= MAX_GREP_MATCHES:
+                    truncated = True
+                    break
+                file_str = path_obj["text"]
+                lines_obj = data["lines"]
+                text = lines_obj.get("text", "").rstrip("\n")
+
+                # make path relative to base when base is a directory; when base is
+                # a single file, rg reports that file's own path, so keep it as-is.
+                if base.is_dir():
+                    try:
+                        rel = str(Path(file_str).relative_to(base))
+                    except ValueError:
+                        rel = file_str
+                else:
                     rel = file_str
-            else:
-                rel = file_str
-            matches.append({"file": rel, "line": data["line_number"], "text": text[:200]})
+                matches.append({"file": rel, "line": data["line_number"], "text": text[:200]})
+        finally:
+            proc.stdout.close()
+            if proc.poll() is None:
+                _terminate_process(proc)
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+            error_reader.join(timeout=1)
+            stderr = _decode_bytes(b"".join(stderr_parts))
+
+        if interrupted:
+            return {"error": "Grep search interrupted.", "success": False, "interrupted": True}
+        if timed_out:
+            return {
+                "error": f"ripgrep timed out after {GREP_TIMEOUT_SECONDS}s. "
+                "Use a narrower regex, path, or file_glob.",
+                "success": False,
+            }
+        # A cap hit kills rg mid-write, so its exit status is only meaningful
+        # when the stream was read to completion (0 = matches, 1 = none).
+        if not truncated and proc.returncode not in (0, 1):
+            return {"error": f"ripgrep error: {stderr.strip()}", "success": False}
 
         return _build_search_result(
             matches,

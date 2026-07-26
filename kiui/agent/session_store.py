@@ -41,6 +41,72 @@ def _object_key(descriptor: dict[str, Any] | None) -> tuple[str, int] | None:
     return descriptor["id"], descriptor["mode"]
 
 
+def _encode_revision(
+    revision: dict[str, Any], parent: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Compress a revision against its parent for storage.
+
+    A session saves once per round, and a revision names every message in the
+    conversation plus the whole session state (the system prompt included).
+    Written out in full each time, that repetition dominates the history file
+    and grows it quadratically in the number of rounds. Since a round almost
+    always *appends* to its parent, only the tail of the message list and the
+    state keys that actually changed are stored; :func:`_decode_revision`
+    reconstructs the full record on load.
+    """
+    record = {key: value for key, value in revision.items() if key not in ("messageIds", "state")}
+    message_ids = revision["messageIds"]
+    state = revision["state"]
+
+    parent_ids = parent["messageIds"] if parent is not None else []
+    if parent is not None and message_ids[: len(parent_ids)] == parent_ids:
+        record["baseCount"] = len(parent_ids)
+        record["addedIds"] = message_ids[len(parent_ids):]
+    else:
+        record["messageIds"] = message_ids
+
+    parent_state = parent["state"] if parent is not None else {}
+    if parent is None:
+        record["state"] = state
+    else:
+        changed = {
+            key: value for key, value in state.items()
+            if key not in parent_state or parent_state[key] != value
+        }
+        removed = [key for key in parent_state if key not in state]
+        record["stateChanged"] = changed
+        if removed:
+            record["stateRemoved"] = removed
+    return record
+
+
+def _decode_revision(
+    record: dict[str, Any], parent: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Rebuild a full revision from its stored (possibly delta-encoded) form."""
+    revision = {
+        key: value for key, value in record.items()
+        if key not in ("baseCount", "addedIds", "stateChanged", "stateRemoved")
+    }
+    if "messageIds" not in record:
+        if parent is None:
+            raise ValueError(f"Session revision {record['id']} has no parent to rebuild from")
+        base_count = record["baseCount"]
+        parent_ids = parent["messageIds"]
+        if base_count > len(parent_ids):
+            raise ValueError(f"Session revision {record['id']} references a truncated parent")
+        revision["messageIds"] = parent_ids[:base_count] + record["addedIds"]
+    if "state" not in record:
+        if parent is None:
+            raise ValueError(f"Session revision {record['id']} has no parent to rebuild from")
+        state = dict(parent["state"])
+        for key in record.get("stateRemoved", ()):
+            state.pop(key, None)
+        state.update(record["stateChanged"])
+        revision["state"] = state
+    return revision
+
+
 # Above this many lines, line-by-line matching costs more than the stat is worth.
 DIFF_LINE_LIMIT = 20000
 
@@ -89,8 +155,13 @@ class SessionStore:
             elif kind == "code_revision":
                 self.code_revisions[record["id"]] = record
             elif kind == "revision":
-                self.revisions[record["id"]] = record
-                self.revision_order.append(record["id"])
+                parent_id = record["parentId"]
+                parent = self.revisions.get(parent_id) if parent_id else None
+                if parent_id is not None and parent is None:
+                    raise ValueError(f"Session revision references unknown parent: {parent_id}")
+                revision = _decode_revision(record, parent)
+                self.revisions[revision["id"]] = revision
+                self.revision_order.append(revision["id"])
             elif kind == "head":
                 target = record["revisionId"]
                 if target not in self.revisions:
@@ -303,7 +374,8 @@ class SessionStore:
                 "reason": reason,
                 "createdAt": time.time(),
             }
-            records.extend((revision, head))
+            parent = self.revisions.get(parent_id) if parent_id else None
+            records.extend((_encode_revision(revision, parent), head))
             append_jsonl(self.history_path, records)
             self.revisions[revision_id] = revision
             self.revision_order.append(revision_id)

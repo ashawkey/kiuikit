@@ -3,17 +3,21 @@
 Usage:
     kia [--model MODEL] [--verbose] [--perm auto|default|strict]
         [--resume [SESSION_ID]]
-        [--list | --storage | --clean [ENTRY ...]]
+        [--list | --storage | --clean [ENTRY ...] | --update]
 """
 
+import json
 import os
 import socket
+import subprocess
 import sys
 import time
 import uuid
+from importlib.metadata import distribution
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, TYPE_CHECKING
+from urllib.parse import unquote, urlparse
 
 if TYPE_CHECKING:
     from kiui.agent.hubclient import HubClient
@@ -46,6 +50,7 @@ class Args:
     storage: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # show project .kia usage and exit
     clean: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # --clean [entry ...]: selected entries, or everything except skills
     hub: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # --hub: run the shared web hub daemon
+    update: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # install the latest kiui source and exit
     web_port: int = 8765
 
 
@@ -335,6 +340,55 @@ def cmd_clean(names: list[str] | None = None):
     console.system(f"Cleaned {format_size(removed)} ({cleaned}) from {kia_storage_dir()}")
 
 
+def _editable_source() -> Path | None:
+    """Return the source directory for a PEP 610 editable install."""
+    direct_url_text = distribution("kiui").read_text("direct_url.json")
+    if not direct_url_text:
+        return None
+
+    direct_url = json.loads(direct_url_text)
+    if not direct_url.get("dir_info", {}).get("editable", False):
+        return None
+
+    parsed = urlparse(direct_url["url"])
+    if parsed.scheme != "file":
+        raise RuntimeError(f"Unsupported editable install URL: {direct_url['url']}")
+    return Path(unquote(parsed.path))
+
+
+def cmd_update() -> int:
+    console = AgentConsole()
+    source = _editable_source()
+
+    if source is not None:
+        console.system(f"Updating editable install in {source}")
+        command = ["git", "-C", str(source), "pull"]
+        action = "git pull"
+        commands = [command]
+    else:
+        console.system("Replacing installed kiui with the latest source")
+        action = "kiui update"
+        commands = [
+            [sys.executable, "-m", "pip", "uninstall", "-y", "kiui"],
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "kiui[kia] @ git+https://github.com/ashawkey/kiuikit.git",
+            ],
+        ]
+
+    for command in commands:
+        result = subprocess.run(command)
+        if result.returncode != 0:
+            console.error(f"{action} failed (exit code {result.returncode}).")
+            return result.returncode
+
+    console.system("kiui updated successfully.")
+    return 0
+
+
 def cmd_hub(args: Args):
     """Run the shared web hub daemon (owns the public port)."""
     console = AgentConsole()
@@ -429,9 +483,9 @@ def main():
     if clean_names is not None:
         args.clean = True
 
-    commands = (args.list, args.storage, args.clean, args.hub)
+    commands = (args.list, args.storage, args.clean, args.hub, args.update)
     if sum(commands) > 1:
-        raise SystemExit("Choose only one of --list, --storage, --clean, or --hub")
+        raise SystemExit("Choose only one of --list, --storage, --clean, --hub, or --update")
 
     if args.list:
         cmd_list()
@@ -441,6 +495,8 @@ def main():
         cmd_clean(clean_names)
     elif args.hub:
         cmd_hub(args)
+    elif args.update:
+        raise SystemExit(cmd_update())
     else:
         cmd_chat(args)
 

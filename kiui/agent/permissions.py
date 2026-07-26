@@ -99,13 +99,16 @@ class SafetyGuard:
         "stdbuf": frozenset({"-i", "--input", "-o", "--output", "-e", "--error"}),
         "time": frozenset({"-f", "--format", "-o", "--output"}),
     }
-    _CONTROL_TOKENS = frozenset({
-        ";", "&", "&&", "|", "||", "(", ")", "{", "}", "\n",
-    })
+    # Characters that end one command and begin the next. The tokenizer groups
+    # maximal runs of punctuation into a single token, so a separator token can
+    # combine several of them (";\n", "|&", ";&", ");", "&&\n"); membership in a
+    # fixed set of operators would miss every combined form and hide the second
+    # command from the per-command checks. Redirection characters are excluded:
+    # they belong to the command they follow rather than starting a new one.
+    _SEPARATOR_CHARS = frozenset(";&|(){}\n")
     _SHELL_PREFIXES = frozenset({
         "!", "do", "elif", "else", "if", "then", "time", "until", "while",
     })
-    _REDIRECT_TOKENS = frozenset({"<", ">", "<<", ">>", "<<<", "<>"})
     _DEVICE_PATH_RE = re.compile(
         r"^/dev/(?:"
         r"(?:sd|hd|vd|xvd)[a-z](?:\d+)?|"
@@ -312,11 +315,25 @@ class SafetyGuard:
         return tokens
 
     @classmethod
+    def _is_separator(cls, token: str) -> bool:
+        """Whether *token* is an operator run that ends the preceding command."""
+        return bool(token) and all(char in cls._SEPARATOR_CHARS for char in token)
+
+    @classmethod
+    def _is_redirect(cls, token: str) -> bool:
+        """Whether *token* is a redirection operator (``>``, ``>>``, ``>&``, ``<<<``, …)."""
+        return (
+            bool(token)
+            and ("<" in token or ">" in token)
+            and all(char in cls._PUNCT_CHARS for char in token)
+        )
+
+    @classmethod
     def _command_segments(cls, tokens: list[str]) -> list[list[str]]:
         segments: list[list[str]] = []
         current: list[str] = []
         for token in tokens:
-            if token in cls._CONTROL_TOKENS:
+            if cls._is_separator(token):
                 if current:
                     segments.append(current)
                     current = []
@@ -335,10 +352,10 @@ class SafetyGuard:
             if token in self._SHELL_PREFIXES or self._ASSIGNMENT_RE.match(token):
                 idx += 1
                 continue
-            if token.isdigit() and idx + 1 < len(tokens) and tokens[idx + 1] in self._REDIRECT_TOKENS:
+            if token.isdigit() and idx + 1 < len(tokens) and self._is_redirect(tokens[idx + 1]):
                 idx += 1
                 continue
-            if token in self._REDIRECT_TOKENS:
+            if self._is_redirect(token):
                 idx += 2
                 continue
 

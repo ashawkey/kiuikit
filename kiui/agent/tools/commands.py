@@ -15,6 +15,8 @@ from typing import Any
 from kiui.agent.utils.interrupt import CancelWatcher
 
 from .constants import (
+    EXEC_DISPLAY_FLUSH_LINES,
+    EXEC_DISPLAY_FLUSH_SECONDS,
     EXEC_READER_JOIN_TIMEOUT,
     MAX_EXEC_ARTIFACT_BYTES,
     MAX_EXEC_OUTPUT_CHARS,
@@ -80,8 +82,36 @@ class CommandToolsMixin:
 
         def _drain(stream, lines_buf, size_ref, prefix=""):
             decoder = codecs.getincrementaldecoder(locale.getpreferredencoding())(errors="replace")
+            # Rendering one line at a time costs ~100us through rich, which
+            # dominates the runtime of any command with lots of output (~20s for
+            # 200k lines). Lines are accumulated and rendered in one call at most
+            # every EXEC_DISPLAY_FLUSH_SECONDS, and a single flush echoes at most
+            # EXEC_DISPLAY_FLUSH_LINES of them: past that the terminal is only
+            # scrolling text nobody can read, while the complete output is
+            # already being captured to the artifact the model is pointed at.
+            display_buf: deque[str] = deque(maxlen=EXEC_DISPLAY_FLUSH_LINES)
+            dropped = 0
+            last_flush = time.monotonic()
+
+            def flush_display(force: bool = False) -> None:
+                nonlocal last_flush, dropped
+                if not display_buf and not dropped:
+                    return
+                now = time.monotonic()
+                if not force and now - last_flush < EXEC_DISPLAY_FLUSH_SECONDS:
+                    return
+                lines = list(display_buf)
+                display_buf.clear()
+                if dropped:
+                    lines.insert(0, f"  [{dropped} line(s) not shown; full output captured]")
+                    dropped = 0
+                # markup=False: command output is data, so a stray "[/x]" must
+                # not be parsed as rich markup (which drops it or raises).
+                self.console.print("\n".join(lines), style="dim", markup=False)
+                last_flush = now
 
             def consume(text: str) -> None:
+                nonlocal dropped
                 if not text or capture_stopped.is_set():
                     return
                 lines_buf.append(text)
@@ -108,7 +138,9 @@ class CommandToolsMixin:
                             artifact_size_bytes[0] += len(chunk.encode("utf-8"))
                 for display in re.split(r"[\r\n]+", text):
                     if display:
-                        self.console.print(f"  {prefix}{display}", style="dim")
+                        if len(display_buf) == display_buf.maxlen:
+                            dropped += 1
+                        display_buf.append(f"  {prefix}{display}")
 
             pending = ""
             try:
@@ -119,9 +151,11 @@ class CommandToolsMixin:
                         consume(pending[start:match.end()])
                         start = match.end()
                     pending = pending[start:]
+                    flush_display()
                 pending += decoder.decode(b"", final=True)
                 consume(pending)
             finally:
+                flush_display(force=True)
                 stream.close()
 
         t_out = threading.Thread(

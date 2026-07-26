@@ -137,13 +137,10 @@ class SessionMixin:
                 self.console.warn(f"Could not save current session: {e}")
 
         old_id = self._session_id
-        old_save_time = self._last_save_time
         if not self.load_session(target):
             self._session_id = old_id
-            self._last_save_time = old_save_time
             return
         self._session_id = target
-        self._last_save_time = 0.0
         self.tool_executor.shutdown_processes(clear=True)
         self._install_change_tracker()
 
