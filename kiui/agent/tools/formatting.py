@@ -1,6 +1,7 @@
 """Formatting helpers for tool calls and their results."""
 
 import json
+import re
 from typing import Any, Callable
 
 from .constants import MAX_READ_LINES, MAX_TOOL_OUTPUT_CHARS
@@ -55,8 +56,27 @@ def format_tool_summary(result_text: str, max_lines: int = TOOL_SUMMARY_MAX_LINE
     return summary
 
 
+def _format_command_result(result: dict[str, Any]) -> str:
+    """Append execution metadata to the command's unmodified merged output."""
+    text = result.get("stdout", "")
+    if result.get("truncation_notice"):
+        text += f"\n{result['truncation_notice']}"
+    status = (
+        f"[exit_code: {result['exit_code']}, "
+        f"interrupted: {str(result.get('interrupted', False)).lower()}, "
+        f"timed_out: {str(result.get('timed_out', False)).lower()}]"
+    )
+    if not text:
+        return status
+    separator = "" if text.endswith("\n") else "\n"
+    return f"{text}{separator}{status}"
+
+
 def format_tool_result(result: dict[str, Any]) -> str:
     """Format a tool result dict into a string for the conversation."""
+    if "exit_code" in result and "stdout" in result:
+        return _format_command_result(result)
+
     if not result.get("success", False):
         stdout = result.get("stdout", "")
         stderr = result.get("stderr", "")
@@ -91,15 +111,17 @@ def format_tool_result(result: dict[str, Any]) -> str:
 
 
 def result_text_failed(result_text: str) -> bool:
-    """Whether a formatted result records a failure.
-
-    Only for replay, which has the formatted text but not the result dict that
-    carries ``success``. :func:`format_tool_result` renders a failure either as
-    the whole text or as its final line, so anchoring on those two positions
-    avoids calling a successful result a failure for merely containing the word.
-    """
+    """Whether a formatted result records a failure during replay."""
     lines = result_text.splitlines()
-    return bool(lines) and (lines[0].startswith("Error: ") or lines[-1].startswith("Error: "))
+    if not lines:
+        return False
+    status = re.fullmatch(
+        r"\[exit_code: (-?\d+), interrupted: (true|false), timed_out: (true|false)\]",
+        lines[-1],
+    )
+    if status:
+        return status.group(1) != "0" or status.group(2) == "true" or status.group(3) == "true"
+    return lines[0].startswith("Error: ") or lines[-1].startswith("Error: ")
 
 
 def _compact_value(value: Any) -> str:

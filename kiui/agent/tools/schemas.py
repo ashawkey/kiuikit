@@ -136,14 +136,21 @@ _BUILTIN_TOOL_SCHEMAS_LIST = [
             "function": {
                 "name": "exec_command",
                 "description": (
-                    "Run a foreground shell command and stream its output. Returns stdout, stderr, and exit code; "
-                    "large output is compacted with full capture available in an artifact."
+                    "Run a non-interactive foreground shell command and stream its merged stdout/stderr. "
+                    "The command times out after 300 seconds by default; set timeout=null to disable the timeout. "
+                    "Returns the output followed by exit, interruption, and timeout status. Large output is "
+                    "compacted with full capture available in an artifact."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "command": {"type": "string", "description": "Shell command to execute"},
                         "cwd": {"type": "string", "description": "Working directory (optional)"},
+                        "timeout": {
+                            "type": ["number", "null"],
+                            "exclusiveMinimum": 0,
+                            "description": "Timeout in seconds (default: 300); null disables the timeout",
+                        },
                     },
                     "required": ["command"],
                 },

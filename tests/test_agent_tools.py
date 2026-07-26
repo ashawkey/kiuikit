@@ -23,6 +23,7 @@ from kiui.agent.tools import (
     apply_edit,
     find_match,
     format_tool_result,
+    result_text_failed,
 )
 from kiui.agent.permissions import SafetyGuard
 from kiui.agent.utils.io import CancellationToken, EventHub
@@ -226,14 +227,40 @@ def test_multi_edit_atomic_failure(tmp_path):
     assert not res["success"] and f.read_text() == "one\ntwo\n"
 
 
-def test_failed_exec_format_keeps_stdout_and_stderr():
+def test_exec_format_appends_status_without_labeling_output():
     text = format_tool_result({
         "success": False,
-        "stdout": "large stdout",
-        "stderr": "brief stderr",
+        "stdout": "ordinary output\nerror output\n",
         "exit_code": 1,
     })
-    assert "large stdout" in text and "brief stderr" in text
+    assert text == (
+        "ordinary output\nerror output\n"
+        "[exit_code: 1, interrupted: false, timed_out: false]"
+    )
+    assert result_text_failed(text)
+
+
+def test_exec_command_merges_output_and_is_noninteractive(tmp_path):
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+    res = te._exec_command(
+        "printf 'out\\n'; printf 'err\\n' >&2; "
+        "python -c \"import sys; print('stdin=' + sys.stdin.read())\""
+    )
+    Path(res["_artifact_path"]).unlink(missing_ok=True)
+    assert res["stdout"] == "out\nerr\nstdin=\n"
+    assert "stderr" not in res
+
+
+def test_exec_command_timeout_and_null_override(tmp_path):
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+    timed_out = te._exec_command("sleep 1", timeout=0.05)
+    Path(timed_out["_artifact_path"]).unlink(missing_ok=True)
+    assert timed_out["timed_out"] and not timed_out["success"]
+    assert "timed_out: true" in format_tool_result(timed_out)
+
+    completed = te._exec_command("sleep 0.05; printf done", timeout=None)
+    Path(completed["_artifact_path"]).unlink(missing_ok=True)
+    assert completed["success"] and completed["stdout"] == "done"
 
 
 def test_exec_command_captures_full_output_artifact(tmp_path):

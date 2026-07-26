@@ -27,14 +27,12 @@ from .process_util import _terminate_process
 
 
 class CommandToolsMixin:
-    def _exec_command(self, command: str, cwd: str | None = None) -> dict[str, Any]:
-        """Execute a shell command, streaming output in real-time.
-
-        Uses subprocess.Popen with reader threads so output is displayed as it
-        arrives. Rolling character buffers bound memory use for long-running
-        processes; the returned result keeps trailing output from both streams,
-        reserving up to half its character budget for stderr.
-        """
+    def _exec_command(
+        self, command: str, cwd: str | None = None, timeout: float | None = 300
+    ) -> dict[str, Any]:
+        """Execute a non-interactive shell command, streaming merged output."""
+        if timeout is not None and timeout <= 0:
+            raise ValueError("timeout must be positive or null")
         cwd = str(self._resolve_path(cwd or "."))
         self.console.tool(describe_tool_call("exec_command", {"command": command, "cwd": cwd}))
 
@@ -49,8 +47,8 @@ class CommandToolsMixin:
             shell_cmd = ["powershell", "-NoLogo", "-Command", command]
             try:
                 proc = subprocess.Popen(
-                    shell_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                    cwd=cwd or None,
+                    shell_cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT, cwd=cwd or None,
                     creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
                 )
             except Exception:
@@ -61,18 +59,16 @@ class CommandToolsMixin:
             shell_cmd = ["/bin/bash", "-lc", command]
             try:
                 proc = subprocess.Popen(
-                    shell_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                    cwd=cwd or None, start_new_session=True,
+                    shell_cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT, cwd=cwd or None, start_new_session=True,
                 )
             except Exception:
                 artifact_file.close()
                 Path(artifact_path).unlink(missing_ok=True)
                 raise
 
-        stdout_lines: deque[str] = deque()
-        stderr_lines: deque[str] = deque()
-        stdout_size = [0]
-        stderr_size = [0]
+        output_lines: deque[str] = deque()
+        output_size = [0]
         artifact_lock = threading.Lock()
         artifact_size_bytes = [0]
         total_output_chars = [0]
@@ -80,7 +76,7 @@ class CommandToolsMixin:
         artifact_write_error: list[str] = []
         capture_stopped = threading.Event()
 
-        def _drain(stream, lines_buf, size_ref, prefix=""):
+        def _drain(stream, lines_buf, size_ref):
             decoder = codecs.getincrementaldecoder(locale.getpreferredencoding())(errors="replace")
             # Rendering one line at a time costs ~100us through rich, which
             # dominates the runtime of any command with lots of output (~20s for
@@ -118,12 +114,11 @@ class CommandToolsMixin:
                 size_ref[0] += len(text)
                 while size_ref[0] > MAX_STREAMING_BUFFER_CHARS and len(lines_buf) > 1:
                     size_ref[0] -= len(lines_buf.popleft())
-                captured = f"{prefix}{text}"
-                encoded = captured.encode("utf-8")
+                encoded = text.encode("utf-8")
                 with artifact_lock:
                     if capture_stopped.is_set():
                         return
-                    total_output_chars[0] += len(captured)
+                    total_output_chars[0] += len(text)
                     remaining = MAX_EXEC_ARTIFACT_BYTES - artifact_size_bytes[0]
                     if len(encoded) > remaining:
                         artifact_truncated[0] = True
@@ -140,7 +135,7 @@ class CommandToolsMixin:
                     if display:
                         if len(display_buf) == display_buf.maxlen:
                             dropped += 1
-                        display_buf.append(f"  {prefix}{display}")
+                        display_buf.append(f"  {display}")
 
             pending = ""
             try:
@@ -158,29 +153,34 @@ class CommandToolsMixin:
                 flush_display(force=True)
                 stream.close()
 
-        t_out = threading.Thread(
-            target=_drain, args=(proc.stdout, stdout_lines, stdout_size), daemon=True,
+        reader = threading.Thread(
+            target=_drain, args=(proc.stdout, output_lines, output_size), daemon=True,
         )
-        t_err = threading.Thread(
-            target=_drain, args=(proc.stderr, stderr_lines, stderr_size, "[stderr] "), daemon=True,
-        )
-        t_out.start()
-        t_err.start()
+        reader.start()
 
         # Wait for the process, watching the keyboard so ESC / Ctrl+C aborts it.
         interrupted = False
+        timed_out = False
+        deadline = time.monotonic() + timeout if timeout is not None else None
         try:
             with CancelWatcher(self.cancellation) as watcher:
                 while proc.poll() is None:
                     if watcher.is_cancelled:
                         interrupted = True
                         break
+                    if deadline is not None and time.monotonic() >= deadline:
+                        timed_out = proc.poll() is None
+                        if timed_out:
+                            break
                     time.sleep(0.1)
         except KeyboardInterrupt:
             interrupted = True
 
         if interrupted:
             self.console.warn("Interrupting command...")
+            _terminate_process(proc)
+        elif timed_out:
+            self.console.warn(f"Command timed out after {timeout:g} seconds; terminating it.")
             _terminate_process(proc)
 
         try:
@@ -196,17 +196,15 @@ class CommandToolsMixin:
         # A background descendant can retain the pipes after the shell exits.
         # Stop capture before closing the shared artifact, then let any lingering
         # daemon drainers discard bytes rather than touching closed state.
-        t_out.join(timeout=EXEC_READER_JOIN_TIMEOUT)
-        t_err.join(timeout=EXEC_READER_JOIN_TIMEOUT)
-        readers_incomplete = t_out.is_alive() or t_err.is_alive()
+        reader.join(timeout=EXEC_READER_JOIN_TIMEOUT)
+        readers_incomplete = reader.is_alive()
         if readers_incomplete:
             with artifact_lock:
                 capture_stopped.set()
                 artifact_truncated[0] = True
             self.console.warn("Output readers did not finish; terminating remaining process tree.")
             _terminate_process(proc)
-            t_out.join(timeout=EXEC_READER_JOIN_TIMEOUT)
-            t_err.join(timeout=EXEC_READER_JOIN_TIMEOUT)
+            reader.join(timeout=EXEC_READER_JOIN_TIMEOUT)
 
         with artifact_lock:
             try:
@@ -218,33 +216,29 @@ class CommandToolsMixin:
             finally:
                 artifact_file.close()
 
-        stdout = "".join(stdout_lines)
-        stderr = "".join(stderr_lines)
+        output = "".join(output_lines)
 
-        total_len = len(stdout) + len(stderr)
+        total_len = len(output)
         truncated = total_len > MAX_EXEC_OUTPUT_CHARS
         truncation_notice = ""
         if truncated:
             guidance = "Search the saved output or rerun with quiet flags or a targeted filter."
             while True:
                 output_budget = MAX_EXEC_OUTPUT_CHARS - len(truncation_notice) - 1
-                stderr_budget = min(len(stderr), output_budget // 2)
-                kept_stdout = stdout[-(output_budget - stderr_budget):]
-                kept_stderr = stderr[-(output_budget - len(kept_stdout)):]
+                kept_output = output[-output_budget:]
                 updated = (
-                    f"[output truncated: showing {len(kept_stdout) + len(kept_stderr):,} of "
+                    f"[output truncated: showing {len(kept_output):,} of "
                     f"{total_len:,} characters. {guidance}]"
                 )
                 if updated == truncation_notice:
-                    stdout, stderr = kept_stdout, kept_stderr
+                    output = kept_output
                     break
                 truncation_notice = updated
 
         res: dict[str, Any] = {
-            "stdout": stdout,
-            "stderr": stderr,
+            "stdout": output,
             "exit_code": proc.returncode if proc.returncode is not None else -1,
-            "success": not interrupted and proc.returncode == 0,
+            "success": not interrupted and not timed_out and proc.returncode == 0,
             "streamed": True,
             "_artifact_path": artifact_path,
             "original_output_chars": total_output_chars[0],
@@ -263,5 +257,8 @@ class CommandToolsMixin:
         if interrupted:
             res["interrupted"] = True
             res["error"] = "Command was interrupted by user."
+        if timed_out:
+            res["timed_out"] = True
+            res["error"] = f"Command timed out after {timeout:g} seconds."
 
         return res

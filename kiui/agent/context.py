@@ -401,22 +401,6 @@ def _collapse_repeated_lines(text: str) -> str:
     return "".join(result)
 
 
-def _stderr_excerpt(text: str, max_chars: int) -> str:
-    """Keep trailing stderr lines within *max_chars*, preserving their order."""
-    selected: list[str] = []
-    used = 0
-    for line in reversed(text.splitlines()):
-        if not line.startswith("[stderr]"):
-            continue
-        separator = 1 if selected else 0
-        remaining = max_chars - used - separator
-        if remaining <= 0:
-            break
-        selected.insert(0, line[-remaining:])
-        used += len(selected[0]) + separator
-    return "\n".join(selected)
-
-
 def _sample_edges(text: str, available: int) -> str:
     """Sample line-aligned head and tail excerpts within *available* chars."""
     label = "\n[... middle omitted ...]\n"
@@ -610,17 +594,8 @@ def compact_tool_result_envelope(
     ))
     content_budget = budget - len(header) - len(trailing_notice) - footer_reserve
 
-    # stderr is where a failure explains itself and is usually short, so it is
-    # surfaced ahead of the excerpt rather than left to chance inside it.
-    stderr_block = ""
-    if tool_name == "exec_command":
-        stderr = _stderr_excerpt(text, min(1800, max(400, content_budget // 4)))
-        if stderr:
-            stderr_block = f"[stderr excerpt]\n{stderr}\n\n"
-            content_budget -= len(stderr_block)
-
     excerpt, _ = _excerpt_for(tool_name, envelope.result, text, content_budget)
-    body = f"{header}{stderr_block}{excerpt}{trailing_notice}"
+    body = f"{header}{excerpt}{trailing_notice}"
     retained_tokens = max(1, int((len(body) + footer_reserve) / chars_per_token))
     footer = _compaction_footer(
         original_tokens, retained_tokens, location, warning_text, guidance

@@ -826,6 +826,10 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 except OSError as e:
                     compaction_text = result_text
                     self.console.warn(f"Could not read captured tool output: {e}")
+                if function_name == "exec_command" and compaction_text != result_text:
+                    status = result_text.rsplit("\n", 1)[-1]
+                    separator = "" if compaction_text.endswith("\n") else "\n"
+                    compaction_text = f"{compaction_text}{separator}{status}"
 
                 try:
                     artifact_path = persist_tool_result_artifact(

@@ -11,7 +11,7 @@ Loading this skill enables:
 - `inspect_processes`: optionally wait, then return one status snapshot and a bounded log tail;
 - `stop_process`: terminate one managed process and its process tree.
 
-Use `exec_command` for foreground commands expected to finish reliably. Use the managed tools for servers, long-running commands, and interruptible monitoring waits.
+Use `exec_command` for non-interactive foreground commands expected to finish reliably. It times out after 300 seconds by default; set `timeout=null` only when no timeout is intentionally required. Use the managed tools for servers, long-running commands, and interruptible monitoring waits.
 
 ## Start and manage a process
 
