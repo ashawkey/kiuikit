@@ -48,6 +48,19 @@ def test_markdown_lexer_does_not_reparse_from_start():
     assert not lexer.sync_from_start()
 
 
+def test_terminal_does_not_disable_cursor_position_reporting(monkeypatch):
+    kwargs = {}
+
+    class Session:
+        def __init__(self, **session_kwargs):
+            kwargs.update(session_kwargs)
+
+    monkeypatch.setattr("kiui.agent.terminal.PromptSession", Session)
+    TerminalInput()
+
+    assert "output" not in kwargs
+
+
 def _message_terminal(*, pending=None, status=None):
     terminal = object.__new__(TerminalInput)
     terminal._busy = True
