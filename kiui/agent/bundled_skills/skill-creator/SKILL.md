@@ -31,6 +31,10 @@ Call out any material assumption that remains unverified.
 
 ### 3. Write a focused skill
 
+Create the skill as project-local state under `.kia/skills/<skill-name>/`. 
+Use the `kib` library workflow to share or synchronize skills: `kib upload <skill-name>` publishes a local skill, `kib install <skill-name>` installs it in another project, and `kib update <skill-name>` synchronizes an installed copy. 
+Do not try to track the skill in git.
+
 Choose one kebab-case name and one coherent responsibility. Read
 `references/skill-format.md` for the required format. Start from
 `assets/SKILL.template.md` when useful, then delete unused sections.
