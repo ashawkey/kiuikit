@@ -5,7 +5,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from .paths import KIA_DIR_NAME
+from .paths import KIA_GITIGNORE_NAME, get_kia_dir
 
 PRESERVED_ENTRIES = frozenset({"skills"})
 
@@ -19,8 +19,7 @@ class StorageEntry:
 
 
 def kia_storage_dir(cwd: str | Path | None = None) -> Path:
-    base = Path(cwd) if cwd is not None else Path.cwd()
-    return base / KIA_DIR_NAME
+    return get_kia_dir(cwd)
 
 
 def allocated_size(path: Path) -> int:
@@ -36,8 +35,6 @@ def allocated_size(path: Path) -> int:
 
 def storage_entries(cwd: str | Path | None = None) -> list[StorageEntry]:
     root = kia_storage_dir(cwd)
-    if not root.exists():
-        return []
     return [
         StorageEntry(
             name=path.name,
@@ -46,6 +43,7 @@ def storage_entries(cwd: str | Path | None = None) -> list[StorageEntry]:
             is_dir=path.is_dir() and not path.is_symlink(),
         )
         for path in sorted(root.iterdir(), key=lambda path: path.name)
+        if path.name != KIA_GITIGNORE_NAME
     ]
 
 
@@ -61,6 +59,7 @@ def clean_storage(
     """Delete selected entries, or all default-cleanable entries, and return their size."""
     if entries is None:
         entries = cleanable_entries(cwd)
+    entries = [entry for entry in entries if entry.name != KIA_GITIGNORE_NAME]
     for entry in entries:
         if entry.is_dir:
             shutil.rmtree(entry.path)

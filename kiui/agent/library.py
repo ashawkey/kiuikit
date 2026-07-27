@@ -21,6 +21,7 @@ from filelock import FileLock
 
 from kiui.agent.personas import read_persona, valid_persona_name
 from kiui.agent.skills import read_skill, valid_skill_name
+from kiui.agent.utils import get_kia_dir
 
 
 logger = logging.getLogger(__name__)
@@ -298,7 +299,7 @@ def list_local_resources(
     """Return resources installed in the current project's ``.kia`` directory."""
     dirname, _, reader, _ = _resource_config(kind)
     base = Path(work_dir) if work_dir is not None else Path.cwd()
-    root = base / ".kia" / dirname
+    root = get_kia_dir(base) / dirname
     logger.info("Scanning local %s in %s", dirname, root)
     resources: dict[str, dict] = {}
     errors: list[dict] = []
@@ -371,7 +372,7 @@ def install_resource(
     dirname, _, _, _ = _resource_config(kind)
     logger.info("Installing %s %s", kind, name)
     base = Path(work_dir) if work_dir is not None else Path.cwd()
-    dest_root = base / ".kia" / dirname
+    dest_root = get_kia_dir(base) / dirname
     dest = dest_root / name
     if dest.exists() or dest.is_symlink():
         raise LibraryError(f"local {kind} already exists: {dest}")
@@ -411,7 +412,7 @@ def update_resource(
     dirname, _, _, validator = _resource_config(kind)
     logger.info("Updating %s %s", kind, name)
     base = Path(work_dir) if work_dir is not None else Path.cwd()
-    dest = base / ".kia" / dirname / name
+    dest = get_kia_dir(base) / dirname / name
     if not dest.is_dir() or dest.is_symlink():
         raise LibraryError(f"local project {kind} not found: {dest}")
 
@@ -567,7 +568,7 @@ def remove_local_resource(
     if not validator(name):
         raise LibraryError(f"invalid {kind} name: {name!r}")
     base = Path(work_dir) if work_dir is not None else Path.cwd()
-    resource = base / ".kia" / dirname / name
+    resource = get_kia_dir(base) / dirname / name
     if not resource.is_dir() or resource.is_symlink():
         raise LibraryError(f"local project {kind} not found: {resource}")
     shutil.rmtree(resource)
@@ -614,7 +615,7 @@ def upload_resource(
     if not validator(name):
         raise LibraryError(f"invalid {kind} name: {name!r}")
     base = Path(work_dir) if work_dir is not None else Path.cwd()
-    source = base / ".kia" / dirname / name
+    source = get_kia_dir(base) / dirname / name
     if not source.is_dir():
         raise LibraryError(f"local project {kind} not found: {source}")
     with _snapshot_resource(source, kind) as snapshot:

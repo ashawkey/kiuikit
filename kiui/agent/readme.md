@@ -66,7 +66,7 @@ kia --model <model_alias> --verbose --perm strict --resume [session_id]
 
 ### Storage management
 
-`kia --storage` reports every top-level entry in the current project's `.kia/` directory and whether a default clean removes it. Bare `kia --clean` removes every entry except persistent `skills/`. Pass one or more entry names to remove only those entries; explicitly named preserved entries can also be removed.
+`kia --storage` reports every user-facing top-level entry in the current project's `.kia/` directory and whether a default clean removes it. Kia maintains `.kia/.gitignore` with a `*` rule so the entire directory stays ignored; this internal file is hidden from storage listings and is never cleaned. Bare `kia --clean` removes every entry except persistent `skills/`. Pass one or more entry names to remove only those entries; explicitly named preserved entries can also be removed.
 
 ```bash
 kia --storage
