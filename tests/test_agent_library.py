@@ -172,6 +172,11 @@ def test_update_skill_pulls_changed_library_copy(tmp_path):
     assert read_skill(dest)["description"] == "Second"
 
 
+def test_update_skill_rejects_invalid_force_value(tmp_path):
+    with pytest.raises(LibraryError, match="invalid update force flag"):
+        update_skill(str(tmp_path / "remote"), "alpha", tmp_path, force="remote")  # type: ignore[arg-type]
+
+
 def test_update_skill_rejects_conflicting_changes(tmp_path):
     remote = _remote(tmp_path)
     source = tmp_path / "source"
@@ -190,9 +195,12 @@ def test_update_skill_rejects_conflicting_changes(tmp_path):
     )
     upload_skill(str(remote), "alpha", source, force=True)
 
-    with pytest.raises(LibraryError, match="both copies changed.*--prefer"):
+    with pytest.raises(LibraryError, match="both copies changed.*merge.*--force"):
         update_skill(str(remote), "alpha", target)
-    assert update_skill(str(remote), "alpha", target, prefer="local") == "pushed"
+    assert read_skill(dest)["description"] == "Local"
+    assert list_skills(str(remote))[0]["alpha"]["description"] == "Remote"
+
+    assert update_skill(str(remote), "alpha", target, force=True) == "pushed"
     assert list_skills(str(remote))[0]["alpha"]["description"] == "Local"
 
 

@@ -196,7 +196,7 @@ kib list
 kib list --local
 kib install pdf-processing
 kib update [pdf-processing ...]
-kib update pdf-processing --prefer local
+kib update pdf-processing --force
 kib upload pdf-processing
 kib upload pdf-processing --force
 kib remove pdf-processing
@@ -207,7 +207,7 @@ kib upload my-coder --kind persona
 kib --verbose list  # show operation, Git command, and timing details
 ```
 
-Remote resources are unavailable until installed. `kib update` safely synchronizes all installed resources of the selected kind; conflicts require `--prefer local` or `--prefer remote`. The committed `.kib.json` records the last synchronized tree. `--kind persona` applies any command to `personas/<name>/` and `./.kia/personas/<name>/`; skill remains the default kind. Upload validates packs and rejects symlinks, and install never overwrites an existing local resource.
+Remote resources are unavailable until installed. `kib update` safely synchronizes all installed resources of the selected kind. If both copies changed, it stops and instructs you to merge them into the project-local resource; after review and validation, `kib update <name> --force` replaces the complete library resource with that local tree. `--force` does not merge and discards remote changes absent from the local copy. The committed `.kib.json` records the last synchronized tree. `--kind persona` applies any command to `personas/<name>/` and `./.kia/personas/<name>/`; skill remains the default kind. Upload validates packs and rejects symlinks, and install never overwrites an existing local resource.
 
 ## Personas
 

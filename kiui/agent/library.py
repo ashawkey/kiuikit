@@ -400,15 +400,15 @@ def update_resource(
     name: str,
     kind: str = "skill",
     work_dir: str | Path | None = None,
-    prefer: str | None = None,
+    force: bool = False,
 ) -> str:
     """Synchronize one installed resource with its library copy.
 
-    Returns ``"current"``, ``"pulled"``, or ``"pushed"``. Without an explicit
-    preference, synchronization uses the last common tree and rejects conflicts.
+    Returns ``"current"``, ``"pulled"``, or ``"pushed"``. Conflicts are
+    rejected unless ``force`` replaces the library copy with the local tree.
     """
-    if prefer not in (None, "local", "remote"):
-        raise LibraryError(f"invalid update preference: {prefer!r}")
+    if not isinstance(force, bool):
+        raise LibraryError(f"invalid update force flag: {force!r}")
     dirname, _, _, validator = _resource_config(kind)
     logger.info("Updating %s %s", kind, name)
     base = Path(work_dir) if work_dir is not None else Path.cwd()
@@ -446,7 +446,7 @@ def update_resource(
                         _git("push", "--quiet", "origin", "main", cwd=checkout)
                     action = "current"
                 elif baseline == remote_digest or (
-                    baseline not in (local_digest, remote_digest) and prefer == "local"
+                    baseline not in (local_digest, remote_digest) and force
                 ):
                     shutil.rmtree(source)
                     shutil.copytree(snapshot, source)
@@ -455,9 +455,7 @@ def update_resource(
                     _git("commit", "--quiet", "-m", f"{kind}: update {name}", cwd=checkout)
                     _git("push", "--quiet", "origin", "main", cwd=checkout)
                     action = "pushed"
-                elif baseline == local_digest or (
-                    baseline not in (local_digest, remote_digest) and prefer == "remote"
-                ):
+                elif baseline == local_digest:
                     if _tree_digest(dest) != local_digest:
                         raise LibraryError(
                             f"cannot update '{name}': local copy changed during update; retry"
@@ -472,8 +470,9 @@ def update_resource(
                 else:
                     reason = "both copies changed" if baseline is not None else "no sync history"
                     raise LibraryError(
-                        f"cannot update '{name}': {reason}; use --prefer local or "
-                        "--prefer remote"
+                        f"cannot update '{name}': {reason}; merge both copies into the "
+                        "local resource (ask your agent for help), then run "
+                        f"'kib update {name} --force' to replace the library copy"
                     )
 
     _record_sync(dest, local_digest)
@@ -484,9 +483,9 @@ def update_skill(
     repo: str,
     name: str,
     work_dir: str | Path | None = None,
-    prefer: str | None = None,
+    force: bool = False,
 ) -> str:
-    return update_resource(repo, name, "skill", work_dir, prefer)
+    return update_resource(repo, name, "skill", work_dir, force)
 
 
 def _replace_local_resource(source: Path, dest: Path, expected_digest: str) -> None:

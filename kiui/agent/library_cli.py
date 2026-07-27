@@ -73,9 +73,9 @@ def build_parser() -> argparse.ArgumentParser:
     update.add_argument("names", nargs="*", metavar="name")
     update.add_argument("--kind", choices=("skill", "persona"), default="skill")
     update.add_argument(
-        "--prefer",
-        choices=("local", "remote"),
-        help="resolve conflicts by keeping the local or remote copy",
+        "--force",
+        action="store_true",
+        help="replace a conflicting library resource with the complete local copy",
     )
 
     remove = commands.add_parser("remove", help="remove resources from the library or project")
@@ -170,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
                     raise LibraryError(f"cannot update invalid local {args.kind}s: {detail}")
                 names = sorted(skills)
             for name in names:
-                action = update_resource(repo, name, args.kind, prefer=args.prefer)
+                action = update_resource(repo, name, args.kind, force=args.force)
                 if action == "current":
                     console.print(f"[cyan]{name}[/cyan] is already up to date.")
                 elif action == "pulled":

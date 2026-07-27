@@ -303,7 +303,7 @@ kib list [pattern]               # list remote skills, optionally filtering name
 kib list [pattern] --local       # list/filter local skills; remote status is best-effort
 kib install <name> [<name> ...]  # install one or more remote skills
 kib update [<name> ...]          # sync all or selected installed skills
-kib update <names...> --prefer local|remote  # resolve conflicts
+kib update <names...> --force  # replace conflicting library copies with local trees
 kib upload <name> [<name> ...]   # upload one or more local skills
 kib remove <name> [<name> ...]   # remove one or more remote skills
 kib remove <names...> --local    # remove project copies only
@@ -318,7 +318,7 @@ kib upload my-coder --kind persona
 Remote resources are not available to the agent until installed.
 The repository is cached under `~/.kia/library/`; each configured URL has an
 isolated checkout, so changing `kia_lib` selects a different cache. Each resource's last synchronized tree is recorded in its committed `.kib.json`, so update works across machines and does not depend on the cache. Install never overwrites an existing local resource. Update uploads local-only changes and downloads remote-only changes.
-Conflicting changes fail until `--prefer local` or `--prefer remote` is given.
+Conflicting changes fail with instructions to merge both copies into the project-local resource. After reviewing and validating that merge, `kib update <name> --force` replaces the complete library resource with the local tree; it does not merge and will discard any remote changes absent from the local copy.
 `kib` only manages project resources under `./.kia/skills/` and `./.kia/personas/`; it does not special-case bundled resources. Upload validates the resource, rejects symlinks, creates a normal commit, and never
 force-pushes. An empty repository is initialized on the first upload.
 
