@@ -1,6 +1,6 @@
 <p align="center">
     <picture>
-    <img alt="kiuikit_logo" src="docs/source/_static/logo.png" width="50%">
+    <img alt="kiuikit_logo" src="docs/source/_static/logo.png" width="10%">
     </picture>
     </br>
     <b>Kiuikit</b>
@@ -35,22 +35,19 @@ pip install git+https://github.com/ashawkey/kiuikit.git # only the minimal packa
 | `kiss` | System information — OS, CPU, GPU, torch, CUDA, conda |
 | `ks` | Slurm job management — queue, history, logs, cancel, usage |
 | `kia` | AI coding agent — terminal-native with web UI, sub-agents, skills, and more |
+| `kib` | AI harness library — share skills and personas across projects |
 
-### AI Agent (`kia`)
+### Agent
 
-`kia` is a lightweight yet powerful coding agent.
+`kia` is an experimental personal AI harness.
 
 ```bash
 pip install "kiui[kia]"
 kia
 ```
 
-What makes it different:
-- Native terminal + synchronized web UI, remote access from any browser.
-- Personal resource library `kib`: share skills and personas across projects.
-- Fully customizable personas.
-
-See the [agent documentation](https://kit.kiui.moe/agent.html) for full details.
+- Personal resource library (`kib`): share skills and personas across projects.
+- Native terminal UI + synchronized web UI, remote access from any browser.
 
 **Python library:**
 
