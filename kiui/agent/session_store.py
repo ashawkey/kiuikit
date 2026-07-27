@@ -592,30 +592,61 @@ class SessionStore:
         return chain
 
     def candidates(self) -> list[dict[str, Any]]:
-        """Return all revisions newest-first for branch-aware rewind selection.
+        """Return prompt boundaries in chronological order, followed by the head.
 
-        Carries the conversation and file-change context the picker needs. Line
-        counts are deliberately left out: they read stored objects, while
-        everything here comes from records already in memory.
+        A round revision is the state *after* its user prompt was answered.  A
+        useful rewind point is the earlier state just before that prompt, so the
+        picker labels the boundary with the prompt and the files changed while
+        answering it.  Intermediate same-round snapshots (for example before
+        compaction) are skipped when finding that boundary.
         """
         result = []
-        for rid in reversed(self.revision_order):
-            revision = self.revisions[rid]
-            state = revision["state"]
-            parent_id = revision["parentId"]
-            parent = self.revisions.get(parent_id) if parent_id else None
+        for source_id in self.revision_order:
+            source = self.revisions[source_id]
+            if source["reason"] != "round":
+                continue
+            source_round = source["state"].get("round_id", 0)
+            target_id = source["parentId"]
+            while (
+                target_id is not None
+                and self.revisions[target_id]["state"].get("round_id", 0) >= source_round
+            ):
+                target_id = self.revisions[target_id]["parentId"]
+            if target_id is None:
+                continue
+
+            target = self.revisions[target_id]
+            deltas = self.code_delta(
+                target.get("codeRevisionId"), source.get("codeRevisionId")
+            )
             result.append({
-                "id": rid,
-                "parent_id": parent_id,
-                "round_id": state.get("round_id", 0),
-                "reason": revision["reason"],
-                "created_at": revision["createdAt"],
-                "messages": len(revision["messageIds"]),
-                "new_messages": len(revision["messageIds"]) - (len(parent["messageIds"]) if parent else 0),
-                "prompt": self.revision_prompt(rid),
-                "files": len(self.revision_changes(rid)),
-                "code_revision_id": revision.get("codeRevisionId"),
-                "current": rid == self.head_id,
+                "id": target_id,
+                "source_id": source_id,
+                "round_id": target["state"].get("round_id", 0),
+                "reason": target["reason"],
+                "created_at": target["createdAt"],
+                "messages": len(target["messageIds"]),
+                "new_messages": len(source["messageIds"]) - len(target["messageIds"]),
+                "prompt": self.revision_prompt(source_id),
+                "files": len(deltas),
+                "code_revision_id": target.get("codeRevisionId"),
+                "current": False,
+            })
+
+        if self.head_id is not None:
+            head = self.revisions[self.head_id]
+            result.append({
+                "id": self.head_id,
+                "source_id": None,
+                "round_id": head["state"].get("round_id", 0),
+                "reason": head["reason"],
+                "created_at": head["createdAt"],
+                "messages": len(head["messageIds"]),
+                "new_messages": 0,
+                "prompt": "",
+                "files": 0,
+                "code_revision_id": head.get("codeRevisionId"),
+                "current": True,
             })
         return result
 

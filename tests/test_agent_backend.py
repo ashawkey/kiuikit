@@ -12,8 +12,10 @@ import pytest
 import kiui.agent.backend as backend
 from kiui.agent.backend import LLMAgent, _is_fatal_api_error
 from kiui.agent.backend.commands import AgentCommandsMixin
+from kiui.agent.context import CompactionState, ContextManager
 from kiui.agent.providers import ProviderError
-from kiui.agent.utils.io import EventHub, InputBroker
+from kiui.agent.utils.interrupt import RequestInterrupted
+from kiui.agent.utils.io import EventHub, InputBroker, UserSubmission
 
 
 class _StatusError(Exception):
@@ -303,6 +305,70 @@ def test_terminal_loop_survives_a_failing_round(monkeypatch):
     terminal.lines.put("exit")  # and still accepts input
     loop.join(timeout=5)
     assert not loop.is_alive()
+
+
+def test_cancelled_round_restores_context_and_message_draft():
+    context = ContextManager("system")
+    context.add({"role": "user", "content": "u1"})
+    context.add({"role": "assistant", "content": "a1"})
+    messages_before = list(context.messages)
+    state_before = CompactionState(original_request="u1")
+    context.compaction_state = state_before
+
+    events = EventHub()
+    resets = []
+    saved = []
+    console = NS(
+        rule=lambda: None,
+        user_input=lambda *args, **kwargs: None,
+        response=lambda *args, **kwargs: None,
+        system=lambda *args, **kwargs: None,
+        error=lambda *args, **kwargs: None,
+        warn=lambda *args, **kwargs: None,
+        reset_timeline=lambda: resets.append(True),
+    )
+
+    agent = object.__new__(LLMAgent)
+    agent.context = context
+    agent.events = events
+    agent.console = console
+    agent.round_id = 1
+    agent._session_id = "test"
+    agent._session_revision_id = "before-round"
+    agent._compaction_floor_tokens = 123
+    agent._pending_images = []
+    agent._last_interrupted = False
+    agent.verbose = False
+    agent.tool_executor = NS(goal_report=None)
+    agent._operation = lambda _label: nullcontext()
+    agent._maybe_continue_goal = lambda: None
+    agent.save_session = lambda *args, **kwargs: saved.append(
+        (list(context.messages), agent.round_id, agent._session_revision_id, kwargs)
+    )
+
+    def cancel_after_context_management():
+        context.replace_messages([{"role": "user", "content": "compacted u2"}])
+        context.compaction_state = CompactionState(original_request="u2")
+        agent._session_revision_id = "cancelled-round-snapshot"
+        agent._compaction_floor_tokens = 999
+        raise RequestInterrupted()
+
+    agent.call_api = cancel_after_context_management
+
+    agent._process_query(
+        UserSubmission("u2 @config.py", "terminal", "submission-2")
+    )
+
+    assert context.messages == messages_before
+    assert context.compaction_state == state_before
+    assert agent.round_id == 1
+    assert agent._session_revision_id == "before-round"
+    assert agent._compaction_floor_tokens == 123
+    assert agent._rewind_draft == "u2 @config.py"
+    assert resets == [True]
+    assert saved == [(messages_before, 1, "before-round", {"reason": "round"})]
+    draft_events = [event for event in events.after(0) if event.type == "draft_set"]
+    assert [event.data["text"] for event in draft_events] == ["u2 @config.py"]
 
 
 def test_provider_retry_classification_overrides_http_status():

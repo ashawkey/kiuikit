@@ -145,7 +145,7 @@ class SessionMixin:
         self._install_change_tracker()
 
     def _cmd_rewind(self):
-        """Move to any saved revision; subsequent work creates a branch."""
+        """Move to the checkpoint before a prompt; subsequent work branches."""
         if not self._session_id or not self.changes or self._session_store is None:
             self.console.warn("Rewind is only available in interactive chat mode with a session.")
             return
@@ -158,22 +158,23 @@ class SessionMixin:
             return
 
         candidates = store.candidates()
-        if len(candidates) <= 1:
+        if not any(not candidate["current"] for candidate in candidates):
             self.console.system("No earlier revisions to rewind to.")
             return
 
-        target_id = self._pick_revision(candidates)
-        if target_id is None:
+        candidate = self._pick_revision(candidates)
+        if candidate is None:
             self.console.system("Rewind cancelled.")
             return
 
-        if target_id == self._session_revision_id:
+        target_id = candidate["id"]
+        if candidate["current"]:
             self.console.system("That revision is already checked out.")
             return
 
         target = store.materialize(target_id)
         plan = self.changes.plan_checkout(target.get("code_revision_id"))
-        self._print_rewind_preview(target_id, target, plan)
+        self._print_rewind_preview(target_id, target, plan, candidate["prompt"])
 
         mode = self._pick_rewind_mode(target, plan)
         if mode is None:
@@ -201,11 +202,12 @@ class SessionMixin:
             self._session_revision_id = target_id
             self.save_session(self._session_id, reason="conversation-rewind")
 
+        self._set_rewind_draft(candidate["prompt"])
         self.console.reset_timeline()
         self._replay_context()
         self.console.system(
             f"Checked out revision {self._session_revision_id[:10]} at round {self.round_id}. "
-            "New work will branch from here."
+            "The selected prompt is ready to edit; new work will branch from here."
         )
 
     def _apply_code_plan(self, plan: CheckoutPlan, target_id: str) -> None:
@@ -219,24 +221,35 @@ class SessionMixin:
         else:
             self.console.system("Code already matched that revision; no files changed.")
 
-    def _pick_revision(self, candidates: list[dict]) -> str | None:
-        """Select a revision; each option carries the whole listing for its row."""
+    def _pick_revision(self, candidates: list[dict]) -> dict | None:
+        """Select a prompt boundary; each option carries its whole listing."""
         labels = []
         for index, revision in enumerate(candidates, start=1):
             marker = "[current]" if revision["current"] else ""
             round_label = f"round {revision['round_id']}"
-            prompt = revision["prompt"] or _reason_label(revision["reason"])
+            prompt = "(current state)" if revision["current"] else revision["prompt"]
+            if revision["reason"] == "initial":
+                prompt += f"  {_reason_label('initial')}"
             labels.append(
                 f"{index:>2}. {marker:<9}  {round_label:<9} · {revision['reason']:<11} · "
                 f"{_relative_time(revision['created_at']):<9} · {_file_label(revision['files']):<8} · "
                 f"{_shorten(prompt, self.REWIND_PROMPT_WIDTH)}"
             )
-        picked = self.console.select(message="Pick a session revision", choices=labels)
+        picked = self.console.select(message="Pick a prompt to rewind to", choices=labels)
         if picked is None:
             return None
-        return candidates[labels.index(picked)]["id"]
+        return candidates[labels.index(picked)]
 
-    def _print_rewind_preview(self, target_id: str, target: dict, plan: CheckoutPlan) -> None:
+    def _set_rewind_draft(self, prompt: str) -> None:
+        """Put the selected, now-removed prompt back in terminal and web editors."""
+        self._rewind_draft = prompt
+        events = getattr(self, "events", None)
+        if events is not None:
+            events.publish("draft_set", text=prompt)
+
+    def _print_rewind_preview(
+        self, target_id: str, target: dict, plan: CheckoutPlan, prompt: str
+    ) -> None:
         """Show what checking out *target_id* would do to history and to files."""
         store = self._session_store
         revision = store.revisions[target_id]
@@ -251,7 +264,7 @@ class SessionMixin:
                 f"{_relative_time(revision['createdAt'])}  ·  saved as {revision['reason']}"
             ),
         )
-        detail.add_row("Prompt", Text(store.revision_prompt(target_id) or "(no user message yet)"))
+        detail.add_row("Prompt", Text(prompt))
         detail.add_row(
             "Conversation",
             Text(

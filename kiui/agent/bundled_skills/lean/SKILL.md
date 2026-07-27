@@ -31,13 +31,19 @@ Prefer deletion over addition and direct code over premature abstraction. Do not
 
 For bugs, inspect relevant callers and sibling paths, then fix the shared root cause rather than one symptom.
 
+## Coding style
+
+- Validate and sanitize untrusted data at system boundaries: APIs, file parsers, CLI handlers, and external integrations.
+- In core code, trust established contracts, type hints, and upstream validation. Do not repeatedly check, coerce, normalize, or convert values, or add defensive branches for states the contract makes impossible.
+- Fail fast and loudly on contract violations with a clear exception. Do not add speculative safeguards, silent exception handling, or arbitrary fallback values.
+- Catch exceptions only to recover meaningfully, add actionable context, perform required cleanup, or translate an error at a boundary.
+- Prefer clear names and straightforward structure over explanatory comments. Comment only intent, invariants, non-obvious constraints, tradeoffs, or why the implementation differs from the obvious approach; never restate the code.
+- When behavior changes, update or remove affected comments in the same change. Delete stale or low-signal comments.
+
 ## Implementation constraints
 
 - Follow repository conventions and established contracts.
-- Validate untrusted input at APIs, parsers, CLI handlers, file formats, and external integrations. Inside that boundary, trust validated types and invariants.
-- Fail loudly on invalid internal state. Catch exceptions only for meaningful recovery, actionable context, cleanup, or boundary translation.
 - Preserve security, accessibility, data integrity, and required environment or hardware behavior.
-- Comment only intent, invariants, non-obvious constraints, or tradeoffs. Update or remove comments made stale by a behavior change.
 - Run the smallest relevant existing check. Add a focused test only when changed behavior is non-trivial or regression-prone.
 
 Before finishing, delete any code or prose that does not contribute to requested behavior, correctness, safety, or verification.

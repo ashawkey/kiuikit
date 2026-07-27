@@ -293,6 +293,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self.goal_iterations: int = 0      # number of goal-check rounds run so far
         self._pending_auto: str | None = None  # queued auto-injected prompt (goal check)
         self._last_interrupted: bool = False   # set by get_response when a round is cancelled
+        self._rewind_draft: str | None = None  # prompt restored after /rewind or cancellation
 
         self.token_totals = {
             "total": 0,
@@ -1196,6 +1197,10 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                         terminal.set_busy(False)
                         if exit_requested or should_exit:
                             return
+                        draft = getattr(self, "_rewind_draft", None)
+                        if draft is not None:
+                            self._rewind_draft = None
+                            await prompts.restart(draft)
                         self._queue_pending_auto()
                         if self.input_broker.pending:
                             active = executor.submit(self._run_round)
@@ -1355,12 +1360,37 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         if query.startswith("/"):
             return self._run_command(query)
 
+        messages_before_round = list(self.context.messages)
+        compaction_state_before_round = self.context.compaction_state
+        round_before_round = self.round_id
+        revision_before_round = self._session_revision_id
+        compaction_floor_before_round = self._compaction_floor_tokens
+
         self.context.add({"role": "user", "content": query})
         self.round_id += 1
         self.console.rule()
         self.tool_executor.goal_report = None
         with self._operation("agent response"):
             self.get_response()
+
+        if self._last_interrupted:
+            # Cancellation rejects the whole conversational turn. Restore the
+            # exact pre-submit context even if this round compacted history or
+            # already appended tool calls/results, then return the user's text
+            # to both editors. External tool side effects are not reversible.
+            self.context.replace_messages(messages_before_round)
+            self.context.compaction_state = compaction_state_before_round
+            self._session_revision_id = revision_before_round
+            self._compaction_floor_tokens = compaction_floor_before_round
+            self.round_id = round_before_round
+            self.console.reset_timeline()
+            self._replay_context()
+            if submission.source != "goal":
+                self._set_rewind_draft(submission.text)
+                self.console.system("Turn cancelled. Message restored to the editor.")
+            else:
+                self.console.system("Turn cancelled.")
+
         self._maybe_continue_goal()
         try:
             self.save_session(self._session_id, reason="round")

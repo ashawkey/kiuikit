@@ -1,173 +1,101 @@
 # AGENTS.md — Kiuikit (`kiui`)
 
-## Overview
-Kiuikit is a **niche Python toolkit**. It is a single package (`kiui`) distributed via PyPI. The project follows a **flat** (non-namespace) package layout with a **lazy loader** at the root.
+## Project
 
-- **Install**: `pip install kiui` (minimal) / `pip install kiui[full]` (all deps)
-- **Python**: ≥3.8
-- **Build**: setuptools (declared in `pyproject.toml`)
+Kiuikit is a flat Python package for computer-vision and 3D utilities, plus the `kia` terminal/web AI agent. It is published as `kiui`.
 
----
+- Python: **>=3.10** (source of truth: `pyproject.toml`)
+- Build: setuptools
+- Minimal install: `pip install -e .`
+- Agent install: `pip install -e ".[kia]"`
+- All optional CV/3D dependencies: `pip install -e ".[full]"`
+- CLI entry points are declared in `pyproject.toml`; do not duplicate or guess them.
 
-## Entry Points (CLI commands → module)
-Defined in `pyproject.toml` `[project.scripts]`:
+Many CV/3D dependencies are intentionally optional. Keep the minimal package importable: avoid importing heavy optional dependencies at package or module import time unless that module requires them.
 
-| Command | Module | Purpose |
-|---------|--------|---------|
-| `kire` | `kiui.render:main` | GUI 3D mesh viewer (nvdiffrast + dearpygui) |
-| `kisr` | `kiui.sr:main` | Super-resolution (Real-ESRGAN) |
-| `kivi` | `kiui.video:main` | Video/Image info & processing |
-| `kiss` | `kiui.sys:main` | System information (OS, GPU, torch, etc.) |
-| `ks` | `kiui.slurm:main` | Slurm job management |
-| `kia` | `kiui.agent.cli:main` | Terminal AI agent (LLM + tools + web) |
-| `kib` | `kiui.agent.library_cli:main` | Git-backed skill/persona library manager |
+## Repository map
 
----
+- `kiui/*.py`: standalone toolkit modules (mesh, camera, image/video, rendering, geometry, Slurm, etc.).
+- `kiui/utils.py`: general utilities exposed at the package root.
+- `kiui/nn/`: standalone PyTorch components.
+- `kiui/gridencoder/`: PyTorch wrapper and CUDA/C++ extension sources.
+- `kiui/agent/`: `kia` and `kib` implementation.
+- `kiui/agent/frontend/`: React/TypeScript/Vite Web UI.
+- `tests/`: pytest suite, currently focused on `kiui.agent`.
+- `docs/source/`: Sphinx documentation.
 
-## Package Architecture
+Prefer inspecting the relevant module over relying on a static exhaustive file list.
 
-### Lazy Loading System (`kiui/__init__.py`)
-The root `__init__.py` uses `lazy_loader.attach()` to:
-- Expose **all submodules** and **all public functions from `utils.py`** at the `kiui` namespace.
-- `kiui.lo(x)` works without explicit import of `kiui.utils`.
-- Reads `~/.kiui.yaml` or `./.kiui.yaml` into `kiui.conf` on import.
+## Important contracts
 
-**Implication**: when adding a new public function to `utils.py`, it automatically appears as `kiui.funcname`. New submodules (top-level `.py` files in `kiui/`) are also auto-exposed.
+### Root package
 
-### Key Module Map
+`kiui/__init__.py` uses `lazy_loader` to expose top-level modules, `env`, and top-level functions parsed from `kiui/utils.py`.
 
-#### Core (always available, minimal deps)
-| File | Purpose |
-|------|---------|
-| `config.py` | Load `~/.kiui.yaml` into dict `conf` |
-| `typing.py` | Re-exports common type hints (`Tensor`, `ndarray`, `Union`, `Optional`, etc.) |
-| `utils.py` | **Big misc utility module**: `lo()` (array inspection with `rich`), `seed_everything()`, `read_image/write_image`, `read_json/write_json`, `read_pickle/write_pickle`, `load_file_from_url`, `batch_process_files`, etc. |
-| `env.py` | `kiui.env('torch')` — auto-import libraries into the caller's globals. Saves boilerplate in notebooks/scripts. |
-| `op.py` | Vector math (`dot`, `length`, `safe_normalize`), image scaling helpers, `uv_padding`, `inverse_sigmoid/softplus`. Works on both torch tensors and numpy arrays. |
-| `timer.py` | `sync_timer` — CUDA-synchronized timer (context manager + decorator). Gated by env var `TIMER=1`. |
+- A new top-level public function in `utils.py` automatically becomes `kiui.<name>`; no manual re-export is needed.
+- Preserve lazy imports and the minimal-install import path.
+- `kiui.conf` is loaded from `./.kiui.yaml`, then `~/.kiui.yaml`, at import time.
 
-#### Mesh (3D feature)
-| File | Purpose |
-|------|---------|
-| `mesh.py` | **`Mesh` class** (~1200 lines). Torch-native mesh with `v/f/vn/vt/vc/albedo/metallicRoughness`. Loads `.obj/.ply/.glb/.fbx` via own parser or trimesh fallback. Exports `.obj/.ply/.glb`. Auto-normalize, auto-UV (xatlas), auto-size, remap-UV. |
-| `mesh_utils.py` | `clean_mesh()`, `decimate_mesh()`, `remesh()` via pymeshlab. |
+### Agent (`kiui/agent`)
 
-#### Visualization & Rendering
-| File | Purpose |
-|------|---------|
-| `vis.py` | `plot_image()` (matplotlib), `map_color()` (matplotlib colormaps) |
-| `render.py` | **`kire` CLI**: GUI mesh viewer (nvdiffrast + dearpygui + OrbitCamera). PBR rendering, auto-rotate, save video. |
-| `render_viser.py` | Web-based mesh viewer using `viser` (alternative to dearpygui). |
-| `video.py` | `read_video()`, video info/stats, CLI processing. ~1200 lines. |
-| `lpips.py` | Clean LPIPS perceptual loss using SqueezeNet. |
+- `backend/`: provider-neutral API loop, commands, goals, and session coordination.
+- `providers/`: provider implementations and authentication.
+- `tools/registry.py`: single source of truth for tool schema, handler, permissions, and advertising. Built-in schemas alone live in `tools/schemas.py`; execution routes through `tools/executor.py`.
+- Managed-process internals live in `tools/process_manager.py` and `tools/process_util.py`; user-facing process tools come from the bundled `monitor` skill.
+- `context.py` owns conversation/token compaction. `session_store.py` owns the append-only message/code revision DAG and object storage. Rewind planning/application lives in `utils/rewind.py` and is coordinated by `backend/sessions.py`.
+- `skills.py` and `personas.py` implement discovery/validation. Bundled resources are under `bundled_skills/` and `bundled_personas/`; project resources are under `.kia/`.
+- `terminal.py` owns prompt lifecycle. Preserve the invariant that a session has one prompt task; pause/ask/restart must remain one locked operation.
+- `hub.py` serves the committed frontend build and multiplexes agents; `hubclient.py` connects terminal agents to it.
 
-#### Camera & Geometry
-| File | Purpose |
-|------|---------|
-| `cam.py` | `OrbitCamera`, `to_homo()`, `intr_to_K()`, projection/unprojection utilities. |
-| `geocalib.py` | Single-image camera intrinsics estimation (GeoCalib, pinhole model). ~1400 lines, self-contained. |
-| `equirect.py` | Equirectangular (360°) utilities, HDR tonemapping, cubemap conversion. |
-| `quaternion.py` | Quaternion math: norm, normalize, conjugate, inverse, multiply, rotate, slerp, to/from matrices. Supports both torch and numpy. |
+When changing shared agent behavior, trace terminal and web paths, session persistence/replay, cancellation, and permission handling. Keep `formatting.describe_tool_call` as the common tool-call label for live execution and replay.
 
-#### Pose & Skeleton
-| File | Purpose |
-|------|---------|
-| `poser.py` | Interactive 3D pose viewer with preset skeletons (2head–8head proportions) and OpenPose joint mapping. Uses dearpygui + nvdiffrast. ~700 lines. |
+### Frontend
 
-#### Neural Networks (`kiui/nn/`)
-A collection of **standalone PyTorch NN building blocks** — not a framework, just reusable modules:
-| File | Purpose |
-|------|---------|
-| `__init__.py` | `MLP` class, `TruncExp` autograd function |
-| `utils.py` | Cosine LR schedule with warmup, parameter counting |
-| `attention_flash.py` | Flash attention wrapper |
-| `attention_xformers.py` | xFormers attention wrapper |
-| `dit.py` | Diffusion Transformer (DiT) blocks |
-| `encoder.py` | Encoder network utilities |
-| `flow_matching.py` | Flow matching utilities |
-| `llm.py` | LLM-related network components |
-| `perciever.py` | Perceiver architecture |
-| `sparse.py` | Sparse tensor utilities |
-| `unet_2d.py` | 2D UNet |
-| `unet_2d_cond.py` | Conditional 2D UNet |
-| `unet_3d_cond.py` | Conditional 3D UNet |
-| `vae_2d.py` | 2D VAE |
-| `vae_3d.py` | 3D VAE |
+Source is in `kiui/agent/frontend/src`; FastAPI serves `frontend/dist` in installed packages. Python package builds do not run Node.
 
-#### Grid Encoder (`kiui/gridencoder/`)
-| File | Purpose |
-|------|---------|
-| `grid.py` | `GridEncoder` torch module (hash-grid encoding) |
-| `backend.py` | Backend binding |
-| `src/` | CUDA C++ kernel (`gridencoder.cu`, `.h`, `bindings.cpp`) |
+- Keep raw HTML disabled in Markdown and preserve CSP, httponly-cookie, and CSRF protections.
+- After frontend source changes, run the checks below and commit the rebuilt `dist/` assets.
 
-#### AI Agent (`kiui/agent/`)
-A self-contained **terminal AI agent** (comparable to Claude Code / Codex CLI). Features include file and shell tools, managed background processes, web access, sub-agents, skills, personas, and a Git-backed resource library, personas, standing goals, context compaction, rewind, three-tier permissions, and a shared Web UI. See `kiui/agent/readme.md` for full docs.
+## Verification
 
-The implementation is split into focused packages; there are no longer top-level `backend.py`, `tools.py`, `prompts.py`, `io.py`, `interrupt.py`, or `rewind.py` modules.
+Run the smallest relevant check first.
 
-| Path | Purpose |
-|------|---------|
-| `cli.py` | `kia` entry point and Tyro argument parsing; starts chats or the hub, resumes sessions, lists models, and manages project `.kia` storage. |
-| `backend/__init__.py` | `LLMAgent`: provider-neutral API loop, retries, streaming, context/tool orchestration, cancellation, and persona setup. |
-| `backend/commands.py` | Slash-command routing, including model, persona, permission, context, and rewind commands, plus which commands may answer while a round is still running. |
-| `backend/goals.py` | Standing-goal state and automatic goal-check iteration. |
-| `backend/sessions.py` | Session persistence, selection, resume, replay, and the `/rewind` picker, checkout preview, and mode selection. |
-| `backend/skill_commands.py` | Skill listing, reload, and manual loading commands. |
-| `tools/` | Tool subsystem. `registry.py` is the single source of truth: each tool (built-in or skill-provided) is one `ToolSpec` (schema + `run` handler + permission class + advertising gate), and `ToolRegistry` resolves the advertised set in one pass from the persona whitelist (skill tools ride along when the persona can `load_skill`) and gates (image / sub-agent / goal). `schemas.py` holds only the raw built-in schemas; `executor.py` dispatches through the registry to focused file, shell, search, web, and agent-session mixins. A loaded skill's `tools.py` injects extra `ToolSpec`s (advertised only while the skill is loaded; name collisions with a built-in or another skill fail the load atomically). `process_manager.py`/`process_util.py` own the managed-process registry and cleanup, while the LLM-facing `start_process`/`inspect_processes`/`stop_process` tools live in the bundled `monitor` skill. Also contains result formatting/artifact storage and limits, plus `formatting.describe_tool_call`, the single source of the one-line label a tool call gets both when it runs and when a session is replayed. |
-| `context.py` | Conversation representation, token estimation, tool-result ingress compaction, context pruning, and LLM compaction. |
-| `session_store.py` | Append-only JSONL DAG of messages, conversation revisions, and code revisions, plus content-addressed object storage. Also answers what a revision contains (prompt, message delta, changed files) and what moving between two code revisions would do. |
-| `personas.py` / `bundled_personas/` | Declarative persona parser, discovery, marker rendering, and bundled `PERSONA.md` packs. Project and personal personas are discovered from `.kia/personas/`; bundled names are reserved. A loaded skill's native tools are advertised whenever the persona can call `load_skill`. |
-| `skills.py` / `bundled_skills/` | Agent Skills discovery, validation, progressive loading, and bundled skill packs. Project and personal skills live under `.kia/skills/`. |
-| `library.py` / `library_cli.py` | Git-backed skill/persona library and its `kib` CLI (`list`, `install`, `update`, `upload`, and `remove`). |
-| `subagent.py` | Synchronous, in-process sub-agent spawning with isolated working-directory context. |
-| `permissions.py` | `PermissionMode` (auto/default/strict), confirmation policy, and destructive-command safety guard. |
-| `models.py` | Model capability profiles and provider-specific reasoning configuration. |
-| `providers/` | Provider abstraction and registry. `openai_compatible.py` implements OpenAI-compatible Chat Completions; `openai_codex.py` implements ChatGPT Plus/Pro OAuth over the Codex Responses API, with durable credentials and OAuth flows in the adjacent auth modules. |
-| `ui.py` | Rich terminal rendering (`AgentConsole`), status indicators, and streamed responses. |
-| `terminal.py` | Prompt-toolkit input, file-path completion, history, and keyboard bindings. `PromptDriver` owns the single prompt task a session may have: a `PromptSession` reuses one Application, so pausing the editor to ask something else must stop, ask, and restart as one locked step. |
-| `utils/io.py` | Thread-safe `EventHub`, `InputBroker`, `PromptBroker`, and `CancellationToken` shared by terminal and web clients. |
-| `utils/interrupt.py` | Cancellation of in-flight API calls, retry waits, and foreground commands via Escape/Ctrl+C. |
-| `utils/rewind.py` | Per-round file change tracking and code checkout: `plan_checkout` describes a move (net per-path effect, line counts, files edited outside the agent) and `apply_plan` performs it, so previews and applies share one walk. Conversation rewind is coordinated by `backend/sessions.py`. |
-| `utils/frontmatter.py`, `utils/paths.py`, `utils/storage.py`, `utils/streaming.py` | Shared YAML-frontmatter parsing, `.kia` path/storage helpers, and OpenAI-compatible streamed-response accumulation. |
-| `hub.py` | `kia --hub` web daemon: browser authentication, agent/session registry, API/WebSockets, and multiplexing many agents into one UI. |
-| `hubclient.py` | Agent-side client. A normal terminal `kia` automatically links to a reachable hub, forwards events, and injects browser actions through the shared brokers. |
-| `frontend/` | React + TypeScript/Vite Web UI; FastAPI serves the committed production build from `frontend/dist/`. |
+```bash
+# Focused Python test
+python -m pytest tests/test_agent_<area>.py -q
 
-#### CLI Tools (`kiui/cli/`)
-Standalone CLI scripts (not exposed via the main package namespace, run directly as scripts):
-| File | Purpose |
-|------|---------|
-| `aes.py` | Aesthetic Predictor V2 |
-| `bg.py` | Background removal (rembg) |
-| `blender_*.py` | Blender integration (qremesh, render) |
-| `blip.py` | BLIP image captioning |
-| `clip_sim.py` / `clip_sim_text.py` | CLIP similarity |
-| `convert.py` / `convert_fp16.py` | File/format conversion |
-| `depth_midas.py` / `depth_zoe.py` | Monocular depth estimation |
-| `dircmp.py` | Directory comparison |
-| `hed.py` | HED edge detection |
-| `lock_version.py` | Lock dependency versions |
-| `remesh.py` | Mesh remeshing |
-| `timer.py` | CLI timer tool |
-| `pose.py` | OpenPose CLI wrapper |
-| `openpose/` | OpenPose body/face/hand model wrappers |
+# Full Python suite for broad/shared agent changes
+python -m pytest tests -q
 
-#### Other Top-Level Modules
-| File | Purpose |
-|------|---------|
-| `sys.py` | `kiss` CLI: rich system info (OS, CPU, GPU, disk, torch, CUDA, conda, etc.) |
-| `slurm.py` | `ks` CLI: Slurm job submission, monitoring, management. ~1100 lines. |
-| `sr.py` | `kisr` CLI: Real-ESRGAN super-resolution. Downloads models from HuggingFace Hub. |
-| `grid_put.py` | `scatter_add_nd` and related sparse grid scatter operations. |
-| `assets/` | Bundled assets: HDRI environment maps (`blender_lights/` with city, courtyard, forest, interior, night, studio, sunrise, sunset EXR files; `lights/` with BSDF LUT and HDR). |
+# Minimal import smoke test for package/import changes
+python -c "import kiui"
 
----
+# Package build/metadata changes
+python -m build
+```
 
-## Configuration
-- `kiui.conf` — loaded at import time from `./.kiui.yaml` or `~/.kiui.yaml`. Used by the agent (`kia`) for model API keys/URLs, and potentially by other modules.
+Frontend:
 
----
+```bash
+cd kiui/agent/frontend
+npm ci
+npm run typecheck
+npm test
+npm run build
+```
 
-## Documentation
-Built with Sphinx, source in `docs/source/`. Published at https://kit.kiui.moe/. Each major module has a corresponding `.md` file in the docs.
+Documentation:
+
+```bash
+pip install -r docs/requirements.txt
+sphinx-build docs/source docs/build -b dirhtml
+```
+
+There is limited automated coverage outside `kiui.agent`; use focused smoke tests for the modified module and optional dependency. Do not require `.[full]` merely to test unrelated agent/core changes.
+
+## Change discipline
+
+- Keep changes focused and consistent with nearby code; do not refactor unrelated modules.
+- Add or update focused tests for agent behavior changes.
+- Update `kiui/agent/readme.md`, `README.md`, or `docs/source/` when user-facing commands, configuration, or behavior changes.
+- Do not commit local `.kiui.yaml`, `.kia/`, caches, `node_modules/`, package build output, or credentials. `kiui/agent/frontend/dist/` is the deliberate generated-artifact exception.

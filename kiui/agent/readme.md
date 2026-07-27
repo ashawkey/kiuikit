@@ -134,7 +134,7 @@ The agent supports the following slash commands in the CLI:
 | `/login [provider\|model-alias]` | Authenticate an OAuth provider; defaults to the current provider |
 | `/logout [provider\|model-alias]` | Remove stored OAuth credentials |
 | `/auth [provider\|model-alias]` | Show authentication status |
-| `/rewind` | Pick, preview, and check out any saved conversation/code revision, then branch from it |
+| `/rewind` | Return to before a user prompt, restore it to the chatbox, then branch |
 | `/skills` | List installed skills; `/skills reload` to re-scan; `/skills <name>` to load one |
 | `/persona` | List personas; `/persona <name>` to switch (restarts the conversation) |
 | `/goal [text\|clear]` | Set a goal the agent auto-iterates toward until met (see [Goals](#goals)) |
@@ -196,15 +196,15 @@ The summary follows a fixed section structure (goal, constraints, progress, key 
 
 The newest 15% of the window (capped at 20k tokens) is never summarized away, and when the summarization input itself has to be cut it drops the *middle* — the oldest messages anchor the task, the newest carry the current state. Compacting an already-compacted session updates the previous summary instead of re-compressing it, so history does not degrade with each pass.
 
-A `pre-compaction` session revision is saved before the history is replaced, so `/rewind` can undo a compaction that lost too much.
+A `pre-compaction` session revision is saved before the history is replaced, so rewinding to the prompt boundary for that round can restore the pre-round conversation and code state.
 
 Two guards keep an unproductive pass from repeating every round. Before the round-trip, a split that would free less than it writes back — the summary is the one part of a compaction that *adds* context — is abandoned without calling the model at all. After it, every pass sets a floor that suppresses the next one until the context has actually grown by 5% of the window, whether or not the pass went well: a pass that clears the yield bar by a hair used to reset that floor, leaving the marginal pass right behind it unguarded. Summarization runs at low reasoning effort under a fixed output cap, since rewriting a conversation into a fixed section structure is transcription rather than reasoning.
 
 ## Rewind
 
-The `/rewind` command checks out any saved session revision. It takes no arguments — `/rewind` opens a picker whose options are the listing: each names which revision is checked out, its round, why it was saved, when, how many files it changed, and the prompt that produced it, so a revision is recognised by what was asked for rather than by an ID.
+The `/rewind` command returns to the checkpoint immediately before a user prompt was sent. It takes no arguments: the picker lists those prompt boundaries in conversation order, followed by the current checkpoint. Each prompt row shows the checkpoint round and how many files were changed while answering that prompt. After a conversation rewind, the removed prompt is restored to the terminal and web chatbox for editing and resubmission.
 
-Picking one previews the checkout before anything is applied — the rounds that would be dropped, and every file the move would create, modify, or delete with its line counts. A file edited outside the agent since it was recorded is called out, because a rewind would overwrite it:
+Picking a prompt previews the checkout before anything is applied — the selected prompt and later rounds that would be dropped, and every file the move would create, modify, or delete with its line counts. A file edited outside the agent since it was recorded is called out, because a rewind would overwrite it:
 
 ```
 Revision     a80161e46f  ·  round 1  ·  9m ago  ·  saved as round

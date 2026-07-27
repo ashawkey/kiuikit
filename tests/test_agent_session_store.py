@@ -323,20 +323,68 @@ def _write(tracker, work, round_id, name, content) -> None:
     path.write_text(content)
 
 
-def test_candidates_carry_the_prompt_and_file_counts(tmp_path: Path):
+def test_candidates_are_pre_prompt_checkpoints_plus_current(tmp_path: Path):
     store, tracker, work = _session(tmp_path)
-    root = _round(store, tracker, None, 1, "start the parser")
+    initial, _, _ = store.commit(
+        {"round_id": 0, "messages": []},
+        parent_id=None,
+        code_parent_id=None,
+        changes=[],
+        reason="initial",
+    )
+    first = _round(store, tracker, initial, 1, "start the parser")
     _write(tracker, work, 2, "parser.py", "a\nb\n")
     _write(tracker, work, 2, "util.py", "x\n")
-    _round(store, tracker, root, 2, "add the parser and a helper")
+    tip = _round(store, tracker, first, 2, "add the parser and a helper")
 
-    newest, oldest = store.candidates()
-    assert newest["round_id"] == 2 and newest["current"]
-    assert newest["prompt"] == "add the parser and a helper"
-    assert newest["files"] == 2
-    assert newest["new_messages"] == 0
-    assert oldest["prompt"] == "start the parser"
-    assert oldest["files"] == 0
+    before_first, before_second, current = store.candidates()
+    assert before_first["id"] == initial and before_first["round_id"] == 0
+    assert before_first["prompt"] == "start the parser"
+    assert before_first["files"] == 0 and not before_first["current"]
+    assert before_second["id"] == first and before_second["round_id"] == 1
+    assert before_second["prompt"] == "add the parser and a helper"
+    assert before_second["files"] == 2 and not before_second["current"]
+    assert current["id"] == tip and current["round_id"] == 2
+    assert current["prompt"] == "" and current["files"] == 0 and current["current"]
+
+
+def test_candidates_skip_same_round_snapshots(tmp_path: Path):
+    store, tracker, work = _session(tmp_path)
+    initial, _, _ = store.commit(
+        {"round_id": 0, "messages": []},
+        parent_id=None,
+        code_parent_id=None,
+        changes=[],
+        reason="initial",
+    )
+    first = _round(store, tracker, initial, 1, "one")
+    messages = [
+        {"role": "user", "content": "one"},
+        {"role": "assistant", "content": "done"},
+        {"role": "user", "content": "two"},
+    ]
+    _write(tracker, work, 2, "value.txt", "two\n")
+    snapshot, code_revision, _ = store.commit(
+        {"round_id": 2, "messages": messages},
+        parent_id=first,
+        code_parent_id=tracker.code_revision_id,
+        changes=tracker.pending_changes,
+        reason="pre-compaction",
+    )
+    tracker.mark_committed(code_revision)
+    store.commit(
+        {"round_id": 2, "messages": messages + [{"role": "assistant", "content": "done"}]},
+        parent_id=snapshot,
+        code_parent_id=code_revision,
+        changes=[],
+        reason="round",
+    )
+
+    before_second = store.candidates()[1]
+    assert before_second["id"] == first
+    assert before_second["round_id"] == 1
+    assert before_second["prompt"] == "two"
+    assert before_second["files"] == 1
 
 
 def test_plan_reports_no_file_changes_when_code_already_matches(tmp_path: Path):

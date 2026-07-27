@@ -89,6 +89,7 @@ def _build(tmp_path: Path, answers: list[str]) -> tuple[_Agent, Path, _Console]:
     console = _Console(answers)
     tracker = ChangeTracker("session", work, console, store)
     agent = _Agent(store, tracker, console)
+    agent.save_session(reason="initial")
 
     agent.round_id = 1
     agent.context.messages = [{"role": "user", "content": "set up the parser module"}]
@@ -116,7 +117,7 @@ def test_picker_and_preview_describe_the_conversation_and_the_files(tmp_path: Pa
     agent._cmd_rewind()
 
     picker, modes = console.prompts
-    assert "set up the parser module" in picker[1]
+    assert "set up the parser module" in picker[0]
     assert "2 files" in picker[1]
     # The preview names every file the checkout touches, and how it touches it.
     assert "modify  parser.py" in console.text
@@ -131,19 +132,23 @@ def test_picker_and_preview_describe_the_conversation_and_the_files(tmp_path: Pa
     assert (work / "parser.py").read_text() == "def parse():\n    return 1\n"
     assert (work / "util.py").read_text() == "X = 1\n"
     assert agent.round_id == 1 and agent.replayed == 1
+    assert agent._rewind_draft == "make the parser handle floats and drop util"
 
 
 def test_picker_options_are_the_listing_and_name_the_revision_type(tmp_path: Path):
     """No table precedes the picker, so every option must stand on its own."""
-    agent, _, console = _build(tmp_path, [" 3.", "5."])
+    agent, _, console = _build(tmp_path, [" 3."])
     agent.context.messages.append({"role": "user", "content": "one more thought"})
     agent.save_session(reason="pre-compaction")
     agent._cmd_rewind()
 
     picker = console.prompts[0]
-    assert "[current]" in picker[0] and "pre-compaction" in picker[0]
-    assert "round 2" in picker[1] and "2 files" in picker[1]
+    assert "round 0" in picker[0] and "set up the parser module" in picker[0]
+    assert "(session start)" in picker[0]
+    assert "round 1" in picker[1] and "2 files" in picker[1]
     assert "make the parser handle floats and drop util" in picker[1]
+    assert "[current]" in picker[2] and "pre-compaction" in picker[2]
+    assert "(current state)" in picker[2]
     # The options replace the table rather than repeating it.
     assert "Session revisions" not in console.text
 
@@ -205,7 +210,7 @@ def test_replay_shows_tool_calls_the_way_the_live_view_does(tmp_path: Path):
 def test_preview_states_when_a_revision_touches_no_files(tmp_path: Path):
     # Round 3 changed no files, so rewinding to round 2 reverts none either, and
     # with nothing to revert the mode menu offers no diff view: Cancel is item 4.
-    agent, _, console = _build(tmp_path, [" 2.", "4."])
+    agent, _, console = _build(tmp_path, [" 3.", "4."])
     agent.round_id = 3
     agent.context.messages.append({"role": "user", "content": "just talking"})
     agent.save_session(reason="round")

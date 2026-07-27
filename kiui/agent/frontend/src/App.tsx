@@ -160,6 +160,9 @@ function SessionPane({
           setWithdrawAction(null)
         }
         break
+      case 'draft_set':
+        onDraftChange(typeof data.text === 'string' ? data.text : '')
+        break
       case 'submission_rejected':
         if (typeof data.action_id === 'string' && data.action_id === submitActionRef.current) {
           submitActionRef.current = null
