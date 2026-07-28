@@ -27,6 +27,7 @@ class AgentCommandsMixin:
         "context": "Show a concise one-line-per-message context log",
         "system_prompt": "Print the current full system prompt",
         "compact": "Force context compaction via LLM summarization",
+        "continue": "Resume an unfinished round without adding a user message",
         "usage": "Show token usage for this session",
         "model": "Show or switch LLM model (/model <name>)",
         "login": "Log in to an OAuth provider (/login [provider|model-alias])",
@@ -79,6 +80,8 @@ class AgentCommandsMixin:
             self._cmd_help()
         elif cmd == "compact":
             self._cmd_compact()
+        elif cmd == "continue":
+            self._cmd_continue(raw)
         elif cmd == "usage":
             self._cmd_usage()
         elif cmd == "clear":
@@ -140,6 +143,56 @@ class AgentCommandsMixin:
                 self._run_compaction("Manual compaction requested")
             except RequestInterrupted:
                 self.console.system("Compaction cancelled.")
+
+    def _cmd_continue(self, raw: str = "/continue"):
+        """Resume a transcript that is waiting for an assistant response."""
+        if len(raw.split()) != 1:
+            self.console.warn("Usage: /continue")
+            return
+
+        if not self.context.messages:
+            self.console.warn("There is no unfinished round to continue.")
+            return
+
+        messages = self.context.messages
+        last = messages[-1]
+        role = get_role(last)
+        if role == "assistant":
+            if get_tool_calls(last):
+                self.console.warn(
+                    "The last assistant message has unresolved tool calls; "
+                    "cannot continue safely."
+                )
+            else:
+                self.console.warn("The last round is already complete; nothing to continue.")
+            return
+        if role == "tool":
+            # All calls from the preceding assistant message must have results;
+            # sending a partial tool batch is invalid for provider APIs.
+            result_ids = set()
+            index = len(messages) - 1
+            while index >= 0 and get_role(messages[index]) == "tool":
+                result_ids.add(get_tool_call_id(messages[index]))
+                index -= 1
+            calls = get_tool_calls(messages[index]) if index >= 0 else []
+            call_ids = {call.get("id") for call in calls}
+            if not call_ids or result_ids != call_ids:
+                self.console.warn(
+                    "The last assistant message has unresolved tool calls; "
+                    "cannot continue safely."
+                )
+                return
+        elif role != "user":
+            self.console.warn("The current conversation state cannot be continued.")
+            return
+
+        self.console.rule()
+        with self._operation("agent response"):
+            self.get_response()
+        try:
+            self.save_session(self._session_id, reason="round")
+        except Exception as e:
+            self.console.warn(f"Could not save continued round: {e}")
 
     def _cmd_usage(self):
         ctx_tokens = self._context_tokens()

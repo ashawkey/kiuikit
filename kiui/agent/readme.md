@@ -128,6 +128,7 @@ The agent supports the following slash commands in the CLI:
 | `/context` | Show a concise one-line-per-message context log |
 | `/system_prompt` | Print the current full system prompt |
 | `/compact` | Force context compaction via LLM summarization |
+| `/continue` | Resume an unfinished round without adding a user message; warns if the last round is complete |
 | `/usage` | Show token usage for this session |
 | `/perm [auto\|default\|strict]` | Show or change permission mode |
 | `/model [name]` | Show or switch LLM model mid-session |

@@ -107,6 +107,7 @@ def test_oauth_commands_use_current_provider():
         ("/persona reload", False),
         ("/clear", False),
         ("/compact", False),
+        ("/continue", False),
         ("/rewind", False),
         ("/exit", False),
         ("/nonsense", True),     # a typo is reported straight away
@@ -464,6 +465,85 @@ def test_cancelled_exec_preserves_its_partial_result_in_round_context(tmp_path):
     assert saved == [expected]
     assert systems[-1:] == ["Turn interrupted."]
     assert not [event for event in events.after(0) if event.type == "draft_set"]
+
+
+def _continue_agent(messages):
+    warnings = []
+    calls = []
+    saved = []
+    agent = type("Agent", (AgentCommandsMixin,), {})()
+    agent.context = ContextManager("system")
+    agent.context.replace_messages(messages)
+    agent.console = NS(
+        warn=lambda message: warnings.append(message),
+        rule=lambda: calls.append("rule"),
+    )
+    agent._operation = lambda label: nullcontext()
+    agent.get_response = lambda: calls.append("response")
+    agent._session_id = "test"
+    agent.save_session = lambda *args, **kwargs: saved.append((args, kwargs))
+    return agent, warnings, calls, saved
+
+
+def test_continue_resumes_after_tool_result_without_adding_user_message():
+    messages = [
+        {"role": "user", "content": "do it"},
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [{
+                "id": "call-1",
+                "type": "function",
+                "function": {"name": "load_skill", "arguments": '{"name":"lean"}'},
+            }],
+        },
+        {"role": "tool", "tool_call_id": "call-1", "content": "loaded"},
+    ]
+    agent, warnings, calls, saved = _continue_agent(messages)
+
+    agent._cmd_continue()
+
+    assert agent.context.messages == messages
+    assert warnings == []
+    assert calls == ["rule", "response"]
+    assert saved == [(('test',), {"reason": "round"})]
+
+
+def test_continue_warns_when_round_is_complete():
+    messages = [
+        {"role": "user", "content": "hello"},
+        {"role": "assistant", "content": "done"},
+    ]
+    agent, warnings, calls, saved = _continue_agent(messages)
+
+    agent._cmd_continue()
+
+    assert warnings == ["The last round is already complete; nothing to continue."]
+    assert calls == []
+    assert saved == []
+
+
+def test_continue_rejects_partial_tool_results():
+    messages = [
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {"id": "call-1", "function": {"name": "one", "arguments": "{}"}},
+                {"id": "call-2", "function": {"name": "two", "arguments": "{}"}},
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call-1", "content": "done"},
+    ]
+    agent, warnings, calls, saved = _continue_agent(messages)
+
+    agent._cmd_continue()
+
+    assert warnings == [
+        "The last assistant message has unresolved tool calls; cannot continue safely."
+    ]
+    assert calls == []
+    assert saved == []
 
 
 def test_provider_retry_classification_overrides_http_status():
