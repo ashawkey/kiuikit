@@ -17,7 +17,8 @@ from importlib.metadata import distribution
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, TYPE_CHECKING
-from urllib.parse import unquote, urlparse
+from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 if TYPE_CHECKING:
     from kiui.agent.hubclient import HubClient
@@ -353,7 +354,7 @@ def _editable_source() -> Path | None:
     parsed = urlparse(direct_url["url"])
     if parsed.scheme != "file":
         raise RuntimeError(f"Unsupported editable install URL: {direct_url['url']}")
-    return Path(unquote(parsed.path))
+    return Path(url2pathname(parsed.path))
 
 
 def cmd_update() -> int:
