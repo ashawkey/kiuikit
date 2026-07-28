@@ -138,11 +138,14 @@ The agent supports the following slash commands in the CLI:
 | `/skills` | List installed skills; `/skills reload` to re-scan; `/skills <name>` to load one |
 | `/persona` | List personas; `/persona <name>` to switch (restarts the conversation) |
 | `/goal [text\|clear]` | Set a goal the agent auto-iterates toward until met (see [Goals](#goals)) |
+| `/wait <duration> <prompt>` | Send a prompt after a delay, e.g. `/wait 1h check whether the other agent finished` |
 | `/clear` | Clear conversation history and start a new session |
 | `/resume [session_id]` | Save the current session, then resume a previous one (bare `/resume` picks interactively) |
 | `/exit` or `/quit` | Exit the agent |
 
-A message sent while the agent is working is queued and runs as the next round, but a command does not have to wait for one: a round owns the conversation, the provider, and the terminal prompt, so any command that merely reads session state (`/help`, `/usage`, `/context`, `/system_prompt`, `/auth`, and the bare listing form of `/model`, `/persona`, `/skills`) or takes effect on the next API call (`/perm`, `/reasoning`, `/goal`) is answered immediately — from the terminal and the Web UI alike. Commands that rewrite the conversation or swap what runs it (`/clear`, `/compact`, `/rewind`, `/resume`, `/login`, a `/model` or `/persona` switch, `/skills <name>`) stay queued until the round ends.
+A message sent while the agent is working normally steers the next tool-call iteration. `/wait` is deliberately different: its prompt becomes ready only after the requested seconds (`s`), minutes (`m`), or hours (`h`) and always starts a fresh round after the current round finishes. While the agent is idle, the same activity indicator used for `Working...` and `Executing...` shows `Waiting...` with a live countdown in the terminal and Web UI. Only one prompt, immediate or delayed, can be pending; use the existing pending-message edit/withdraw action to cancel it.
+
+A command sent while the agent is working does not have to wait for the round: a round owns the conversation, the provider, and the terminal prompt, so any command that merely reads session state (`/help`, `/usage`, `/context`, `/system_prompt`, `/auth`, and the bare listing form of `/model`, `/persona`, `/skills`) or takes effect on the next API call (`/perm`, `/reasoning`, `/goal`) is answered immediately — from the terminal and the Web UI alike. Commands that rewrite the conversation or swap what runs it (`/clear`, `/compact`, `/rewind`, `/resume`, `/login`, a `/model` or `/persona` switch, `/skills <name>`) stay queued until the round ends.
 
 ### Bash shortcut
 

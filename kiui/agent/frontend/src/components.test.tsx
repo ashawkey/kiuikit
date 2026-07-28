@@ -94,6 +94,18 @@ describe('interaction components', () => {
     }
   })
 
+  it('counts down while waiting', () => {
+    vi.useFakeTimers()
+    try {
+      render(<Thinking label="Waiting" countdown={61} />)
+      expect(screen.getByText('Waiting... (1m 01s)')).toBeInTheDocument()
+      act(() => { vi.advanceTimersByTime(2000) })
+      expect(screen.getByText('Waiting... (59s)')).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('preserves elapsed time when remounted', () => {
     vi.useFakeTimers()
     try {

@@ -123,6 +123,16 @@ function compactTokens(value: number) {
   return String(value)
 }
 
+function formatDuration(value: number) {
+  const total = Math.max(0, Math.ceil(value))
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const seconds = total % 60
+  if (hours) return `${hours}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`
+  if (minutes) return `${minutes}m ${String(seconds).padStart(2, '0')}s`
+  return `${seconds}s`
+}
+
 export function Thinking({
   suffix = '',
   contextTokens = 0,
@@ -131,6 +141,7 @@ export function Thinking({
   outputTokens = 0,
   label = 'Working',
   progress = false,
+  countdown,
   startedAt,
 }: {
   suffix?: string
@@ -140,6 +151,7 @@ export function Thinking({
   outputTokens?: number
   label?: string
   progress?: boolean
+  countdown?: number
   startedAt?: number
 }) {
   const mountedAt = useRef(Date.now())
@@ -158,7 +170,7 @@ export function Thinking({
   return (
     <div className="working" aria-label="working">
       <span /><span /><span />
-      <em>{label}... ({seconds}s)</em>
+      <em>{label}... ({countdown == null ? `${seconds}s` : formatDuration(countdown - seconds)})</em>
       {progress ? <i className="indeterminate-progress" aria-hidden="true"><i /></i> : null}
       {contextLimit > 0 ? (
         <>

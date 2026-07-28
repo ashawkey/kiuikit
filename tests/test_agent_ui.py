@@ -2,7 +2,19 @@ import io
 
 from rich.console import Console
 
-from kiui.agent.ui import ResponseStream
+from kiui.agent.ui import ResponseStream, ThinkingIndicator
+
+
+def test_thinking_indicator_can_render_a_countdown():
+    output = io.StringIO()
+    console = Console(file=output, width=80, no_color=True)
+    indicator = ThinkingIndicator(console, countdown=61, label="Waiting")
+
+    assert indicator._label_plain(0) == "Waiting... (1m 01s)"
+    assert indicator._label_plain(1.1) == "Waiting... (1m 00s)"
+    assert indicator._label_plain(99) == "Waiting... (0s)"
+    status = "".join(text for _, text in indicator._prompt_status("⠋", 1.1))
+    assert "Waiting... (1m 00s)" in status
 
 
 def make_stream():

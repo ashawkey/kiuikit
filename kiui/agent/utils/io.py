@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import queue
+import re
 import threading
 import time
 import uuid
@@ -16,6 +18,50 @@ from typing import Any, Awaitable, Callable
 # Cap per-field payload of published events so the EventHub's replay
 # history stays bounded even for large file writes or tool outputs.
 EVENT_TEXT_LIMIT = 64 * 1024
+_WAIT_UNITS = {
+    "s": 1,
+    "sec": 1,
+    "secs": 1,
+    "second": 1,
+    "seconds": 1,
+    "m": 60,
+    "min": 60,
+    "mins": 60,
+    "minute": 60,
+    "minutes": 60,
+    "h": 3600,
+    "hr": 3600,
+    "hrs": 3600,
+    "hour": 3600,
+    "hours": 3600,
+}
+_WAIT_DURATION_RE = re.compile(r"^(\d+(?:\.\d+)?)([a-z]+)$", re.IGNORECASE)
+
+
+def parse_wait_command(text: str) -> tuple[float, str] | None:
+    """Parse ``/wait <duration> <prompt>`` or return ``None`` for other input."""
+    if not re.match(r"^/wait(?:\s|$)", text, re.IGNORECASE):
+        return None
+    parts = text.split(maxsplit=2)
+    if len(parts) != 3:
+        raise ValueError(
+            "Usage: /wait <duration> <prompt> "
+            "(for example, /wait 1h check the job)"
+        )
+    match = _WAIT_DURATION_RE.fullmatch(parts[1])
+    unit = match.group(2).lower() if match else ""
+    if match is None or unit not in _WAIT_UNITS:
+        raise ValueError(
+            "Invalid wait duration. Use seconds, minutes, or hours "
+            "(for example: 30s, 5m, 1h)."
+        )
+    delay = float(match.group(1)) * _WAIT_UNITS[unit]
+    if not math.isfinite(delay) or delay <= 0:
+        raise ValueError("Wait duration must be greater than zero.")
+    prompt = parts[2].strip()
+    if not prompt:
+        raise ValueError("A prompt is required after the wait duration.")
+    return delay, prompt
 
 
 def sanitize_unicode(value: Any) -> Any:
@@ -108,6 +154,13 @@ class UserSubmission:
     source: str
     id: str
     action_id: str | None = None
+    ready_at: float | None = None
+    steer: bool = True
+
+    @property
+    def ready(self) -> bool:
+        return self.ready_at is None or time.monotonic() >= self.ready_at
+
 
 
 class InputBroker:
@@ -118,6 +171,7 @@ class InputBroker:
         self._lock = threading.Lock()
         self._submission: UserSubmission | None = None
         self._listeners: set[Callable[[], None]] = set()
+        self._ready_timer: threading.Timer | None = None
 
     def add_listener(self, listener: Callable[[], None]) -> None:
         with self._lock:
@@ -131,22 +185,41 @@ class InputBroker:
         for listener in listeners:
             listener()
 
+    def _notify_ready(self, submission_id: str) -> None:
+        with self._lock:
+            if self._submission is None or self._submission.id != submission_id:
+                return
+            self._ready_timer = None
+            listeners = tuple(self._listeners)
+        self._notify(listeners)
+
     def submit(
         self,
         text: str,
         source: str = "web",
         action_id: str | None = None,
+        *,
+        delay: float = 0,
+        steer: bool = True,
     ) -> UserSubmission:
         text = sanitize_unicode(text).strip()
         if not text:
             raise ValueError("Message cannot be empty.")
+        wait = parse_wait_command(text) if source in {"terminal", "web"} else None
+        if wait is not None:
+            delay, text = wait
+            steer = False
         if len(text.encode("utf-8")) > EVENT_TEXT_LIMIT:
             raise ValueError("Message is too large.")
+        if not math.isfinite(delay) or delay < 0:
+            raise ValueError("Delay must be a non-negative number of seconds.")
         item = UserSubmission(
             text=text,
             source=source,
             id=uuid.uuid4().hex,
             action_id=action_id,
+            ready_at=time.monotonic() + delay if delay else None,
+            steer=steer,
         )
         with self._lock:
             if self._submission is not None:
@@ -158,8 +231,15 @@ class InputBroker:
                 text=item.text,
                 source=item.source,
                 action_id=item.action_id,
+                delay=delay,
+                steer=item.steer,
             )
             listeners = tuple(self._listeners)
+            if delay:
+                timer = threading.Timer(delay, self._notify_ready, args=(item.id,))
+                timer.daemon = True
+                self._ready_timer = timer
+                timer.start()
         self._notify(listeners)
         return item
 
@@ -167,11 +247,14 @@ class InputBroker:
         """Consume the pending submission, optionally only when its ID matches."""
         with self._lock:
             item = self._submission
-            if item is None or (
+            if item is None or not item.ready or (
                 submission_id is not None and item.id != submission_id
             ):
                 raise queue.Empty
             self._submission = None
+            if self._ready_timer is not None:
+                self._ready_timer.cancel()
+                self._ready_timer = None
             self.events.publish("pending_cleared", id=item.id, reason="consumed")
             listeners = tuple(self._listeners)
         self._notify(listeners)
@@ -190,6 +273,9 @@ class InputBroker:
             ):
                 return None
             self._submission = None
+            if self._ready_timer is not None:
+                self._ready_timer.cancel()
+                self._ready_timer = None
             self.events.publish(
                 "pending_cleared",
                 id=item.id,
@@ -210,6 +296,11 @@ class InputBroker:
     def pending(self) -> int:
         with self._lock:
             return int(self._submission is not None)
+
+    @property
+    def ready(self) -> bool:
+        with self._lock:
+            return self._submission is not None and self._submission.ready
 
 
 @dataclass

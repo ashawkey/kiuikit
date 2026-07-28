@@ -99,6 +99,7 @@ def test_oauth_commands_use_current_provider():
         ("/context", True),
         ("/perm auto", True),
         ("/goal clear", True),
+        ("/wait 1h later", False),
         ("/model", True),        # bare form only lists
         ("/model gpt-5", False),  # switching swaps the provider mid-round
         ("/skills", True),
@@ -144,7 +145,7 @@ def test_instant_command_runs_while_a_round_is_in_flight():
     assert broker.submission is None
 
 
-@pytest.mark.parametrize("query", ["/clear", "steer the agent", "!git status"])
+@pytest.mark.parametrize("query", ["/clear", "/wait 1h later", "steer the agent", "!git status"])
 def test_non_instant_input_stays_queued_while_busy(query):
     broker = InputBroker(EventHub())
     submission = broker.submit(query)
@@ -307,7 +308,7 @@ def test_terminal_loop_survives_a_failing_round(monkeypatch):
     assert not loop.is_alive()
 
 
-def test_cancelled_round_restores_context_and_message_draft():
+def test_cancelled_initial_request_restores_context_and_message_draft():
     context = ContextManager("system")
     context.add({"role": "user", "content": "u1"})
     context.add({"role": "assistant", "content": "a1"})
@@ -369,6 +370,100 @@ def test_cancelled_round_restores_context_and_message_draft():
     assert saved == [(messages_before, 1, "before-round", {"reason": "round"})]
     draft_events = [event for event in events.after(0) if event.type == "draft_set"]
     assert [event.data["text"] for event in draft_events] == ["u2 @config.py"]
+
+
+def test_cancelled_exec_preserves_its_partial_result_in_round_context(tmp_path):
+    context = ContextManager("system")
+    context.add({"role": "user", "content": "u1"})
+    context.add({"role": "assistant", "content": "a1"})
+    messages_before = list(context.messages)
+    tool_call = {
+        "id": "call-1",
+        "type": "function",
+        "function": {"name": "exec_command", "arguments": '{"command": "slow"}'},
+    }
+
+    events = EventHub()
+    resets = []
+    systems = []
+    saved = []
+    console = NS(
+        rule=lambda: None,
+        user_input=lambda *args, **kwargs: None,
+        response=lambda *args, **kwargs: None,
+        system=lambda text, **kwargs: systems.append(text),
+        error=lambda *args, **kwargs: None,
+        warn=lambda *args, **kwargs: None,
+        tool_result=lambda *args, **kwargs: None,
+        thinking=lambda *args, **kwargs: nullcontext(),
+        reset_timeline=lambda: resets.append(True),
+    )
+
+    agent = object.__new__(LLMAgent)
+    agent.context = context
+    agent.events = events
+    agent.console = console
+    agent.round_id = 1
+    agent._session_id = "test"
+    agent._session_revision_id = "before-round"
+    agent._compaction_floor_tokens = None
+    agent._pending_images = []
+    agent._last_interrupted = False
+    agent.verbose = False
+    agent.stream = False
+    agent.input_broker = None
+    agent.cancellation = None
+    agent.permissions = NS(check=lambda *args: (True, ""))
+    agent.context_length = 16_000
+    agent.token_estimator = NS(chars_per_token=3.3)
+    agent.work_dir = str(tmp_path)
+    agent.tool_compaction_totals = {
+        "calls": 0,
+        "original_chars": 0,
+        "retained_chars": 0,
+    }
+    agent.tool_executor = NS(
+        goal_report=None,
+        execute=lambda *args: {
+            "stdout": "partial output\n",
+            "exit_code": 143,
+            "success": False,
+            "streamed": True,
+            "interrupted": True,
+            "error": "Command was interrupted by user.",
+        },
+    )
+    agent._operation = lambda _label: nullcontext()
+    agent._maybe_continue_goal = lambda: None
+    agent.save_session = lambda *args, **kwargs: saved.append(list(context.messages))
+
+    def call_api():
+        message = {"role": "assistant", "content": None, "tool_calls": [tool_call]}
+        context.add(message)
+        return message
+
+    agent.call_api = call_api
+    agent._process_query(UserSubmission("run it", "terminal", "submission-2"))
+
+    expected = messages_before + [
+        {"role": "user", "content": "run it"},
+        {"role": "assistant", "content": None, "tool_calls": [tool_call]},
+        {
+            "role": "tool",
+            "tool_call_id": "call-1",
+            "content": (
+                "partial output\n"
+                "[exit_code: 143, interrupted: true, timed_out: false]"
+            ),
+        },
+    ]
+    assert context.messages == expected
+    assert agent.round_id == 2
+    assert not hasattr(agent, "_rewind_draft")
+    assert resets == []
+    assert saved == [expected]
+    assert systems[-1:] == ["Turn interrupted."]
+    assert not [event for event in events.after(0) if event.type == "draft_set"]
 
 
 def test_provider_retry_classification_overrides_http_status():

@@ -362,6 +362,21 @@ def test_pending_message_steers_next_agentic_iteration():
     assert agent.round_id == 4
 
 
+def test_wait_submission_never_steers_current_round():
+    broker = InputBroker(EventHub())
+    submission = broker.submit("follow up", delay=0, steer=False)
+    context = ContextManager("system")
+    agent = NS(
+        input_broker=broker,
+        context=context,
+        console=NS(user_input=lambda *args, **kwargs: None),
+    )
+
+    assert not LLMAgent._inject_pending_steer(agent)
+    assert broker.submission == submission
+    assert context.messages == []
+
+
 @pytest.mark.parametrize("query", ["/help", "!git status", "exit", "quit"])
 def test_pending_local_query_waits_for_round_completion(query):
     broker = InputBroker(EventHub())

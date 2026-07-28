@@ -7,6 +7,7 @@ interactive prompting are handled in one place.
 
 from __future__ import annotations
 
+import math
 import threading
 import time
 from dataclasses import dataclass
@@ -130,8 +131,19 @@ class ContextStatus:
         return row
 
 
+def _format_duration(seconds: float) -> str:
+    total = max(0, math.ceil(seconds))
+    hours, remainder = divmod(total, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    if hours:
+        return f"{hours}h {minutes:02d}m {seconds:02d}s"
+    if minutes:
+        return f"{minutes}m {seconds:02d}s"
+    return f"{seconds}s"
+
+
 class ThinkingIndicator:
-    """Animated model activity or indeterminate operation progress."""
+    """Animated model activity, countdown, or indeterminate progress."""
 
     def __init__(
         self,
@@ -140,6 +152,7 @@ class ThinkingIndicator:
         status_suffix: str | ContextStatus = "",
         label: str = "Working",
         progress: bool = False,
+        countdown: float | None = None,
         render_terminal: bool = True,
         status_sink: Callable[[list[tuple[str, str]] | None], None] | None = None,
         indicator_stack: list["ThinkingIndicator"] | None = None,
@@ -150,6 +163,7 @@ class ThinkingIndicator:
         self._status_suffix = status_suffix
         self._label_text = label
         self._progress = progress
+        self._countdown = countdown
         self._render_terminal = render_terminal
         self._status_sink = status_sink
         self._status: Status | None = None
@@ -238,6 +252,7 @@ class ThinkingIndicator:
                 started_at=self._started_at,
                 label=self._label_text,
                 progress=self._progress,
+                countdown=self._countdown,
             )
         else:
             self._events.publish(
@@ -246,20 +261,25 @@ class ThinkingIndicator:
                 started_at=self._started_at,
                 label=self._label_text,
                 progress=self._progress,
+                countdown=self._countdown,
             )
 
     def _publish_stop(self) -> None:
         if self._events is not None:
             self._events.publish("thinking_stop")
 
+    def _base_label(self, elapsed: float) -> str:
+        if self._countdown is not None:
+            remaining = max(0, self._countdown - elapsed)
+            return f"{self._label_text}... ({_format_duration(remaining)})"
+        if elapsed:
+            return f"{self._label_text}... ({elapsed:.0f}s)"
+        return f"{self._label_text}..."
+
     def _prompt_status(
         self, frame: str, elapsed: float
     ) -> list[tuple[str, str]]:
-        label = (
-            f"{self._label_text}... ({elapsed:.0f}s)"
-            if elapsed
-            else f"{self._label_text}..."
-        )
+        label = self._base_label(elapsed)
         fragments = [
             ("class:status.spinner", f"{frame} "),
             ("class:status.text", label),
@@ -302,11 +322,7 @@ class ThinkingIndicator:
         return fragments
 
     def _label_plain(self, elapsed: float) -> str:
-        base = (
-            f"{self._label_text}... ({elapsed:.0f}s)"
-            if elapsed
-            else f"{self._label_text}..."
-        )
+        base = self._base_label(elapsed)
         if not self._status_suffix:
             return base
         suffix = (
@@ -317,11 +333,7 @@ class ThinkingIndicator:
         return f"{base} · {suffix}"
 
     def _label(self, elapsed: float) -> str | Table:
-        base = (
-            f"{self._label_text}... ({elapsed:.0f}s)"
-            if elapsed
-            else f"{self._label_text}..."
-        )
+        base = self._base_label(elapsed)
         if self._progress:
             row = Table.grid(padding=(0, 1))
             cells = [
@@ -668,12 +680,14 @@ class AgentConsole:
         status_suffix: str | ContextStatus = "",
         label: str = "Working",
         progress: bool = False,
+        countdown: float | None = None,
     ) -> ThinkingIndicator:
         """Return a context manager that displays an animated thinking indicator.
 
         ``status_suffix`` is appended after the elapsed-time counter. Set
-        ``progress`` for an indeterminate bar. A :class:`ContextStatus` renders
-        context usage as a progress bar in the terminal and plain text on web.
+        ``progress`` for an indeterminate bar, or ``countdown`` for a decreasing
+        duration. A :class:`ContextStatus` renders context usage as a progress
+        bar in the terminal and plain text on web.
 
         Usage::
 
@@ -686,6 +700,7 @@ class AgentConsole:
             status_suffix=status_suffix,
             label=label,
             progress=progress,
+            countdown=countdown,
             render_terminal=not self.interactive_input,
             status_sink=self.status_sink if self.interactive_input else None,
             indicator_stack=self._indicator_stack,

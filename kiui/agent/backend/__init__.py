@@ -293,6 +293,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self.goal_iterations: int = 0      # number of goal-check rounds run so far
         self._pending_auto: str | None = None  # queued auto-injected prompt (goal check)
         self._last_interrupted: bool = False   # set by get_response when a round is cancelled
+        self._interrupt_reverts_prompt: bool = False
         self._rewind_draft: str | None = None  # prompt restored after /rewind or cancellation
 
         self.token_totals = {
@@ -941,7 +942,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             return False
 
         submission = self.input_broker.submission
-        if submission is None:
+        if submission is None or not submission.steer:
             return False
         query = _strip_at_marks(submission.text.strip())
         if not query or _is_local_query(query):
@@ -969,6 +970,8 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         iteration = 0
         t_turn_start = time.monotonic()
         self._last_interrupted = False
+        self._interrupt_reverts_prompt = False
+        turn_has_response = False
 
         while True:
             iteration += 1
@@ -988,12 +991,17 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 self._pending_images.clear()
                 self.console.system("Request cancelled.")
                 self._last_interrupted = True
+                self._interrupt_reverts_prompt = not turn_has_response
                 return None
             except RuntimeError as e:
                 self._pending_images.clear()
                 self.console.error(f"API call failed: {e}")
                 return None
 
+            # call_api appends the completed assistant message. From this point
+            # cancellation must preserve the turn (including tool results from
+            # completed iterations) rather than withdrawing the user's prompt.
+            turn_has_response = True
             content = message.get("content")
             if content:
                 # The stream sink renders buffered Markdown and emits the final
@@ -1140,6 +1148,13 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             nonlocal active, exit_requested, should_exit, prompts
             ui_loop = asyncio.get_running_loop()
             input_ready = asyncio.Event()
+            wait_indicator = None
+
+            def stop_wait_indicator() -> None:
+                nonlocal wait_indicator
+                if wait_indicator is not None:
+                    wait_indicator.__exit__(None, None, None)
+                    wait_indicator = None
 
             def wake_input() -> None:
                 def refresh() -> None:
@@ -1176,6 +1191,22 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
 
             try:
                 while True:
+                    item = self.input_broker.submission
+                    should_show_wait = (
+                        active is None
+                        and item is not None
+                        and item.ready_at is not None
+                        and not item.ready
+                    )
+                    if should_show_wait and wait_indicator is None:
+                        wait_indicator = self.console.thinking(
+                            label="Waiting",
+                            countdown=max(0, item.ready_at - time.monotonic()),
+                        )
+                        wait_indicator.__enter__()
+                    elif not should_show_wait:
+                        stop_wait_indicator()
+
                     input_task = asyncio.create_task(input_ready.wait())
                     prompt_task = prompts.task
                     wait = {input_task}
@@ -1202,12 +1233,14 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                             self._rewind_draft = None
                             await prompts.restart(draft)
                         self._queue_pending_auto()
-                        if self.input_broker.pending:
+                        if self.input_broker.ready:
+                            stop_wait_indicator()
                             active = executor.submit(self._run_round)
                             terminal.set_busy(True)
 
                     if self.input_broker.pending:
-                        if active is None:
+                        if active is None and self.input_broker.ready:
+                            stop_wait_indicator()
                             active = executor.submit(self._run_round)
                             terminal.set_busy(True)
                         else:
@@ -1248,12 +1281,14 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                             continue
                         await prompts.restart()
                         terminal.app.invalidate()
-                        if active is None:
+                        if active is None and self.input_broker.ready:
+                            stop_wait_indicator()
                             active = executor.submit(self._run_round)
                             terminal.set_busy(True)
                     elif prompt_task is not None and prompt_task in done:
                         await prompts.wait_resumed()
             finally:
+                stop_wait_indicator()
                 self.input_broker.remove_listener(wake_input)
                 await prompts.stop()
                 if active is not None:
@@ -1324,7 +1359,11 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         if submission is None:
             return False
         query = submission.text.strip()
-        if not query.startswith("/") or not self.is_instant_command(query):
+        if (
+            not submission.ready
+            or not query.startswith("/")
+            or not self.is_instant_command(query)
+        ):
             return False
         try:
             submission = self.input_broker.get_nowait(submission.id)
@@ -1374,22 +1413,27 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             self.get_response()
 
         if self._last_interrupted:
-            # Cancellation rejects the whole conversational turn. Restore the
-            # exact pre-submit context even if this round compacted history or
-            # already appended tool calls/results, then return the user's text
-            # to both editors. External tool side effects are not reversible.
-            self.context.replace_messages(messages_before_round)
-            self.context.compaction_state = compaction_state_before_round
-            self._session_revision_id = revision_before_round
-            self._compaction_floor_tokens = compaction_floor_before_round
-            self.round_id = round_before_round
-            self.console.reset_timeline()
-            self._replay_context()
-            if submission.source != "goal":
-                self._set_rewind_draft(submission.text)
-                self.console.system("Turn cancelled. Message restored to the editor.")
-            else:
-                self.console.system("Turn cancelled.")
+            if self._interrupt_reverts_prompt:
+                # No assistant message was completed, so withdraw the untouched
+                # prompt and restore the exact pre-submit state. External side
+                # effects cannot exist yet because no tool call was received.
+                self.context.replace_messages(messages_before_round)
+                self.context.compaction_state = compaction_state_before_round
+                self._session_revision_id = revision_before_round
+                self._compaction_floor_tokens = compaction_floor_before_round
+                self.round_id = round_before_round
+                self.console.reset_timeline()
+                self._replay_context()
+                if submission.source != "goal":
+                    self._set_rewind_draft(submission.text)
+                    self.console.system(
+                        "Turn cancelled. Message restored to the editor."
+                    )
+                else:
+                    self.console.system("Turn cancelled.")
+            # Otherwise at least one assistant/tool step is already useful
+            # history. get_response has reported the interrupted iteration, so
+            # keep the turn as-is without replaying or restoring the prompt.
 
         self._maybe_continue_goal()
         try:

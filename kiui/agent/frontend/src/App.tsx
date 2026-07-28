@@ -56,6 +56,7 @@ function SessionPane({
     outputTokens: 0,
     label: 'Working',
     progress: false,
+    countdown: undefined as number | undefined,
     startedAt: undefined as number | undefined,
   })
   const socket = useRef<WebSocket | null>(null)
@@ -199,6 +200,7 @@ function SessionPane({
           label: typeof data.label === 'string' ? data.label : 'Working',
           startedAt: typeof data.started_at === 'number' ? data.started_at * 1000 : Date.now(),
           progress: data.progress === true,
+          countdown: typeof data.countdown === 'number' ? data.countdown : undefined,
         })
         break
       case 'thinking_stop':

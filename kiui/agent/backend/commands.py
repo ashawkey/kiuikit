@@ -36,6 +36,7 @@ class AgentCommandsMixin:
         "skills": "List skills; /skills <name> to load one, /skills reload to re-scan",
         "persona": "List/switch personas; /persona reload to re-scan",
         "goal": "Set a goal the agent auto-iterates toward (/goal <text> | clear)",
+        "wait": "Send a prompt after a delay (/wait <30s|5m|1h> <prompt>)",
         "perm": "Show or change permission mode (/perm auto|default|strict)",
         "rewind": "Return to before a user prompt, edit it, then branch",
         "clear": "Clear conversation history (keep system prompt)",

@@ -13,6 +13,7 @@ from kiui.agent.utils.io import (
     EventHub,
     InputBroker,
     PromptBroker,
+    parse_wait_command,
     sanitize_unicode,
 )
 from kiui.agent.utils.interrupt import RequestInterrupted, run_interruptible
@@ -45,6 +46,56 @@ def test_input_broker_accepts_only_one_pending_submission():
         ("pending_set", None),
         ("pending_cleared", "consumed"),
     ]
+
+
+@pytest.mark.parametrize(
+    "text, seconds, prompt",
+    [
+        ("/wait 30s check status", 30, "check status"),
+        ("/WAIT 2min do it", 120, "do it"),
+        ("/wait 1.5hours finish task", 5400, "finish task"),
+    ],
+)
+def test_parse_wait_command(text, seconds, prompt):
+    assert parse_wait_command(text) == (seconds, prompt)
+
+
+@pytest.mark.parametrize("text", ["/wait", "/wait 1d prompt", "/wait 0s prompt"])
+def test_parse_wait_command_rejects_invalid_input(text):
+    with pytest.raises(ValueError):
+        parse_wait_command(text)
+
+
+def test_wait_submission_is_hidden_until_ready_and_is_non_steering():
+    hub = EventHub()
+    broker = InputBroker(hub)
+    ready = threading.Event()
+    broker.add_listener(ready.set)
+
+    submission = broker.submit("/wait 0.05s check status", source="web")
+    assert submission.text == "check status"
+    assert not submission.steer
+    assert not submission.ready
+    assert not broker.ready
+    with pytest.raises(queue.Empty):
+        broker.get_nowait()
+
+    ready.clear()  # discard the immediate pending-set notification
+    assert ready.wait(1)
+    assert broker.ready
+    assert broker.get_nowait() == submission
+
+
+def test_withdrawing_wait_submission_cancels_ready_notification():
+    broker = InputBroker(EventHub())
+    notified = threading.Event()
+    broker.add_listener(notified.set)
+    submission = broker.submit("/wait 0.05s later", source="terminal")
+    notified.clear()
+
+    assert broker.withdraw() == submission
+    notified.clear()  # discard the withdrawal notification
+    assert not notified.wait(0.1)
 
 
 def test_input_broker_consumes_only_the_expected_submission():
