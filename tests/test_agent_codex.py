@@ -309,6 +309,86 @@ def test_codex_stream_round_trip_and_provider_state(monkeypatch, tmp_path):
     assert replay["input"][3]["type"] == "function_call_output"
 
 
+def test_codex_incomplete_response_returns_replayable_partial_text(monkeypatch, tmp_path):
+    events = [{
+        "type": "response.incomplete",
+        "response": {
+            "status": "incomplete",
+            "output": [{
+                "type": "message",
+                "role": "assistant",
+                "status": "incomplete",
+                "content": [{"type": "output_text", "text": "partial", "annotations": []}],
+            }],
+        },
+    }]
+    payload = "".join(f"data: {json.dumps(event)}\n\n" for event in events)
+
+    def handler(request: httpx.Request):
+        return httpx.Response(
+            200,
+            content=payload.encode(),
+            headers={"content-type": "text/event-stream"},
+        )
+
+    store = CredentialStore(tmp_path / "auth.json")
+    store.write_oauth("openai-codex", _credential())
+    provider = OpenAICodexProvider(ProviderSettings(), store=store)
+    monkeypatch.setattr(
+        provider,
+        "_new_client",
+        lambda timeout: httpx.Client(transport=httpx.MockTransport(handler), timeout=timeout),
+    )
+    stream = provider.open_stream(CompletionRequest(
+        model="gpt-5.6-sol",
+        messages=[{"role": "user", "content": "go"}],
+        stream=True,
+    ))
+    try:
+        result = stream.consume()
+    finally:
+        stream.close()
+
+    assert result.message["content"] == "partial"
+    assert "provider_state" not in result.message
+    assert result.finish_reason == "length"
+
+
+def test_codex_stream_without_terminal_event_returns_partial_response(monkeypatch, tmp_path):
+    events = [
+        {"type": "response.output_text.delta", "output_index": 0, "delta": "partial"},
+    ]
+    payload = "".join(f"data: {json.dumps(event)}\n\n" for event in events)
+
+    def handler(request: httpx.Request):
+        return httpx.Response(
+            200,
+            content=payload.encode(),
+            headers={"content-type": "text/event-stream"},
+        )
+
+    store = CredentialStore(tmp_path / "auth.json")
+    store.write_oauth("openai-codex", _credential())
+    provider = OpenAICodexProvider(ProviderSettings(), store=store)
+    monkeypatch.setattr(
+        provider,
+        "_new_client",
+        lambda timeout: httpx.Client(transport=httpx.MockTransport(handler), timeout=timeout),
+    )
+    stream = provider.open_stream(CompletionRequest(
+        model="gpt-5.6-sol",
+        messages=[{"role": "user", "content": "go"}],
+        stream=True,
+    ))
+    try:
+        result = stream.consume()
+    finally:
+        stream.close()
+
+    assert result.message["content"] == "partial"
+    assert result.finish_reason is None
+
+
 def test_expired_oauth_token_is_refreshed_once(monkeypatch, tmp_path):
     store = CredentialStore(tmp_path / "auth.json")
     store.write_oauth("openai-codex", _credential(expires=time.time() - 1))

@@ -153,6 +153,7 @@ def _is_local_query(query: str) -> bool:
 class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
     INITIAL_BACKOFF = 1.0   # seconds
     MAX_BACKOFF = 64.0      # seconds
+    MAX_AUTO_CONTINUES = 3
 
     def __init__(
         self, 
@@ -420,6 +421,8 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         appended as the last step, so every failure path leaves the history
         exactly as it was found — apart from eviction and compaction, which are
         window maintenance rather than turn state and are meant to persist.
+        Responses cut off by the output limit or without a terminal finish
+        reason are appended too; ``get_response`` then continues them.
         """
 
         # context management: evict old tool results, then compact if needed
@@ -548,13 +551,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             if tool_calls:
                 self.console.debug(f"Requested tool calls: {len(tool_calls)}")
 
-        if finish_reason == "length":
-            raise RuntimeError(
-                "Response truncated by the output-token limit "
-                f"(finish_reason='length', output={usage.completion_tokens:,}, "
-                f"requested max_tokens={self.max_output_tokens:,})."
-            )
-
+        self._last_finish_reason = finish_reason
         self.context.add(message)
         return message
 
@@ -972,6 +969,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self._last_interrupted = False
         self._interrupt_reverts_prompt = False
         turn_has_response = False
+        auto_continues = 0
 
         while True:
             iteration += 1
@@ -986,6 +984,10 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             # for, and on the overflow-retry path would throw away the exact
             # remediation the next attempt needs.
             try:
+                # A test double or alternate caller that replaces call_api is
+                # a normal completed response unless it explicitly overrides
+                # this value.
+                self._last_finish_reason = "stop"
                 message = self.call_api()
             except RequestInterrupted:
                 self._pending_images.clear()
@@ -1008,6 +1010,31 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 # event on close, so avoid printing it twice here.
                 if not self.stream:
                     self.console.response(content)
+
+            finish_reason = self._last_finish_reason
+            if finish_reason in (None, "length"):
+                if message.get("tool_calls"):
+                    self.console.warn(
+                        "Response was truncated during a tool call; cannot "
+                        "automatically continue safely."
+                    )
+                    return content or None
+                if auto_continues >= self.MAX_AUTO_CONTINUES:
+                    self.console.warn(
+                        "Response is still unfinished after "
+                        f"{auto_continues} automatic continuations; stopping."
+                    )
+                    return content or None
+                auto_continues += 1
+                if finish_reason == "length":
+                    reason = "the output-token limit was reached"
+                else:
+                    reason = "the response ended without a terminal finish reason"
+                self.console.warn(
+                    f"Unfinished response ({reason}); automatically continuing "
+                    f"({auto_continues}/{self.MAX_AUTO_CONTINUES})."
+                )
+                continue
 
             if not message.get("tool_calls"):
                 if self.verbose:

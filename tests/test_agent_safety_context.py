@@ -432,7 +432,7 @@ def test_interrupted_tool_iteration_does_not_consume_pending_message():
     assert agent._last_interrupted
 
 
-def test_call_api_sets_output_limit_and_rejects_truncated_response():
+def test_call_api_preserves_output_limited_response_for_continuation():
     kwargs_seen = {}
     added = []
     max_output_tokens = 20_000
@@ -473,11 +473,53 @@ def test_call_api_sets_output_limit_and_rejects_truncated_response():
         context=NS(add=added.append),
     )
 
-    with pytest.raises(RuntimeError, match="finish_reason='length'"):
-        LLMAgent.call_api(agent)
+    message = LLMAgent.call_api(agent)
 
     assert kwargs_seen["max_tokens"] == max_output_tokens
-    assert added == []
+    assert message["content"] == "partial"
+    assert added == [message]
+    assert agent._last_finish_reason == "length"
+
+
+@pytest.mark.parametrize("unfinished_reason", [None, "length"])
+def test_get_response_warns_and_automatically_continues(unfinished_reason):
+    context = ContextManager("system")
+    context.add({"role": "user", "content": "write it"})
+    warnings = []
+    responses = iter([
+        ({"role": "assistant", "content": "partial "}, unfinished_reason),
+        ({"role": "assistant", "content": "answer"}, "stop"),
+    ])
+
+    agent = NS(
+        console=NS(
+            warn=lambda text: warnings.append(text),
+            response=lambda text: None,
+            debug=lambda text: None,
+            error=lambda text: None,
+        ),
+        context=context,
+        verbose=False,
+        stream=False,
+        _pending_images=[],
+        _last_interrupted=False,
+        MAX_AUTO_CONTINUES=3,
+    )
+
+    def call_api():
+        message, finish_reason = next(responses)
+        agent._last_finish_reason = finish_reason
+        context.add(message)
+        return message
+
+    agent.call_api = call_api
+
+    assert LLMAgent.get_response(agent) == "answer"
+    assert len(warnings) == 1
+    assert "automatically continuing (1/3)" in warnings[0]
+    assert [get_text(message) for message in context.messages] == [
+        "write it", "partial ", "answer"
+    ]
 
 
 def _compaction_agent(token_readings):

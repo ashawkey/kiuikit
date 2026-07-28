@@ -354,7 +354,21 @@ class _CodexCompletionStream(CompletionStream):
 
             raise RequestInterrupted()
         if terminal is None:
-            raise ProviderError("OpenAI Codex stream ended without a terminal response", retryable=True)
+            # Preserve a cleanly ended partial stream so the backend can append
+            # it and continue from that exact point. Transport exceptions still
+            # raise and use the normal retry path.
+            output = [output_items[index] for index in sorted(output_items)]
+            message = _canonical_message(
+                output,
+                self._model,
+                "".join(text_parts),
+                "".join(reasoning_parts),
+            )
+            # The accumulated output items may themselves be incomplete. Replay
+            # the canonical partial text instead of treating this state as an
+            # opaque completed Codex response.
+            message.pop("provider_state", None)
+            return CompletionResult(message, None, None)
         output = terminal.get("output")
         if not isinstance(output, list) or (not output and output_items):
             output = [output_items[index] for index in sorted(output_items)]
@@ -369,6 +383,9 @@ class _CodexCompletionStream(CompletionStream):
             finish_reason = "tool_calls"
         elif status == "incomplete":
             finish_reason = "length"
+            # Replay partial text canonically on the continuation request; the
+            # terminal output items are explicitly incomplete.
+            message.pop("provider_state", None)
         else:
             finish_reason = "stop"
         return CompletionResult(message, _response_usage(terminal), finish_reason)
