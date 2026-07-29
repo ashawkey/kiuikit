@@ -105,13 +105,21 @@ DEFAULT_CHARS_PER_TOKEN = 3.3  # conservative for code-heavy workloads
 # (window ratio, floor, ceiling). Proactive tools are called repeatedly and can
 # be re-run with a narrower argument, so they get the tighter budget; anything
 # else — skill tools, sub-agent reports — cannot be re-narrowed and gets more.
-PROACTIVE_RESULT_BUDGET = (0.04, 3_000, 12_000)
-GENERIC_RESULT_BUDGET = (0.10, 8_000, 24_000)
-# Tools whose output is worth a higher ceiling than their tier's default.
-RESULT_CEILING_OVERRIDES = {
-    "read_file": 24_000,
-    "inspect_processes": 24_000,
-    "web_fetch": 24_000,
+#
+# Every ceiling must stay strictly under the tools' own MAX_TOOL_OUTPUT_CHARS
+# (24_000). A ceiling at that cap can never be exceeded, which silently turns
+# ingress compaction into dead code for the tool rather than making it generous.
+PROACTIVE_RESULT_BUDGET = (0.02, 2_000, 6_000)
+GENERIC_RESULT_BUDGET = (0.06, 4_000, 16_000)
+# Tools that earn a tier of their own. A file read is content the model asked
+# for by name and usually needs whole: truncating it buys a re-read round trip
+# and risks an edit against a string that was cut away, so it keeps the widest
+# budget. Fetched pages and process snapshots are verbose and low-density, so
+# they sit between the tiers instead of at the tool cap.
+RESULT_BUDGET_OVERRIDES = {
+    "read_file": (0.06, 4_000, 16_000),
+    "web_fetch": (0.04, 3_000, 10_000),
+    "inspect_processes": (0.04, 3_000, 10_000),
 }
 
 # Upper bound on the raw capture fed into the semantic reducers. Well above any
@@ -156,9 +164,9 @@ PROTECTED_TAIL_RATIO = 0.25
 PROTECTED_TAIL_MAX_TOKENS = 40_000
 KEEP_LAST_ASSISTANTS = 3
 
-SOFT_TRIM_THRESHOLD = 6000  # trim results larger than this (head+tail ≈ 3K, so min savings ≈ 50%)
-SOFT_TRIM_HEAD = 1500
-SOFT_TRIM_TAIL = 1500
+SOFT_TRIM_THRESHOLD = 3000  # trim results larger than this (head+tail ≈ 1.5K, so min savings ≈ 50%)
+SOFT_TRIM_HEAD = 750
+SOFT_TRIM_TAIL = 750
 
 # Tools whose output cannot be produced again. A file read or a search can just
 # be repeated, but a command runs once, with side effects, against a world that
@@ -363,10 +371,10 @@ def tool_result_char_budget(
     tool_name: str = "",
 ) -> int:
     """Return the maximum characters one tool result may add to history."""
-    ratio, min_chars, max_chars = (
-        PROACTIVE_RESULT_BUDGET if tool_name in PROACTIVE_TOOLS else GENERIC_RESULT_BUDGET
+    ratio, min_chars, max_chars = RESULT_BUDGET_OVERRIDES.get(
+        tool_name,
+        PROACTIVE_RESULT_BUDGET if tool_name in PROACTIVE_TOOLS else GENERIC_RESULT_BUDGET,
     )
-    max_chars = RESULT_CEILING_OVERRIDES.get(tool_name, max_chars)
     if context_length <= 0:
         return max_chars
     return max(min_chars, min(int(context_length * ratio * chars_per_token), max_chars))

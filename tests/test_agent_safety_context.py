@@ -218,21 +218,21 @@ def test_midsize_exec_capture_survives_for_eviction(tmp_path):
     """Output too small to compact but big enough to trim must stay recoverable.
 
     A result between SOFT_TRIM_THRESHOLD and the ingress budget enters history
-    whole, so nothing is persisted for it — and layer 2 later cuts it to ~3k
+    whole, so nothing is persisted for it — and layer 2 later cuts it to ~1.5k
     chars. A command's output cannot be produced again, so the capture is kept
     and pointed at even though no ingress compaction happens.
     """
     console = _Console()
     console.system = lambda *args, **kwargs: None
     executor = ToolExecutor(console=console, work_dir=str(tmp_path))
-    command = "python -c \"print('HEAD'); print('x' * 8000); print('TAIL')\""
+    command = "python -c \"print('HEAD'); print('x' * 4000); print('TAIL')\""
     tool_call = {"id": "call-mid", "type": "function", "function": {"name": "exec_command", "arguments": json.dumps({"command": command})}}
     agent = NS(
         verbose=False,
         console=console,
         permissions=NS(check=lambda *args: (True, "")),
         tool_executor=executor,
-        context_length=200_000,  # exec budget 12k, so 8k of output is not compacted
+        context_length=200_000,  # exec budget 6k, so 4k of output is not compacted
         token_estimator=NS(chars_per_token=3.3),
         context=NS(messages=[], add=lambda message: agent.context.messages.append(message)),
         cancellation=None,
@@ -252,7 +252,7 @@ def test_midsize_exec_capture_survives_for_eviction(tmp_path):
     pointer = _artifact_path_in(stored)
     assert pointer is not None
     captured = (tmp_path / pointer).read_text()
-    assert "HEAD" in captured and "TAIL" in captured and len(captured) > 8_000
+    assert "HEAD" in captured and "TAIL" in captured and len(captured) > 4_000
 
 
 def test_old_session_captures_are_pruned(tmp_path):

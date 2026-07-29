@@ -276,8 +276,8 @@ def test_superseded_read_is_cleared_and_keeps_its_recovery_pointer():
     messages = [{"role": "user", "content": "start"}]
     messages += _turn("c0", "read_file", {"file": "a.py"},
                       _with_artifact("x" * 40_000, path))
-    messages += _turn("c1", "read_file", {"file": "b.py"}, "x" * 5_000)
-    messages += _turn("c2", "read_file", {"file": "c.py"}, "x" * 5_000)
+    messages += _turn("c1", "read_file", {"file": "b.py"}, "x" * 2_000)
+    messages += _turn("c2", "read_file", {"file": "c.py"}, "x" * 2_000)
     # A later identical read makes the first one stale.
     messages += _turn("c3", "read_file", {"file": "a.py"}, "x" * 40_000)
     messages += _tail_turns()[:4]
@@ -289,8 +289,8 @@ def test_superseded_read_is_cleared_and_keeps_its_recovery_pointer():
     assert "superseded by a later identical call" in cleared
     assert path in cleared
     # Results that are still current are not collateral damage.
-    assert get_text(result[4]) == "x" * 5_000
-    assert get_text(result[6]) == "x" * 5_000
+    assert get_text(result[4]) == "x" * 2_000
+    assert get_text(result[6]) == "x" * 2_000
 
 
 def test_supersession_is_scoped_to_the_same_target():
