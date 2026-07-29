@@ -31,7 +31,7 @@ from .types import (
 
 CODEX_BASE_URL = "https://chatgpt.com/backend-api"
 CODEX_RESPONSES_URL = f"{CODEX_BASE_URL}/codex/responses"
-_RETRYABLE_STATUS = frozenset({408, 409, 425, 500, 502, 503, 504})
+_RETRYABLE_STATUS = frozenset({408, 409, 425, 429, 500, 502, 503, 504, 529})
 _USAGE_LIMIT_CODES = frozenset({"usage_limit_reached", "usage_not_included", "rate_limit_exceeded"})
 
 
@@ -339,14 +339,12 @@ class _CodexCompletionStream(CompletionStream):
                 raise ProviderError(
                     error.get("message") or "OpenAI Codex response failed",
                     code=error.get("code"),
-                    retryable=False,
                 )
             elif kind == "error":
                 error = event.get("error") if isinstance(event.get("error"), dict) else event
                 raise ProviderError(
                     error.get("message") or "OpenAI Codex stream failed",
                     code=error.get("code"),
-                    retryable=False,
                 )
 
         if should_stop is not None and should_stop():
