@@ -1,7 +1,28 @@
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from 'react'
 
+import type { ConnectionStatus } from './connection'
 import type { PendingMessage, Prompt, SessionSummary } from './types'
 import type { Theme } from './theme'
+
+export function ConnectionBanner({
+  status,
+  onRetry,
+  initial = false,
+}: {
+  status: ConnectionStatus
+  onRetry: () => void
+  initial?: boolean
+}) {
+  if (status === 'connected') return null
+  const message = status === 'connecting' ? 'Connecting to kia…' : 'Connection lost. Reconnecting…'
+  return (
+    <div className={`connection-banner${initial ? ' initial' : ''}`} role="status">
+      <span className="connection-dot" aria-hidden="true" />
+      <span>{message}</span>
+      {status === 'reconnecting' ? <button type="button" onClick={onRetry}>Retry now</button> : null}
+    </div>
+  )
+}
 
 export function SessionSidebar({
   sessions,
@@ -133,6 +154,18 @@ function formatDuration(value: number) {
   return `${seconds}s`
 }
 
+export type ThinkingProps = {
+  suffix?: string
+  contextTokens?: number
+  contextLimit?: number
+  inputTokens?: number
+  outputTokens?: number
+  label?: string
+  progress?: boolean
+  countdown?: number
+  startedAt?: number
+}
+
 export function Thinking({
   suffix = '',
   contextTokens = 0,
@@ -143,17 +176,7 @@ export function Thinking({
   progress = false,
   countdown,
   startedAt,
-}: {
-  suffix?: string
-  contextTokens?: number
-  contextLimit?: number
-  inputTokens?: number
-  outputTokens?: number
-  label?: string
-  progress?: boolean
-  countdown?: number
-  startedAt?: number
-}) {
+}: ThinkingProps) {
   const mountedAt = useRef(Date.now())
   const start = startedAt ?? mountedAt.current
   const elapsed = () => Math.max(0, Math.floor((Date.now() - start) / 1000))
@@ -183,6 +206,17 @@ export function Thinking({
       ) : suffix ? <small>{suffix}</small> : null}
     </div>
   )
+}
+
+export function ActivityStatus({
+  busy,
+  status,
+}: {
+  busy: boolean
+  status: ThinkingProps | null
+}) {
+  if (!busy && status === null) return null
+  return <Thinking {...(status ?? {})} />
 }
 
 export function Login({ onSuccess }: { onSuccess: () => void }) {
@@ -247,9 +281,11 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
 
 export function PromptDialog({
   prompt,
+  connected = true,
   onAnswer,
 }: {
   prompt: Prompt
+  connected?: boolean
   onAnswer: (answer: string) => void
 }) {
   const [answer, setAnswer] = useState(prompt.default)
@@ -279,6 +315,7 @@ export function PromptDialog({
               type="button"
               key={choice}
               className={choice === primary ? 'primary' : undefined}
+              disabled={!connected}
               onClick={() => onAnswer(choice)}
             >
               {choice}
@@ -286,7 +323,7 @@ export function PromptDialog({
           )) : (
             <>
               <textarea autoFocus rows={3} value={answer} onChange={(event) => setAnswer(event.target.value)} />
-              <button type="button" onClick={() => onAnswer(answer)}>Submit response</button>
+              <button type="button" disabled={!connected} onClick={() => onAnswer(answer)}>Submit response</button>
             </>
           )}
         </div>
@@ -299,6 +336,7 @@ export function Composer({
   operationId,
   pending,
   busy,
+  connected = true,
   draft,
   onDraftChange,
   onSend,
@@ -308,6 +346,7 @@ export function Composer({
   operationId: string | null
   pending: PendingMessage | null
   busy: boolean
+  connected?: boolean
   draft: string
   onDraftChange: (text: string) => void
   onSend: (text: string) => void
@@ -370,7 +409,7 @@ export function Composer({
           className="pending-message"
           type="button"
           onClick={onWithdraw}
-          disabled={busy || Boolean(text)}
+          disabled={!connected || busy || Boolean(text)}
           title={text ? 'Clear the draft before editing the pending message' : 'Withdraw and edit pending message'}
         >
           <span>Pending</span>
@@ -393,6 +432,7 @@ export function Composer({
             className="stop-button"
             type="button"
             onClick={onCancel}
+            disabled={!connected}
             aria-label="Stop"
             title="Stop"
           >
@@ -403,9 +443,9 @@ export function Composer({
           className="send-button"
           type="button"
           onClick={submit}
-          disabled={busy || Boolean(pending)}
+          disabled={!connected || busy || Boolean(pending)}
           aria-label="Send"
-          title="Send"
+          title={connected ? 'Send' : 'Waiting for connection'}
         >
           ↑
         </button>

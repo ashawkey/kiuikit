@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
-import { Composer, Login, PromptDialog, ScrollTopButton, SessionSidebar, Thinking, ThemeToggle } from './components'
+import { ActivityStatus, Composer, ConnectionBanner, Login, PromptDialog, ScrollTopButton, SessionSidebar, ThemeToggle } from './components'
+import type { ThinkingProps } from './components'
+import { useConnectionSocket } from './connection'
 import { EventCard } from './renderers'
 import { applyTheme, hasStoredTheme, resolveInitialTheme, storeTheme } from './theme'
 import type { Theme } from './theme'
@@ -31,12 +33,14 @@ function SessionPane({
   active,
   draft,
   restoreScroll,
+  showConnectionStatus,
   onDraftChange,
 }: {
   sessionId: string
   active: boolean
   draft: string
   restoreScroll: number | undefined
+  showConnectionStatus: boolean
   onDraftChange: (text: string) => void
 }) {
   const [events, setEvents] = useState<DisplayEvent[]>([])
@@ -47,19 +51,7 @@ function SessionPane({
   const [withdrawAction, setWithdrawAction] = useState<string | null>(null)
   const submitActionRef = useRef<string | null>(null)
   const withdrawActionRef = useRef<string | null>(null)
-  const [thinking, setThinking] = useState(false)
-  const [thinkingStatus, setThinkingStatus] = useState({
-    suffix: '',
-    contextTokens: 0,
-    contextLimit: 0,
-    inputTokens: 0,
-    outputTokens: 0,
-    label: 'Working',
-    progress: false,
-    countdown: undefined as number | undefined,
-    startedAt: undefined as number | undefined,
-  })
-  const socket = useRef<WebSocket | null>(null)
+  const [thinkingStatus, setThinkingStatus] = useState<ThinkingProps | null>(null)
   const lastSeq = useRef(0)
   const streamKey = useRef('')
   const localKey = useRef(0)
@@ -86,12 +78,16 @@ function SessionPane({
     if (message.type === 'state') {
       const state = message as StateMessage
       const key = `${state.session}:${state.stream_id}`
-      if (streamKey.current && streamKey.current !== key) {
+      const streamChanged = Boolean(streamKey.current && streamKey.current !== key)
+      if (streamChanged) {
         lastSeq.current = 0
         setEvents([])
       }
       streamKey.current = key
       setOperationId(state.operation_id)
+      // State frames are authoritative after reconnect. A fresh stream cannot
+      // inherit an old indicator; an idle operation cannot keep one visible.
+      if (streamChanged || state.operation_id === null) setThinkingStatus(null)
       setPrompt(state.prompt)
       setPending(state.pending)
       const submitId = submitActionRef.current
@@ -188,9 +184,9 @@ function SessionPane({
         break
       case 'operation_end':
         setOperationId(null)
+        setThinkingStatus(null)
         break
       case 'thinking_start':
-        setThinking(true)
         setThinkingStatus({
           suffix: typeof data.suffix === 'string' ? data.suffix : '',
           contextTokens: typeof data.context_tokens === 'number' ? data.context_tokens : 0,
@@ -204,15 +200,14 @@ function SessionPane({
         })
         break
       case 'thinking_stop':
-        setThinking(false)
+        setThinkingStatus(null)
         break
       case 'timeline_reset':
-        setThinking(false)
+        setThinkingStatus(null)
         setEvents([])
         break
       case 'assistant_delta':
       case 'thinking_delta':
-        setThinking(false)
         setEvents((current) => appendDelta(current, message.type, typeof data.text === 'string' ? data.text : ''))
         break
       case 'assistant_message':
@@ -231,46 +226,23 @@ function SessionPane({
     }
   }, [onDraftChange, showEvent])
 
-  // Open the session socket once and keep it open for the pane's whole life.
-  useEffect(() => {
-    let disposed = false
-    let reconnectTimer: number | undefined
-
-    function connect() {
-      if (disposed) return
+  const connection = useConnectionSocket({
+    getUrl: () => {
       const protocol = location.protocol === 'https:' ? 'wss' : 'ws'
       const id = encodeURIComponent(sessionId)
-      const next = new WebSocket(
-        `${protocol}://${location.host}/api/ws?session=${id}&after=${lastSeq.current}`,
-      )
-      socket.current = next
-      next.onmessage = (event) => {
-        if (disposed || socket.current !== next) return
-        try {
-          handleMessage(JSON.parse(event.data) as AgentEvent)
-        } catch {
-          // Ignore malformed server frames.
-        }
-      }
-      next.onclose = (event) => {
-        if (disposed || socket.current !== next) return
-        setSubmitAction(null)
-        setWithdrawAction(null)
-        // 4404: the agent exited; the control channel will prune this pane.
-        if (event.code !== 4403 && event.code !== 4404) {
-          reconnectTimer = window.setTimeout(connect, 1200)
-        }
-      }
-    }
+      return `${protocol}://${location.host}/api/ws?session=${id}&after=${lastSeq.current}`
+    },
+    onMessage: (message) => handleMessage(message as AgentEvent),
+    // 4404: the agent exited; the control channel will prune this pane.
+    shouldReconnect: (event) => event.code !== 4403 && event.code !== 4404,
+  })
 
-    connect()
-    return () => {
-      disposed = true
-      if (reconnectTimer) window.clearTimeout(reconnectTimer)
-      socket.current?.close()
-      socket.current = null
+  useEffect(() => {
+    if (connection.status !== 'connected') {
+      setSubmitAction(null)
+      setWithdrawAction(null)
     }
-  }, [sessionId, handleMessage])
+  }, [connection.status])
 
   // Track whether new output should keep following the tail. App owns the
   // actual per-session offsets because it can capture before switching panes.
@@ -302,18 +274,9 @@ function SessionPane({
   // tail scroll on tab activation and overwrite the restoration above.
   useEffect(() => {
     if (activeRef.current && pinned.current) scrollToTail()
-  }, [events, thinking, scrollToTail])
+  }, [events, thinkingStatus, operationId, scrollToTail])
 
-  const send = useCallback((action: ClientAction): boolean => {
-    const current = socket.current
-    if (current?.readyState !== WebSocket.OPEN) return false
-    try {
-      current.send(JSON.stringify(action))
-      return true
-    } catch {
-      return false
-    }
-  }, [])
+  const send = useCallback((action: ClientAction): boolean => connection.send(action), [connection.send])
 
   return (
     <>
@@ -321,16 +284,24 @@ function SessionPane({
         <div className="timeline" aria-live="polite">
           {events.map((event) => <EventCard event={event} key={event.key} />)}
         </div>
-        {active && thinking ? <Thinking {...thinkingStatus} /> : null}
+        {active ? <ActivityStatus busy={operationId !== null} status={thinkingStatus} /> : null}
       </section>
+      {active && showConnectionStatus ? (
+        <ConnectionBanner status={connection.status} onRetry={connection.retry} />
+      ) : null}
       {active && prompt ? (
-        <PromptDialog prompt={prompt} onAnswer={(answer) => send({ type: 'prompt_response', id: prompt.id, answer })} />
+        <PromptDialog
+          prompt={prompt}
+          connected={connection.status === 'connected'}
+          onAnswer={(answer) => send({ type: 'prompt_response', id: prompt.id, answer })}
+        />
       ) : null}
       {active ? (
         <Composer
           operationId={operationId}
           pending={pending}
           busy={submitAction !== null || withdrawAction !== null}
+          connected={connection.status === 'connected'}
           draft={draft}
           onDraftChange={onDraftChange}
           onSend={(text) => {
@@ -358,60 +329,37 @@ function SessionPane({
 
 export default function App() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null)
-  const [connectVersion, setConnectVersion] = useState(0)
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [activeSession, setActiveSession] = useState<string | null>(null)
   const [theme, setTheme] = useState<Theme>(resolveInitialTheme)
   // Per-session composer drafts. Panes unmount their Composer when inactive, so
   // the in-progress text lives here to survive tab switches.
   const [drafts, setDrafts] = useState<Record<string, string>>({})
-  const controlSocket = useRef<WebSocket | null>(null)
   const csrf = useRef('')
   const scrollPositions = useRef(new Map<string, number>())
 
   // Control channel: session list + auth confirmation.
-  useEffect(() => {
-    let disposed = false
-    let reconnectTimer: number | undefined
-
-    function connect() {
-      if (disposed) return
+  const controlConnection = useConnectionSocket({
+    enabled: authenticated !== false,
+    getUrl: () => {
       const protocol = location.protocol === 'https:' ? 'wss' : 'ws'
-      const next = new WebSocket(`${protocol}://${location.host}/api/ws`)
-      controlSocket.current = next
-
-      next.onmessage = (event) => {
-        if (disposed || controlSocket.current !== next) return
-        try {
-          const message = JSON.parse(event.data) as AgentEvent
-          if (message.type !== 'sessions') return
-          if (message.csrf) csrf.current = message.csrf
-          setAuthenticated(true)
-          const list = message.sessions ?? []
-          setSessions(list)
-          setActiveSession((current) => {
-            if (current && list.some((s) => s.id === current)) return current
-            return list[0]?.id ?? null
-          })
-        } catch {
-          // Ignore malformed frames.
-        }
-      }
-      next.onclose = (event) => {
-        if (disposed || controlSocket.current !== next) return
-        if (event.code === 4403) setAuthenticated(false)
-        else reconnectTimer = window.setTimeout(connect, 1200)
-      }
-    }
-
-    connect()
-    return () => {
-      disposed = true
-      if (reconnectTimer) window.clearTimeout(reconnectTimer)
-      controlSocket.current?.close()
-      controlSocket.current = null
-    }
-  }, [connectVersion])
+      return `${protocol}://${location.host}/api/ws`
+    },
+    onMessage: (raw) => {
+      const message = raw as AgentEvent
+      if (message.type !== 'sessions') return
+      if (message.csrf) csrf.current = message.csrf
+      setAuthenticated(true)
+      const list = message.sessions ?? []
+      setSessions(list)
+      setActiveSession((current) => {
+        if (current && list.some((s) => s.id === current)) return current
+        return list[0]?.id ?? null
+      })
+    },
+    shouldReconnect: (event) => event.code !== 4403,
+    onTerminalClose: () => setAuthenticated(false),
+  })
 
   useEffect(() => { applyTheme(theme) }, [theme])
 
@@ -454,24 +402,29 @@ export default function App() {
     } catch {
       // Ignore network failures: the local state reset below still signs out.
     }
-    const control = controlSocket.current
-    controlSocket.current = null
-    control?.close()
+    controlConnection.close()
     // Clearing sessions unmounts every pane, closing their sockets.
     setSessions([])
     setActiveSession(null)
     setDrafts({})
     scrollPositions.current.clear()
     setAuthenticated(false)
-  }, [])
+  }, [controlConnection.close])
 
   if (authenticated === false) {
-    return <Login onSuccess={() => setConnectVersion((value) => value + 1)} />
+    return <Login onSuccess={() => setAuthenticated(null)} />
   }
-  if (authenticated === null) return <main className="loading" aria-label="Connecting" />
+  if (authenticated === null) {
+    return (
+      <main className="loading" aria-label="Connecting">
+        <ConnectionBanner status={controlConnection.status} onRetry={controlConnection.retry} initial />
+      </main>
+    )
+  }
 
   return (
     <main className="app-shell">
+      <ConnectionBanner status={controlConnection.status} onRetry={controlConnection.retry} />
       <div className="top-controls">
         <ScrollTopButton onClick={scrollToTop} />
         <ThemeToggle theme={theme} onToggle={toggleTheme} />
@@ -492,6 +445,7 @@ export default function App() {
               active={session.id === activeSession}
               draft={drafts[session.id] ?? ''}
               restoreScroll={scrollPositions.current.get(session.id)}
+              showConnectionStatus={controlConnection.status === 'connected'}
               onDraftChange={(text) => setDraft(session.id, text)}
             />
           ))}

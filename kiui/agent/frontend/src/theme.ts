@@ -2,7 +2,7 @@ export type Theme = 'light' | 'dark'
 
 const STORAGE_KEY = 'kia-theme'
 // Browser-chrome colors matching each palette's page background.
-const chrome: Record<Theme, string> = { light: '#ffffff', dark: '#22231e' }
+const chrome: Record<Theme, string> = { light: '#eaf3ff', dark: '#070b16' }
 
 export function hasStoredTheme(): boolean {
   const stored = localStorage.getItem(STORAGE_KEY)

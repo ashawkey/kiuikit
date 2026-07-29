@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
 import { vi } from 'vitest'
 
-import { Composer, PromptDialog, Thinking, ThemeToggle } from './components'
+import { ActivityStatus, Composer, ConnectionBanner, PromptDialog, Thinking, ThemeToggle } from './components'
 
 // Controlled composer wrapper: the draft now lives in the parent (App), so the
 // test drives it through local state just like the real app does.
@@ -33,6 +33,14 @@ describe('interaction components', () => {
     expect(screen.getByRole('button', { name: 'Switch to dark theme' })).toBeInTheDocument()
   })
 
+  it('shows reconnecting status with an immediate retry', () => {
+    const retry = vi.fn()
+    render(<ConnectionBanner status="reconnecting" onRetry={retry} />)
+    expect(screen.getByText('Connection lost. Reconnecting…')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry now' }))
+    expect(retry).toHaveBeenCalled()
+  })
+
   it('sends composer text with Enter', () => {
     const onSend = vi.fn()
     render(<ControlledComposer onSend={onSend} />)
@@ -40,6 +48,25 @@ describe('interaction components', () => {
     fireEvent.change(field, { target: { value: 'hello' } })
     fireEvent.keyDown(field, { key: 'Enter' })
     expect(onSend).toHaveBeenCalledWith('hello')
+  })
+
+  it('keeps drafts editable but disables actions while disconnected', () => {
+    render(
+      <Composer
+        operationId="op"
+        pending={null}
+        busy={false}
+        connected={false}
+        draft="unsent text"
+        onDraftChange={() => undefined}
+        onSend={() => undefined}
+        onWithdraw={() => undefined}
+        onCancel={() => undefined}
+      />,
+    )
+    expect(screen.getByPlaceholderText('Queue a message...')).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeDisabled()
   })
 
   it('shows pending input and offers withdrawal', () => {
@@ -104,6 +131,22 @@ describe('interaction components', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('falls back to working while an operation has no specific indicator', () => {
+    render(<ActivityStatus busy status={null} />)
+    expect(screen.getByText('Working... (0s)')).toBeInTheDocument()
+  })
+
+  it('keeps the specific activity while an operation is busy', () => {
+    render(<ActivityStatus busy status={{ label: 'Executing', suffix: 'read_file' }} />)
+    expect(screen.getByText('Executing... (0s)')).toBeInTheDocument()
+    expect(screen.getByText('read_file')).toBeInTheDocument()
+  })
+
+  it('hides the status when the operation and indicator are both idle', () => {
+    const { container } = render(<ActivityStatus busy={false} status={null} />)
+    expect(container).toBeEmptyDOMElement()
   })
 
   it('preserves elapsed time when remounted', () => {

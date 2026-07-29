@@ -99,7 +99,9 @@ cd ~/projB && kia
 The hub writes its connection info (host, port, access token) to
 `~/.kia/hub.json`; agents read it to find the hub, so no extra config is
 needed. Use `kia_web_token` in the config (or the token printed on hub start)
-to sign in.
+to sign in. The browser monitors its hub connection, shows a reconnecting
+banner when it becomes unhealthy, and preserves drafts while actions are
+disabled until the connection recovers.
 
 To reach the hub from another device, tunnel the hub port with `cloudflared`:
 

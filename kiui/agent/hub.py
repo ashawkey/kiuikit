@@ -610,9 +610,11 @@ class Hub:
                     pass
 
         async def drain():
-            # Control channel takes no client actions; just detect disconnect.
+            # Control channel accepts only browser heartbeats.
             while True:
-                await websocket.receive_text()
+                payload = await websocket.receive_json()
+                if isinstance(payload, dict) and payload.get("type") == "ping":
+                    await websocket.send_json({"type": "pong"})
 
         await self._race(push_updates(), drain())
 
@@ -686,6 +688,9 @@ class Hub:
                 if not isinstance(payload, dict):
                     continue
                 action = payload.get("type")
+                if action == "ping":
+                    await websocket.send_json({"type": "pong"})
+                    continue
                 if action not in {
                     "submit", "withdraw_pending", "prompt_response", "cancel"
                 }:

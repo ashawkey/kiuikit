@@ -96,6 +96,22 @@ def test_per_session_state_and_event_replay():
             assert receive_type(sock, "system")["data"]["text"] == "ready"
 
 
+def test_browser_websockets_answer_heartbeats():
+    hub = make_hub()
+    add_session(hub, "s1")
+    with TestClient(hub.app) as client:
+        client.post("/api/login", json={"token": "correct-token"})
+        headers = {"origin": "http://testserver"}
+        with client.websocket_connect("/api/ws", headers=headers) as control:
+            assert receive_type(control, "sessions")["type"] == "sessions"
+            control.send_json({"type": "ping"})
+            assert receive_type(control, "pong")["type"] == "pong"
+        with client.websocket_connect("/api/ws?session=s1", headers=headers) as session:
+            assert receive_type(session, "state")["type"] == "state"
+            session.send_json({"type": "ping"})
+            assert receive_type(session, "pong")["type"] == "pong"
+
+
 def test_websocket_requires_same_origin():
     hub = make_hub()
     add_session(hub, "s1")
