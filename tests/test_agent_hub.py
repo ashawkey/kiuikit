@@ -106,6 +106,10 @@ def test_browser_websockets_answer_heartbeats():
             assert receive_type(control, "sessions")["type"] == "sessions"
             control.send_json({"type": "ping"})
             assert receive_type(control, "pong")["type"] == "pong"
+            # A malformed frame must not tear down the control channel.
+            control.send_text("not json")
+            control.send_json({"type": "ping"})
+            assert receive_type(control, "pong")["type"] == "pong"
         with client.websocket_connect("/api/ws?session=s1", headers=headers) as session:
             assert receive_type(session, "state")["type"] == "state"
             session.send_json({"type": "ping"})

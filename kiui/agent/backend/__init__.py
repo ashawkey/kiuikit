@@ -907,6 +907,30 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
 
         return interrupted
 
+    def _resolve_unexecuted_tool_calls(self, message: dict[str, Any]) -> None:
+        """Keep history valid when a turn ends on tool calls that never ran.
+
+        Providers reject an assistant message whose tool calls have no matching
+        results, so leaving the pair unresolved would fail every later request
+        in the session rather than just this round. Each call is answered with a
+        synthetic result, exactly as an interrupted round does. A call that
+        arrived without an id cannot be answered at all — the truncation cut it
+        that early — so the whole message is withdrawn instead.
+        """
+        tool_calls = message.get("tool_calls") or []
+        if all(tool_call.get("id") for tool_call in tool_calls):
+            for tool_call in tool_calls:
+                self.context.add({
+                    "role": "tool",
+                    "tool_call_id": tool_call["id"],
+                    "content": (
+                        "Tool call skipped: the response was cut off before the "
+                        "call was complete, so it was never executed."
+                    ),
+                })
+        else:
+            self.context.drop_last(message)
+
     def _display_read_result(self, result: dict[str, Any], success: bool) -> None:
         """Compact read_file result: show path, line count, success."""
         if not success:
@@ -1024,7 +1048,15 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                         "Response was truncated during a tool call; cannot "
                         "automatically continue safely."
                     )
+                    self._resolve_unexecuted_tool_calls(message)
                     return content or None
+                if empty_response and not message.get("provider_state"):
+                    # Nothing in this message reaches the next request: no text,
+                    # no tool call, no provider state to replay. Left in history
+                    # it is re-sent every round for the rest of the session (and
+                    # some providers reject a contentless assistant turn), so the
+                    # continuation restarts from the exact pre-call context.
+                    self.context.drop_last(message)
                 if auto_continues >= self.MAX_AUTO_CONTINUES:
                     self.console.warn(
                         "Response is still unfinished after "

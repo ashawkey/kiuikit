@@ -21,6 +21,7 @@ from kiui.agent.context import (
     compact_context,
     compact_tool_result_envelope,
     estimate_context_chars,
+    get_role,
     get_text,
     tool_result_char_budget,
 )
@@ -298,7 +299,11 @@ def test_large_tool_result_is_persisted_before_context(tmp_path):
     assert len(stored) <= tool_result_char_budget(16_000, tool_name="exec_command")
     assert "Large exec_command result compacted" in stored
     artifact = tmp_path / ".kia" / "tool-results" / "test" / "r2-call-1-exec_command.txt"
-    assert artifact.read_text() == result_text
+    # No producer capture on this stub, so the formatted result is persisted:
+    # the whole untruncated output plus the exec status line it ends with.
+    captured = artifact.read_text()
+    assert captured.startswith(result_text)
+    assert captured.endswith("[exit_code: 0, interrupted: false, timed_out: false]")
     if os.name == "posix":  # Windows has no Unix permission bits
         assert artifact.stat().st_mode & 0o077 == 0
 
@@ -591,6 +596,116 @@ def test_get_response_stops_after_repeated_empty_responses():
 
     assert LLMAgent.get_response(agent) is None
     assert "still unfinished after 2 automatic continuations" in warnings[-1]
+    # Nothing in a contentless assistant turn reaches the next request, so none
+    # of them may accumulate in the history that every later round re-sends.
+    assert [get_role(message) for message in context.messages] == ["user"]
+
+
+def _unfinished_agent(context, warnings):
+    agent = NS(
+        console=NS(
+            warn=lambda text: warnings.append(text),
+            response=lambda text: None,
+            debug=lambda text: None,
+            error=lambda text: None,
+        ),
+        context=context,
+        verbose=False,
+        stream=False,
+        _pending_images=[],
+        _last_interrupted=False,
+        MAX_AUTO_CONTINUES=3,
+    )
+    agent._resolve_unexecuted_tool_calls = (
+        lambda message: LLMAgent._resolve_unexecuted_tool_calls(agent, message)
+    )
+    return agent
+
+
+def test_truncated_tool_call_is_answered_so_history_stays_valid():
+    """A cut-off tool call must not leave the turn unresolved.
+
+    Providers reject an assistant message whose tool calls have no matching
+    results, so an unanswered pair would fail every later request in the
+    session rather than just this round.
+    """
+    context = ContextManager("system")
+    context.add({"role": "user", "content": "run it"})
+    warnings = []
+    agent = _unfinished_agent(context, warnings)
+
+    def call_api():
+        agent._last_finish_reason = "length"
+        message = {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [{
+                "id": "call-cut",
+                "type": "function",
+                "function": {"name": "exec_command", "arguments": '{"command": "ls -'},
+            }],
+        }
+        context.add(message)
+        return message
+
+    agent.call_api = call_api
+
+    assert LLMAgent.get_response(agent) is None
+    assert "cannot automatically continue safely" in warnings[-1]
+    assert [get_role(message) for message in context.messages] == [
+        "user", "assistant", "tool"
+    ]
+    result = context.messages[-1]
+    assert result["tool_call_id"] == "call-cut"
+    assert "never executed" in result["content"]
+
+
+def test_truncated_tool_call_without_an_id_withdraws_the_message():
+    """A call cut off before its id cannot be answered, so it cannot stay."""
+    context = ContextManager("system")
+    context.add({"role": "user", "content": "run it"})
+    warnings = []
+    agent = _unfinished_agent(context, warnings)
+
+    def call_api():
+        agent._last_finish_reason = "length"
+        message = {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [{"id": "", "type": "function", "function": {"name": "", "arguments": ""}}],
+        }
+        context.add(message)
+        return message
+
+    agent.call_api = call_api
+
+    assert LLMAgent.get_response(agent) is None
+    assert [get_role(message) for message in context.messages] == ["user"]
+
+
+def test_empty_response_with_provider_state_is_kept_for_replay():
+    """Provider state is what the continuation replays; dropping it loses the turn."""
+    context = ContextManager("system")
+    context.add({"role": "user", "content": "keep going"})
+    warnings = []
+    agent = _unfinished_agent(context, warnings)
+    responses = iter([
+        ({"role": "assistant", "content": None, "provider_state": {"openai-codex": {}}}, "stop"),
+        ({"role": "assistant", "content": "answer"}, "stop"),
+    ])
+
+    def call_api():
+        message, finish_reason = next(responses)
+        agent._last_finish_reason = finish_reason
+        context.add(message)
+        return message
+
+    agent.call_api = call_api
+
+    assert LLMAgent.get_response(agent) == "answer"
+    assert [get_role(message) for message in context.messages] == [
+        "user", "assistant", "assistant"
+    ]
 
 
 def _compaction_agent(token_readings):

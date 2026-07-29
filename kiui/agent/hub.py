@@ -610,9 +610,15 @@ class Hub:
                     pass
 
         async def drain():
-            # Control channel accepts only browser heartbeats.
+            # Control channel accepts only browser heartbeats. A frame that is
+            # not JSON is ignored rather than raised: letting it escape would
+            # tear down the socket through the endpoint's blanket handler and
+            # show up as an unexplained disconnect.
             while True:
-                payload = await websocket.receive_json()
+                try:
+                    payload = await websocket.receive_json()
+                except json.JSONDecodeError:
+                    continue
                 if isinstance(payload, dict) and payload.get("type") == "ping":
                     await websocket.send_json({"type": "pong"})
 

@@ -38,8 +38,14 @@ def test_document_and_search_compaction_keeps_prefix(tool_name):
     assert "END" not in result.text
 
 
-def test_exec_compaction_keeps_latest_output_and_diagnostics():
-    text = "BEGINNING\n" + "middle\n" * 3000 + "ERROR: failed\nLATEST\n"
+def test_exec_compaction_keeps_both_ends_of_command_output():
+    """Command output is sampled at both ends, not tail-only.
+
+    stdout and stderr share one pipe and a piped child block-buffers stdout
+    while stderr stays unbuffered, so a diagnostic routinely lands ahead of the
+    bulk output rather than after it.
+    """
+    text = "BEGINNING\n" + "".join(f"middle {i}\n" for i in range(3000)) + "ERROR: failed\nLATEST\n"
 
     result = compact_tool_result_envelope(
         ToolResultEnvelope("exec_command", {"command": "custom"}, {}, text),
@@ -47,7 +53,8 @@ def test_exec_compaction_keeps_latest_output_and_diagnostics():
     )
 
     assert result.retained_chars < result.original_chars
-    assert "BEGINNING" not in result.text
+    assert "BEGINNING" in result.text
+    assert "middle 1500" not in result.text
     assert "ERROR: failed" in result.text
     assert "LATEST" in result.text
 

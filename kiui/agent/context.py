@@ -67,6 +67,19 @@ class ContextManager:
         if self._char_cache is not None:
             self._char_cache += msg_chars(message)
 
+    def drop_last(self, message: dict[str, Any]) -> bool:
+        """Withdraw *message* if it is still the newest one. Returns whether it was.
+
+        Identity-checked so a caller can only undo its own append: a turn that
+        has already moved on must not lose someone else's message.
+        """
+        if not self.messages or self.messages[-1] is not message:
+            return False
+        self.messages.pop()
+        if self._char_cache is not None:
+            self._char_cache -= msg_chars(message)
+        return True
+
     def get(self, include_system: bool = True) -> list[dict[str, Any]]:
         messages: list[dict[str, Any]] = []
         if include_system:
@@ -114,7 +127,6 @@ PROACTIVE_TOOLS = frozenset({
 PREFIX_TOOLS = frozenset({
     "read_file", "web_fetch", "ls", "glob_files", "grep_files", "web_search",
 })
-LATEST_TOOLS = frozenset({"exec_command", "inspect_processes"})
 
 _ANSI_RE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
 _PROGRESS_RE = re.compile(r"^\s*(?:[\[\]=\->#|. ]{5,}\d*%?|[⠀-⣿]+)\s*$")
@@ -498,8 +510,12 @@ def _excerpt_for(
     The full output is already on disk under a pointer, so an excerpt only has
     to be enough to decide whether to go and read it — which end it comes from
     is the only thing worth getting right. A document or listing is read from the
-    top, a log from the bottom, a process snapshot keeps its status and latest
-    tail, and anything else is sampled at both ends.
+    top, a process snapshot keeps its status and latest tail, and anything else
+    is sampled at both ends.
+
+    Command output is deliberately *not* tail-only: stdout and stderr share one
+    pipe, and a piped child block-buffers stdout while stderr stays unbuffered,
+    so a diagnostic routinely lands ahead of the bulk output it describes.
 
     Shared by ingress and eviction so a result is cut the same way whenever it
     is cut; the label is only used by the eviction placeholder.
@@ -508,8 +524,6 @@ def _excerpt_for(
         return _sample_prefix(text, budget), "beginning"
     if tool_name == "inspect_processes":
         return _compact_process_output(result, text, budget), "status and latest log"
-    if tool_name in LATEST_TOOLS:
-        return _sample_suffix(text, budget), "latest"
     return _sample_edges(text, budget), "beginning and end"
 
 
