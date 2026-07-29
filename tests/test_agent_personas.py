@@ -67,6 +67,40 @@ def test_render_expands_markers_once(tmp_path):
     assert "## Skills" not in prompt
 
 
+def test_local_project_instructions_can_import_root(tmp_path):
+    work = tmp_path / "work"
+    (work / ".kia").mkdir(parents=True)
+    (work / "AGENTS.md").write_text("Root instructions.", encoding="utf-8")
+    (work / ".kia" / "AGENTS.md").write_text(
+        "@AGENTS.md\n\nLocal instructions.", encoding="utf-8"
+    )
+    path = _write_persona(
+        tmp_path / "personas",
+        "custom",
+        body="{{kia:project-instructions}}",
+    )
+
+    prompt = read_persona(path).build(PersonaContext(work_dir=str(work)))
+
+    assert prompt == "## Project Instructions\nRoot instructions.\n\nLocal instructions."
+
+
+def test_local_project_instructions_replace_root(tmp_path):
+    work = tmp_path / "work"
+    (work / ".kia").mkdir(parents=True)
+    (work / "AGENTS.md").write_text("Root instructions.", encoding="utf-8")
+    (work / ".kia" / "AGENTS.md").write_text("Local only.", encoding="utf-8")
+    path = _write_persona(
+        tmp_path / "personas",
+        "custom",
+        body="{{kia:project-instructions}}",
+    )
+
+    prompt = read_persona(path).build(PersonaContext(work_dir=str(work)))
+
+    assert prompt == "## Project Instructions\nLocal only."
+
+
 def test_bundled_name_cannot_be_shadowed(tmp_path, monkeypatch):
     bundled = tmp_path / "bundled"
     project = tmp_path / "project"

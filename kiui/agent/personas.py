@@ -216,12 +216,27 @@ def _allows(persona: PersonaInfo, tool: str) -> bool:
 
 
 def _build_project_section(work_dir: str | None) -> str:
-    instr_file = Path(work_dir) / "AGENTS.md" if work_dir else Path.cwd() / "AGENTS.md"
+    base = Path(work_dir) if work_dir else Path.cwd()
+    root_file = base / "AGENTS.md"
+    local_file = base / ".kia" / "AGENTS.md"
+    if local_file.is_file():
+        content = _read_instructions(local_file)
+        if "@AGENTS.md" in content.splitlines():
+            root_content = _read_instructions(root_file)
+            content = "\n".join(
+                root_content if line == "@AGENTS.md" else line
+                for line in content.splitlines()
+            ).strip()
+    else:
+        content = _read_instructions(root_file)
+    return f"## Project Instructions\n{content}" if content else ""
+
+
+def _read_instructions(path: Path) -> str:
     try:
-        content = instr_file.read_text(encoding="utf-8").strip()
+        return path.read_text(encoding="utf-8").strip()
     except (OSError, UnicodeDecodeError):
         return ""
-    return f"## Project Instructions\n{content}" if content else ""
 
 
 def _build_context_section(work_dir: str | None) -> str:
