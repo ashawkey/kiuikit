@@ -523,6 +523,20 @@ def test_continue_warns_when_round_is_complete():
     assert saved == []
 
 
+def test_continue_resumes_after_empty_assistant_message():
+    messages = [
+        {"role": "user", "content": "hello"},
+        {"role": "assistant", "content": ""},
+    ]
+    agent, warnings, calls, saved = _continue_agent(messages)
+
+    agent._cmd_continue()
+
+    assert warnings == []
+    assert calls == ["rule", "response"]
+    assert saved == [(('test',), {"reason": "round"})]
+
+
 def test_continue_rejects_partial_tool_results():
     messages = [
         {

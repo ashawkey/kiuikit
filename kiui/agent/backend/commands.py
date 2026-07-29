@@ -163,10 +163,14 @@ class AgentCommandsMixin:
                     "The last assistant message has unresolved tool calls; "
                     "cannot continue safely."
                 )
-            else:
+                return
+            if get_text(last).strip():
                 self.console.warn("The last round is already complete; nothing to continue.")
-            return
-        if role == "tool":
+                return
+            # An assistant turn with neither text nor tool calls left the task
+            # mid-flight (reasoning-only round); resuming from it is exactly
+            # what /continue is for.
+        elif role == "tool":
             # All calls from the preceding assistant message must have results;
             # sending a partial tool batch is invalid for provider APIs.
             result_ids = set()

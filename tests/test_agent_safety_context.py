@@ -522,6 +522,77 @@ def test_get_response_warns_and_automatically_continues(unfinished_reason):
     ]
 
 
+def test_get_response_continues_after_empty_stopped_response():
+    """A "stop" round with no text and no tool call left the task mid-flight."""
+    context = ContextManager("system")
+    context.add({"role": "user", "content": "keep going"})
+    warnings = []
+    responses = iter([
+        ({"role": "assistant", "content": None}, "stop"),
+        ({"role": "assistant", "content": "answer"}, "stop"),
+    ])
+
+    agent = NS(
+        console=NS(
+            warn=lambda text: warnings.append(text),
+            response=lambda text: None,
+            debug=lambda text: None,
+            error=lambda text: None,
+        ),
+        context=context,
+        verbose=False,
+        stream=False,
+        _pending_images=[],
+        _last_interrupted=False,
+        MAX_AUTO_CONTINUES=3,
+    )
+
+    def call_api():
+        message, finish_reason = next(responses)
+        agent._last_finish_reason = finish_reason
+        context.add(message)
+        return message
+
+    agent.call_api = call_api
+
+    assert LLMAgent.get_response(agent) == "answer"
+    assert len(warnings) == 1
+    assert "no text or tool call" in warnings[0]
+    assert "automatically continuing (1/3)" in warnings[0]
+
+
+def test_get_response_stops_after_repeated_empty_responses():
+    context = ContextManager("system")
+    context.add({"role": "user", "content": "keep going"})
+    warnings = []
+
+    agent = NS(
+        console=NS(
+            warn=lambda text: warnings.append(text),
+            response=lambda text: None,
+            debug=lambda text: None,
+            error=lambda text: None,
+        ),
+        context=context,
+        verbose=False,
+        stream=False,
+        _pending_images=[],
+        _last_interrupted=False,
+        MAX_AUTO_CONTINUES=2,
+    )
+
+    def call_api():
+        agent._last_finish_reason = "stop"
+        message = {"role": "assistant", "content": ""}
+        context.add(message)
+        return message
+
+    agent.call_api = call_api
+
+    assert LLMAgent.get_response(agent) is None
+    assert "still unfinished after 2 automatic continuations" in warnings[-1]
+
+
 def _compaction_agent(token_readings):
     """Agent stub for :meth:`LLMAgent._run_compaction`, driven by token readings.
 

@@ -1012,7 +1012,13 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                     self.console.response(content)
 
             finish_reason = self._last_finish_reason
-            if finish_reason in (None, "length"):
+            # An assistant turn with neither text nor tool calls is unfinished
+            # whatever the provider reported: the model spent the round on
+            # reasoning alone (or the visible part was dropped) and the task is
+            # left mid-flight, so it needs the same continuation as a truncated
+            # response rather than ending the turn silently.
+            empty_response = not get_text(message).strip() and not message.get("tool_calls")
+            if finish_reason in (None, "length") or empty_response:
                 if message.get("tool_calls"):
                     self.console.warn(
                         "Response was truncated during a tool call; cannot "
@@ -1028,8 +1034,10 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 auto_continues += 1
                 if finish_reason == "length":
                     reason = "the output-token limit was reached"
-                else:
+                elif finish_reason is None:
                     reason = "the response ended without a terminal finish reason"
+                else:
+                    reason = "the response carried no text or tool call"
                 self.console.warn(
                     f"Unfinished response ({reason}); automatically continuing "
                     f"({auto_continues}/{self.MAX_AUTO_CONTINUES})."
