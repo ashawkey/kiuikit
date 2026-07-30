@@ -480,6 +480,88 @@ class TerminalInput:
             erase_when_done=True,
         )
 
+    @staticmethod
+    def _visual_cursor_positions(event):
+        """Return rendered cursor positions grouped by visual row.
+
+        prompt_toolkit's Buffer navigation only knows newline-delimited lines,
+        not lines soft-wrapped by the Window.  The Window's last render is the
+        source of truth for translating those visual rows back to the buffer.
+        """
+        app = getattr(event, "app", None)
+        layout = getattr(app, "layout", None)
+        if layout is None:
+            return None
+        control = layout.current_control
+        window = layout.current_window
+        info = window.render_info
+        get_processed_line = getattr(control, "_last_get_processed_line", None)
+        rowcol_to_yx = getattr(info, "_rowcol_to_yx", None)
+        if get_processed_line is None or not rowcol_to_yx:
+            return None
+
+        buf = event.current_buffer
+        document = buf.document
+        positions: dict[int, list[tuple[int, int]]] = {}
+        for (row, display_col), (y, x) in rowcol_to_yx.items():
+            if row >= document.line_count:
+                continue
+            processed = get_processed_line(row)
+            source_col = processed.display_to_source(display_col)
+            if not 0 <= source_col <= len(document.lines[row]):
+                continue
+            # Exclude prompt and suggestion characters inserted by processors.
+            if processed.source_to_display(source_col) != display_col:
+                continue
+            index = document.translate_row_col_to_index(row, source_col)
+            positions.setdefault(y, []).append((x, index))
+
+        row = document.cursor_position_row
+        col = document.cursor_position_col
+        display_col = get_processed_line(row).source_to_display(col)
+        current = rowcol_to_yx.get((row, display_col))
+        if current is None:
+            return None
+        return positions, current
+
+    def _move_visual_vertical(self, event, direction: int) -> bool:
+        visual = self._visual_cursor_positions(event)
+        if visual is None:
+            return False
+        positions, (current_y, current_x) = visual
+        target = positions.get(current_y + direction * event.arg)
+        if not target:
+            return False
+
+        buf = event.current_buffer
+        preferred_x = buf.preferred_column
+        if preferred_x is None:
+            preferred_x = current_x
+        _, index = min(target, key=lambda item: (abs(item[0] - preferred_x), item[0]))
+        buf.cursor_position = index
+        buf.preferred_column = preferred_x
+        return True
+
+    def _move_visual_boundary(self, event, *, end: bool) -> bool:
+        visual = self._visual_cursor_positions(event)
+        if visual is None:
+            return False
+        positions, (current_y, _) = visual
+        current = positions.get(current_y)
+        if not current:
+            return False
+
+        buf = event.current_buffer
+        indexes = [index for _, index in current]
+        index = max(indexes) if end else min(indexes)
+        if end and index < len(buf.text) and buf.text[index] != "\n":
+            # Cursor positions are rendered before their character.  At a soft
+            # wrap, the position after the final visible character is mapped
+            # to the beginning of the following visual row.
+            index += 1
+        buf.cursor_position = index
+        return True
+
     def _create_keybindings(self) -> KeyBindings:
         kb = KeyBindings()
 
@@ -540,7 +622,27 @@ class TerminalInput:
                     event.current_buffer.text = text
                     event.current_buffer.cursor_position = len(text)
                 return
-            event.current_buffer.auto_up(count=event.arg)
+            buf = event.current_buffer
+            if buf.complete_state is not None or not self._move_visual_vertical(event, -1):
+                buf.auto_up(count=event.arg)
+
+        @kb.add("down", filter=~is_searching)
+        def _(event):
+            buf = event.current_buffer
+            if buf.complete_state is not None or not self._move_visual_vertical(event, 1):
+                buf.auto_down(count=event.arg)
+
+        @kb.add("home", filter=~is_searching)
+        def _(event):
+            buf = event.current_buffer
+            if not self._move_visual_boundary(event, end=False):
+                buf.cursor_position += buf.document.get_start_of_line_position()
+
+        @kb.add("end", filter=~is_searching)
+        def _(event):
+            buf = event.current_buffer
+            if not self._move_visual_boundary(event, end=True):
+                buf.cursor_position += buf.document.get_end_of_line_position()
 
         @kb.add("tab", filter=is_searching)
         def _(event):

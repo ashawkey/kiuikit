@@ -159,6 +159,63 @@ def test_up_with_empty_buffer_withdraws_pending_message():
     terminal._edit_pending.assert_called_once_with()
 
 
+def _visual_event(buffer: Buffer, width: int = 10):
+    class ProcessedLine:
+        source_to_display = staticmethod(lambda col: col)
+        display_to_source = staticmethod(lambda col: col)
+
+    positions = {
+        (0, col): (col // width, col % width)
+        for col in range(len(buffer.text) + 1)
+    }
+    info = SimpleNamespace(_rowcol_to_yx=positions)
+    control = SimpleNamespace(_last_get_processed_line=lambda row: ProcessedLine())
+    layout = SimpleNamespace(
+        current_control=control,
+        current_window=SimpleNamespace(render_info=info),
+    )
+    return SimpleNamespace(
+        current_buffer=buffer,
+        arg=1,
+        app=SimpleNamespace(layout=layout),
+    )
+
+
+def _terminal_binding(key):
+    terminal = object.__new__(TerminalInput)
+    terminal._pending_text = None
+    terminal._edit_pending = None
+    bindings = terminal._create_keybindings()
+    return next(b.handler for b in bindings.bindings if b.keys == (key,))
+
+
+def test_up_navigates_soft_wrapped_new_input_before_history():
+    buffer = Buffer(document=Document("0123456789abcdefgh", cursor_position=15))
+
+    _terminal_binding(Keys.Up)(_visual_event(buffer))
+
+    assert buffer.cursor_position == 5
+
+
+def test_down_navigates_soft_wrapped_new_input():
+    buffer = Buffer(document=Document("0123456789abcdefgh", cursor_position=3))
+
+    _terminal_binding(Keys.Down)(_visual_event(buffer))
+
+    assert buffer.cursor_position == 13
+
+
+def test_home_and_end_use_soft_wrapped_visual_line():
+    home_buffer = Buffer(document=Document("0123456789abcdefgh", cursor_position=15))
+    end_buffer = Buffer(document=Document("0123456789abcdefgh", cursor_position=3))
+
+    _terminal_binding(Keys.Home)(_visual_event(home_buffer))
+    _terminal_binding(Keys.End)(_visual_event(end_buffer))
+
+    assert home_buffer.cursor_position == 10
+    assert end_buffer.cursor_position == 10
+
+
 def test_fuzzy_finds_nested_file(tmp_path):
     _touch(str(tmp_path / "src" / "a" / "b" / "widget.txt"))
     comp = AtFileCompleter(tmp_path)
