@@ -87,7 +87,10 @@ def test_response_stream_renders_table_without_leading_pipes():
     rendered = output.getvalue()
     assert "A" in rendered and "B" in rendered
     assert "1" in rendered and "2" in rendered
-    assert "━━" in rendered
+    # The table must be rendered by rich (pipes replaced by a rule line), but
+    # the exact box character varies across rich versions (─ vs ━).
+    assert "|" not in rendered
+    assert any(ch in rendered for ch in ("─", "━"))
 
 
 def test_response_stream_keeps_text_after_unterminated_table():
@@ -128,3 +131,39 @@ def test_response_stream_discards_pending_thinking_on_abort():
     stream.close(render_terminal=False)
 
     assert output.getvalue() == "complete\n"
+
+
+def test_agent_console_stream_output_writes_raw_block_and_emits_event():
+    from kiui.agent.ui import AgentConsole
+    from kiui.agent.utils.io import EventHub
+
+    output = io.StringIO()
+    console = AgentConsole()
+    console._console = Console(file=output, width=80, force_terminal=True, color_system="truecolor")
+    events = EventHub()
+    console.events = events
+
+    # Command output is data: markup and ANSI escapes pass through untouched.
+    console.stream_output("a\n[/bad] [dim] tag\n\x1b[31mred\x1b[0m")
+
+    rendered = output.getvalue()
+    assert "[/bad] [dim] tag" in rendered
+    assert "\x1b[31mred\x1b[0m" in rendered
+    assert rendered.startswith("\x1b[2m")  # dim-wrapped on ANSI terminals
+
+    evs = events.after(0)
+    assert evs and evs[-1].type == "output"
+    assert evs[-1].data["text"] == "a\n[/bad] [dim] tag\n\x1b[31mred\x1b[0m"
+
+
+def test_agent_console_stream_output_is_plain_when_not_ansi():
+    from kiui.agent.ui import AgentConsole
+
+    output = io.StringIO()
+    console = AgentConsole()
+    console._console = Console(file=output, width=80, no_color=True)
+
+    console.stream_output("plain line")
+    console.stream_output("")
+
+    assert output.getvalue() == "plain line\n"

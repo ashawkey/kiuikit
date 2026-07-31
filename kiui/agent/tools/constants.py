@@ -11,9 +11,10 @@ MAX_EXEC_ARTIFACT_BYTES = 100 * 1024 * 1024
 MAX_PROCESS_LOG_BYTES = 100 * 1024 * 1024
 MAX_PROCESS_LOG_TAIL_CHARS = MAX_TOOL_OUTPUT_CHARS
 EXEC_READER_JOIN_TIMEOUT = 5
-# How often streamed command output is rendered, and how many lines one flush
-# may echo. Together these bound the cost of rich rendering by elapsed time
-# instead of by line count; the full output always reaches the artifact file.
+# How often streamed command output is flushed to the terminal, and how many
+# lines a single raw block write may carry. Raw block writes keep the cost low
+# even for high-volume output, and every line is streamed to the terminal (the
+# full output also reaches the artifact file).
 EXEC_DISPLAY_FLUSH_SECONDS = 0.1
 EXEC_DISPLAY_FLUSH_LINES = 200
 MAX_WEB_FETCH_CHARS = MAX_TOOL_OUTPUT_CHARS

@@ -80,8 +80,11 @@ def test_wait_submission_is_hidden_until_ready_and_is_non_steering():
     with pytest.raises(queue.Empty):
         broker.get_nowait()
 
-    ready.clear()  # discard the immediate pending-set notification
-    assert ready.wait(1)
+    # Poll broker state rather than the event flag: the immediate pending-set
+    # notification can race with clear() under load.
+    deadline = time.time() + 2
+    while not broker.ready and time.time() < deadline:
+        time.sleep(0.01)
     assert broker.ready
     assert broker.get_nowait() == submission
 

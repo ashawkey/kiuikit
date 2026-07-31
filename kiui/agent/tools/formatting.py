@@ -156,9 +156,20 @@ def _compact_value(value: Any, key: str = "") -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
-def quote_tool_call_value(value: Any) -> str:
-    """Compact and quote a user-facing tool-call value."""
-    return json.dumps(_compact_text(str(value)), ensure_ascii=False)
+def quote_tool_call_value(value: Any, *, compact: bool = True) -> str:
+    """Quote a user-facing tool-call value.
+
+    ``compact=True`` (default) collapses whitespace and caps the text so
+    labels stay short; ``compact=False`` still collapses whitespace (a
+    multi-line shell command becomes one line) but never truncates, which
+    ``exec_command`` relies on to show the full command it is about to run.
+    """
+    text = str(value)
+    if compact:
+        text = _compact_text(text)
+    else:
+        text = " ".join(text.split())
+    return json.dumps(text, ensure_ascii=False)
 
 
 def build_tool_call_description(

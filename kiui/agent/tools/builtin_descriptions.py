@@ -11,12 +11,18 @@ def _description(name: str, primary: str = "", *qualifiers: str) -> ToolCallDesc
 
 
 def _describe_exec(args: dict[str, Any]) -> ToolCallDescription:
+    """exec_command is special: the user must see the full command they are
+    about to run, so the command is never truncated (unlike other tools' compact
+    values), and realtime output is streamed separately while it runs.
+    """
     qualifiers = []
     if args.get("cwd"):
         qualifiers.append(f"cwd {args['cwd']}")
     if "timeout" in args and args["timeout"] != 300:
         qualifiers.append("no timeout" if args["timeout"] is None else f"timeout {args['timeout']}s")
-    return _description("exec_command", quote_tool_call_value(args["command"]), *qualifiers)
+    return _description(
+        "exec_command", quote_tool_call_value(args["command"], compact=False), *qualifiers
+    )
 
 
 def _describe_read_file(args: dict[str, Any]) -> ToolCallDescription:

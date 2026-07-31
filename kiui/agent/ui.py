@@ -739,6 +739,29 @@ class AgentConsole:
         if self.events is not None:
             self._emit("output", text=self._render_plain(table))
 
+    def stream_output(self, text: str, *, dim: bool = True) -> None:
+        """Write a plain-text block straight to the terminal file, bypassing
+        rich's per-line layout cost.
+
+        Used for high-volume command output: rich renders roughly 14k lines/s,
+        which would throttle the child process through pipe backpressure. Raw
+        block writes are orders of magnitude faster, and command output is
+        data, so markup and ANSI escapes pass through untouched. Web clients
+        still receive the same ``output`` event as :meth:`print`.
+        """
+        if not text:
+            return
+        console = self._console
+        if dim and console.is_terminal and console.color_system not in (None, "windows"):
+            console.file.write(f"\x1b[2m{text}\x1b[22m")
+        else:
+            console.file.write(text)
+        if not text.endswith("\n"):
+            console.file.write("\n")
+        console.file.flush()
+        if self.events is not None:
+            self._emit("output", text=text.rstrip("\n"))
+
     def _agent_panel(
         self, rows: list[tuple[str, str]], *, show_logo: bool = True
     ) -> None:

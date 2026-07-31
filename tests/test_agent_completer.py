@@ -41,7 +41,14 @@ def _press_enter(buffer: Buffer) -> None:
     handler(SimpleNamespace(current_buffer=buffer))
 
 
-def test_markdown_lexer_does_not_reparse_from_start():
+def test_markdown_lexer_does_not_reparse_from_start(monkeypatch):
+    # PromptSession needs a real console; under pytest there is none on
+    # Windows (NoConsoleScreenBufferError), so substitute the test output.
+    from prompt_toolkit.output import DummyOutput
+
+    import prompt_toolkit.output.defaults as pt_defaults
+
+    monkeypatch.setattr(pt_defaults, "create_output", lambda *a, **k: DummyOutput())
     terminal = TerminalInput()
     lexer = terminal._session.app.layout.current_control.lexer.get_lexer()
 

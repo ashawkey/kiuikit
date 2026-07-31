@@ -104,15 +104,18 @@ def glob_tree(tmp_path):
 
 
 def _assert_glob_semantics(te):
-    result = te._glob_files("*.py")
-    assert result["success"]
-    assert result["matches"] == [".hidden.py", "a.py", "src/b.py"]
-    assert te._glob_files("src/**/*.py")["matches"] == ["src/b.py"]
-    assert te._glob_files("!important")["matches"] == ["!important"]
-    assert te._glob_files("*.py", recursive=False)["matches"] == [".hidden.py", "a.py"]
-    assert "ignored.py" in te._glob_files("*.py", include_ignored=True)["matches"]
-    assert "ignored/c.py" in te._glob_files("*.py", include_ignored=True)["matches"]
-    assert "node_modules/d.py" not in te._glob_files("*.py", include_ignored=True)["matches"]
+    def matches(pattern, **kwargs):
+        # ripgrep returns OS-native separators (backslashes on Windows);
+        # compare against canonical forward-slash paths.
+        return [m.replace("\\", "/") for m in te._glob_files(pattern, **kwargs)["matches"]]
+
+    assert matches("*.py") == [".hidden.py", "a.py", "src/b.py"]
+    assert matches("src/**/*.py") == ["src/b.py"]
+    assert matches("!important") == ["!important"]
+    assert matches("*.py", recursive=False) == [".hidden.py", "a.py"]
+    assert "ignored.py" in matches("*.py", include_ignored=True)
+    assert "ignored/c.py" in matches("*.py", include_ignored=True)
+    assert "node_modules/d.py" not in matches("*.py", include_ignored=True)
     assert not te._glob_files("**/*.py", recursive=False)["success"]
 
 
@@ -243,11 +246,13 @@ def test_exec_format_appends_status_without_labeling_output():
 def test_exec_command_merges_output_and_is_noninteractive(tmp_path):
     te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
     res = te._exec_command(
-        "printf 'out\\n'; printf 'err\\n' >&2; "
-        "python -c \"import sys; print('stdin=' + sys.stdin.read())\""
+        "python -c \"import sys; print('out', flush=True); "
+        "print('err', file=sys.stderr, flush=True); "
+        "print('stdin=' + sys.stdin.read(), flush=True)\""
     )
     Path(res["_artifact_path"]).unlink(missing_ok=True)
-    assert res["stdout"] == "out\nerr\nstdin=\n"
+    # Windows shells emit \r\n; normalize so the merged stream is comparable.
+    assert res["stdout"].replace("\r\n", "\n") == "out\nerr\nstdin=\n"
     assert "stderr" not in res
 
 
@@ -258,7 +263,10 @@ def test_exec_command_timeout_and_null_override(tmp_path):
     assert timed_out["timed_out"] and not timed_out["success"]
     assert "timed_out: true" in format_tool_result(timed_out)
 
-    completed = te._exec_command("sleep 0.05; printf done", timeout=None)
+    completed = te._exec_command(
+        "python -c \"import time; time.sleep(0.05); print('done', end='')\"",
+        timeout=None,
+    )
     Path(completed["_artifact_path"]).unlink(missing_ok=True)
     assert completed["success"] and completed["stdout"] == "done"
 
@@ -288,11 +296,14 @@ def test_exec_command_output_is_not_parsed_as_markup(tmp_path):
         te = ToolExecutor(console=console, work_dir=str(tmp_path))
         # "[/bad]" is a closing tag with no opening tag: parsed as markup it
         # raises MarkupError, and "[dim]" would silently vanish from display.
-        res = te._exec_command("printf '%s\\n' one '[/bad] markup' '[dim]tag' two")
+        res = te._exec_command(
+            "python -c \"print('one\\n[/bad] markup\\n[dim]tag\\ntwo')\""
+        )
     finally:
         console._console.file.close()
     assert res["exit_code"] == 0
-    assert res["stdout"] == "one\n[/bad] markup\n[dim]tag\ntwo\n"
+    # Windows shells emit \r\n; normalize so the merged stream is comparable.
+    assert res["stdout"].replace("\r\n", "\n") == "one\n[/bad] markup\n[dim]tag\ntwo\n"
 
 
 def test_exec_command_display_is_batched(tmp_path, monkeypatch):
@@ -304,7 +315,9 @@ def test_exec_command_display_is_batched(tmp_path, monkeypatch):
             calls.append(args[0] if args else "")
 
     te = ToolExecutor(console=_CountingConsole(), work_dir=str(tmp_path))
-    res = te._exec_command("seq 1 5000")
+    res = te._exec_command(
+        "python -c \"print('\\n'.join(str(i) for i in range(1, 5001)))\""
+    )
     assert res["exit_code"] == 0
     # One print per line would be 5000 calls; batching keeps it far lower while
     # still emitting something for the user to watch.
@@ -553,6 +566,46 @@ def test_tool_call_descriptions_use_one_visual_grammar():
     assert describe("read_file", {"file": "a.py", "offset": 5, "limit": 20}) == "read_file a.py · lines 5–24"
     assert describe("multi_edit", {"file": "a.py", "edits": [{}, {}]}) == "multi_edit a.py · 2 edits"
     assert describe("write_file", {"file": "a.py", "content": "secret"}) == "write_file a.py"
+
+
+def test_exec_command_describe_shows_full_command():
+    """exec_command must show the complete shell command, never truncate it."""
+    import json
+
+    from kiui.agent.tools.formatting import build_tool_call_description
+
+    describe = tools.describe_tool_call
+    command = "python -m pytest tests -q --tb=short " + "x" * 200  # > 60-char cap
+    desc = build_tool_call_description(
+        "exec_command", {"command": command, "cwd": "src"}
+    )
+    assert json.loads(desc.primary) == command
+    assert "…" not in desc.primary
+    assert "cwd src" in desc.qualifiers
+
+    # Other tools keep the compact label so the terminal stays readable.
+    long_query = "q " * 50
+    assert "…" in describe("web_search", {"query": long_query})
+
+
+def test_exec_command_streams_full_output(tmp_path):
+    """Every line of streamed output reaches the console; nothing is dropped."""
+    printed = []
+
+    class _CountingConsole(_SilentConsole):
+        def print(self, *args, **kwargs):
+            printed.append(args[0] if args else "")
+
+    te = ToolExecutor(console=_CountingConsole(), work_dir=str(tmp_path))
+    res = te._exec_command(
+        "python -c \"print('\\n'.join('L%d' % i for i in range(300)))\""
+    )
+    assert res["exit_code"] == 0
+    shown = "\n".join(printed)
+    assert "not shown" not in shown
+    assert len(printed) >= 2  # batched in print calls, not dropped
+    for i in range(300):
+        assert f"L{i}" in shown
 
 
 def test_executor_logs_skill_tool_once_and_redacts_text_arguments(tmp_path):

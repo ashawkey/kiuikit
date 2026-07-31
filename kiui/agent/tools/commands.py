@@ -76,36 +76,40 @@ class CommandToolsMixin:
 
         def _drain(stream, lines_buf, size_ref):
             decoder = codecs.getincrementaldecoder(locale.getpreferredencoding())(errors="replace")
-            # Rendering one line at a time costs ~100us through rich, which
-            # dominates the runtime of any command with lots of output (~20s for
-            # 200k lines). Lines are accumulated and rendered in one call at most
-            # every EXEC_DISPLAY_FLUSH_SECONDS, and a single flush echoes at most
-            # EXEC_DISPLAY_FLUSH_LINES of them: past that the terminal is only
-            # scrolling text nobody can read, while the complete output is
-            # already being captured to the artifact the model is pointed at.
-            display_buf: deque[str] = deque(maxlen=EXEC_DISPLAY_FLUSH_LINES)
-            dropped = 0
+            # Rendering through rich's per-line layout costs ~70us/line, which
+            # would throttle a command with lots of output via pipe backpressure
+            # (rich manages ~14k lines/s; the stream must not wait on that).
+            # Lines are accumulated and flushed as raw block writes at most
+            # every EXEC_DISPLAY_FLUSH_SECONDS, each carrying at most
+            # EXEC_DISPLAY_FLUSH_LINES lines. Nothing is dropped: every line is
+            # streamed to the terminal in realtime (the full output also
+            # reaches the artifact the model is pointed at).
+            display_buf: deque[str] = deque()
             last_flush = time.monotonic()
+            stream_output = getattr(self.console, "stream_output", None)
 
             def flush_display(force: bool = False) -> None:
-                nonlocal last_flush, dropped
-                if not display_buf and not dropped:
+                nonlocal last_flush
+                if not display_buf:
                     return
                 now = time.monotonic()
                 if not force and now - last_flush < EXEC_DISPLAY_FLUSH_SECONDS:
                     return
-                lines = list(display_buf)
-                display_buf.clear()
-                if dropped:
-                    lines.insert(0, f"  [{dropped} line(s) not shown; full output captured]")
-                    dropped = 0
-                # markup=False: command output is data, so a stray "[/x]" must
-                # not be parsed as rich markup (which drops it or raises).
-                self.console.print("\n".join(lines), style="dim", markup=False)
+                while display_buf:
+                    batch: list[str] = []
+                    for _ in range(min(EXEC_DISPLAY_FLUSH_LINES, len(display_buf))):
+                        batch.append(display_buf.popleft())
+                    block = "\n".join(batch)
+                    if stream_output is not None:
+                        # Raw block write: command output is data, so markup
+                        # and ANSI pass through untouched (rich would parse a
+                        # stray "[/x]" as markup and drop it or raise).
+                        stream_output(block)
+                    else:
+                        self.console.print(block, style="dim", markup=False)
                 last_flush = now
 
             def consume(text: str) -> None:
-                nonlocal dropped
                 if not text or capture_stopped.is_set():
                     return
                 lines_buf.append(text)
@@ -131,8 +135,6 @@ class CommandToolsMixin:
                             artifact_size_bytes[0] += len(chunk.encode("utf-8"))
                 for display in re.split(r"[\r\n]+", text):
                     if display:
-                        if len(display_buf) == display_buf.maxlen:
-                            dropped += 1
                         display_buf.append(f"  {display}")
 
             pending = ""
