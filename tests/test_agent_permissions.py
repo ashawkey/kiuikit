@@ -133,6 +133,47 @@ def test_safety_blocks_recursive_delete_of_work_dir(tmp_path):
 
 
 @unix_only
+@pytest.mark.parametrize(
+    "command",
+    [
+        # `cd` must change where relative targets are resolved: without this,
+        # "etc" below is checked against the workdir and the guard is bypassed.
+        "cd / && rm -rf etc",
+        "cd / && rm -rf var/log",
+        "cd /etc && rm -rf *",
+        # /tmp is a critical path, so a glob against it stays blocked.
+        "cd /tmp && rm -rf *",
+        # A glob whose parent is above the workdir can swallow the workdir.
+        "cd .. && rm -rf *",
+        "pushd /etc && rm -rf *",
+        "env -C / rm -rf etc",
+        "command cd / && rm -rf etc",
+        "VAR=x cd / && rm -rf etc",
+        "cd / && rm -rf /tmp/../etc",
+    ],
+)
+def test_safety_cd_tracks_running_directory(tmp_path, command):
+    allowed, reason = SafetyGuard(work_dir=tmp_path).check(
+        "exec_command", {"command": command}
+    )
+    assert not allowed and reason.startswith("Blocked:")
+
+
+@unix_only
+def test_safety_allows_cleanup_within_work_dir(tmp_path):
+    (tmp_path / "build").mkdir()
+    guard = SafetyGuard(work_dir=tmp_path)
+    # A glob whose parent is the workdir itself only clears its contents.
+    for command in ("rm -rf *", "rm -rf ./build/*"):
+        allowed, reason = guard.check("exec_command", {"command": command})
+        assert allowed and reason == "", command
+    # The workdir itself and everything above it remain off-limits.
+    for command in (f"rm -rf {tmp_path}", "rm -rf ../*"):
+        allowed, reason = guard.check("exec_command", {"command": command})
+        assert not allowed and reason, command
+
+
+@unix_only
 def test_safety_blocks_symlink_to_critical_path(tmp_path):
     link = tmp_path / "system"
     link.symlink_to("/etc")
@@ -169,6 +210,14 @@ def test_safety_blocks_remove_file_on_critical_paths(path):
         "Restart-Computer",
         "Remove-Item C:\\ -Recurse -Force",
         "rmdir C:\\ /s",
+        # Aliases and flags-before-target must be caught too: cmd.exe/PowerShell
+        # accept both spellings and either flag position.
+        "rd /s /q C:\\",
+        "rmdir /s /q C:\\Windows",
+        "rm -Recurse -Force C:\\",
+        "del /f /s /q C:\\Windows\\*",
+        "Remove-Item -Path C:\\* -Recurse",
+        "Remove-Item C:\\ -Recurse",
     ],
 )
 def test_safety_blocks_dangerous_windows_commands(command):
@@ -184,6 +233,9 @@ def test_safety_blocks_dangerous_windows_commands(command):
         "Remove-Item -Recurse .\\build",
         "echo 'format the report'",
         "git status",
+        # Deep paths (below the top level) are ordinary cleanup, not a drive-root wipe.
+        "Remove-Item -Recurse C:\\Users\\me\\work\\project\\build",
+        "del /s /q C:\\Users\\me\\work\\project\\tmp\\*",
     ],
 )
 def test_safety_allows_normal_windows_commands(command):

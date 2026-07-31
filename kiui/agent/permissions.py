@@ -129,9 +129,15 @@ class SafetyGuard:
         (re.compile(r"(?:^|[;&|\r\n]\s*)(?:stop|restart)-computer\b", re.IGNORECASE),
          "system shutdown/reboot"),
         (re.compile(
-            r"(?:^|[;&|\r\n]\s*)(?:remove-item|rd|rmdir)\b[^\r\n;&|]*"
-            r"(?:[a-z]:\\(?:\s|$)|[a-z]:\\\*).*"
-            r"(?:-recurse|-r\b|/s\b)",
+            r"(?:^|[;&|\r\n]\s*)"
+            r"(?:remove-item|rm|del|erase|rd|rmdir)\b"
+            # Recursive flag in either spelling, anywhere in the command:
+            # cmd.exe/PowerShell accept flags before or after the target.
+            r"(?=[^\r\n;&|]*(?:-r\w*|/s\b))"
+            r"[^\r\n;&|]*?"
+            # Drive root, drive-root glob, or a single top-level directory
+            # (no deeper components) — deep paths stay legal.
+            r"(?:[a-z]:\\[^\\\s]*(?:\\\*)?(?:\s|$))",
             re.IGNORECASE,
         ), "recursive deletion of drive root"),
     ]
@@ -192,13 +198,90 @@ class SafetyGuard:
             if ">" in token and self._is_device_path(tokens[idx + 1]):
                 return False, "Blocked: redirect to block device."
 
+        # Relative paths resolve against the directory the shell is actually
+        # in when a command runs, which `cd`-style segments change mid-command.
+        # Track it so `cd / && rm -rf etc` is checked against /etc rather than
+        # against the workdir.
         segments = self._command_segments(tokens)
+        current_cwd = os.path.abspath(cwd) if cwd else self._work_dir
         for segment in segments:
-            reason = self._check_segment(segment, cwd)
+            new_cwd = self._leading_cd(segment, current_cwd)
+            if new_cwd is not None:
+                current_cwd = new_cwd
+                continue
+            reason = self._check_segment(segment, current_cwd)
             if reason:
                 return False, f"Blocked: {reason}."
 
         return True, ""
+
+    def _leading_cd(self, segment: list[str], cwd: str) -> str | None:
+        """Return the cwd *segment* leaves behind, or ``None`` if it does not change it.
+
+        Handles a leading ``cd``/``pushd`` (optionally behind assignments,
+        shell prefixes, and wrappers) and ``env -C <dir>``. ``cd -`` and
+        ``popd`` cannot be resolved from the command alone, so they fall back
+        to ``/`` — the most conservative base for the relative checks that
+        follow.
+        """
+        idx = 0
+        while idx < len(segment):
+            token = segment[idx]
+            if (
+                self._ASSIGNMENT_RE.match(token)
+                or token in self._SHELL_PREFIXES
+                or token == "builtin"
+            ):
+                idx += 1
+                continue
+            name = os.path.basename(token).lower()
+            if name in self._WRAPPER_COMMANDS:
+                if name == "env":
+                    env_target = self._env_chdir_target(segment, idx)
+                    if env_target is not None:
+                        return self._resolve_cwd(env_target, cwd)
+                idx = self._skip_wrapper(segment, idx, name)
+                continue
+            break
+        if idx >= len(segment):
+            return None
+        name = os.path.basename(segment[idx]).lower()
+        if name == "popd":
+            return "/"  # the previous stack entry is not tracked; be conservative
+        if name not in ("cd", "pushd"):
+            return None
+        args = segment[idx + 1:]
+        if name == "pushd" and "-n" in args:
+            return None  # pushd -n only manipulates the directory stack
+        target = next(
+            (arg for arg in args if not (arg.startswith("-") and arg != "-")),
+            None,
+        )
+        if target is None:
+            return os.path.expanduser("~")
+        if target == "-":
+            return "/"  # OLDPWD is not tracked; use the conservative base
+        return self._resolve_cwd(target, cwd)
+
+    def _resolve_cwd(self, target: str, base: str) -> str:
+        """Resolve a cd target against *base* the way the shell would."""
+        expanded = os.path.expandvars(os.path.expanduser(target))
+        if not os.path.isabs(expanded):
+            expanded = os.path.join(base, expanded)
+        return os.path.normpath(os.path.realpath(os.path.abspath(expanded)))
+
+    def _env_chdir_target(self, segment: list[str], idx: int) -> str | None:
+        """Return the directory selected by ``env -C/--chdir``, or ``None``."""
+        args = segment[idx + 1:]
+        for i, arg in enumerate(args):
+            if arg in ("-C", "--chdir"):
+                target = args[i + 1] if i + 1 < len(args) else None
+                return target if target is not None and not target.startswith("-") else None
+            if arg.startswith("--chdir="):
+                return arg.split("=", 1)[1]
+            if arg.startswith("-C") and len(arg) > 2:
+                return arg[2:]
+        return None
 
     _PUNCT_CHARS: ClassVar[frozenset[str]] = frozenset(";&|()<>{}\n")
 
@@ -497,7 +580,15 @@ class SafetyGuard:
         norm = os.path.normpath(os.path.realpath(os.path.abspath(literal)))
         home = os.path.normpath(os.path.realpath(os.path.expanduser("~")))
         work_dir = os.path.normpath(os.path.realpath(self._work_dir))
-        if work_dir == norm or work_dir.startswith(norm + os.sep):
+        last_component = pattern.rsplit("/", 1)[-1]
+        glob_component = re.search(r"[*?\[]", last_component) is not None
+        # A glob in the final component matches entries *under* its literal
+        # parent — the shell never matches "." with "*" — so when that parent
+        # is the workdir itself, the glob cannot remove the workdir (`rm -rf *`
+        # clears its contents only). Anything above the workdir stays
+        # off-limits: such a glob can swallow the workdir (`cd .. && rm -rf *`).
+        workdir_self = work_dir == norm and not glob_component
+        if workdir_self or work_dir.startswith(norm + os.sep):
             return True
         if self._is_resolved_critical(norm, home):
             return True

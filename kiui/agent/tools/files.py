@@ -8,7 +8,12 @@ from typing import Any
 
 import pathspec
 
-from .constants import MAX_READ_LINES, MAX_TOOL_OUTPUT_CHARS, SKIP_DIRS as _SKIP_DIRS
+from .constants import (
+    MAX_IMAGE_BYTES,
+    MAX_READ_LINES,
+    MAX_TOOL_OUTPUT_CHARS,
+    SKIP_DIRS as _SKIP_DIRS,
+)
 from .formatting import truncate_text_output
 
 
@@ -218,6 +223,22 @@ class FileToolsMixin:
             return {"error": f"File not found: {file}", "success": False}
         if not file_path.is_file():
             return {"error": f"Path is not a file: {file}", "success": False}
+
+        # Reject oversized files before reading: a mistyped path (a video, a
+        # binary dump) would otherwise be read whole and base64-expanded into
+        # the provider payload with no bound.
+        try:
+            size = file_path.stat().st_size
+        except OSError as e:
+            return {"error": f"Cannot read image: {file}: {e}", "success": False}
+        if size > MAX_IMAGE_BYTES:
+            return {
+                "error": (
+                    f"Image too large: {file} ({_human_size(size)} exceeds the "
+                    f"{_human_size(MAX_IMAGE_BYTES)} limit)."
+                ),
+                "success": False,
+            }
 
         data = file_path.read_bytes()
         mime_type = _image_mime_type(data)

@@ -219,6 +219,20 @@ def test_read_image_returns_data_url(tmp_path):
     )
 
 
+def test_read_image_rejects_oversized_file(tmp_path, monkeypatch):
+    import kiui.agent.tools.files as files_mod
+
+    monkeypatch.setattr(files_mod, "MAX_IMAGE_BYTES", 16)
+    image = tmp_path / "big.png"
+    image.write_bytes(b"\x89PNG\r\n\x1a\n" + b"x" * 64)
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+
+    result = te.execute("read_image", {"file": "big.png"})
+
+    assert not result["success"]
+    assert "too large" in result["error"]
+
+
 def test_multi_edit_atomic_failure(tmp_path):
     f = tmp_path / "m.py"
     f.write_text("one\ntwo\n")
