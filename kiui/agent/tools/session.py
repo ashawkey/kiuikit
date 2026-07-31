@@ -3,14 +3,9 @@
 from pathlib import Path
 from typing import Any
 
-from .formatting import describe_tool_call
-
-
 class SessionToolsMixin:
     def _spawn_subagent(self, task: str = "") -> dict[str, Any]:
         """Spawn a sub-agent and wait for it to complete."""
-        self.console.tool(describe_tool_call("spawn_subagent", {"task": task}))
-
         if self.subagent_manager is None:
             return {"error": "Sub-agent spawning is not available.", "success": False}
         if not task:
@@ -20,8 +15,6 @@ class SessionToolsMixin:
 
     def _load_skill(self, name: str) -> dict[str, Any]:
         """Load a skill's full prompt instructions into the conversation context."""
-        self.console.tool(describe_tool_call("load_skill", {"name": name}))
-
         if not self._skills:
             return {
                 "error": "No skills available. Create a folder under .kia/skills/<name>/ with a SKILL.md file.",
@@ -97,7 +90,6 @@ class SessionToolsMixin:
         """
         met = bool(met)
         reason = reason or ""
-        self.console.tool(describe_tool_call("report_goal", {"met": met}))
         self.goal_report = {"met": met, "reason": reason}
         status = "goal met" if met else "goal not yet met"
         return {

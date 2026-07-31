@@ -2,7 +2,8 @@
 
 Every tool the model can call — built-in or skill-provided — is described by a
 single :class:`ToolSpec` (OpenAI ``schema`` + ``handler`` + ``permission`` +
-optional ``gate``). :class:`ToolRegistry` holds them all and is the single
+optional ``gate`` and call ``describe`` function). :class:`ToolRegistry` holds
+them all and is the single
 source of truth for three questions that used to be answered in three places:
 
 - *Which tools are advertised to the API?* — :meth:`ToolRegistry.advertised`
@@ -24,6 +25,8 @@ from dataclasses import dataclass
 import re
 from typing import Any, Callable
 
+from .builtin_descriptions import BUILTIN_CALL_DESCRIBERS
+from .formatting import ToolCallDescription
 from .schemas import BUILTIN_TOOL_SCHEMAS
 
 # Tool source marker for built-in (executor-owned) tools; skill tools use their
@@ -50,7 +53,8 @@ class ToolSpec:
     ``"risky"`` (prompts in default mode); strict mode prompts for both.
     ``source`` is :data:`BUILTIN_SOURCE` for built-in
     tools or the owning skill name. ``gate`` is one of the ``GATE_*`` constants
-    or ``None``.
+    or ``None``. ``describe`` is owned by the tool definition and provides its
+    semantic call label; absent descriptors use the shared generic fallback.
     """
 
     name: str
@@ -59,6 +63,7 @@ class ToolSpec:
     permission: str = "risky"
     source: str = BUILTIN_SOURCE
     gate: str | None = None
+    describe: Callable[[dict[str, Any]], ToolCallDescription] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -148,6 +153,7 @@ def build_builtin_specs() -> dict[str, ToolSpec]:
             permission=permission,
             source=BUILTIN_SOURCE,
             gate=gate,
+            describe=BUILTIN_CALL_DESCRIBERS[name],
         )
     return specs
 
@@ -173,8 +179,8 @@ class ToolRegistry:
         """Register a skill's tools atomically.
 
         Each entry provides an OpenAI function ``schema``, a ``run`` callable
-        (used as the handler), and an optional ``permission`` class (default
-        ``"risky"``). A tool name that collides with a built-in or with another
+        (used as the handler), and optional ``permission`` and ``describe``
+        callables. A tool name that collides with a built-in or with another
         already-registered skill's tool aborts the whole registration before any
         entry is committed, so a skill is never left partially registered.
         """
@@ -192,6 +198,11 @@ class ToolRegistry:
             if permission not in _VALID_PERMISSIONS:
                 raise ValueError(
                     f"Skill '{skill}' TOOLS[{index}] permission must be 'safe' or 'risky'."
+                )
+            describer = entry.get("describe")
+            if describer is not None and not callable(describer):
+                raise ValueError(
+                    f"Skill '{skill}' TOOLS[{index}] describe must be callable."
                 )
 
             schema = entry.get("schema")
@@ -215,6 +226,7 @@ class ToolRegistry:
                 handler=handler,
                 permission=permission,
                 source=skill,
+                describe=describer,
             )
         self._specs.update(prepared)
 

@@ -222,6 +222,7 @@ TOOLS = [
     [
         ('"permission": "risk"', "permission must be 'safe' or 'risky'"),
         ('"run": "ping"', "run must be callable"),
+        ('"describe": "ping",\n        "run": ping', "describe must be callable"),
         ('"description": ""', "non-empty description"),
         ('"type": "object",\n                    "properties"', "schema must be a function schema"),
     ],
@@ -231,6 +232,8 @@ def test_skill_tool_definition_is_validated(tmp_path, replacement, message):
     if replacement.startswith('"permission"'):
         tools = _TOOLS_PY.replace('"permission": "safe"', replacement)
     elif replacement.startswith('"run"'):
+        tools = _TOOLS_PY.replace('"run": ping', replacement)
+    elif replacement.startswith('"describe"'):
         tools = _TOOLS_PY.replace('"run": ping', replacement)
     elif replacement.startswith('"description"'):
         tools = _TOOLS_PY.replace('"description": "Echo a value back."', replacement)

@@ -12,7 +12,7 @@ from rich.text import Text
 from kiui.agent.context import CompactionState, get_role, get_text, get_tool_calls
 from kiui.agent.personas import get_persona
 from kiui.agent.session_store import SessionStore
-from kiui.agent.tools import describe_tool_call, format_tool_summary, result_text_failed
+from kiui.agent.tools import format_tool_summary, log_tool_call, result_text_failed
 from kiui.agent.utils.rewind import CheckoutPlan
 
 _OP_STYLES = {"create": "green", "modify": "yellow", "delete": "red"}
@@ -561,7 +561,15 @@ class SessionMixin:
                         fargs = json.loads(fn.get("arguments") or "{}")
                     except json.JSONDecodeError:
                         fargs = {}
-                    self.console.tool(describe_tool_call(fname, fargs))
+                    executor = getattr(self, "tool_executor", None)
+                    registry = getattr(executor, "registry", None)
+                    spec = registry.get(fname) if registry is not None else None
+                    log_tool_call(
+                        self.console,
+                        fname,
+                        fargs,
+                        spec.describe if spec is not None else None,
+                    )
 
             elif role == "tool":
                 result_text = get_text(msg)

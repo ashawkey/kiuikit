@@ -22,7 +22,6 @@ from .constants import (
     MAX_EXEC_OUTPUT_CHARS,
     MAX_STREAMING_BUFFER_CHARS,
 )
-from .formatting import describe_tool_call
 from .process_util import _terminate_process
 
 
@@ -34,7 +33,6 @@ class CommandToolsMixin:
         if timeout is not None and timeout <= 0:
             raise ValueError("timeout must be positive or null")
         cwd = str(self._resolve_path(cwd or "."))
-        self.console.tool(describe_tool_call("exec_command", {"command": command, "cwd": cwd}))
 
         artifact_file = tempfile.NamedTemporaryFile(
             mode="w", encoding="utf-8", prefix="kia-exec-", suffix=".txt", delete=False

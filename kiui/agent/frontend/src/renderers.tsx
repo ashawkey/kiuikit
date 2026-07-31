@@ -146,13 +146,27 @@ function EventBody({ type, text, data, failed }: {
       return <ThinkingBlock text={clean} />
     case 'diff':
       return <DiffView data={data} />
-    case 'tool_start':
+    case 'tool_start': {
+      const qualifiers = Array.isArray(data.qualifiers)
+        ? data.qualifiers.filter((item): item is string => typeof item === 'string')
+        : []
       return (
         <>
           <span className="activity-mark" aria-hidden="true">▸</span>
-          <code className="tool-code">{clean}</code>
+          {typeof data.name === 'string' ? (
+            <span className="tool-call">
+              <span className="tool-name">{data.name}</span>
+              {typeof data.primary === 'string' && data.primary ? (
+                <span className="tool-primary"> {data.primary}</span>
+              ) : null}
+              {qualifiers.map((qualifier, index) => (
+                <span className="tool-qualifier" key={`${index}-${qualifier}`}> · {qualifier}</span>
+              ))}
+            </span>
+          ) : <code className="tool-code">{clean}</code>}
         </>
       )
+    }
     case 'tool_result':
       return (
         <>

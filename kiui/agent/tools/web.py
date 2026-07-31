@@ -9,7 +9,7 @@ from .constants import (
     MAX_WEB_REDIRECTS,
     IPV6_TRANSITION_NETWORKS,
 )
-from .formatting import describe_tool_call, truncate_text_output
+from .formatting import truncate_text_output
 
 
 def _resolve_public_addresses(host: str, port: int) -> tuple[str, ...]:
@@ -41,7 +41,6 @@ def _resolve_public_addresses(host: str, port: int) -> tuple[str, ...]:
 class WebToolsMixin:
     def _web_search(self, query: str) -> dict[str, Any]:
         """Web search using DuckDuckGo."""
-        self.console.tool(describe_tool_call("web_search", {"query": query}))
         try:
             from ddgs import DDGS
         except ImportError:
@@ -65,7 +64,6 @@ class WebToolsMixin:
 
     def _web_fetch(self, url: str) -> dict[str, Any]:
         """Fetch public HTTP(S) content with bounded redirects and bytes."""
-        self.console.tool(describe_tool_call("web_fetch", {"url": url}))
         try:
             import httpcore
             import httpx

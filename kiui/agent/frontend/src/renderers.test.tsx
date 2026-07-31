@@ -53,9 +53,21 @@ describe('content renderers', () => {
     expect(container.querySelector('.diff-line .hljs-keyword')).toBeNull()
   })
 
-  it('renders a tool call as a compact code line without a label head', () => {
-    const { container } = render(<EventCard event={makeEvent('tool_start', 'exec_command(ls)')} />)
+  it('renders a structured tool call with semantic spans', () => {
+    const event = makeEvent('tool_start', 'grep_files "needle" · in src · glob *.py', {
+      name: 'grep_files',
+      primary: '"needle"',
+      qualifiers: ['in src', 'glob *.py'],
+    })
+    const { container } = render(<EventCard event={event} />)
     expect(container.querySelector('.event-head')).toBeNull()
+    expect(container.querySelector('.tool-name')).toHaveTextContent('grep_files')
+    expect(container.querySelector('.tool-primary')).toHaveTextContent('"needle"')
+    expect(container.querySelectorAll('.tool-qualifier')).toHaveLength(2)
+  })
+
+  it('falls back to the legacy text-only tool call', () => {
+    const { container } = render(<EventCard event={makeEvent('tool_start', 'exec_command(ls)')} />)
     expect(container.querySelector('.tool-code')).toHaveTextContent('exec_command(ls)')
   })
 

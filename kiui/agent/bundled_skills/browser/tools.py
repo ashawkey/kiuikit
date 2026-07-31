@@ -11,6 +11,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from kiui.agent.tools import ToolCallDescription
+
 _MAX_OUTPUT_CHARS = 20_000
 _DEFAULT_CDP_URL = "http://127.0.0.1:9222"
 
@@ -252,7 +254,6 @@ def _label(text: str, fallback: str = "") -> str:
 
 def browser_status(executor, cdp_url: str | None = None) -> dict[str, Any]:
     """Attach if necessary and report the selected page and open tabs."""
-    executor.console.tool("browser_status")
     connection = _connection(executor, cdp_url)
     tabs = _tabs(connection)
     active = next(tab for tab in tabs if tab["active"])
@@ -268,8 +269,6 @@ def browser_status(executor, cdp_url: str | None = None) -> dict[str, Any]:
 
 def browser_open(executor, url: str, new_tab: bool = False) -> dict[str, Any]:
     """Navigate the selected tab or create a visible tab."""
-    action = "new tab" if new_tab else "current tab"
-    executor.console.tool(f"browser_open {url} ({action})")
     connection = _connection(executor)
     if new_tab:
         target_id = connection.send("Target.createTarget", {"url": url})["targetId"]
@@ -350,7 +349,6 @@ def browser_observe(
         raise ValueError("max_elements must be between 1 and 500")
     if not 0 <= max_text_chars <= _MAX_OUTPUT_CHARS:
         raise ValueError(f"max_text_chars must be between 0 and {_MAX_OUTPUT_CHARS}")
-    executor.console.tool("browser_observe")
     connection = _connection(executor)
     script = _OBSERVE_SCRIPT.replace("__MAX_ELEMENTS__", str(max_elements)).replace(
         "__MAX_TEXT__", str(max_text_chars)
@@ -393,7 +391,6 @@ def browser_click(executor, index: int) -> dict[str, Any]:
     """Perform a real mouse click on an element from the latest observation."""
     if index < 1:
         raise ValueError("index must be positive")
-    executor.console.tool(f"browser_click #{index}")
     connection = _connection(executor)
     geometry = _element_geometry(connection, index)
     session = connection.session()
@@ -416,7 +413,6 @@ def browser_type(executor, index: int, text: str, clear: bool = True) -> dict[st
     """Focus an observed editable element and insert text."""
     if index < 1:
         raise ValueError("index must be positive")
-    executor.console.tool(f"browser_type #{index} ({len(text)} chars)")
     connection = _connection(executor)
     script = f"""
 (() => {{
@@ -471,7 +467,6 @@ def browser_scroll(
     if not 0.1 <= pages <= 10:
         raise ValueError("pages must be between 0.1 and 10")
     target_label = "page" if index is None else f"element #{index}"
-    executor.console.tool(f"browser_scroll {target_label} {direction} {pages:g} pages")
     target = "window" if index is None else f"window.__kiaBrowserElements?.[{index - 1}]"
     sign = -1 if direction in {"up", "left"} else 1
     axis = "x" if direction in {"left", "right"} else "y"
@@ -506,8 +501,6 @@ def browser_extract(
     """Extract bounded visible text and optional links without another LLM."""
     if not 1 <= max_chars <= _MAX_OUTPUT_CHARS:
         raise ValueError(f"max_chars must be between 1 and {_MAX_OUTPUT_CHARS}")
-    target = selector or "page"
-    executor.console.tool(f"browser_extract {target}")
     script = f"""
 (() => {{
   const root = {f'document.querySelector({json.dumps(selector)})' if selector else 'document.body'};
@@ -539,8 +532,6 @@ def browser_tabs(executor, action: str = "list", tab_id: str | None = None) -> d
     """List, switch, or close browser tabs."""
     if action not in {"list", "switch", "close"}:
         raise ValueError("action must be list, switch, or close")
-    suffix = f" {tab_id}" if tab_id else ""
-    executor.console.tool(f"browser_tabs {action}{suffix}")
     connection = _connection(executor)
     if action == "switch":
         if not tab_id:
@@ -567,7 +558,6 @@ def browser_tabs(executor, action: str = "list", tab_id: str | None = None) -> d
 
 def browser_stop(executor) -> dict[str, Any]:
     """Detach Kia from Chrome without closing the user's browser."""
-    executor.console.tool("browser_stop")
     connection = getattr(executor, "_browser_connection", None)
     if connection is None:
         message = "Browser was already detached"
@@ -575,6 +565,67 @@ def browser_stop(executor) -> dict[str, Any]:
     executor.close_tool_resource("browser")
     message = "Detached from browser; Chrome remains open"
     return _ok(ui_summary=message, connected=False, message=message)
+
+
+def _describe_status(args: dict[str, Any]) -> ToolCallDescription:
+    return ToolCallDescription(
+        "browser_status",
+        qualifiers=(f"endpoint {args['cdp_url']}",) if args.get("cdp_url") else (),
+    )
+
+
+def _describe_open(args: dict[str, Any]) -> ToolCallDescription:
+    return ToolCallDescription(
+        "browser_open",
+        str(args["url"]),
+        ("new tab",) if args.get("new_tab") else (),
+    )
+
+
+def _describe_observe(args: dict[str, Any]) -> ToolCallDescription:
+    qualifiers = []
+    if "max_elements" in args and args["max_elements"] != 150:
+        qualifiers.append(f"max {args['max_elements']} elements")
+    if "max_text_chars" in args and args["max_text_chars"] != 12000:
+        qualifiers.append(f"max {args['max_text_chars']:,} text chars")
+    return ToolCallDescription("browser_observe", qualifiers=tuple(qualifiers))
+
+
+def _describe_click(args: dict[str, Any]) -> ToolCallDescription:
+    return ToolCallDescription("browser_click", f"#{args['index']}")
+
+
+def _describe_type(args: dict[str, Any]) -> ToolCallDescription:
+    qualifiers = [f"{len(args['text'])} chars"]
+    if args.get("clear") is False:
+        qualifiers.append("keep existing text")
+    return ToolCallDescription("browser_type", f"#{args['index']}", tuple(qualifiers))
+
+
+def _describe_scroll(args: dict[str, Any]) -> ToolCallDescription:
+    target = f"#{args['index']}" if args.get("index") is not None else "page"
+    direction = args.get("direction", "down")
+    pages = args.get("pages", 1)
+    return ToolCallDescription("browser_scroll", target, (f"{direction} {pages:g} pages",))
+
+
+def _describe_extract(args: dict[str, Any]) -> ToolCallDescription:
+    qualifiers = []
+    if args.get("include_links"):
+        qualifiers.append("include links")
+    if "max_chars" in args and args["max_chars"] != _MAX_OUTPUT_CHARS:
+        qualifiers.append(f"max {args['max_chars']:,} chars")
+    return ToolCallDescription("browser_extract", str(args.get("selector") or "page"), tuple(qualifiers))
+
+
+def _describe_tabs(args: dict[str, Any]) -> ToolCallDescription:
+    action = str(args.get("action") or "list")
+    qualifiers = (f"tab {args['tab_id']}",) if args.get("tab_id") else ()
+    return ToolCallDescription("browser_tabs", action, qualifiers)
+
+
+def _describe_stop(args: dict[str, Any]) -> ToolCallDescription:
+    return ToolCallDescription("browser_stop")
 
 
 def _schema(name: str, description: str, properties: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
@@ -597,6 +648,7 @@ TOOLS = [
     {
         "permission": "safe",
         "run": browser_status,
+        "describe": _describe_status,
         "schema": _schema(
             "browser_status",
             "Attach to an already-running Chrome browser through CDP and report its active page and tabs.",
@@ -606,6 +658,7 @@ TOOLS = [
     {
         "permission": "risky",
         "run": browser_open,
+        "describe": _describe_open,
         "schema": _schema(
             "browser_open",
             "Navigate the current visible browser tab or open a new visible tab.",
@@ -616,6 +669,7 @@ TOOLS = [
     {
         "permission": "safe",
         "run": browser_observe,
+        "describe": _describe_observe,
         "schema": _schema(
             "browser_observe",
             "Read the active page and assign indexes to visible interactive elements for click, type, and scroll.",
@@ -628,6 +682,7 @@ TOOLS = [
     {
         "permission": "risky",
         "run": browser_click,
+        "describe": _describe_click,
         "schema": _schema(
             "browser_click",
             "Click an element index from the latest browser_observe call with a real mouse event.",
@@ -638,6 +693,7 @@ TOOLS = [
     {
         "permission": "risky",
         "run": browser_type,
+        "describe": _describe_type,
         "schema": _schema(
             "browser_type",
             "Type text into an editable element index from the latest browser_observe call.",
@@ -652,6 +708,7 @@ TOOLS = [
     {
         "permission": "safe",
         "run": browser_scroll,
+        "describe": _describe_scroll,
         "schema": _schema(
             "browser_scroll",
             "Scroll the page or an indexed scrollable element by viewport-sized pages.",
@@ -665,6 +722,7 @@ TOOLS = [
     {
         "permission": "safe",
         "run": browser_extract,
+        "describe": _describe_extract,
         "schema": _schema(
             "browser_extract",
             "Extract bounded text and optional links from the active page or a CSS-selected region.",
@@ -678,6 +736,7 @@ TOOLS = [
     {
         "permission": "risky",
         "run": browser_tabs,
+        "describe": _describe_tabs,
         "schema": _schema(
             "browser_tabs",
             "List, switch, or close tabs in the attached browser. Closing a tab is irreversible.",
@@ -690,6 +749,7 @@ TOOLS = [
     {
         "permission": "safe",
         "run": browser_stop,
+        "describe": _describe_stop,
         "schema": _schema(
             "browser_stop",
             "Detach Kia from Chrome without closing the user's browser or tabs.",

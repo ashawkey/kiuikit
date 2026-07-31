@@ -21,7 +21,6 @@ from .constants import (
     MAX_TOOL_OUTPUT_CHARS,
     SKIP_DIRS as _SKIP_DIRS,
 )
-from .formatting import describe_tool_call
 from .process_util import _terminate_process
 
 
@@ -61,8 +60,6 @@ def _build_search_result(matches: list, truncated: bool, guidance: str) -> dict[
 class SearchToolsMixin:
     def _glob_files(self, pattern: str, base_dir: str | None = None, recursive: bool = True, include_ignored: bool = False) -> dict[str, Any]:
         """Find files matching a glob pattern (gitignore-aware)."""
-        self.console.tool(describe_tool_call("glob_files", {"pattern": pattern, "recursive": recursive}))
-
         base = self._resolve_path(base_dir or ".")
         if not base.is_dir():
             return {"error": f"Not a directory: {base}", "success": False}
@@ -266,13 +263,6 @@ class SearchToolsMixin:
         case_insensitive: bool = False,
     ) -> dict[str, Any]:
         """Search file contents using a regex pattern."""
-        self.console.tool(describe_tool_call("grep_files", {
-            "pattern": pattern,
-            "path": path,
-            "file_glob": file_glob,
-            "case_insensitive": case_insensitive,
-        }))
-
         base = self._resolve_path(path or ".")
 
         if not shutil.which("rg"):

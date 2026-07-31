@@ -1,14 +1,29 @@
 """Formatting helpers for tool calls and their results."""
 
+from dataclasses import dataclass
 import json
 import re
 from typing import Any, Callable
 
-from .constants import MAX_READ_LINES, MAX_TOOL_OUTPUT_CHARS
+from .constants import MAX_TOOL_OUTPUT_CHARS
 
 TOOL_SUMMARY_MAX_LINES = 4
 TOOL_SUMMARY_MAX_CHARS = 300
 CALL_VALUE_MAX_CHARS = 60
+
+
+@dataclass(frozen=True)
+class ToolCallDescription:
+    """Semantic, one-line description shared by terminal, web, and replay."""
+
+    name: str
+    primary: str = ""
+    qualifiers: tuple[str, ...] = ()
+
+    @property
+    def text(self) -> str:
+        head = f"{self.name} {self.primary}" if self.primary else self.name
+        return " · ".join((head, *self.qualifiers))
 
 
 def truncate_text_output(
@@ -124,10 +139,16 @@ def result_text_failed(result_text: str) -> bool:
     return lines[0].startswith("Error: ") or lines[-1].startswith("Error: ")
 
 
-def _compact_value(value: Any) -> str:
+def _compact_text(value: str) -> str:
+    text = " ".join(value.split())
+    return text if len(text) <= CALL_VALUE_MAX_CHARS else text[: CALL_VALUE_MAX_CHARS - 1] + "…"
+
+
+def _compact_value(value: Any, key: str = "") -> str:
     if isinstance(value, str):
-        text = " ".join(value.split())
-        return text if len(text) <= CALL_VALUE_MAX_CHARS else text[: CALL_VALUE_MAX_CHARS - 1] + "…"
+        if key in {"content", "old_text", "new_text", "text"}:
+            return f"<{len(value)} chars>"
+        return _compact_text(value)
     if isinstance(value, (list, tuple)):
         return f"[{len(value)} items]"
     if isinstance(value, dict):
@@ -135,58 +156,55 @@ def _compact_value(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
-def _describe_read_file(args: dict[str, Any]) -> str:
-    start = max(1, args.get("offset") or 1)
-    limit = args.get("limit")
-    effective_limit = limit if limit is not None else MAX_READ_LINES
-    return f"read_file {args['file']}:{start}-{start + effective_limit - 1}"
+def quote_tool_call_value(value: Any) -> str:
+    """Compact and quote a user-facing tool-call value."""
+    return json.dumps(_compact_text(str(value)), ensure_ascii=False)
 
 
-def _describe_grep_files(args: dict[str, Any]) -> str:
-    parts = [f"grep_files {args['pattern']}"]
-    if args.get("path"):
-        parts.append(f"path={args['path']}")
-    if args.get("file_glob"):
-        parts.append(f"glob={args['file_glob']}")
-    if args.get("case_insensitive"):
-        parts.append("(case-insensitive)")
-    return " ".join(parts)
+def build_tool_call_description(
+    name: str,
+    args: dict[str, Any],
+    describer: Callable[[dict[str, Any]], ToolCallDescription] | None = None,
+) -> ToolCallDescription:
+    """Build a robust description using an owner-provided formatter or fallback."""
+    if describer is None:
+        # Keep the public helper useful for built-ins without coupling the
+        # generic formatter to their definitions at import time.
+        from .builtin_descriptions import BUILTIN_CALL_DESCRIBERS
 
-
-# One label per built-in tool, derived purely from the call arguments so that a
-# live call and a replayed one render identically.
-_CALL_DESCRIBERS: dict[str, Callable[[dict[str, Any]], str]] = {
-    "exec_command": lambda a: f"exec_command: {a['command']} (cwd={a.get('cwd') or '.'})",
-    "read_file": _describe_read_file,
-    "read_image": lambda a: f"read_image {a['file']}",
-    "write_file": lambda a: f"write_file {a['file']}",
-    "edit_file": lambda a: f"edit_file {a['file']}",
-    "multi_edit": lambda a: f"multi_edit {a['file']} ({len(a.get('edits') or [])} edits)",
-    "ls": lambda a: f"ls {a.get('path') or '.'}" + (" (all)" if a.get("all") else ""),
-    "remove_file": lambda a: f"remove_file {a['file']}",
-    "glob_files": lambda a: f"glob_files {a['pattern']} (recursive={a.get('recursive', True)})",
-    "grep_files": _describe_grep_files,
-    "spawn_subagent": lambda a: f"spawn_subagent: {a['task'][:60]}",
-    "load_skill": lambda a: f"load_skill {a['name']}",
-    "report_goal": lambda a: f"report_goal(met={a['met']})",
-    "web_search": lambda a: f"web_search: {a['query']}",
-    "web_fetch": lambda a: f"web_fetch: {a['url']}",
-}
-
-
-def describe_tool_call(name: str, args: dict[str, Any]) -> str:
-    """Render one line describing a tool call, for live display and for replay.
-
-    Skill tools and any call whose arguments do not fit the built-in shape (the
-    model can emit anything, and replay reads whatever was persisted) fall back
-    to a compact ``name(key=value)`` form rather than failing to render.
-    """
-    describer = _CALL_DESCRIBERS.get(name)
+        describer = BUILTIN_CALL_DESCRIBERS.get(name)
     if describer is not None:
         try:
-            return describer(args)
-        except (KeyError, TypeError, IndexError):
+            description = describer(args)
+            if not isinstance(description, ToolCallDescription):
+                raise TypeError("tool call describer must return ToolCallDescription")
+            return description
+        except (KeyError, TypeError, IndexError, ValueError):
             pass
-    if not args:
-        return name
-    return f"{name}({', '.join(f'{key}={_compact_value(value)}' for key, value in args.items())})"
+    qualifiers = tuple(f"{key}={_compact_value(value, key)}" for key, value in args.items())
+    return ToolCallDescription(name, qualifiers=qualifiers)
+
+
+def describe_tool_call(
+    name: str,
+    args: dict[str, Any],
+    describer: Callable[[dict[str, Any]], ToolCallDescription] | None = None,
+) -> str:
+    """Return the canonical plain-text description of a tool call."""
+    return build_tool_call_description(name, args, describer).text
+
+
+def log_tool_call(
+    console: Any,
+    name: str,
+    args: dict[str, Any],
+    describer: Callable[[dict[str, Any]], ToolCallDescription] | None = None,
+) -> None:
+    """Render one call through the console's structured tool-call interface."""
+    description = build_tool_call_description(name, args, describer)
+    console.tool(
+        description.text,
+        name=description.name,
+        primary=description.primary,
+        qualifiers=list(description.qualifiers),
+    )

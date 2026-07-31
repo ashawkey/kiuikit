@@ -14,6 +14,9 @@ export type EventData = {
   output_tokens?: number
   label?: string
   progress?: boolean
+  name?: string
+  primary?: string
+  qualifiers?: string[]
   [key: string]: unknown
 }
 

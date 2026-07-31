@@ -266,8 +266,9 @@ def load_skill_tools(skill_dir: str | Path) -> list[dict[str, Any]]:
 
     A skill may ship a ``tools.py`` at its root exposing a module-level
     ``TOOLS`` list. Each entry must provide an OpenAI function ``schema``, a
-    ``run`` callable (invoked as ``run(executor, **arguments)``), and an
-    optional ``permission`` class (``"safe"`` or ``"risky"``, default risky).
+    ``run`` callable (invoked as ``run(executor, **arguments)``), plus optional
+    ``permission`` (``"safe"`` or ``"risky"``, default risky) and ``describe``
+    callables. A descriptor owns that skill tool's semantic UI label.
 
     Since these tools become callable in-process, this is only appropriate for
     trusted (user-authored and bundled) skills. The module is imported under a

@@ -199,7 +199,7 @@ def test_replay_shows_tool_calls_the_way_the_live_view_does(tmp_path: Path):
     ]
     SessionMixin._replay_context(agent)
 
-    assert "read_file a.txt:1-1000" in console.text
+    assert "read_file a.txt · lines 1–1000" in console.text
     assert "edit_file a.txt" in console.text
     assert '{"file"' not in console.text
     # Only the result actually formatted as a failure is marked as one.

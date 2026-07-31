@@ -397,8 +397,11 @@ The agent has access to the following tools:
 ### Skill-provided tools
 
 A skill may ship a `tools.py` at its root (a module-level `TOOLS` list of
-`{schema, run, permission}` entries). Those tools are registered and advertised
-to the model only while the skill is loaded, and removed when it is unloaded.
+`{schema, run, permission, describe}` entries; `permission` and `describe` are
+optional). A descriptor returns a `ToolCallDescription`, keeping each skill's
+call-label semantics beside its tools while the shared UI owns rendering. Those
+tools are registered and advertised to the model only while the skill is loaded,
+and removed when it is unloaded.
 The bundled **`monitor`** skill uses this to provide the managed background
 process tools, so they appear only after `load_skill("monitor")`:
 

@@ -66,6 +66,9 @@ AGENT_THEME = Theme({
     "system": "bold blue",
     "thinking": "dim italic color(245)",
     "tool": "color(244)",
+    "tool_name": "bold color(75)",
+    "tool_primary": "color(252)",
+    "tool_meta": "color(244)",
     "tool_ok": "dim green",
     "tool_fail": "dim red",
 })
@@ -838,9 +841,35 @@ class AgentConsole:
         if exc_info:
             self._console.print_exception()
 
-    def tool(self, msg: str):
-        self._block(msg, style="tool", prefix=f"{_DOT} ")
-        self._emit("tool_start", text=msg)
+    def tool(
+        self,
+        msg: str,
+        *,
+        name: str | None = None,
+        primary: str = "",
+        qualifiers: list[str] | None = None,
+    ):
+        """Render a tool call, using semantic spans when structured data is available."""
+        qualifiers = qualifiers or []
+        if name is None:
+            self._block(msg, style="tool", prefix=f"{_DOT} ")
+            self._emit("tool_start", text=msg)
+            return
+
+        line = Text(f"{_DOT} ", style="tool")
+        line.append(name, style="tool_name")
+        if primary:
+            line.append(f" {primary}", style="tool_primary")
+        for qualifier in qualifiers:
+            line.append(f" · {qualifier}", style="tool_meta")
+        self._console.print(line, markup=False, highlight=False)
+        self._emit(
+            "tool_start",
+            text=msg,
+            name=name,
+            primary=primary,
+            qualifiers=qualifiers,
+        )
 
     def tool_result(self, msg: str, success: bool = True):
         style = "tool_ok" if success else "tool_fail"

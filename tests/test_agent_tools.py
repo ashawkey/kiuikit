@@ -514,6 +514,7 @@ class _RecordingConsole(_SilentConsole):
         ("ls", {"path": "sub", "all": True}),
         ("glob_files", {"pattern": "*.txt"}),
         ("glob_files", {"pattern": "*.txt", "recursive": False}),
+        ("glob_files", {"pattern": "*.txt", "base_dir": "sub", "include_ignored": True}),
         ("grep_files", {"pattern": "needle"}),
         ("grep_files", {"pattern": "needle", "path": "sub", "file_glob": "*.py", "case_insensitive": True}),
         ("load_skill", {"name": "monitor"}),
@@ -532,13 +533,110 @@ def test_replayed_tool_calls_render_like_live_ones(tmp_path, name, args):
 
 def test_unknown_and_malformed_calls_still_describe_compactly():
     describe = tools.describe_tool_call
-    assert describe("browser_click", {"index": 3}) == "browser_click(index=3)"
+    assert describe("browser_click", {"index": 3}) == "browser_click · index=3"
     assert describe("browser_stop", {}) == "browser_stop"
     assert describe("edit_file", {"file": "a.txt"}) == "edit_file a.txt"
     # Missing required arguments fall back instead of failing the render.
-    assert describe("edit_file", {"path": "a.txt"}) == "edit_file(path=a.txt)"
+    assert describe("edit_file", {"path": "a.txt"}) == "edit_file · path=a.txt"
     long_value = describe("web_fetch", {"note": "x " * 60})
-    assert long_value.endswith("…)") and len(long_value) < 120
+    assert long_value.endswith("…") and len(long_value) < 120
+
+
+def test_tool_call_descriptions_use_one_visual_grammar():
+    describe = tools.describe_tool_call
+    assert describe("grep_files", {
+        "pattern": "needle", "path": "src", "file_glob": "*.py", "case_insensitive": True,
+    }) == 'grep_files "needle" · in src · glob *.py · ignore case'
+    assert describe("glob_files", {
+        "pattern": "**/*.py", "base_dir": "src", "recursive": False, "include_ignored": True,
+    }) == 'glob_files "**/*.py" · in src · non-recursive · include ignored'
+    assert describe("read_file", {"file": "a.py", "offset": 5, "limit": 20}) == "read_file a.py · lines 5–24"
+    assert describe("multi_edit", {"file": "a.py", "edits": [{}, {}]}) == "multi_edit a.py · 2 edits"
+    assert describe("write_file", {"file": "a.py", "content": "secret"}) == "write_file a.py"
+
+
+def test_executor_logs_skill_tool_once_and_redacts_text_arguments(tmp_path):
+    console = _RecordingConsole()
+    te = ToolExecutor(console=console, work_dir=str(tmp_path))
+    te.register_skill_tools("demo", [{
+        "permission": "safe",
+        "run": lambda executor, text: {"success": True},
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "demo_type",
+                "description": "Type text.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"text": {"type": "string"}},
+                    "required": ["text"],
+                },
+            },
+        },
+    }])
+
+    assert te.execute("demo_type", {"text": "top secret"})["success"]
+    assert console.labels == ["demo_type · text=<10 chars>"]
+
+
+def test_skill_owned_tool_description_is_used(tmp_path):
+    console = _RecordingConsole()
+    te = ToolExecutor(console=console, work_dir=str(tmp_path))
+    te.register_skill_tools("demo", [{
+        "permission": "safe",
+        "run": lambda executor, process_id, wait=0: {"success": True},
+        "describe": lambda args: tools.ToolCallDescription(
+            "inspect_demo", args["process_id"], (f"wait {args['wait']}s",),
+        ),
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "inspect_demo",
+                "description": "Inspect a demo process.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "process_id": {"type": "string"},
+                        "wait": {"type": "number"},
+                    },
+                    "required": ["process_id"],
+                },
+            },
+        },
+    }])
+
+    assert te.execute("inspect_demo", {"process_id": "p-1", "wait": 5})["success"]
+    assert console.labels == ["inspect_demo p-1 · wait 5s"]
+
+
+def test_monitor_skill_owns_its_tool_descriptions(tmp_path):
+    console = _RecordingConsole()
+    te = _executor_with_monitor(tmp_path)
+    te.console = console
+
+    te.execute("inspect_processes", {"process_id": "p-1", "wait": 5, "log_tail_chars": 1000})
+    te.execute("stop_process", {"process_id": "p-1"})
+
+    assert console.labels == [
+        "inspect_processes p-1 · wait 5s · tail 1,000 chars",
+        "stop_process p-1",
+    ]
+
+
+def test_browser_skill_owns_sensitive_tool_descriptions(tmp_path):
+    console = _RecordingConsole()
+    te = ToolExecutor(console=console, work_dir=str(tmp_path))
+    te.register_skill_tools("browser", browser_tools.TOOLS)
+
+    # Execution may fail without an attached browser, but logging happens first.
+    te.execute("browser_type", {"index": 3, "text": "top secret", "clear": False})
+    te.execute("browser_scroll", {"direction": "down", "pages": 2})
+
+    assert console.labels == [
+        "browser_type #3 · 10 chars · keep existing text",
+        "browser_scroll page · down 2 pages",
+    ]
+    assert "top secret" not in " ".join(console.labels)
 
 
 def test_replay_only_calls_a_result_failed_when_it_is_formatted_as_one():

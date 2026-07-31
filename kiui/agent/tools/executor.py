@@ -15,6 +15,7 @@ from kiui.agent.ui import AgentConsole
 
 from .commands import CommandToolsMixin
 from .files import FileToolsMixin
+from .formatting import log_tool_call
 from .process_manager import ProcessManagerMixin
 from .registry import ToolRegistry
 from .search import SearchToolsMixin
@@ -74,6 +75,7 @@ class ToolExecutor(
         spec = self.registry.get(function_name)
         if spec is None:
             return {"error": f"Unknown tool: {function_name}", "success": False}
+        log_tool_call(self.console, function_name, arguments, spec.describe)
         try:
             return spec.handler(self, **arguments)
         except Exception as e:

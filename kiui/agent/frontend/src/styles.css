@@ -530,9 +530,13 @@ html { scrollbar-gutter: stable; }
   font: 0.85rem/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
   white-space: normal;
 }
-/* Tool calls read as prose, not code: same UI font, grey. */
+/* Tool calls use the same semantic hierarchy as the terminal. */
 .event.tool_start .event-body { color: var(--muted); font-family: inherit; font-size: 0.90rem; }
 .activity-mark { flex: none; color: var(--dim); }
+.tool-call { min-width: 0; overflow-wrap: anywhere; }
+.tool-name { color: var(--accent); font-weight: 650; }
+.tool-primary { color: var(--mono-text); }
+.tool-qualifier { color: var(--muted); }
 .activity-mark.ok { color: var(--success); }
 .activity-mark.fail { color: var(--danger); }
 .activity-text { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }

@@ -13,21 +13,31 @@ one-shot commands.
 | `schema` | yes | OpenAI function schema. |
 | `run` | yes | Callable invoked as `run(executor, **arguments)`. |
 | `permission` | no | `safe` or `risky`; defaults to `risky`. |
+| `describe` | no | Callable receiving the argument dict and returning `ToolCallDescription`. |
 
 `safe` avoids confirmation in default permission mode; strict mode prompts for
 all tools. Mark mutating operations `risky`.
 
 ```python
+from kiui.agent.tools import ToolCallDescription
+
+
 def echo(executor, text: str) -> dict:
     if not text:
         return {"error": "text must not be empty", "success": False}
     return {"echoed": text, "success": True}
 
 
+def describe_echo(args: dict) -> ToolCallDescription:
+    # Keep sensitive or bulky values out of the log; summarize them instead.
+    return ToolCallDescription("echo_text", qualifiers=(f"{len(args['text'])} chars",))
+
+
 TOOLS = [
     {
         "permission": "safe",
         "run": echo,
+        "describe": describe_echo,
         "schema": {
             "type": "function",
             "function": {
@@ -46,7 +56,9 @@ TOOLS = [
 
 Tool names must not collide with built-ins or other loaded skill tools. The
 module is loaded standalone, so use absolute imports rather than sibling or
-relative imports.
+relative imports. If `describe` is omitted, kia uses a generic, redacted
+`key=value` representation. Custom descriptors should expose only useful call
+metadata and must not include secrets or full content arguments.
 
 The schema guides the model, but kia does not guarantee runtime JSON Schema
 validation. Validate constraints important to correctness. Return a dictionary

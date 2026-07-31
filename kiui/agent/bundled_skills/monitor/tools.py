@@ -17,6 +17,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from kiui.agent.tools import ToolCallDescription, quote_tool_call_value
 from kiui.agent.tools.constants import (
     MAX_PROCESS_LOG_BYTES,
     MAX_PROCESS_LOG_TAIL_CHARS,
@@ -72,7 +73,6 @@ def _process_info(record: dict[str, Any]) -> dict[str, Any]:
 def start_process(executor, command: str, cwd: str | None = None) -> dict[str, Any]:
     """Start a session-managed background process with file-backed output."""
     cwd = str(executor._resolve_path(cwd or "."))
-    executor.console.tool(f"start_process: {command} (cwd={cwd})")
 
     process_id = f"p-{uuid.uuid4().hex[:8]}"
     log_dir = executor._resolve_path(".kia/processes")
@@ -202,10 +202,6 @@ def inspect_processes(
     executor, process_id: str | None = None, wait: float = 0, log_tail_chars: int = 0
 ) -> dict[str, Any]:
     """Optionally wait, then return status and a bounded log tail."""
-    executor.console.tool(
-        f"inspect_processes: {process_id or 'all'} "
-        f"(wait={wait}s, log_tail_chars={log_tail_chars})"
-    )
     if wait < 0:
         return {"error": "wait must be non-negative", "success": False}
     if log_tail_chars < 0 or log_tail_chars > MAX_PROCESS_LOG_TAIL_CHARS:
@@ -290,7 +286,6 @@ def inspect_processes(
 
 def stop_process(executor, process_id: str) -> dict[str, Any]:
     """Stop one managed process and its process tree."""
-    executor.console.tool(f"stop_process: {process_id}")
     with executor._process_lock:
         record = executor._processes.get(process_id)
     if record is None:
@@ -300,10 +295,33 @@ def stop_process(executor, process_id: str) -> dict[str, Any]:
     return {**_process_info(record), "success": True}
 
 
+def _describe_start_process(args: dict[str, Any]) -> ToolCallDescription:
+    qualifiers = (f"cwd {args['cwd']}",) if args.get("cwd") else ()
+    return ToolCallDescription("start_process", quote_tool_call_value(args["command"]), qualifiers)
+
+
+def _describe_inspect_processes(args: dict[str, Any]) -> ToolCallDescription:
+    qualifiers = []
+    if args.get("wait"):
+        qualifiers.append(f"wait {args['wait']:g}s")
+    if args.get("log_tail_chars"):
+        qualifiers.append(f"tail {args['log_tail_chars']:,} chars")
+    return ToolCallDescription(
+        "inspect_processes",
+        str(args.get("process_id") or "all"),
+        tuple(qualifiers),
+    )
+
+
+def _describe_stop_process(args: dict[str, Any]) -> ToolCallDescription:
+    return ToolCallDescription("stop_process", str(args["process_id"]))
+
+
 TOOLS = [
     {
         "permission": "risky",
         "run": start_process,
+        "describe": _describe_start_process,
         "schema": {
             "type": "function",
             "function": {
@@ -326,6 +344,7 @@ TOOLS = [
     {
         "permission": "safe",
         "run": inspect_processes,
+        "describe": _describe_inspect_processes,
         "schema": {
             "type": "function",
             "function": {
@@ -364,6 +383,7 @@ TOOLS = [
     {
         "permission": "risky",
         "run": stop_process,
+        "describe": _describe_stop_process,
         "schema": {
             "type": "function",
             "function": {
