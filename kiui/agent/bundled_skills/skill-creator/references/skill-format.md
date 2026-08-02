@@ -42,6 +42,24 @@ Operational instructions go here.
 Only names and descriptions are advertised before skills load, so the
 description is the primary activation signal.
 
+## Direct invocation in kia
+
+A discovered skill can be invoked explicitly with `/<skill-name>` or
+`/<skill-name> <task context>`. This is a kia host convention, not an Agent
+Skills frontmatter extension.
+
+When a no-argument invocation should perform a specific workflow, document it in
+an optional `## Default invocation` section. Define the outcome, how inputs are
+discovered, permitted actions, verification, stopping conditions, and behavior
+when required information is missing. If the skill is a general capability and
+has no safe, unambiguous default task, omit that section: kia will load the
+skill and ask the user what to do. An ordinary `## Workflow` section does not by
+itself declare a default invocation.
+
+With trailing task context, kia loads the skill and applies its instructions to
+that request. Built-in slash commands take precedence over skills with the same
+name. Skill names therefore use kebab-case, for example `/monitor-jobs`.
+
 ## Progressive disclosure
 
 Keep `SKILL.md` focused and generally below 500 lines. Put conditional detail in

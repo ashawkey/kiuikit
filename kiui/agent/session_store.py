@@ -17,7 +17,7 @@ from typing import Any
 
 from filelock import FileLock
 
-from kiui.agent.context import get_role, get_text
+from kiui.agent.context import get_display_text, get_role, get_text
 from kiui.agent.utils.persistence import (
     append_jsonl,
     read_jsonl,
@@ -579,7 +579,7 @@ class SessionStore:
             message = self.messages.get(message_id)
             if message is None or get_role(message) != "user":
                 continue
-            return " ".join(get_text(message).split())
+            return " ".join(get_display_text(message).split())
         return ""
 
     def revision_ancestors(self, revision_id: str) -> list[str]:

@@ -42,17 +42,22 @@ class ToolExecutor(
         get_round_id=None,
         skills: dict | None = None,
         cancellation: CancellationToken | None = None,
+        isolated_turn=None,
     ):
         self.console = console or AgentConsole()
         self.cancellation = cancellation
         self.subagent_manager = subagent_manager
+        # LLMAgent.run_isolated_turn: run one turn and discard its context.
+        # Skill tools that drive repetitive work (the `batch` skill) call it;
+        # None when no agent owns this executor.
+        self.isolated_turn = isolated_turn
         self._work_dir = str(Path(work_dir).absolute()) if work_dir else str(Path.cwd())
         self._change_tracker = change_tracker
         self._get_round_id = get_round_id  # callable → int
         self._skills = skills or {}
         self._loaded_skills: set[str] = set()
-        # Per-session usage counter: skill name → number of load_skill invocations
-        # (including redundant "already loaded" calls). Persisted with the session
+        # Per-session usage counter: skill name → number of load_skill invocations,
+        # including reloads. Persisted with the session
         # for telemetry and surfaced in /usage and the final summary.
         self._skill_loads: dict[str, int] = {}
         # Last report_goal() call result: None, or {"met": bool, "reason": str}.
@@ -124,3 +129,28 @@ class ToolExecutor(
         """Drop skill tools and close their session-scoped resources."""
         self.shutdown_tool_resources(clear=True)
         self.registry.clear_skill_tools()
+
+    def skill_state(self) -> dict[str, Any]:
+        """Snapshot which skills are loaded and what tools they contributed.
+
+        Skill state lives on the executor rather than in the conversation, so a
+        caller that discards a turn's context (see
+        ``LLMAgent.run_isolated_turn``) must restore it explicitly: otherwise a
+        skill loaded inside that turn stays loaded and leaves its contributed
+        tools registered in the enclosing conversation.
+
+        Session-scoped tool *resources* are deliberately not part of the
+        snapshot: they are external (a browser, a process) and their owning
+        skill is responsible for their lifetime.
+        """
+        return {
+            "loaded": set(self._loaded_skills),
+            "loads": dict(self._skill_loads),
+            "specs": self.registry.skill_specs(),
+        }
+
+    def restore_skill_state(self, state: dict[str, Any]) -> None:
+        """Restore a snapshot taken by :meth:`skill_state`."""
+        self._loaded_skills = set(state["loaded"])
+        self._skill_loads = dict(state["loads"])
+        self.registry.restore_skill_specs(state["specs"])

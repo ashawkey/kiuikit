@@ -42,7 +42,7 @@ class SlashCommandCompleter(Completer):
 
     def get_completions(self, document, complete_event):
         text = document.text_before_cursor
-        if not re.fullmatch(r"/\w*", text):
+        if not re.fullmatch(r"/[\w-]*", text):
             return
         partial = text[1:].lower()
         matches = [name for name in self._commands if name.startswith(partial)]
@@ -664,10 +664,6 @@ class TerminalInput:
                 ("class:status.spinner", "⠋ "),
                 ("class:status.text", "Working..."),
             ]
-        if self._busy and pending is None:
-            status.append(
-                ("class:status.detail", " · messages are queued · /commands run now")
-            )
         if pending is not None:
             preview = pending.replace("\n", " ")
             if len(preview) > 20:

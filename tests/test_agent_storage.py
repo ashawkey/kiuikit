@@ -33,8 +33,9 @@ def test_kia_dir_ignores_itself_and_all_contents(tmp_path):
     assert status.stdout == ""
 
 
-def test_default_clean_removes_all_entries_except_skills(tmp_path):
+def test_default_clean_removes_all_entries_except_preserved(tmp_path):
     skills = _write_entry(tmp_path, "skills")
+    batch = _write_entry(tmp_path, "batch")
     pdf_cache = _write_entry(tmp_path, "pdf-cache")
     custom_cache = _write_entry(tmp_path, "custom-cache")
 
@@ -47,6 +48,7 @@ def test_default_clean_removes_all_entries_except_skills(tmp_path):
 
     assert removed > 0
     assert skills.exists()
+    assert batch.exists()
     assert (tmp_path / ".kia" / ".gitignore").read_text(encoding="utf-8") == "*\n"
     assert not pdf_cache.exists()
     assert not custom_cache.exists()

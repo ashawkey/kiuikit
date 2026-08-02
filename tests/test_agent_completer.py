@@ -17,7 +17,7 @@ from prompt_toolkit.completion import Completion
 from prompt_toolkit.document import Document
 from prompt_toolkit.keys import Keys
 
-from kiui.agent.terminal import AtFileCompleter, TerminalInput
+from kiui.agent.terminal import AtFileCompleter, SlashCommandCompleter, TerminalInput
 
 
 class _Doc:
@@ -25,8 +25,25 @@ class _Doc:
         self.text_before_cursor = text
 
 
-def _complete(comp: AtFileCompleter, text: str) -> list[str]:
+def _complete(comp, text: str) -> list[str]:
     return [c.text for c in comp.get_completions(_Doc(text), None)]
+
+
+def test_slash_completion_supports_kebab_case_skills():
+    comp = SlashCommandCompleter({
+        "monitor-jobs": "Skill — Monitor jobs.",
+        "model": "Switch model.",
+    })
+
+    assert _complete(comp, "/monitor-") == ["/monitor-jobs"]
+
+
+def test_slash_completion_reads_live_command_catalog():
+    commands = {"model": "Switch model."}
+    comp = SlashCommandCompleter(commands)
+    commands["monitor-jobs"] = "Skill — Monitor jobs."
+
+    assert _complete(comp, "/monitor-") == ["/monitor-jobs"]
 
 
 def _touch(path: str) -> None:
@@ -83,15 +100,16 @@ def _message_terminal(*, pending=None, status=None):
     return terminal
 
 
-def test_busy_prompt_always_explains_that_new_messages_are_queued():
+def test_busy_prompt_shows_only_working_status_without_pending_message():
     terminal = _message_terminal()
 
     message = terminal._message()
     text = "".join(fragment for _, fragment in message)
 
     assert "Working..." in text
-    assert "messages are queued" in text
-    assert "/commands run now" in text
+    assert "messages are queued" not in text
+    assert "/commands run now" not in text
+    assert "pending:" not in text
     assert "queue> " not in text
     assert ("class:separator.busy", "─" * 79) in message
     assert ("class:prompt.busy", "> ") in message

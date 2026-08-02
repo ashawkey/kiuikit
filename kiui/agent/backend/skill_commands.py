@@ -1,6 +1,10 @@
 """Skill discovery and interactive skill commands."""
 
+import json
+import uuid
 from pathlib import Path
+
+from kiui.agent.tools import format_tool_result
 
 
 class SkillCommandsMixin:
@@ -125,6 +129,7 @@ class SkillCommandsMixin:
         # `tools` property, so removed skills' tools stop being advertised.
         self.system_prompt = self._build_system_prompt()
         self.context.system_prompt["content"] = self.system_prompt
+        self._refresh_slash_commands()
         self._report_skills_summary()
 
         after = set(self.skills)
@@ -137,27 +142,38 @@ class SkillCommandsMixin:
             summary += f" Removed: {', '.join(removed)}."
         self.console.system(summary)
 
-    def _load_skill_into_context(self, name: str):
-        """Manually load a skill's instructions into the conversation context.
-
-        Reuses the load_skill tool path so behavior matches model-invoked loads,
-        then injects the body as a user message so it takes effect on the next
-        turn. Lets the user force a skill the model did not auto-select.
-        """
+    def _record_skill_load(self, name: str) -> dict | None:
+        """Load *name* and record the same assistant/tool pair as ``load_skill``."""
         result = self.tool_executor._load_skill(name)
         if not result.get("success"):
             self.console.warn(result.get("error", f"Could not load skill '{name}'."))
-            return
+            return None
 
-        if "content" not in result:
-            # Already loaded earlier in this session; nothing new to inject.
-            self.console.system(result.get("message", f"Skill '{name}' is already loaded."))
-            return
-
+        call_id = f"call_kia_skill_{uuid.uuid4().hex}"
         self.context.add({
-            "role": "user",
-            "content": f"[Manually loaded skill '{name}']\n\n{result['content']}",
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [{
+                "id": call_id,
+                "type": "function",
+                "function": {
+                    "name": "load_skill",
+                    "arguments": json.dumps({"name": name}),
+                },
+            }],
         })
+        self.context.add({
+            "role": "tool",
+            "tool_call_id": call_id,
+            "content": format_tool_result(result),
+        })
+        return result
+
+    def _load_skill_into_context(self, name: str):
+        """Manually load a skill without starting a model turn."""
+        if self._record_skill_load(name) is None:
+            return
+
         # Any tools the skill contributes are advertised automatically on the
         # next turn via the `tools` property.
         self.console.system(

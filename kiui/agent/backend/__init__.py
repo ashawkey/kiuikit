@@ -12,6 +12,7 @@ from typing import Any
 
 from prompt_toolkit.patch_stdout import patch_stdout
 
+from kiui.agent.backend.batch import IsolatedTurnMixin
 from kiui.agent.backend.commands import AgentCommandsMixin
 from kiui.agent.backend.goals import GoalMixin
 from kiui.agent.personas import (
@@ -150,7 +151,9 @@ def _is_local_query(query: str) -> bool:
     return query.lower() in ("exit", "quit") or query.startswith(("!", "/"))
 
 
-class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
+class LLMAgent(
+    AgentCommandsMixin, GoalMixin, IsolatedTurnMixin, SkillCommandsMixin, SessionMixin
+):
     INITIAL_BACKOFF = 1.0   # seconds
     MAX_BACKOFF = 64.0      # seconds
     MAX_AUTO_CONTINUES = 3
@@ -275,6 +278,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             work_dir=self.work_dir,
             skills=self.skills,
             cancellation=cancellation,
+            isolated_turn=self.run_isolated_turn,
         )
         # Confirmation policy reads permission classes straight from the registry,
         # so built-in and skill tools share one source of truth.
@@ -282,6 +286,9 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
 
         self.context = ContextManager(self.system_prompt)
         self._pending_images: list[dict[str, str]] = []
+        # Whether a context-isolated turn owns the conversation right now; see
+        # IsolatedTurnMixin.
+        self._isolated_turn_active: bool = False
 
         self.round_id = 0
         self._session_id: str | None = None  # set by chat_loop
@@ -475,7 +482,15 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 stream=self.stream,
                 max_output_tokens=self.max_output_tokens,
                 reasoning_effort=self.reasoning_effort,
-                session_id=self._session_id,
+                # Providers use this to key their prompt cache. Isolated turns
+                # share a prefix with each other but not with the conversation,
+                # so they get their own key rather than repeatedly displacing
+                # the cached prefix of the round they run inside.
+                session_id=(
+                    f"{self._session_id}-isolated"
+                    if self._isolated_turn_active and self._session_id
+                    else self._session_id
+                ),
             )
 
         messages, request = build_request()
@@ -558,6 +573,12 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
     def _snapshot_before_compaction(self) -> None:
         """Save a revision so /rewind can undo a compaction that lost too much."""
         if not self._session_id or self._session_store is None:
+            return
+        if self._isolated_turn_active:
+            # An isolated turn's messages are not the conversation, so
+            # committing them would move the durable head onto a revision that
+            # a later resume would restore instead of the real session. There is
+            # nothing to rewind to either: the context is discarded regardless.
             return
         try:
             self.save_session(self._session_id, reason="pre-compaction")
@@ -961,6 +982,11 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         """Add pending conversational input before the next agentic iteration."""
         if self.input_broker is None:
             return False
+        if self._isolated_turn_active:
+            # An isolated turn's context is discarded when it ends, so steering
+            # into it would consume the user's message and then throw it away.
+            # Leaving it pending lets the enclosing round pick it up instead.
+            return False
 
         submission = self.input_broker.submission
         if submission is None or not submission.steer:
@@ -1154,6 +1180,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         self.context.replace_messages([])
         self.context.compaction_state = CompactionState()
         self._pending_images.clear()
+        self._isolated_turn_active = False
         self.round_id = 0
         self.token_totals = {key: 0 for key in self.token_totals}
         self.tool_compaction_totals = {key: 0 for key in self.tool_compaction_totals}
@@ -1404,7 +1431,7 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
         return self._process_query(submission)
 
     def _run_command(self, query: str) -> bool:
-        """Dispatch a /command. Returns True when the chat loop should stop."""
+        """Dispatch a built-in /command. Returns True when chat should stop."""
         cmd_word = query.split()[0][1:].lower()
         if cmd_word in self.COMMANDS:
             return self._handle_command(query)
@@ -1412,6 +1439,26 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             f"Unknown command: /{cmd_word}. Type /help for available commands."
         )
         return False
+
+    def _skill_invocation_prompt(self, name: str, arguments: str) -> str:
+        """Build the model-facing request for an explicit /skill invocation."""
+        if arguments:
+            return arguments
+        return (
+            f"The user explicitly invoked the '{name}' skill without additional task "
+            "context. If SKILL.md clearly defines a `Default invocation` workflow, "
+            "perform it. Otherwise, do not infer or start a task; briefly acknowledge "
+            "the loaded skill and ask what the user wants to do with it."
+        )
+
+    def _prepare_skill_invocation(self, query: str) -> str | None:
+        """Load an explicitly invoked skill and return its user instruction."""
+        parts = query.split(maxsplit=1)
+        name = parts[0][1:].lower()
+        arguments = parts[1] if len(parts) > 1 else ""
+        if self._record_skill_load(name) is None:
+            return None
+        return self._skill_invocation_prompt(name, arguments.strip())
 
     def _run_instant_command(self) -> bool:
         """Run the pending submission now when it is safe to run mid-round.
@@ -1463,16 +1510,30 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
             else:
                 self.console.warn("Usage: !<shell command>")
             return False
-        if query.startswith("/"):
-            return self._run_command(query)
-
         messages_before_round = list(self.context.messages)
         compaction_state_before_round = self.context.compaction_state
         round_before_round = self.round_id
         revision_before_round = self._session_revision_id
         compaction_floor_before_round = self._compaction_floor_tokens
+        skill_state_before_round = None
+        if query.startswith("/"):
+            cmd_word = query.split()[0][1:].lower()
+            if cmd_word in self.COMMANDS:
+                return self._run_command(query)
+            if cmd_word not in self.skills:
+                return self._run_command(query)
+            skill_state_before_round = self.tool_executor.skill_state()
+            model_query = self._prepare_skill_invocation(query)
+            if model_query is None:
+                return False
+        else:
+            model_query = query
 
-        self.context.add({"role": "user", "content": query})
+        self.context.add({
+            "role": "user",
+            "content": model_query,
+            **({"display_content": query} if model_query != query else {}),
+        })
         self.round_id += 1
         self.console.rule()
         self.tool_executor.goal_report = None
@@ -1488,6 +1549,8 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 self.context.compaction_state = compaction_state_before_round
                 self._session_revision_id = revision_before_round
                 self._compaction_floor_tokens = compaction_floor_before_round
+                if skill_state_before_round is not None:
+                    self.tool_executor.restore_skill_state(skill_state_before_round)
                 self.round_id = round_before_round
                 self.console.reset_timeline()
                 self._replay_context()
@@ -1547,10 +1610,11 @@ class LLMAgent(AgentCommandsMixin, GoalMixin, SkillCommandsMixin, SessionMixin):
                 )
 
         _wd = self.tool_executor._work_dir or os.getcwd()
+        self._refresh_slash_commands()
         terminal = TerminalInput(
             history_path=str(self._kia_dir() / "history"),
             work_dir=_wd,
-            commands=self.COMMAND_HELP,
+            commands=self._slash_commands,
         )
 
         try:

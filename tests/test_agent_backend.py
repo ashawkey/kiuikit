@@ -118,6 +118,31 @@ def test_instant_command_classification(query, instant):
     assert agent.is_instant_command(query) is instant
 
 
+def test_slash_command_catalog_includes_skills_without_shadowing_builtins():
+    agent = type("Agent", (AgentCommandsMixin,), {})()
+    agent.skills = {
+        "monitor-jobs": {"description": "Monitor jobs."},
+        "usage": {"description": "Collides with a built-in."},
+    }
+
+    catalog = agent._slash_command_help()
+
+    assert catalog["monitor-jobs"] == "Skill — Monitor jobs."
+    assert catalog["usage"] == agent.COMMAND_HELP["usage"]
+
+
+def test_skill_invocation_is_not_instant_and_cannot_shadow_builtin():
+    agent = type("Agent", (AgentCommandsMixin,), {})()
+    agent.skills = {
+        "monitor-jobs": {"description": "Monitor jobs."},
+        "usage": {"description": "Collides with a built-in."},
+    }
+
+    assert agent.is_instant_command("/monitor-jobs") is False
+    assert agent.is_instant_command("/monitor-jobs training") is False
+    assert agent.is_instant_command("/usage") is True
+
+
 def _busy_agent(broker):
     """Agent stub standing in for one whose round runs on the worker thread."""
     dispatched = []
@@ -307,6 +332,119 @@ def test_terminal_loop_survives_a_failing_round(monkeypatch):
     terminal.lines.put("exit")  # and still accepts input
     loop.join(timeout=5)
     assert not loop.is_alive()
+
+
+def _skill_invocation_agent(tmp_path, name="general-skill"):
+    skill_dir = tmp_path / ".kia" / "skills" / name
+    skill_dir.mkdir(parents=True)
+    body = "General instructions."
+    (skill_dir / "SKILL.md").write_text(
+        f"---\nname: {name}\ndescription: Use for tests.\n---\n{body}\n",
+        encoding="utf-8",
+    )
+    agent = object.__new__(LLMAgent)
+    agent.skills = backend.discover_skills(tmp_path)
+    agent.context = ContextManager("system")
+    agent.tool_executor = backend.ToolExecutor(work_dir=str(tmp_path), skills=agent.skills)
+    agent.console = NS(
+        rule=lambda *a, **k: None,
+        user_input=lambda *a, **k: None,
+        warn=lambda *a, **k: None,
+        reset_timeline=lambda: None,
+    )
+    agent.round_id = 0
+    agent._session_id = "test"
+    agent._session_revision_id = None
+    agent._compaction_floor_tokens = None
+    agent._pending_images = []
+    agent._last_interrupted = False
+    agent.verbose = False
+    agent._operation = lambda _label: nullcontext()
+    agent._maybe_continue_goal = lambda: None
+    agent.save_session = lambda *a, **k: None
+    agent.get_response = lambda: None
+    return agent, body
+
+
+def test_explicit_skill_invocation_without_task_asks_model_not_to_infer(tmp_path):
+    agent, body = _skill_invocation_agent(tmp_path)
+
+    agent._process_query(UserSubmission("/general-skill", "terminal", "s1"))
+
+    call, result, message = agent.context.messages
+    tool_call = call["tool_calls"][0]
+    assert call["role"] == "assistant"
+    assert tool_call["function"]["name"] == "load_skill"
+    assert tool_call["function"]["arguments"] == '{"name": "general-skill"}'
+    assert result["role"] == "tool"
+    assert result["tool_call_id"] == tool_call["id"]
+    assert body in result["content"]
+    assert message["display_content"] == "/general-skill"
+    assert body not in message["content"]
+    assert "Default invocation" in message["content"]
+    assert "do not infer or start a task" in message["content"]
+    state = CompactionState().absorb(agent.context.messages)
+    assert state.original_request == message["content"]
+    assert state.skills == ("general-skill",)
+    assert agent.round_id == 1
+
+
+def test_explicit_skill_invocation_with_task_and_when_already_loaded(tmp_path):
+    agent, body = _skill_invocation_agent(tmp_path)
+
+    agent._process_query(UserSubmission("/general-skill first task", "web", "s1"))
+    agent._process_query(UserSubmission("/general-skill second task", "web", "s2"))
+
+    first_call, first_result, first, second_call, second_result, second = (
+        agent.context.messages
+    )
+    assert first_call["tool_calls"][0]["function"]["name"] == "load_skill"
+    assert body in first_result["content"]
+    assert first["content"] == "first task"
+    assert first["display_content"] == "/general-skill first task"
+    assert second_call["tool_calls"][0]["function"]["name"] == "load_skill"
+    assert body in second_result["content"]
+    assert second["content"] == "second task"
+    assert second["display_content"] == "/general-skill second task"
+    state = CompactionState().absorb(agent.context.messages)
+    assert state.original_request == "first task"
+    assert state.skills == ("general-skill",)
+    assert agent.round_id == 2
+
+
+def test_manual_skill_load_records_tool_pair_without_user_message(tmp_path):
+    agent, body = _skill_invocation_agent(tmp_path)
+    agent.console.system = lambda *a, **k: None
+
+    agent._cmd_skills("/skills general-skill")
+
+    call, result = agent.context.messages
+    tool_call = call["tool_calls"][0]
+    assert call["role"] == "assistant"
+    assert tool_call["function"]["name"] == "load_skill"
+    assert result["role"] == "tool"
+    assert result["tool_call_id"] == tool_call["id"]
+    assert body in result["content"]
+    assert not any(message["role"] == "user" for message in agent.context.messages)
+    assert agent.round_id == 0
+
+
+def test_cancelled_skill_invocation_restores_skill_state(tmp_path):
+    agent, _ = _skill_invocation_agent(tmp_path)
+    agent.events = EventHub()
+    agent.console.system = lambda *a, **k: None
+    agent._set_rewind_draft = lambda *a, **k: None
+
+    def interrupt():
+        agent._last_interrupted = True
+        agent._interrupt_reverts_prompt = True
+
+    agent.get_response = interrupt
+    agent._process_query(UserSubmission("/general-skill", "terminal", "s1"))
+
+    assert agent.context.messages == []
+    assert agent.tool_executor._loaded_skills == set()
+    assert agent.tool_executor._skill_loads == {}
 
 
 def test_cancelled_initial_request_restores_context_and_message_draft():

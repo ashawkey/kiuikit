@@ -10,8 +10,9 @@ from __future__ import annotations
 import math
 import threading
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, Iterator
 
 import questionary
 from rich.console import Console
@@ -196,6 +197,16 @@ class ThinkingIndicator:
             self._thread = threading.Thread(target=self._tick, daemon=True)
             self._thread.start()
         return self
+
+    def set_status_suffix(self, status_suffix: str | ContextStatus) -> None:
+        """Update the suffix of a running indicator in place.
+
+        The next tick repaints it, so long-running work can report progress
+        without stopping and restarting the indicator — a restart costs a
+        thread join per update and publishes a start/stop event pair, which a
+        per-item loop would multiply into a flood.
+        """
+        self._status_suffix = status_suffix
 
     def __exit__(self, *args) -> None:
         self._running = False
@@ -665,9 +676,56 @@ class AgentConsole:
         ) = None
         self._indicator_stack: list[ThinkingIndicator] = []
         self._indicator_lock = threading.RLock()
+        self._quiet_depth = 0
+        self._visible_depth = 0
+
+    @property
+    def quiet(self) -> bool:
+        """Whether output is currently suppressed (see :meth:`suppressed`)."""
+        return self._quiet_depth > 0 and self._visible_depth == 0
+
+    @contextmanager
+    def suppressed(self) -> Iterator[None]:
+        """Silence rendered output and published events for nested work.
+
+        A context-isolated turn is not part of the conversation: its messages
+        are discarded, so rendering them contradicts the caller's summary, and
+        publishing them floods the bounded event history until the real
+        timeline is evicted from reconnect replay.
+
+        Anything wrapped in :meth:`visible` is exempt, because suppressing it
+        would strand the user: interactive prompts (an unanswerable question
+        blocks the run), errors, and safety-guard denials are the only account
+        of *why* the nested work failed.
+        """
+        self._quiet_depth += 1
+        self._console.quiet = True
+        try:
+            yield
+        finally:
+            self._quiet_depth -= 1
+            if self._quiet_depth == 0:
+                self._console.quiet = False
+
+    @contextmanager
+    def visible(self) -> Iterator[None]:
+        """Render and publish the enclosed output even while :meth:`suppressed`.
+
+        Use it for anything the user must see to stay in control of a nested
+        run: a question, a failure, or a refused action. Web clients need these
+        as much as the terminal does, so the exemption covers events too.
+        """
+        self._visible_depth += 1
+        was_quiet = self._console.quiet
+        self._console.quiet = False
+        try:
+            yield
+        finally:
+            self._visible_depth -= 1
+            self._console.quiet = was_quiet
 
     def _emit(self, event_type: str, **data) -> None:
-        if self.events is not None:
+        if self.events is not None and not self.quiet:
             self.events.publish(event_type, **data)
 
     def _render_plain(self, *objects, markup: bool = True) -> str:
@@ -697,6 +755,16 @@ class AgentConsole:
             with console.thinking():
                 response = client.chat.completions.create(...)
         """
+        if self.quiet:
+            # Inert indicator: taking over the display would replace the
+            # enclosing indicator's progress with an item's transient status.
+            return ThinkingIndicator(
+                self._console,
+                None,
+                status_suffix=status_suffix,
+                label=label,
+                render_terminal=False,
+            )
         return ThinkingIndicator(
             self._console,
             self.events,
@@ -718,7 +786,11 @@ class AgentConsole:
             with console.stream_response() as sink:
                 message, usage = consume_stream(stream, on_content=sink.on_content, ...)
         """
-        return ResponseStream(self._console, self.events, show_thinking=show_thinking)
+        return ResponseStream(
+            self._console,
+            None if self.quiet else self.events,
+            show_thinking=show_thinking,
+        )
 
     # -- raw pass-through (for rich markup, tables, etc.) -------------------
 
@@ -731,8 +803,13 @@ class AgentConsole:
             )
 
     def local(self, *args, **kwargs):
-        """Print terminal-only information such as authentication secrets."""
-        self._console.print(*args, **kwargs)
+        """Print terminal-only information such as authentication secrets.
+
+        Renders even under :meth:`suppressed`: the permission prompt asks its
+        question through here, and an invisible question cannot be answered.
+        """
+        with self.visible():
+            self._console.print(*args, **kwargs)
 
     def table(self, table: Table):
         self._console.print(table)
@@ -749,7 +826,7 @@ class AgentConsole:
         data, so markup and ANSI escapes pass through untouched. Web clients
         still receive the same ``output`` event as :meth:`print`.
         """
-        if not text:
+        if not text or self.quiet:
             return
         console = self._console
         if dim and console.is_terminal and console.color_system not in (None, "windows"):
@@ -855,8 +932,12 @@ class AgentConsole:
         self._emit("debug", text=msg)
 
     def error(self, msg: str):
-        self._block(msg, style="error", prefix=f"{_DOT} ")
-        self._emit("error", text=msg)
+        # Errors survive suppression: a nested turn that failed on an API error
+        # reports only "no response" to its caller, so this is the sole account
+        # of what actually went wrong.
+        with self.visible():
+            self._block(msg, style="error", prefix=f"{_DOT} ")
+            self._emit("error", text=msg)
 
     def warn(self, msg: str, *, exc_info: bool = False):
         self._block(msg, style="warning", prefix=f"{_DOT} ")

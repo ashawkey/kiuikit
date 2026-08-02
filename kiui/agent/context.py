@@ -303,6 +303,12 @@ def get_text(msg: dict) -> str:
     return ""
 
 
+def get_display_text(msg: dict) -> str:
+    """Return user-facing text when a message carries an internal expansion."""
+    display = msg.get("display_content")
+    return display if isinstance(display, str) else get_text(msg)
+
+
 def set_text(msg: dict, text: str) -> dict:
     """Return a shallow copy of *msg* with text content replaced."""
     content = msg.get("content")

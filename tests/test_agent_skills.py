@@ -82,6 +82,18 @@ class _SummaryAgent(SkillCommandsMixin):
         self.token_estimator = TokenEstimator()
 
 
+def test_skill_creator_documents_optional_default_invocation():
+    root = Path(skills_module.BUNDLED_SKILLS_DIR) / "skill-creator"
+    instructions = (root / "SKILL.md").read_text(encoding="utf-8")
+    reference = (root / "references" / "skill-format.md").read_text(encoding="utf-8")
+    template = (root / "assets" / "SKILL.template.md").read_text(encoding="utf-8")
+
+    assert "## Default invocation" in instructions
+    assert "## Default invocation" in reference
+    assert "## Default invocation" in template
+    assert "Optional" in template
+
+
 def test_skills_summary_counts_only_registry_in_persona_prompt():
     skills = {"alpha": {"description": "Use for alpha tasks."}}
     section = build_skills_prompt_section(skills)
@@ -105,9 +117,10 @@ def test_load_skill_counts(tmp_path):
     assert ex._skill_loads["alpha"] == 1
     assert "alpha" in ex._loaded_skills
 
-    # Redundant re-load still increments the usage counter.
+    # Reloading returns the full instructions again in case the earlier copy
+    # has been compacted out of conversation history.
     r2 = ex._load_skill("alpha")
-    assert r2["success"] and "content" not in r2
+    assert r2["success"] and r2["content"] == r1["content"]
     assert ex._skill_loads["alpha"] == 2
 
 

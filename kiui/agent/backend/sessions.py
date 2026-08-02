@@ -9,7 +9,13 @@ from pathlib import Path
 from rich.table import Table
 from rich.text import Text
 
-from kiui.agent.context import CompactionState, get_role, get_text, get_tool_calls
+from kiui.agent.context import (
+    CompactionState,
+    get_display_text,
+    get_role,
+    get_text,
+    get_tool_calls,
+)
 from kiui.agent.personas import get_persona
 from kiui.agent.session_store import SessionStore
 from kiui.agent.tools import format_tool_summary, log_tool_call, result_text_failed
@@ -69,7 +75,7 @@ class SessionMixin:
         for message in reversed(messages):
             if get_role(message) != "user":
                 continue
-            text = get_text(message).replace("\n", " ").strip()
+            text = get_display_text(message).replace("\n", " ").strip()
             return text[:60] + ("..." if len(text) > 60 else "")
         return ""
 
@@ -547,7 +553,7 @@ class SessionMixin:
         for msg in msgs:
             role = get_role(msg)
             if role == "user":
-                text = get_text(msg)
+                text = get_display_text(msg)
                 self.console.user_input(text)
 
             elif role == "assistant":

@@ -41,6 +41,9 @@ class _Console:
     def print(self, *args, **kwargs):
         pass
 
+    def visible(self):
+        return nullcontext()
+
     def tool(self, *args, **kwargs):
         pass
 
@@ -352,6 +355,7 @@ def test_pending_message_steers_next_agentic_iteration():
         call_api=call_api,
         execute_tool_calls=execute_tool_calls,
         _last_interrupted=False,
+        _isolated_turn_active=False,
         round_id=4,
     )
     agent._inject_pending_steer = lambda: LLMAgent._inject_pending_steer(agent)
@@ -375,6 +379,7 @@ def test_wait_submission_never_steers_current_round():
         input_broker=broker,
         context=context,
         console=NS(user_input=lambda *args, **kwargs: None),
+        _isolated_turn_active=False,
     )
 
     assert not LLMAgent._inject_pending_steer(agent)
@@ -391,6 +396,7 @@ def test_pending_local_query_waits_for_round_completion(query):
         input_broker=broker,
         context=context,
         console=NS(user_input=lambda *args, **kwargs: None),
+        _isolated_turn_active=False,
     )
 
     assert not LLMAgent._inject_pending_steer(agent)
@@ -465,6 +471,7 @@ def test_call_api_preserves_output_limited_response_for_continuation():
         verbose=False,
         round_id=1,
         _session_id=None,
+        _isolated_turn_active=False,
         _pending_images=[],
         _messages_with_pending_images=lambda: [],
         stream=False,
@@ -786,6 +793,7 @@ def test_compaction_is_skipped_while_the_floor_holds():
         verbose=False,
         round_id=1,
         _session_id=None,
+        _isolated_turn_active=False,
         _pending_images=[],
         stream=False,
         tools=[],
@@ -825,6 +833,7 @@ def _overflow_agent(completion, compactions):
         verbose=False,
         round_id=1,
         _session_id=None,
+        _isolated_turn_active=False,
         _pending_images=[],
         _messages_with_pending_images=lambda: [],
         stream=False,

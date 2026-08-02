@@ -2,6 +2,7 @@
 
 from kiui.agent.context import (
     build_tool_name_index,
+    get_display_text,
     get_role,
     get_text,
     get_tool_call_id,
@@ -62,12 +63,15 @@ class AgentCommandsMixin:
         """Whether ``raw`` can run now rather than queue behind a live round."""
         parts = raw.split(maxsplit=1)
         cmd = parts[0][1:].lower()
-        if cmd not in self.COMMANDS:
-            # A typo is worth reporting immediately rather than after the round.
-            return True
-        if cmd in self.INSTANT_COMMANDS:
-            return True
-        return cmd in self.INSTANT_LISTING_COMMANDS and len(parts) == 1
+        if cmd in self.COMMANDS:
+            if cmd in self.INSTANT_COMMANDS:
+                return True
+            return cmd in self.INSTANT_LISTING_COMMANDS and len(parts) == 1
+        if cmd in getattr(self, "skills", {}):
+            # Explicit skill invocation starts a model round.
+            return False
+        # A typo is worth reporting immediately rather than after the round.
+        return True
 
     def _handle_command(self, raw: str) -> bool:
         """Handle a /command.  Returns True if the agent loop should stop."""
@@ -115,6 +119,23 @@ class AgentCommandsMixin:
 
         return False
 
+    def _slash_command_help(self) -> dict[str, str]:
+        """Return built-in commands plus currently discovered skills."""
+        commands = dict(self.COMMAND_HELP)
+        for name, info in getattr(self, "skills", {}).items():
+            if name not in commands:
+                commands[name] = f"Skill — {info.get('description', '')}"
+        return commands
+
+    def _refresh_slash_commands(self) -> None:
+        """Refresh completion data without replacing the terminal's shared dict."""
+        commands = self._slash_command_help()
+        if hasattr(self, "_slash_commands"):
+            self._slash_commands.clear()
+            self._slash_commands.update(commands)
+        else:
+            self._slash_commands = commands
+
     def _cmd_help(self):
         width = max(len(name) for name in self.COMMAND_HELP) + 1  # +1 for the slash
         lines = ["  [cyan]!<cmd>[/cyan]" + " " * (width - 5) + "— Run a shell command directly (e.g. !ls, !git diff)"]
@@ -128,6 +149,7 @@ class AgentCommandsMixin:
             + "\n".join(lines)
             + "\n\n"
             "  Press [bold]Enter[/bold] to send, [bold]Escape → Enter[/bold] for a newline.\n"
+            "  Invoke a discovered skill with [cyan]/<skill-name> [optional task][/cyan].\n"
             "  While the agent is working, messages queue; commands that do not touch\n"
             "  the conversation (such as /usage, /context, /perm) run right away."
         )
@@ -327,7 +349,7 @@ class AgentCommandsMixin:
 
         for idx, m in enumerate(msgs):
             role = get_role(m)
-            text = get_text(m)
+            text = get_display_text(m) if role == "user" else get_text(m)
             chars = msg_chars(m)
             total_chars += chars
 

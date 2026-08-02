@@ -244,6 +244,19 @@ class ToolRegistry:
             if spec.source == BUILTIN_SOURCE
         }
 
+    def skill_specs(self) -> dict[str, ToolSpec]:
+        """Snapshot every skill-contributed spec, keyed by tool name."""
+        return {
+            name: spec
+            for name, spec in self._specs.items()
+            if spec.source != BUILTIN_SOURCE
+        }
+
+    def restore_skill_specs(self, specs: dict[str, ToolSpec]) -> None:
+        """Replace all skill tools with a snapshot from :meth:`skill_specs`."""
+        self.clear_skill_tools()
+        self._specs.update(specs)
+
     def skill_tool_schemas(self) -> list[dict[str, Any]]:
         """Return schemas for every currently-registered skill tool (any source
         that is not built-in)."""

@@ -151,6 +151,7 @@ class SafetyGuard:
     _PROTECTED_UNIX_TREES = frozenset({
         "/bin", "/boot", "/dev", "/etc", "/lib", "/lib64", "/opt",
         "/proc", "/root", "/run", "/sbin", "/snap", "/sys", "/usr",
+        "/var/log",
     })
 
     def __init__(self, work_dir: str | None = None):
@@ -208,7 +209,6 @@ class SafetyGuard:
             new_cwd = self._leading_cd(segment, current_cwd)
             if new_cwd is not None:
                 current_cwd = new_cwd
-                continue
             reason = self._check_segment(segment, current_cwd)
             if reason:
                 return False, f"Blocked: {reason}."
@@ -602,7 +602,10 @@ class SafetyGuard:
             path in self._CRITICAL_UNIX_PATHS
             or path == home
             or os.path.ismount(path)
-            or any(path.startswith(root + os.sep) for root in self._PROTECTED_UNIX_TREES)
+            or any(
+                path == root or path.startswith(root + os.sep)
+                for root in self._PROTECTED_UNIX_TREES
+            )
         )
 
     def _is_device_path(self, path: str) -> bool:
@@ -700,12 +703,15 @@ class PermissionController:
         """Run safety checks without applying mode-based confirmation policy."""
         safe, reason = self.safety.check(tool_name, arguments)
         if not safe:
-            self.console.print(
-                f"[bold red]🛡  Safety guard:[/bold red] [red]{reason}[/red]"
-            )
-            if tool_name in ("exec_command", "start_process"):
-                command = arguments.get("command", "")
-                self.console.print(f"   Command: {command!r}", markup=False)
+            # A refusal stays visible inside a suppressed nested run: it is the
+            # only signal that an item was blocked rather than simply failing.
+            with self.console.visible():
+                self.console.print(
+                    f"[bold red]🛡  Safety guard:[/bold red] [red]{reason}[/red]"
+                )
+                if tool_name in ("exec_command", "start_process"):
+                    command = arguments.get("command", "")
+                    self.console.print(f"   Command: {command!r}", markup=False)
         return safe, reason
 
     def _needs_prompt(self, tool_name: str) -> bool:

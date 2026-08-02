@@ -14,7 +14,8 @@ but has no effect.
 
 Skills load via progressive disclosure: only name+description is advertised in
 the system prompt; the full body is pulled into context on demand via the
-load_skill tool (or the manual ``/skills <name>`` command). Bundled resource
+load_skill tool, the load-only ``/skills <name>`` command, or direct
+``/<skill-name> [task]`` invocation. Bundled resource
 files are read only when the instructions call for them (using the ordinary
 read_file / exec_command tools).
 

@@ -108,7 +108,11 @@ class OpenAICompatibleProvider(LLMProvider):
 
     def _kwargs(self, request: CompletionRequest) -> dict[str, Any]:
         messages = [
-            {key: value for key, value in message.items() if key != "provider_state"}
+            {
+                key: value
+                for key, value in message.items()
+                if key not in {"provider_state", "display_content"}
+            }
             for message in request.messages
         ]
         kwargs: dict[str, Any] = {

@@ -28,21 +28,21 @@ class SessionToolsMixin:
                 "success": False,
             }
 
-        if name in self._loaded_skills:
-            self._skill_loads[name] = self._skill_loads.get(name, 0) + 1
-            return {"message": f"Skill '{name}' is already loaded.", "success": True}
-
         skill = self._skills[name]
         body = skill["body"]
         skill_dir = skill.get("dir")
-        # Register contributed tools before marking the skill loaded so a
-        # packaging error (e.g. a tool shadowing a built-in) fails the whole
-        # load atomically instead of leaving half-registered state.
-        error = self._register_skill_tools(name, skill_dir)
-        if error is not None:
-            return {"error": error, "success": False}
+        if name not in self._loaded_skills:
+            # Register contributed tools before marking the skill loaded so a
+            # packaging error (e.g. a tool shadowing a built-in) fails the whole
+            # load atomically instead of leaving half-registered state.
+            error = self._register_skill_tools(name, skill_dir)
+            if error is not None:
+                return {"error": error, "success": False}
+            self._loaded_skills.add(name)
 
-        self._loaded_skills.add(name)
+        # Always return the instructions. They may have been compacted out of
+        # the conversation since the previous load, and callers cannot reliably
+        # tell whether the body is still present.
         self._skill_loads[name] = self._skill_loads.get(name, 0) + 1
         resources = [
             directory

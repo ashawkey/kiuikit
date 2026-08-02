@@ -66,11 +66,11 @@ kia --model <model_alias> --verbose --perm strict --resume [session_id]
 
 ### Storage management
 
-`kia --storage` reports every user-facing top-level entry in the current project's `.kia/` directory and whether a default clean removes it. Kia maintains `.kia/.gitignore` with a `*` rule so the entire directory stays ignored; this internal file is hidden from storage listings and is never cleaned. Bare `kia --clean` removes every entry except persistent `skills/`. Pass one or more entry names to remove only those entries; explicitly named preserved entries can also be removed.
+`kia --storage` reports every user-facing top-level entry in the current project's `.kia/` directory and whether a default clean removes it. Kia maintains `.kia/.gitignore` with a `*` rule so the entire directory stays ignored; this internal file is hidden from storage listings and is never cleaned. Bare `kia --clean` removes every entry except the persistent ones, `skills/` and `batch/` (authored content and batch results). Pass one or more entry names to remove only those entries; explicitly named preserved entries can also be removed.
 
 ```bash
 kia --storage
-kia --clean                    # everything except skills/
+kia --clean                    # everything except skills/ and batch/
 kia --clean pdf-cache          # one entry
 kia --clean sessions pdf-cache # selected entries
 ```
@@ -139,6 +139,7 @@ The agent supports the following slash commands in the CLI:
 | `/auth [provider\|model-alias]` | Show authentication status |
 | `/rewind` | Return to before a user prompt, restore it to the chatbox, then branch |
 | `/skills` | List installed skills; `/skills reload` to re-scan; `/skills <name>` to load one |
+| `/<skill-name> [task]` | Invoke a skill for an optional task; without one, run its declared default or ask what to do |
 | `/persona` | List personas; `/persona <name>` to switch (restarts the conversation) |
 | `/goal [text\|clear]` | Set a goal the agent auto-iterates toward until met (see [Goals](#goals)) |
 | `/wait <duration> <prompt>` | Send a prompt after a delay, e.g. `/wait 1h check whether the other agent finished` |
@@ -148,7 +149,7 @@ The agent supports the following slash commands in the CLI:
 
 A message sent while the agent is working normally steers the next tool-call iteration. `/wait` is deliberately different: its prompt becomes ready only after the requested seconds (`s`), minutes (`m`), or hours (`h`) and always starts a fresh round after the current round finishes. While the agent is idle, the same activity indicator used for `Working...` and `Executing...` shows `Waiting...` with a live countdown in the terminal and Web UI. Only one prompt, immediate or delayed, can be pending; use the existing pending-message edit/withdraw action to cancel it.
 
-A command sent while the agent is working does not have to wait for the round: a round owns the conversation, the provider, and the terminal prompt, so any command that merely reads session state (`/help`, `/usage`, `/context`, `/system_prompt`, `/auth`, and the bare listing form of `/model`, `/persona`, `/skills`) or takes effect on the next API call (`/perm`, `/reasoning`, `/goal`) is answered immediately — from the terminal and the Web UI alike. Commands that rewrite the conversation or swap what runs it (`/clear`, `/compact`, `/rewind`, `/resume`, `/login`, a `/model` or `/persona` switch, `/skills <name>`) stay queued until the round ends.
+A command sent while the agent is working does not have to wait for the round: a round owns the conversation, the provider, and the terminal prompt, so any command that merely reads session state (`/help`, `/usage`, `/context`, `/system_prompt`, `/auth`, and the bare listing form of `/model`, `/persona`, `/skills`) or takes effect on the next API call (`/perm`, `/reasoning`, `/goal`) is answered immediately — from the terminal and the Web UI alike. Commands that rewrite the conversation or swap what runs it (`/clear`, `/compact`, `/rewind`, `/resume`, `/login`, a `/model` or `/persona` switch, `/skills <name>`) stay queued until the round ends. Direct skill invocations also start model rounds, so `/<skill-name>` always queues while another round is active.
 
 ### Bash shortcut
 
@@ -205,6 +206,22 @@ The newest 15% of the window (capped at 20k tokens) is never summarized away, an
 A `pre-compaction` session revision is saved before the history is replaced, so rewinding to the prompt boundary for that round can restore the pre-round conversation and code state.
 
 Two guards keep an unproductive pass from repeating every round. Before the round-trip, a split that would free less than it writes back — the summary is the one part of a compaction that *adds* context — is abandoned without calling the model at all. After it, every pass sets a floor that suppresses the next one until the context has actually grown by 5% of the window, whether or not the pass went well: a pass that clears the yield bar by a hair used to reset that floor, leaving the marginal pass right behind it unguarded. Summarization runs at low reasoning effort under a fixed output cap, since rewriting a conversation into a fixed section structure is transcription rather than reasoning.
+
+### Batch processing
+
+Repeating one task over many independent items (caption 1000 images, classify 5000 rows) is the case none of the three layers above can fix: every item pays for every earlier item, and compaction eventually summarizes away the very results that were asked for.
+
+The bundled `batch` skill's `run_batch` tool instead runs each item as a **context-isolated turn** — the conversation is restored byte-for-byte after every item, so the prompt stays flat instead of growing, and per-item results are appended to a JSONL file rather than the conversation. The tool returns only counts, the output path, and a sample of failures. Items run sequentially; the skill's instructions cover when to prefer a plain script (uniform work needing no tools) or `spawn_subagent` (heterogeneous items) instead.
+
+Isolation covers everything a discarded turn could otherwise leak into. An item is not rendered or published — hundreds of item turns would bury the transcript and push the real timeline out of the bounded event history that reconnecting web clients replay — and it never commits a session revision, so a compaction inside an item cannot move the durable head onto that item's context. Errors, permission prompts, and safety-guard denials are the deliberate exceptions: all are still shown, because an unanswerable prompt blocks the run and an item reports only "no response" to its caller. Item turns also get their own prompt-cache key rather than repeatedly displacing the conversation's cached prefix.
+
+Skill state is rolled back with the context, because it lives on the executor rather than in the message history. An item starts with no skill marked loaded — it does not inherit the history those instructions live in, so `load_skill` must be able to return them — and whatever it loads is forgotten afterwards, along with the tools that skill contributed. Without that, one item's `load_skill` would leave every later item (and the conversation) with "already loaded" and no instructions at all: a silent, results-corrupting failure. A task that needs a skill should load it itself.
+
+Two consequences are worth knowing. File changes from all items land in the enclosing round, so **the whole batch is a single rewind step** — there is no per-item granularity. And item turns never enter history, so they are not replayed; per-item failure diagnosis relies on the `error` field in the output file.
+
+A run is identified by a `name` rather than a path, and results are written to `.kia/batch/<name>.jsonl`, one record per item (`item`, its `index` in the item list, `ok`, `result`, `error`). The name is the resume key, so re-issuing a call continues the run it names instead of quietly starting a second one, and a name cannot be steered into a path. `batch` joins `skills` as an entry `kia --clean` preserves: results are a deliverable the agent may still be working from, not a reclaimable cache.
+
+Interrupting a batch stops it at the current item and still reports what completed; re-issuing the identical call resumes, skipping items already recorded as successful. Restarting a run instead (`resume=false`) moves the old file to `<name>.jsonl.bak` rather than truncating it, so a mistaken restart cannot destroy finished results.
 
 ## Rewind
 
@@ -284,6 +301,8 @@ e.g. `references/REFERENCE.md` or `scripts/extract.py`.
 
 `name` and `description` are required (the `description` is what the model matches against to decide when to activate a skill). Optional fields `license`, `compatibility`, and `metadata` are also parsed. `allowed-tools` is accepted for cross-agent compatibility but **not enforced** — kia uses its own permission model. Skills load via **progressive disclosure**: only name+description are advertised in the system prompt; the full body loads when the model calls `load_skill` (or you run `/skills <name>`); bundled `scripts/`, `references/`, and `assets/` files are read/run on demand via the ordinary file and exec tools (the skill's directory path is provided when it is loaded so relative references resolve correctly).
 
+Invoke a discovered skill directly with `/<skill-name> [task context]`; names are kebab-case, such as `/monitor-jobs`. With task context, kia applies the skill to that request. Without task context, kia performs a workflow only when the body clearly declares an optional `## Default invocation` section; otherwise it loads the skill and asks what you want to do. This Markdown section is a kia convention rather than a new Agent Skills frontmatter field. Built-in commands retain precedence over same-named skills.
+
 Skills are discovered from the installed package and from `.kia/skills/` under **both the project directory and your home directory** (`~/.kia/skills/`), so you can keep personal skills that follow you across projects. Bundled skills take precedence so they always match the installed `kiui` version; project skills then take precedence over personal ones. Other agents' skill directories are not scanned; when needed, give kia a skill path explicitly so it can read the instructions.
 
 Skill commands:
@@ -292,7 +311,9 @@ Skill commands:
 |---------|--------|
 | `/skills` | List installed skills (with spec-compliance warnings) |
 | `/skills reload` | Re-scan skill dirs (picks up skills created/edited mid-session) |
-| `/skills <name>` | Manually load a skill into context, forcing one the model did not auto-select |
+| `/skills <name>` | Manually load a skill into context without starting a model turn |
+| `/<skill-name>` | Invoke a skill; run its declared default or ask for a task |
+| `/<skill-name> <task>` | Invoke a skill for the supplied task context |
 
 Discovery is non-silent: skills whose `SKILL.md` cannot be read or parsed (bad YAML, missing `description`) and skills **shadowed** by a higher-precedence copy of the same name are reported as warnings at startup and on `/skills reload`, rather than vanishing quietly. Skill load activity is tracked per session — `/skills` shows a per-skill load count, `/usage` and the end-of-run summary list which skills were loaded, and the loaded-skill set is persisted so `--resume` does not re-load skills whose instructions are already in the replayed conversation.
 
@@ -330,7 +351,7 @@ force-pushes. An empty repository is initialized on the first upload.
 
 ### Bundled skills
 
-kia ships a few common skills, including `skill-creator` for authoring spec-compliant skills and `pdf-reading` for converting PDFs into readable Markdown and structured data with the external [MinerU](https://github.com/opendatalab/MinerU) CLI. The PDF skill can read extracted text, LaTeX, tables, and captions; direct inspection of extracted image pixels still requires a vision-capable tool. Bundled skills are loaded directly from the installed package rather than copied into `.kia`, so updates take effect whenever `kiui` is updated. To customize one, create a new project or personal skill under a different name.
+kia ships a few common skills, including `skill-creator` for authoring spec-compliant skills, `batch` for repetitive work over independent items (see [Batch processing](#batch-processing)), and `pdf-reading` for converting PDFs into readable Markdown and structured data with the external [MinerU](https://github.com/opendatalab/MinerU) CLI. The PDF skill can read extracted text, LaTeX, tables, and captions; direct inspection of extracted image pixels still requires a vision-capable tool. Bundled skills are loaded directly from the installed package rather than copied into `.kia`, so updates take effect whenever `kiui` is updated. To customize one, create a new project or personal skill under a different name.
 
 ## Personas
 
@@ -414,3 +435,10 @@ process tools, so they appear only after `load_skill("monitor")`:
 The executor always owns the process *registry* and cleanup, so any background
 processes are terminated on `/clear`, session switch, and exit even when the
 `monitor` skill is not loaded.
+
+The bundled **`batch`** skill follows the same split: the agent owns the
+context-isolated turn, the skill owns everything around it.
+
+| Tool | Description |
+|------|-------------|
+| `run_batch` | Run one task per item in a fresh context, appending per-item results to a JSONL file |

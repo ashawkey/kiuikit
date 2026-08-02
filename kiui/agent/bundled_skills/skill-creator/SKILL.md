@@ -16,6 +16,8 @@ Establish:
 - the recurring outcome the skill should produce;
 - when it should activate;
 - the inputs, outputs, and important constraints;
+- whether invoking `/<skill-name>` without task context should run a specific
+  default workflow or simply load the skill and ask what to do;
 - one or two representative examples.
 
 Use existing conversation context when sufficient. Ask only for important
@@ -42,14 +44,19 @@ Choose one kebab-case name and one coherent responsibility. Read
 Write the `description` around user intent: say what outcome the skill enables
 and when to use it. Include likely user terminology, but avoid keyword stuffing.
 
-Write the body as an operational procedure:
+Write the body as operational instructions:
 
-- give one clear default approach;
 - use imperative steps;
 - include concrete constraints and non-obvious gotchas;
 - define the expected output when consistency matters;
 - include a verification step;
 - omit generic statements such as “follow best practices.”
+
+Add a `## Default invocation` section only when `/<skill-name>` without
+additional context can safely perform a clearly defined workflow. Specify its
+outcome, input discovery, permitted actions, verification, and stopping
+condition. General capability skills should omit this section; direct invocation
+will then load the skill and ask the user for a task instead of inventing one.
 
 ### 4. Add only useful resources
 
@@ -81,7 +88,9 @@ instructions are factually correct or useful.
 
 Before finishing, check:
 
-- **Clear:** one obvious workflow; explicit outputs and completion conditions.
+- **Clear:** procedures have explicit inputs, outputs, and completion conditions.
+- **Invocation:** any declared default is self-contained and safe; otherwise the
+  skill correctly omits `## Default invocation`.
 - **Accurate:** commands, paths, APIs, and examples are verified.
 - **Focused:** every instruction changes likely agent behavior.
 - **Consistent:** `SKILL.md`, references, scripts, and examples agree.
