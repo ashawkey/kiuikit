@@ -44,7 +44,6 @@ Review requested changes without modifying files. Report actionable findings fir
 Available whole-line markers are:
 
 - `{{kia:autonomous-mode}}`: autonomous execution rules; empty in interactive mode.
-- `{{kia:sub-agents}}`: sub-agent guidance when `spawn_subagent` is allowed and the agent is not itself a sub-agent.
 - `{{kia:skills}}`: discovered skills when `load_skill` is allowed.
 - `{{kia:project-instructions}}`: the working directory's `AGENTS.md`, when present.
 - `{{kia:current-context}}`: working directory, operating system, and Git branch/status.

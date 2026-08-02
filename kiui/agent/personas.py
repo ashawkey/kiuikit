@@ -21,30 +21,23 @@ _RESERVED_NAMES = frozenset({"reload"})
 _MARKER_RE = re.compile(r"\{\{kia:([^{}]+)\}\}")
 _MARKERS = frozenset({
     "autonomous-mode",
-    "sub-agents",
     "skills",
     "project-instructions",
     "current-context",
 })
 
 _AUTONOMOUS_MODE = """## Autonomous Mode
-You are running as an autonomous sub-agent with no user available to respond.
+You are running autonomously with no user available to respond.
 - Do not ask questions or request confirmation.
 - Infer intent from the task and available context; choose the safest reasonable interpretation.
 - If blocked, report the blocker instead of using a risky workaround.
 - Complete and verify the task, then return a concise summary."""
-
-_SUBAGENTS = """## Sub-Agents
-**spawn_subagent** runs a focused task synchronously in a separate conversation and returns its result.
-Use a sub-agent only when the user explicitly requests delegation or when a task is genuinely independent and context isolation is clearly necessary, such as work unrelated to the current codebase. When delegation is justified, give one focused, self-contained task."""
-
 
 @dataclass(frozen=True)
 class PersonaContext:
     """Runtime information available to persona markers."""
 
     exec_mode: bool = False
-    is_subagent: bool = False
     work_dir: str | None = None
     skills: dict | None = None
 
@@ -199,7 +192,6 @@ def render_persona(persona: PersonaInfo, ctx: PersonaContext) -> str:
     """Expand a persona's recognized markers exactly once."""
     expansions = {
         "autonomous-mode": _AUTONOMOUS_MODE if ctx.exec_mode else "",
-        "sub-agents": _SUBAGENTS if not ctx.is_subagent and _allows(persona, "spawn_subagent") else "",
         "skills": build_skills_prompt_section(ctx.skills or {}) if _allows(persona, "load_skill") else "",
         "project-instructions": _build_project_section(ctx.work_dir),
         "current-context": _build_context_section(ctx.work_dir),

@@ -71,9 +71,7 @@ BUILTIN_CALL_DESCRIBERS: dict[str, Callable[[dict[str, Any]], ToolCallDescriptio
     "remove_file": lambda a: _description("remove_file", str(a["file"])),
     "glob_files": _describe_glob,
     "grep_files": _describe_grep,
-    "spawn_subagent": lambda a: _description("spawn_subagent", quote_tool_call_value(a["task"])),
     "load_skill": lambda a: _description("load_skill", str(a["name"])),
-    "report_goal": lambda a: _description("report_goal", "met" if a["met"] else "not met"),
     "web_search": lambda a: _description("web_search", quote_tool_call_value(a["query"])),
     "web_fetch": lambda a: _description("web_fetch", str(a["url"])),
 }

@@ -1,18 +1,9 @@
-"""Agent-specific sub-agent, skill, and goal tools."""
+"""Agent-specific skill tools."""
 
 from pathlib import Path
 from typing import Any
 
 class SessionToolsMixin:
-    def _spawn_subagent(self, task: str = "") -> dict[str, Any]:
-        """Spawn a sub-agent and wait for it to complete."""
-        if self.subagent_manager is None:
-            return {"error": "Sub-agent spawning is not available.", "success": False}
-        if not task:
-            return {"error": "task is required.", "success": False}
-
-        return self.subagent_manager.spawn(task=task, cwd=self._work_dir)
-
     def _load_skill(self, name: str) -> dict[str, Any]:
         """Load a skill's full prompt instructions into the conversation context."""
         if not self._skills:
@@ -81,18 +72,3 @@ class SessionToolsMixin:
         except Exception as e:
             return f"Skill '{name}' tools.py failed to load: {e}"
         return None
-
-    def _report_goal(self, met: bool = False, reason: str = "") -> dict[str, Any]:
-        """Record whether the current standing goal is met.
-
-        The result is stashed on ``self.goal_report`` for the agent loop to
-        read after the round; it decides whether to keep auto-iterating.
-        """
-        met = bool(met)
-        reason = reason or ""
-        self.goal_report = {"met": met, "reason": reason}
-        status = "goal met" if met else "goal not yet met"
-        return {
-            "message": f"Recorded: {status}." + (f" {reason}" if reason else ""),
-            "success": True,
-        }

@@ -6,7 +6,7 @@ and call ``describe`` function). :class:`ToolRegistry` holds them all and is
 the single source of truth for two questions:
 
 - *Which tools are advertised to the API?* — :meth:`ToolRegistry.advertised`
-  applies gates (image/sub-agent/goal), the persona whitelist, and the
+  applies gates (image), the persona whitelist, and the
   per-persona skill-tool policy in one pass.
 - *How does a call dispatch?* — :meth:`ToolRegistry.get` returns the spec whose
   ``handler`` is invoked as ``handler(executor, **arguments)``.
@@ -31,12 +31,8 @@ BUILTIN_SOURCE = "builtin"
 _TOOL_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 # Advertising gates. A gated tool is advertised only when its condition holds:
-#   "image"         -> the model supports image input
-#   "subagent_root" -> the agent is not itself a sub-agent
-#   "goal"          -> a standing goal is currently active
+#   "image" -> the model supports image input
 GATE_IMAGE = "image"
-GATE_SUBAGENT_ROOT = "subagent_root"
-GATE_GOAL = "goal"
 
 
 @dataclass(frozen=True)
@@ -77,9 +73,7 @@ _BUILTIN_TABLE: dict[str, tuple[str, str | None]] = {
     "web_search": ("_web_search", None),
     "web_fetch": ("_web_fetch", None),
     "remove_file": ("_remove_file", None),
-    "spawn_subagent": ("_spawn_subagent", GATE_SUBAGENT_ROOT),
     "load_skill": ("_load_skill", None),
-    "report_goal": ("_report_goal", GATE_GOAL),
 }
 
 BUILTIN_TOOL_NAMES = frozenset(_BUILTIN_TABLE)
@@ -252,9 +246,7 @@ class ToolRegistry:
         self,
         *,
         persona_tools: frozenset[str] | None,
-        include_subagent: bool,
         supports_image: bool,
-        goal_active: bool,
     ) -> list[dict[str, Any]]:
         """Return the OpenAI tool schemas to advertise for the current turn.
 
@@ -266,8 +258,6 @@ class ToolRegistry:
         """
         gate_ok = {
             GATE_IMAGE: supports_image,
-            GATE_SUBAGENT_ROOT: include_subagent,
-            GATE_GOAL: goal_active,
         }
         allow_skill_tools = persona_tools is None or "load_skill" in persona_tools
         advertised: list[dict[str, Any]] = []

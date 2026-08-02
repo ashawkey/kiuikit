@@ -388,8 +388,7 @@ class PromptBroker:
             done=threading.Event(),
         )
         with self._cond:
-            # Queue behind any active prompt (e.g. a concurrent subagent ask)
-            # instead of failing the caller.
+            # Queue behind any active prompt instead of failing the caller.
             while self._active is not None:
                 self._cond.wait()
             if self.cancellation is not None and self.cancellation.cancelled:

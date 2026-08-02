@@ -18,6 +18,23 @@ from kiui.agent.utils.interrupt import RequestInterrupted
 from kiui.agent.utils.io import EventHub, InputBroker, UserSubmission
 
 
+def test_agent_close_releases_resources_once():
+    calls = []
+    agent = LLMAgent.__new__(LLMAgent)
+    agent._closed = False
+    agent.changes = NS(close=lambda: calls.append("changes"))
+    agent.provider = NS(close=lambda: calls.append("provider"))
+    agent.tool_executor = NS(
+        shutdown_processes=lambda: calls.append("processes"),
+        shutdown_tool_resources=lambda clear=False: calls.append(("resources", clear)),
+    )
+
+    agent.close()
+    agent.close()
+
+    assert calls == ["changes", "provider", "processes", ("resources", True)]
+
+
 class _StatusError(Exception):
     """Mimics an openai.APIStatusError instance carrying ``status_code``."""
 
@@ -97,7 +114,6 @@ def test_oauth_commands_use_current_provider():
     [
         ("/usage", True),
         ("/context", True),
-        ("/goal clear", True),
         ("/wait 1h later", False),
         ("/model", True),        # bare form only lists
         ("/model gpt-5", False),  # switching swaps the provider mid-round
@@ -248,9 +264,6 @@ def test_terminal_loop_answers_a_command_without_waiting_for_the_round(monkeypat
             release_round.wait(5)
             return False
 
-        def _queue_pending_auto(self) -> None:
-            pass
-
         def _run_command(self, query: str) -> bool:
             dispatched.append(query)
             return False
@@ -312,9 +325,6 @@ def test_terminal_loop_survives_a_failing_round(monkeypatch):
                 return True
             raise RuntimeError("round blew up")
 
-        def _queue_pending_auto(self) -> None:
-            pass
-
         def _run_command(self, query: str) -> bool:
             return False
 
@@ -359,7 +369,6 @@ def _skill_invocation_agent(tmp_path, name="general-skill"):
     agent._last_interrupted = False
     agent.verbose = False
     agent._operation = lambda _label: nullcontext()
-    agent._maybe_continue_goal = lambda: None
     agent.save_session = lambda *a, **k: None
     agent.get_response = lambda: None
     return agent, body
@@ -478,9 +487,8 @@ def test_cancelled_initial_request_restores_context_and_message_draft():
     agent._pending_images = []
     agent._last_interrupted = False
     agent.verbose = False
-    agent.tool_executor = NS(goal_report=None)
+    agent.tool_executor = NS()
     agent._operation = lambda _label: nullcontext()
-    agent._maybe_continue_goal = lambda: None
     agent.save_session = lambda *args, **kwargs: saved.append(
         (list(context.messages), agent.round_id, agent._session_revision_id, kwargs)
     )
@@ -560,7 +568,6 @@ def test_cancelled_exec_preserves_its_partial_result_in_round_context(tmp_path):
         "retained_chars": 0,
     }
     agent.tool_executor = NS(
-        goal_report=None,
         execute=lambda *args: {
             "stdout": "partial output\n",
             "exit_code": 143,
@@ -571,7 +578,6 @@ def test_cancelled_exec_preserves_its_partial_result_in_round_context(tmp_path):
         },
     )
     agent._operation = lambda _label: nullcontext()
-    agent._maybe_continue_goal = lambda: None
     agent.save_session = lambda *args, **kwargs: saved.append(list(context.messages))
 
     def call_api():

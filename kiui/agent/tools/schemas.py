@@ -244,26 +244,6 @@ _BUILTIN_TOOL_SCHEMAS_LIST = [
         {
             "type": "function",
             "function": {
-                "name": "spawn_subagent",
-                "description": (
-                    "Run an independent task in a sub-agent and wait for its result. "
-                    "Use only when the user explicitly requests delegation or context isolation is clearly necessary. "
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "task": {
-                            "type": "string",
-                            "description": "Natural language task for the sub-agent",
-                        },
-                    },
-                    "required": ["task"],
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
                 "name": "load_skill",
                 "description": "Load the full prompt instructions for a skill by name. Use this when a task matches a skill's domain so you can follow its specialized guidance.",
                 "parameters": {
@@ -272,26 +252,6 @@ _BUILTIN_TOOL_SCHEMAS_LIST = [
                         "name": {"type": "string", "description": "Name of the skill to load"},
                     },
                     "required": ["name"],
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "report_goal",
-                "description": (
-                    "Report whether the current standing goal (set by the user via /goal) is met. "
-                    "Call this exactly once at the end of a goal-check turn. "
-                    "When met=true the automatic goal iteration stops; when met=false the agent is "
-                    "prompted again to keep working toward the goal."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "met": {"type": "boolean", "description": "True if the goal is now fully satisfied."},
-                        "reason": {"type": "string", "description": "Brief explanation of the current status or what still remains."},
-                    },
-                    "required": ["met"],
                 },
             },
         },

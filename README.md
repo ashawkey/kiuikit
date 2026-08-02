@@ -34,7 +34,7 @@ pip install git+https://github.com/ashawkey/kiuikit.git # only the minimal packa
 | `kivi` | Video/image info, resize, preview (capped-CRF), split |
 | `kiss` | System information — OS, CPU, GPU, torch, CUDA, conda |
 | `ks` | Slurm job management — queue, history, logs, cancel, usage |
-| `kia` | AI coding agent — terminal-native with web UI, sub-agents, skills, and more |
+| `kia` | AI coding agent — terminal-native with web UI, skills, and more |
 | `kib` | AI harness library — share skills and personas across projects |
 
 ### Agent

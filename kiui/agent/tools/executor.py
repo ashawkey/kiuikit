@@ -36,7 +36,6 @@ class ToolExecutor(
     def __init__(
         self,
         console: AgentConsole | None = None,
-        subagent_manager=None,
         work_dir: str | None = None,
         change_tracker=None,
         get_round_id=None,
@@ -46,7 +45,6 @@ class ToolExecutor(
     ):
         self.console = console or AgentConsole()
         self.cancellation = cancellation
-        self.subagent_manager = subagent_manager
         # LLMAgent.run_isolated_turn: run one turn and discard its context.
         # Skill tools that drive repetitive work (the `batch` skill) call it;
         # None when no agent owns this executor.
@@ -60,9 +58,6 @@ class ToolExecutor(
         # including reloads. Persisted with the session
         # for telemetry and surfaced in /usage and the final summary.
         self._skill_loads: dict[str, int] = {}
-        # Last report_goal() call result: None, or {"met": bool, "reason": str}.
-        # Consumed by LLMAgent after each goal-check round.
-        self.goal_report: dict | None = None
         # Single source of truth for all tools (built-ins seeded; skill tools
         # added/removed as skills load and unload).
         self.registry = ToolRegistry()

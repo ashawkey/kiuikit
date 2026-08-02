@@ -410,9 +410,6 @@ class SessionMixin:
             "system_prompt": self.context.system_prompt,
             "persona": self.persona.name,
             "persona_digest": self.persona.digest,
-            "goal": self.goal,
-            "goal_active": self.goal_active,
-            "goal_iterations": self.goal_iterations,
             "loaded_skills": sorted(self.tool_executor._loaded_skills),
             "skill_loads": self.tool_executor._skill_loads,
             "messages": self.context.messages,
@@ -518,16 +515,6 @@ class SessionMixin:
             if isinstance(count, int)
         }
 
-        self.goal = data.get("goal")
-        self.goal_iterations = data.get("goal_iterations", 0)
-        goal_supported = self.persona.tools is None or "report_goal" in self.persona.tools
-        if self.goal and goal_supported:
-            self.goal_active = True
-            self._pending_auto = self._build_goal_prompt()
-        else:
-            self.goal = None
-            self.goal_active = False
-            self._pending_auto = None
 
     def _install_change_tracker(self) -> None:
         work_dir = self.tool_executor._work_dir or os.getcwd()

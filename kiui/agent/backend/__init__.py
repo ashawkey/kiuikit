@@ -14,7 +14,6 @@ from prompt_toolkit.patch_stdout import patch_stdout
 
 from kiui.agent.backend.batch import IsolatedTurnMixin
 from kiui.agent.backend.commands import AgentCommandsMixin
-from kiui.agent.backend.goals import GoalMixin
 from kiui.agent.personas import (
     DEFAULT_PERSONA,
     PersonaContext,
@@ -34,7 +33,6 @@ from kiui.agent.tools import (
     format_tool_result,
     format_tool_summary,
 )
-from kiui.agent.subagent import SubagentManager
 from kiui.agent.tools.results import (
     discard_tool_result_artifact,
     persist_tool_result_artifact,
@@ -155,7 +153,7 @@ def _is_local_query(query: str) -> bool:
 
 
 class LLMAgent(
-    AgentCommandsMixin, GoalMixin, IsolatedTurnMixin, SkillCommandsMixin, SessionMixin
+    AgentCommandsMixin, IsolatedTurnMixin, SkillCommandsMixin, SessionMixin
 ):
     INITIAL_BACKOFF = 1.0   # seconds
     MAX_BACKOFF = 64.0      # seconds
@@ -174,7 +172,6 @@ class LLMAgent(
         context_length: int | None = None,
         persona: str | None = None,
         exec_mode: bool = False,
-        is_subagent: bool = False,
         work_dir: str | None = None,
         console: AgentConsole | None = None,
         events: EventHub | None = None,
@@ -203,15 +200,15 @@ class LLMAgent(
         self.token_estimator = TokenEstimator()
 
         self.events = events
-        if input_broker is None and not is_subagent:
+        if input_broker is None:
             events = events or EventHub()
             self.events = events
             input_broker = InputBroker(events)
         self.input_broker = input_broker
-        if prompt_broker is None and not is_subagent:
+        if prompt_broker is None:
             prompt_broker = PromptBroker(events)
         self.prompt_broker = prompt_broker
-        if cancellation is None and not is_subagent:
+        if cancellation is None:
             cancellation = CancellationToken(events, prompt_broker)
         self.cancellation = cancellation
         if self.cancellation is not None and self.prompt_broker is not None:
@@ -236,7 +233,6 @@ class LLMAgent(
 
             self.prompt_broker.set_terminal_adapter(terminal_ask_async)
 
-        self.is_subagent = is_subagent
         self.exec_mode = exec_mode
         self.work_dir = str(Path(work_dir).absolute()) if work_dir else str(Path.cwd())
 
@@ -244,33 +240,17 @@ class LLMAgent(
         self.skills = discover_skills(self.work_dir, issues=skill_issues)
         persona_issues: dict = {}
         self.personas = discover_personas(self.work_dir, issues=persona_issues)
-        if not is_subagent:
-            self._report_skill_issues(skill_issues)
-            self._report_persona_issues(persona_issues)
+        self._report_skill_issues(skill_issues)
+        self._report_persona_issues(persona_issues)
 
-        # A sub-agent must not spawn further sub-agents: spawning stays a
-        # single, sequential level deep and always returns.
         self.persona: PersonaInfo = get_persona(
             persona or DEFAULT_PERSONA, personas=self.personas
         )
         self.system_prompt = self._build_system_prompt()
 
-        # subagent manager (only for top-level agents with a model_alias;
-        # sub-agents get None so they cannot recursively spawn children)
-        self.subagent_manager = (
-            SubagentManager(
-                model_alias=model_alias,
-                reasoning_effort=reasoning_effort,
-                console=self.console,
-                parent_cancellation=cancellation,
-            )
-            if model_alias and not is_subagent
-            else None
-        )
         self.changes: ChangeTracker | None = None
         self.tool_executor = ToolExecutor(
             console=self.console,
-            subagent_manager=self.subagent_manager,
             work_dir=self.work_dir,
             skills=self.skills,
             cancellation=cancellation,
@@ -287,13 +267,10 @@ class LLMAgent(
         self._session_store = None
         self._session_revision_id: str | None = None
 
-        # ----- /goal auto-iteration state -----
-        self.goal: str | None = None       # standing goal text (persists across rounds)
-        self.goal_active: bool = False     # whether the auto-iterate loop is armed
-        self.goal_iterations: int = 0      # number of goal-check rounds run so far
-        self._pending_auto: str | None = None  # queued auto-injected prompt (goal check)
         self._last_interrupted: bool = False   # set by get_response when a round is cancelled
         self._last_turn_outcome: TurnOutcome = TurnOutcome.COMPLETED
+        self._last_error: str | None = None
+        self._closed = False
         self._interrupt_reverts_prompt: bool = False
         self._rewind_draft: str | None = None  # prompt restored after /rewind or cancellation
 
@@ -327,14 +304,11 @@ class LLMAgent(
         """Tool schemas advertised to the API for the current turn.
 
         Computed live from the registry so it always reflects the persona, the
-        currently-loaded skills, image support, sub-agent status, and whether a
-        standing goal is active — no manual rebuild needed.
+        currently-loaded skills, and image support — no manual rebuild needed.
         """
         return self.tool_executor.registry.advertised(
             persona_tools=self.persona.tools,
-            include_subagent=not self.is_subagent,
             supports_image=self.profile.supports_image_input,
-            goal_active=self.goal_active,
         )
 
     def _messages_with_pending_images(self) -> list[dict[str, Any]]:
@@ -355,7 +329,6 @@ class LLMAgent(
         """Build the system prompt via the active persona."""
         ctx = PersonaContext(
             exec_mode=self.exec_mode,
-            is_subagent=self.is_subagent,
             work_dir=self.work_dir,
             skills=self.skills,
         )
@@ -1011,6 +984,7 @@ class LLMAgent(
         t_turn_start = time.monotonic()
         self._last_interrupted = False
         self._last_turn_outcome = TurnOutcome.COMPLETED
+        self._last_error = None
         self._interrupt_reverts_prompt = False
         turn_has_response = False
         auto_continues = 0
@@ -1043,6 +1017,7 @@ class LLMAgent(
             except RuntimeError as e:
                 self._pending_images.clear()
                 self._last_turn_outcome = TurnOutcome.FAILED
+                self._last_error = str(e)
                 self.console.error(f"API call failed: {e}")
                 return None
 
@@ -1183,12 +1158,6 @@ class LLMAgent(
         self.tool_executor.reset_skill_tools()
         self.tool_executor._loaded_skills.clear()
         self.tool_executor._skill_loads.clear()
-        self.tool_executor.goal_report = None
-        # Drop any standing goal — the new session starts clean.
-        self.goal = None
-        self.goal_active = False
-        self.goal_iterations = 0
-        self._pending_auto = None
         self._last_interrupted = False
         self._last_turn_outcome = TurnOutcome.COMPLETED
         # Create and persist the branch root before the first round.
@@ -1319,7 +1288,6 @@ class LLMAgent(
                         if draft is not None:
                             self._rewind_draft = None
                             await prompts.restart(draft)
-                        self._queue_pending_auto()
                         if self.input_broker.ready:
                             stop_wait_indicator()
                             active = executor.submit(self._run_round)
@@ -1404,16 +1372,6 @@ class LLMAgent(
         except Exception as e:
             self.console.warn(f"Round failed: {e}", exc_info=self.verbose)
             return False
-
-    def _queue_pending_auto(self) -> None:
-        if self._pending_auto is None or self.input_broker is None:
-            return
-        query = self._pending_auto
-        self._pending_auto = None
-        try:
-            self.input_broker.submit(query, source="goal")
-        except ValueError:
-            self._pending_auto = query
 
     def _process_next_submission(self) -> bool:
         assert self.input_broker is not None
@@ -1529,7 +1487,6 @@ class LLMAgent(
         })
         self.round_id += 1
         self.console.rule()
-        self.tool_executor.goal_report = None
         with self._operation("agent response"):
             self.get_response()
 
@@ -1547,18 +1504,14 @@ class LLMAgent(
                 self.round_id = round_before_round
                 self.console.reset_timeline()
                 self._replay_context()
-                if submission.source != "goal":
-                    self._set_rewind_draft(submission.text)
-                    self.console.system(
-                        "Turn cancelled. Message restored to the editor."
-                    )
-                else:
-                    self.console.system("Turn cancelled.")
+                self._set_rewind_draft(submission.text)
+                self.console.system(
+                    "Turn cancelled. Message restored to the editor."
+                )
             # Otherwise at least one assistant/tool step is already useful
             # history. get_response has reported the interrupted iteration, so
             # keep the turn as-is without replaying or restoring the prompt.
 
-        self._maybe_continue_goal()
         try:
             self.save_session(self._session_id, reason="round")
         except Exception as e:
@@ -1618,12 +1571,25 @@ class LLMAgent(
                 session_saved = True
             except Exception as e:
                 self.console.warn(f"Could not save session before exit: {e}")
+            self.close()
+            self._print_token_summary(resume=self._session_id if session_saved else None)
+
+    def close(self) -> None:
+        """Release provider, process, skill, and change-tracking resources."""
+        if self._closed:
+            return
+        self._closed = True
+        try:
             if self.changes is not None:
                 self.changes.close()
-            self.provider.close()
-            self.tool_executor.shutdown_processes()
-            self.tool_executor.shutdown_tool_resources(clear=True)
-            self._print_token_summary(resume=self._session_id if session_saved else None)
+        finally:
+            try:
+                self.provider.close()
+            finally:
+                try:
+                    self.tool_executor.shutdown_processes()
+                finally:
+                    self.tool_executor.shutdown_tool_resources(clear=True)
 
     def execute(self, query: str, *, manage_operation: bool = True):
         self.console.system(f"Executing query: {query}")

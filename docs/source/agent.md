@@ -2,7 +2,7 @@
 
 [[source]](https://github.com/ashawkey/kiuikit/tree/main/kiui/agent) · `pip install "kiui[kia]"`
 
-`kia` is a lightweight coding agent that works where you do: in the terminal and inside your project. It can inspect a repository, edit files, run commands, search the web, delegate work, and keep long sessions focused. Bring any model served through an OpenAI-compatible API.
+`kia` is a lightweight coding agent that works where you do: in the terminal and inside your project. It can inspect a repository, edit files, run commands, search the web, and keep long sessions focused. Bring any model served through an OpenAI-compatible API.
 
 ```text
 $ kia --model gpt
@@ -19,7 +19,7 @@ $ kia --model gpt
 | | |
 |---|---|
 | **Agentic coding**<br>Reads, searches, edits, and runs commands with live output. | **Model agnostic**<br>Works with OpenAI-compatible APIs and switches models without leaving the session. |
-| **Terminal + Web UI**<br>A polished Rich terminal experience with an optional synchronized, mobile-friendly browser UI. | **Sub-agents and goals**<br>Delegates independent research or iterates autonomously toward a standing objective. |
+| **Terminal + Web UI**<br>A polished Rich terminal experience with an optional synchronized, mobile-friendly browser UI. | **Python API**<br>Runs independent, non-interactive tasks directly from Python. |
 | **Skills**<br>Loads reusable [Agent Skills](https://agentskills.io) only when relevant, keeping the base prompt lean. | **Long-context management**<br>Compacts large tool results, prunes old output, and summarizes history as context fills. |
 | **Rewind and sessions**<br>Resumes previous work or rolls conversation and file changes back to an earlier round. | **Human control**<br>Steer, interrupt, or cancel a running turn at any point from the terminal or the browser. |
 | **Web access**<br>Searches current information and turns web pages into readable text. | **Developer-friendly UI**<br>Streams responses, shows diffs and token usage, and autocompletes file references with `@`. |
@@ -44,6 +44,27 @@ This installs two commands:
 
 - `kia` — the coding agent and shared Web UI hub.
 - `kib` — the optional Git-backed skill/persona library.
+
+## Python API
+
+Run one independent, non-interactive task from Python:
+
+```python
+from kiui.agent import run_agent
+
+result = run_agent(
+    "Inspect the repository and explain the failing test.",
+    model_alias="gpt",
+    work_dir=".",
+)
+
+if result.success:
+    print(result.response)
+else:
+    print(result.outcome, result.error)
+```
+
+The run starts with a fresh conversation, does not create an interactive session or rewind history, and releases its resources before returning. `AgentRunResult` also includes token usage. Output is quiet and non-streaming by default; use `quiet=False` to observe progress and optionally `stream=True` to stream response tokens.
 
 ## Configure a model
 
@@ -228,7 +249,7 @@ You are a terminal coding assistant.
 {{kia:current-context}}
 ```
 
-`tools` accepts `all`, `[]`, or a list of built-in tool names. Supported whole-line markers are `autonomous-mode`, `sub-agents`, `skills`, `project-instructions`, and `current-context`, prefixed with `kia:`. They expand exactly once.
+`tools` accepts `all`, `[]`, or a list of built-in tool names. Supported whole-line markers are `autonomous-mode`, `skills`, `project-instructions`, and `current-context`, prefixed with `kia:`. They expand exactly once.
 
 ```text
 kia --persona chatter   start as another persona

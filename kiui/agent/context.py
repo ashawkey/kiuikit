@@ -104,7 +104,7 @@ DEFAULT_CHARS_PER_TOKEN = 3.3  # conservative for code-heavy workloads
 # Layer 1: how much of the window one tool result may occupy, as
 # (window ratio, floor, ceiling). Proactive tools are called repeatedly and can
 # be re-run with a narrower argument, so they get the tighter budget; anything
-# else — skill tools, sub-agent reports — cannot be re-narrowed and gets more.
+# else — including skill tools — cannot be re-narrowed and gets more.
 #
 # Every ceiling must stay strictly under the tools' own MAX_TOOL_OUTPUT_CHARS
 # (24_000). A ceiling at that cap can never be exceeded, which silently turns

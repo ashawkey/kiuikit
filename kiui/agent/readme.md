@@ -6,6 +6,27 @@
 pip install kiui[kia]
 ```
 
+## Python API
+
+Run one independent, non-interactive agent task from Python:
+
+```python
+from kiui.agent import run_agent
+
+result = run_agent(
+    "Inspect the repository and explain the failing test.",
+    model_alias="gpt",
+    work_dir=".",
+)
+
+if result.success:
+    print(result.response)
+else:
+    print(result.outcome, result.error)
+```
+
+`run_agent` starts with a fresh conversation, uses the selected model entry from `.kiui.yaml`, does not create an interactive session or rewind history, and always closes provider, process, and skill resources. It is quiet and non-streaming by default; pass `quiet=False` to observe progress and optionally `stream=True` to stream response tokens. The returned `AgentRunResult` contains `response`, `outcome`, `token_usage`, `error`, and the derived `success` property.
+
 ## Configuration
 
 The agent uses a YAML configuration file located at `./.kiui.yaml` (current directory) or `~/.kiui.yaml` (home directory). Model aliases remain under the `openai` key. Each entry may select a provider; omitted `provider` defaults to the currently bundled `openai` provider, which uses the OpenAI-compatible Chat Completions transport.
@@ -139,7 +160,6 @@ The agent supports the following slash commands in the CLI:
 | `/skills` | List installed skills; `/skills reload` to re-scan; `/skills <name>` to load one |
 | `/<skill-name> [task]` | Invoke a skill for an optional task; without one, run its declared default or ask what to do |
 | `/persona` | List personas; `/persona <name>` to switch (restarts the conversation) |
-| `/goal [text\|clear]` | Set a goal the agent auto-iterates toward until met (see [Goals](#goals)) |
 | `/wait <duration> <prompt>` | Send a prompt after a delay, e.g. `/wait 1h check whether the other agent finished` |
 | `/clear` | Clear conversation history and start a new session |
 | `/resume [session_id]` | Save the current session, then resume a previous one (bare `/resume` picks interactively) |
@@ -147,7 +167,7 @@ The agent supports the following slash commands in the CLI:
 
 A message sent while the agent is working normally steers the next tool-call iteration. `/wait` is deliberately different: its prompt becomes ready only after the requested seconds (`s`), minutes (`m`), or hours (`h`) and always starts a fresh round after the current round finishes. While the agent is idle, the same activity indicator used for `Working...` and `Executing...` shows `Waiting...` with a live countdown in the terminal and Web UI. Only one prompt, immediate or delayed, can be pending; use the existing pending-message edit/withdraw action to cancel it.
 
-A command sent while the agent is working does not have to wait for the round: a round owns the conversation, the provider, and the terminal prompt, so any command that merely reads session state (`/help`, `/usage`, `/context`, `/system_prompt`, `/auth`, and the bare listing form of `/model`, `/persona`, `/skills`) or takes effect on the next API call (`/reasoning`, `/goal`) is answered immediately — from the terminal and the Web UI alike. Commands that rewrite the conversation or swap what runs it (`/clear`, `/compact`, `/rewind`, `/resume`, `/login`, a `/model` or `/persona` switch, `/skills <name>`) stay queued until the round ends. Direct skill invocations also start model rounds, so `/<skill-name>` always queues while another round is active.
+A command sent while the agent is working does not have to wait for the round: a round owns the conversation, the provider, and the terminal prompt, so any command that merely reads session state (`/help`, `/usage`, `/context`, `/system_prompt`, `/auth`, and the bare listing form of `/model`, `/persona`, `/skills`) or takes effect on the next API call (`/reasoning`) is answered immediately — from the terminal and the Web UI alike. Commands that rewrite the conversation or swap what runs it (`/clear`, `/compact`, `/rewind`, `/resume`, `/login`, a `/model` or `/persona` switch, `/skills <name>`) stay queued until the round ends. Direct skill invocations also start model rounds, so `/<skill-name>` always queues while another round is active.
 
 ### Bash shortcut
 
@@ -200,7 +220,7 @@ Two guards keep an unproductive pass from repeating every round. Before the roun
 
 Repeating one task over many independent items (caption 1000 images, classify 5000 rows) is the case none of the three layers above can fix: every item pays for every earlier item, and compaction eventually summarizes away the very results that were asked for.
 
-The bundled `batch` skill's `run_batch` tool instead runs each item as a **context-isolated turn** — the conversation is restored byte-for-byte after every item, so the prompt stays flat instead of growing, and per-item results are appended to a JSONL file rather than the conversation. The tool returns only counts, the output path, and a sample of failures. Items run sequentially; the skill's instructions cover when to prefer a plain script (uniform work needing no tools) or `spawn_subagent` (heterogeneous items) instead.
+The bundled `batch` skill's `run_batch` tool instead runs each item as a **context-isolated turn** — the conversation is restored byte-for-byte after every item, so the prompt stays flat instead of growing, and per-item results are appended to a JSONL file rather than the conversation. The tool returns only counts, the output path, and a sample of failures. Items run sequentially; the skill's instructions cover when to prefer a plain script (uniform work needing no tools) or the normal conversation (heterogeneous items) instead.
 
 Isolation covers everything a discarded turn could otherwise leak into. An item is not rendered or published — hundreds of item turns would bury the transcript and push the real timeline out of the bounded event history that reconnecting web clients replay — and it never commits a session revision, so a compaction inside an item cannot move the durable head onto that item's context. Errors and interactive prompts are the deliberate exceptions: both are still shown, because an unanswerable prompt blocks the run and an item reports only "no response" to its caller. Item turns also get their own prompt-cache key rather than repeatedly displacing the conversation's cached prefix.
 
@@ -248,19 +268,6 @@ Session messages, revisions, head movements, and code revisions are stored in an
 Restoring a conversation — after a rewind, `/resume`, or `--resume` — reprints it. Tool calls are described by the same function that labels them live (`read_file a.txt:1-1000`, not `read_file({"file": "a.txt"})`), so a replayed transcript reads like the session did.
 
 Results are the part that cannot be fully reproduced: the live view renders them from the result object (a coloured diff for an edit, an exit code for a command, a line count for a read), and only the formatted text is persisted. A replayed result is therefore its text summary, marked as a failure only when the text is formatted as one.
-
-## Goals
-
-The `/goal` command sets a **standing objective** the agent works toward autonomously. After every round finishes, the agent is automatically re-prompted to check whether the goal is met:
-
-- If **met**, it calls the `report_goal(met=true)` tool and the loop stops.
-- If **not met**, it calls `report_goal(met=false, reason=...)`, keeps working, and the loop iterates again.
-
-```
-/goal all pytest tests pass and there are no lint errors
-```
-
-There is **no fixed iteration cap** — the loop runs until the goal is reported met or you stop it. Since the terminal prompt is blocked while the loop runs, **`Ctrl+C` / `Esc` during a round is the way to stop it**, which clears the goal.
 
 ## Skills
 
@@ -350,7 +357,7 @@ A persona owns the agent's identity, complete system prompt, and tool surface. B
 |---------|-------|---------|
 | `coder` | all | The default coding agent (project-aware, full tool access) |
 | `chatter` | `web_search`, `web_fetch` | General chatbot without file/shell access |
-| `reviewer` | paper/file, web, skill, and sub-agent tools | Evidence-grounded academic paper reviewer |
+| `reviewer` | paper/file, web, and skill tools | Evidence-grounded academic paper reviewer |
 
 Each persona is a directory containing `PERSONA.md`:
 
@@ -367,7 +374,7 @@ You are a terminal-based coding assistant.
 {{kia:current-context}}
 ```
 
-`tools` is required and is either `all` or a YAML list of built-in tool names; use `[]` for no tools. Supported whole-line markers are `autonomous-mode`, `sub-agents`, `skills`, `project-instructions`, and `current-context`, each prefixed with `kia:` as above. Markers are expanded once, so marker-like text inside project instructions is not interpreted.
+`tools` is required and is either `all` or a YAML list of built-in tool names; use `[]` for no tools. Supported whole-line markers are `autonomous-mode`, `skills`, `project-instructions`, and `current-context`, each prefixed with `kia:` as above. Markers are expanded once, so marker-like text inside project instructions is not interpreted.
 
 Project instructions normally come from `./AGENTS.md`. If `./.kia/AGENTS.md` exists, it replaces that file; an exact `@AGENTS.md` line imports the root file at that position, allowing local instructions to extend it. No other import paths are supported.
 
@@ -401,7 +408,6 @@ The agent has access to the following tools:
 | `web_search` | Search the web via DuckDuckGo |
 | `web_fetch` | Fetch and parse content from a URL |
 | `remove_file` | Remove a file or directory |
-| `spawn_subagent` | Delegate a task to a new in-process agent instance |
 | `load_skill` | Load the full prompt instructions for a skill by name |
 
 ### Skill-provided tools
