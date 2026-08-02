@@ -10,6 +10,7 @@ import pytest
 from kiui.agent.backend import LLMAgent
 from kiui.agent.context import CompactionState, ContextManager
 from kiui.agent.skills import BUNDLED_SKILLS_DIR, load_skill_tools
+from kiui.agent.utils.interrupt import TurnOutcome
 from kiui.agent.tools import ToolExecutor
 from kiui.agent.tools.registry import ToolRegistry
 from kiui.agent.ui import AgentConsole
@@ -83,6 +84,7 @@ def _agent(responses=None, system="system prompt", console=None, executor=None):
         _pending_images=[],
         _isolated_turn_active=False,
         _last_interrupted=False,
+        _last_turn_outcome=TurnOutcome.COMPLETED,
         _interrupt_reverts_prompt=False,
         _last_finish_reason="stop",
         _compaction_floor_tokens=None,
@@ -99,6 +101,10 @@ def _agent(responses=None, system="system prompt", console=None, executor=None):
         if isinstance(outcome, Exception):
             raise outcome
         agent._last_interrupted = bool(getattr(outcome, "interrupted", False))
+        agent._last_turn_outcome = (
+            TurnOutcome.USER_INTERRUPTED
+            if agent._last_interrupted else TurnOutcome.COMPLETED
+        )
         text = outcome.text if hasattr(outcome, "text") else outcome
         context.add({"role": "assistant", "content": text or ""})
         return text
@@ -122,8 +128,8 @@ def test_isolated_turn_restores_context_exactly():
     before_chars = agent.context.total_chars
 
     for i in range(3):
-        response, interrupted = agent.run_isolated_turn(f"item {i}")
-        assert not interrupted
+        response, outcome = agent.run_isolated_turn(f"item {i}")
+        assert outcome == TurnOutcome.COMPLETED
         assert response == ["first", "second", "third"][i]
 
     assert agent.context.messages == before
@@ -197,15 +203,16 @@ def test_isolated_turn_reports_interruption_without_overwriting_outer_state():
 
     def get_response():
         agent._last_interrupted = True
+        agent._last_turn_outcome = TurnOutcome.USER_INTERRUPTED
         agent._interrupt_reverts_prompt = True
         agent._last_finish_reason = "cancelled"
         return None
 
     agent.get_response = get_response
-    response, interrupted = agent.run_isolated_turn("item")
+    response, outcome = agent.run_isolated_turn("item")
 
     assert response is None
-    assert interrupted is True
+    assert outcome == TurnOutcome.USER_INTERRUPTED
     assert agent._last_interrupted is False
     assert agent._interrupt_reverts_prompt is False
     assert agent._last_finish_reason == "tool_calls"
@@ -215,9 +222,9 @@ def test_isolated_turn_skipped_when_already_cancelled():
     agent = _agent(["unused"])
     agent.cancellation = NS(cancelled=True)
 
-    response, interrupted = agent.run_isolated_turn("item")
+    response, outcome = agent.run_isolated_turn("item")
 
-    assert (response, interrupted) == (None, True)
+    assert (response, outcome) == (None, TurnOutcome.USER_INTERRUPTED)
     assert agent.seen == []  # the turn never ran
 
 
@@ -327,7 +334,6 @@ def test_isolated_turn_restores_skill_tools_and_load_counts(tmp_path):
         tmp_path,
         tools=(
             "TOOLS = [{\n"
-            "    'permission': 'safe',\n"
             "    'run': lambda executor: {'success': True},\n"
             "    'schema': {'type': 'function', 'function': {\n"
             "        'name': 'demo_tool', 'description': 'd',\n"
@@ -410,30 +416,6 @@ def test_isolated_turn_still_reports_errors(capsys):
     assert response is None
     assert "quota exhausted" in capsys.readouterr().out
     assert [event.type for event in events.after(baseline)] == ["error"]
-
-
-def test_isolated_turn_still_reports_a_safety_denial(capsys):
-    """A blocked item must not look like an ordinary failure."""
-    from kiui.agent.permissions import PermissionController, PermissionMode
-
-    events = EventHub()
-    console = AgentConsole(events)
-    agent = _agent(console=console)
-    permissions = PermissionController(
-        mode=PermissionMode.AUTO, console=console, work_dir="."
-    )
-    agent.get_response = lambda: permissions.check_safety(
-        "exec_command", {"command": "mkfs.ext4 /dev/example"}
-    )[1]
-
-    baseline = events.latest_seq
-    capsys.readouterr()
-
-    agent.run_isolated_turn("item")
-
-    out = capsys.readouterr().out
-    assert "Safety guard" in out and "mkfs.ext4 /dev/example" in out
-    assert [event.type for event in events.after(baseline)] == ["output", "output"]
 
 
 def test_isolated_turns_do_not_share_a_prompt_cache_key_with_the_conversation():
@@ -852,7 +834,7 @@ def test_batch_tool_registers_without_colliding(tmp_path):
     registry.register_skill("batch", [entry])
 
     spec = registry.get("run_batch")
-    assert spec is not None and spec.permission == "risky"
+    assert spec is not None
     description = spec.describe({
         "task": "Describe the image",
         "items_file": "items.txt",

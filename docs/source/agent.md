@@ -21,7 +21,7 @@ $ kia --model gpt
 | **Agentic coding**<br>Reads, searches, edits, and runs commands with live output. | **Model agnostic**<br>Works with OpenAI-compatible APIs and switches models without leaving the session. |
 | **Terminal + Web UI**<br>A polished Rich terminal experience with an optional synchronized, mobile-friendly browser UI. | **Sub-agents and goals**<br>Delegates independent research or iterates autonomously toward a standing objective. |
 | **Skills**<br>Loads reusable [Agent Skills](https://agentskills.io) only when relevant, keeping the base prompt lean. | **Long-context management**<br>Compacts large tool results, prunes old output, and summarizes history as context fills. |
-| **Rewind and sessions**<br>Resumes previous work or rolls conversation and file changes back to an earlier round. | **Human control**<br>Offers three confirmation modes plus a hard guard against recognized destructive operations. |
+| **Rewind and sessions**<br>Resumes previous work or rolls conversation and file changes back to an earlier round. | **Human control**<br>Steer, interrupt, or cancel a running turn at any point from the terminal or the browser. |
 | **Web access**<br>Searches current information and turns web pages into readable text. | **Developer-friendly UI**<br>Streams responses, shows diffs and token usage, and autocompletes file references with `@`. |
 
 > **One agent, two interfaces.** Start work in the terminal, open the optional Web UI from another device, and interact with the same live session from either place.
@@ -237,4 +237,4 @@ kia --persona chatter   start as another persona
 /persona reload         re-scan custom personas
 ```
 
-Persona identity and a content digest are stored with sessions, so resume warns when a custom persona changed. Tool selection controls what is advertised to the model; normal permission checks still apply.
+Persona identity and a content digest are stored with sessions, so resume warns when a custom persona changed. Tool selection controls what is advertised to the model.

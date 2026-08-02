@@ -40,14 +40,14 @@ Prefer inspecting the relevant module over relying on a static exhaustive file l
 
 - `backend/`: provider-neutral API loop, commands, goals, and session coordination.
 - `providers/`: provider implementations and authentication.
-- `tools/registry.py`: single source of truth for tool schema, handler, permissions, and advertising. Built-in schemas alone live in `tools/schemas.py`; execution routes through `tools/executor.py`.
+- `tools/registry.py`: single source of truth for tool schema, handler, and advertising. Built-in schemas alone live in `tools/schemas.py`; execution routes through `tools/executor.py`.
 - Managed-process internals live in `tools/process_manager.py` and `tools/process_util.py`; user-facing process tools come from the bundled `monitor` skill.
 - `context.py` owns conversation/token compaction. `session_store.py` owns the append-only message/code revision DAG and object storage. Rewind planning/application lives in `utils/rewind.py` and is coordinated by `backend/sessions.py`.
 - `skills.py` and `personas.py` implement discovery/validation. Bundled resources are under `bundled_skills/` and `bundled_personas/`; project resources are under `.kia/`.
 - `terminal.py` owns prompt lifecycle. Preserve the invariant that a session has one prompt task; pause/ask/restart must remain one locked operation.
 - `hub.py` serves the committed frontend build and multiplexes agents; `hubclient.py` connects terminal agents to it.
 
-When changing shared agent behavior, trace terminal and web paths, session persistence/replay, cancellation, and permission handling. Keep `formatting.describe_tool_call` as the common tool-call label for live execution and replay.
+When changing shared agent behavior, trace terminal and web paths, session persistence/replay, and cancellation. Keep `formatting.describe_tool_call` as the common tool-call label for live execution and replay.
 
 ### Frontend
 

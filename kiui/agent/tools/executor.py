@@ -2,7 +2,7 @@
 
 The :class:`~kiui.agent.tools.registry.ToolRegistry` is the single source of
 truth for every tool (built-in and skill-provided): its schema, dispatch
-handler, permission class, and advertising gates. The executor holds one
+handler, and advertising gates. The executor holds one
 registry and dispatches through it, so there is no separate built-in/skill
 branch to keep in sync.
 """

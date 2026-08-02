@@ -12,11 +12,7 @@ one-shot commands.
 |---|---:|---|
 | `schema` | yes | OpenAI function schema. |
 | `run` | yes | Callable invoked as `run(executor, **arguments)`. |
-| `permission` | no | `safe` or `risky`; defaults to `risky`. |
 | `describe` | no | Callable receiving the argument dict and returning `ToolCallDescription`. |
-
-`safe` avoids confirmation in default permission mode; strict mode prompts for
-all tools. Mark mutating operations `risky`.
 
 ```python
 from kiui.agent.tools import ToolCallDescription
@@ -35,7 +31,6 @@ def describe_echo(args: dict) -> ToolCallDescription:
 
 TOOLS = [
     {
-        "permission": "safe",
         "run": echo,
         "describe": describe_echo,
         "schema": {

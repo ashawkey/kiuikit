@@ -16,6 +16,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from kiui.agent.utils.interrupt import TurnOutcome
 from kiui.agent.tools import ToolCallDescription, quote_tool_call_value
 from kiui.agent.utils import get_kia_dir
 
@@ -258,15 +259,15 @@ def run_batch(
             for attempt, (index, item) in enumerate(pending, start=1):
                 indicator.set_status_suffix(f"{attempt}/{len(pending)}")
                 try:
-                    response, interrupted = executor.isolated_turn(
-                        _build_prompt(task, item)
-                    )
+                    response, outcome = executor.isolated_turn(_build_prompt(task, item))
                     failure = None if response else "The turn produced no response."
                 except Exception as e:
                     response, failure = None, f"{type(e).__name__}: {e}"
+                    outcome = TurnOutcome.FAILED
 
+                interrupted = outcome == TurnOutcome.USER_INTERRUPTED
                 if interrupted:
-                    # The item never really ran; leave it unrecorded so a
+                    # The item never completed; leave it unrecorded so a
                     # resumed run picks it up again.
                     break
 
@@ -333,7 +334,6 @@ def _describe_run_batch(args: dict[str, Any]) -> ToolCallDescription:
 
 TOOLS = [
     {
-        "permission": "risky",
         "run": run_batch,
         "describe": _describe_run_batch,
         "schema": {

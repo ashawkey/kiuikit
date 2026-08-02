@@ -46,7 +46,7 @@ kia # use the first configured model
 ### Additional options
 
 ```bash
-kia --model <model_alias> --verbose --perm strict --resume [session_id]
+kia --model <model_alias> --verbose --resume [session_id]
 ```
 
 | Flag | Description |
@@ -56,7 +56,6 @@ kia --model <model_alias> --verbose --perm strict --resume [session_id]
 | `--verbose` | Enable verbose debug output |
 | `--stream` / `--no-stream` | Stream the response token-by-token as it is generated (default: on) |
 
-| `--perm MODE` | `auto` (default), `default`, or `strict` |
 | `--resume [SESSION_ID]` | Resume a session (bare `--resume` lists saved sessions interactively) |
 | `--list` | List available models with context-window info and exit |
 | `--storage` | Show allocated disk usage for each entry in the project `.kia/` and exit |
@@ -132,7 +131,6 @@ The agent supports the following slash commands in the CLI:
 | `/compact` | Force context compaction via LLM summarization |
 | `/continue` | Resume an unfinished round without adding a user message; warns if the last round is complete (output-limit, missing-terminal, and empty responses continue automatically, except a response truncated mid tool call, whose calls are answered as never executed so the history stays valid) |
 | `/usage` | Show token usage for this session |
-| `/perm [auto\|default\|strict]` | Show or change permission mode |
 | `/model [name]` | Show or switch LLM model mid-session |
 | `/login [provider\|model-alias]` | Authenticate an OAuth provider; defaults to the current provider |
 | `/logout [provider\|model-alias]` | Remove stored OAuth credentials |
@@ -149,7 +147,7 @@ The agent supports the following slash commands in the CLI:
 
 A message sent while the agent is working normally steers the next tool-call iteration. `/wait` is deliberately different: its prompt becomes ready only after the requested seconds (`s`), minutes (`m`), or hours (`h`) and always starts a fresh round after the current round finishes. While the agent is idle, the same activity indicator used for `Working...` and `Executing...` shows `Waiting...` with a live countdown in the terminal and Web UI. Only one prompt, immediate or delayed, can be pending; use the existing pending-message edit/withdraw action to cancel it.
 
-A command sent while the agent is working does not have to wait for the round: a round owns the conversation, the provider, and the terminal prompt, so any command that merely reads session state (`/help`, `/usage`, `/context`, `/system_prompt`, `/auth`, and the bare listing form of `/model`, `/persona`, `/skills`) or takes effect on the next API call (`/perm`, `/reasoning`, `/goal`) is answered immediately — from the terminal and the Web UI alike. Commands that rewrite the conversation or swap what runs it (`/clear`, `/compact`, `/rewind`, `/resume`, `/login`, a `/model` or `/persona` switch, `/skills <name>`) stay queued until the round ends. Direct skill invocations also start model rounds, so `/<skill-name>` always queues while another round is active.
+A command sent while the agent is working does not have to wait for the round: a round owns the conversation, the provider, and the terminal prompt, so any command that merely reads session state (`/help`, `/usage`, `/context`, `/system_prompt`, `/auth`, and the bare listing form of `/model`, `/persona`, `/skills`) or takes effect on the next API call (`/reasoning`, `/goal`) is answered immediately — from the terminal and the Web UI alike. Commands that rewrite the conversation or swap what runs it (`/clear`, `/compact`, `/rewind`, `/resume`, `/login`, a `/model` or `/persona` switch, `/skills <name>`) stay queued until the round ends. Direct skill invocations also start model rounds, so `/<skill-name>` always queues while another round is active.
 
 ### Bash shortcut
 
@@ -170,18 +168,9 @@ Prefix a command with `!` to run it directly without involving the model:
 | `Ctrl+C` (empty prompt, twice) | Exit the agent |
 | `Ctrl+C` / `Esc` (during API call) | Cancel the in-flight request |
 
-## Permissions
+## Tool execution
 
-Three permission modes control when the agent asks for confirmation before executing tools:
-
-| Mode | Behavior |
-|------|----------|
-| `auto` | All tools run without prompting (default) |
-| `default` | Risky tools (write, edit, remove, exec, spawn) prompt for confirmation |
-| `strict` | Every tool call prompts for confirmation |
-
-In all modes, we always detect and prevent common destructive shell commands (`rm -rf /`, `mkfs`, device writes, fork bombs, shutdown/reboot, etc.).
-However, this is not a security boundary: arbitrary shell syntax can evade static pattern matching. Use an OS-level sandbox or container when commands must be contained!
+All tools execute automatically; kia has no permission modes, confirmation prompts, or command screening. It is not a security boundary and does not attempt to contain what a model runs — use an OS-level sandbox or container when commands must be constrained, and review a task before handing it to an autonomous agent.
 
 ## Context Management
 
@@ -213,7 +202,7 @@ Repeating one task over many independent items (caption 1000 images, classify 50
 
 The bundled `batch` skill's `run_batch` tool instead runs each item as a **context-isolated turn** — the conversation is restored byte-for-byte after every item, so the prompt stays flat instead of growing, and per-item results are appended to a JSONL file rather than the conversation. The tool returns only counts, the output path, and a sample of failures. Items run sequentially; the skill's instructions cover when to prefer a plain script (uniform work needing no tools) or `spawn_subagent` (heterogeneous items) instead.
 
-Isolation covers everything a discarded turn could otherwise leak into. An item is not rendered or published — hundreds of item turns would bury the transcript and push the real timeline out of the bounded event history that reconnecting web clients replay — and it never commits a session revision, so a compaction inside an item cannot move the durable head onto that item's context. Errors, permission prompts, and safety-guard denials are the deliberate exceptions: all are still shown, because an unanswerable prompt blocks the run and an item reports only "no response" to its caller. Item turns also get their own prompt-cache key rather than repeatedly displacing the conversation's cached prefix.
+Isolation covers everything a discarded turn could otherwise leak into. An item is not rendered or published — hundreds of item turns would bury the transcript and push the real timeline out of the bounded event history that reconnecting web clients replay — and it never commits a session revision, so a compaction inside an item cannot move the durable head onto that item's context. Errors and interactive prompts are the deliberate exceptions: both are still shown, because an unanswerable prompt blocks the run and an item reports only "no response" to its caller. Item turns also get their own prompt-cache key rather than repeatedly displacing the conversation's cached prefix.
 
 Skill state is rolled back with the context, because it lives on the executor rather than in the message history. An item starts with no skill marked loaded — it does not inherit the history those instructions live in, so `load_skill` must be able to return them — and whatever it loads is forgotten afterwards, along with the tools that skill contributed. Without that, one item's `load_skill` would leave every later item (and the conversation) with "already loaded" and no instructions at all: a silent, results-corrupting failure. A task that needs a skill should load it itself.
 
@@ -392,7 +381,7 @@ kia --persona reviewer
 | `/persona <name>` | Switch persona and restart the conversation |
 | `/persona reload` | Re-scan persona directories; restart if the active persona changed |
 
-The active persona name and content digest are saved with the session. Resume warns if its content changed and fails clearly if it is no longer installed. Tool whitelists guide the advertised model capabilities; interactive user commands remain governed by normal permission and safety checks.
+The active persona name and content digest are saved with the session. Resume warns if its content changed and fails clearly if it is no longer installed. Tool whitelists guide the advertised model capabilities; interactive user commands are unaffected.
 
 ## Tools
 
@@ -418,8 +407,8 @@ The agent has access to the following tools:
 ### Skill-provided tools
 
 A skill may ship a `tools.py` at its root (a module-level `TOOLS` list of
-`{schema, run, permission, describe}` entries; `permission` and `describe` are
-optional). A descriptor returns a `ToolCallDescription`, keeping each skill's
+`{schema, run, describe}` entries; `describe` is optional). A descriptor
+returns a `ToolCallDescription`, keeping each skill's
 call-label semantics beside its tools while the shared UI owns rendering. Those
 tools are registered and advertised to the model only while the skill is loaded,
 and removed when it is unloaded.

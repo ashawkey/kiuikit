@@ -1,7 +1,7 @@
 """OpenAI-format function schemas for the built-in tools.
 
 This module owns only the raw schemas. Which schemas are advertised to the API,
-how each tool dispatches, and its permission class are all decided in
+how each tool dispatches and when it is advertised are decided in
 ``registry.py`` via :class:`~kiui.agent.tools.registry.ToolSpec`, so there is a
 single source of truth per tool.
 """

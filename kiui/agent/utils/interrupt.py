@@ -18,11 +18,20 @@ from __future__ import annotations
 import sys
 import time
 import threading
+from enum import Enum
 from typing import Callable, TypeVar
 
 from .io import CancellationToken
 
 T = TypeVar("T")
+
+
+class TurnOutcome(str, Enum):
+    """Terminal state of one agentic turn or tool-call batch."""
+
+    COMPLETED = "completed"
+    USER_INTERRUPTED = "user_interrupted"
+    FAILED = "failed"
 
 
 class RequestInterrupted(Exception):

@@ -25,7 +25,6 @@ from kiui.agent.tools import (
     format_tool_result,
     result_text_failed,
 )
-from kiui.agent.permissions import SafetyGuard
 from kiui.agent.utils.io import CancellationToken, EventHub
 
 
@@ -177,16 +176,6 @@ def test_relative_paths_resolve_against_work_dir(tmp_path, monkeypatch):
     assert te._exec_command(pwd, cwd="nested")["stdout"].strip() == str(
         work_dir / "nested"
     )
-    if os.name == "posix":  # Unix-shell safety patterns are POSIX-only
-        guard = SafetyGuard(work_dir="/tmp/job")
-        safe, _ = guard.check(
-            "exec_command", {"command": "rm -rf .", "cwd": "../../etc"}
-        )
-        assert not safe
-        safe, _ = guard.check(
-            "exec_command", {"command": "chmod -R 000 .", "cwd": "~"}
-        )
-        assert not safe
     assert te._remove_file("nested/a.txt")["success"]
     assert not (work_dir / "nested/a.txt").exists()
 
@@ -626,7 +615,6 @@ def test_executor_logs_skill_tool_once_and_redacts_text_arguments(tmp_path):
     console = _RecordingConsole()
     te = ToolExecutor(console=console, work_dir=str(tmp_path))
     te.register_skill_tools("demo", [{
-        "permission": "safe",
         "run": lambda executor, text: {"success": True},
         "schema": {
             "type": "function",
@@ -650,7 +638,6 @@ def test_skill_owned_tool_description_is_used(tmp_path):
     console = _RecordingConsole()
     te = ToolExecutor(console=console, work_dir=str(tmp_path))
     te.register_skill_tools("demo", [{
-        "permission": "safe",
         "run": lambda executor, process_id, wait=0: {"success": True},
         "describe": lambda args: tools.ToolCallDescription(
             "inspect_demo", args["process_id"], (f"wait {args['wait']}s",),

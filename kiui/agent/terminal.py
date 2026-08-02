@@ -740,7 +740,7 @@ class PromptDriver:
 
     ``PromptSession`` reuses a single prompt_toolkit ``Application``, so starting
     a second prompt while one is alive raises "Application is already running".
-    Suspending the editor to ask something else (a permission prompt, a rewind
+    Suspending the editor to ask something else (a rewind picker, a session
     picker) therefore has to stop the current prompt, ask, and start the next one
     as one indivisible step: a browser or Escape answer resolves the prompt
     broker from another thread, which returns to the caller *before* this loop

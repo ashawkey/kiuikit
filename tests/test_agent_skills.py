@@ -132,7 +132,6 @@ def ping(executor, value="pong"):
 
 TOOLS = [
     {
-        "permission": "safe",
         "run": ping,
         "schema": {
             "type": "function",
@@ -165,7 +164,6 @@ def test_loading_skill_injects_its_tools(tmp_path):
 
     names = {s["function"]["name"] for s in ex.skill_tool_schemas()}
     assert "ping" in names
-    assert ex.registry.permission("ping") == "safe"
     result = ex.execute("ping", {"value": "hi"})
     assert result["success"] and result["echo"] == "hi"
 
@@ -216,7 +214,6 @@ def grab(executor):
 
 TOOLS = [
     {
-        "permission": "safe",
         "run": grab,
         "schema": {
             "type": "function",
@@ -233,7 +230,6 @@ TOOLS = [
 @pytest.mark.parametrize(
     ("replacement", "message"),
     [
-        ('"permission": "risk"', "permission must be 'safe' or 'risky'"),
         ('"run": "ping"', "run must be callable"),
         ('"describe": "ping",\n        "run": ping', "describe must be callable"),
         ('"description": ""', "non-empty description"),
@@ -242,9 +238,7 @@ TOOLS = [
 )
 def test_skill_tool_definition_is_validated(tmp_path, replacement, message):
     d = _write_skill(tmp_path, ".kia", "broken", _valid("broken"))
-    if replacement.startswith('"permission"'):
-        tools = _TOOLS_PY.replace('"permission": "safe"', replacement)
-    elif replacement.startswith('"run"'):
+    if replacement.startswith('"run"'):
         tools = _TOOLS_PY.replace('"run": ping', replacement)
     elif replacement.startswith('"describe"'):
         tools = _TOOLS_PY.replace('"run": ping', replacement)

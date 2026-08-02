@@ -1,8 +1,7 @@
-"""Regression tests for agent safety routing, compaction, and stream cleanup."""
+"""Regression tests for agent tool-call routing, compaction, and stream cleanup."""
 
 import json
 import os
-import sys
 from contextlib import nullcontext
 from types import SimpleNamespace as NS
 
@@ -27,7 +26,7 @@ from kiui.agent.context import (
 )
 from kiui.agent.utils.interrupt import RequestInterrupted
 from kiui.agent.utils.io import EventHub, InputBroker
-from kiui.agent.permissions import PermissionController, PermissionMode
+from kiui.agent.utils.interrupt import TurnOutcome
 from kiui.agent.tools import ToolExecutor
 
 
@@ -62,23 +61,22 @@ class _Console:
         pass
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="Unix shell command semantics")
-def test_direct_bash_routes_through_safety_guard(tmp_path):
+def test_direct_bash_routes_to_the_exec_tool(tmp_path):
     console = _Console()
     executed = []
     agent = NS(
         console=console,
-        permissions=PermissionController(
-            mode=PermissionMode.AUTO, console=console, work_dir=tmp_path
+        tool_executor=NS(
+            execute=lambda name, args: executed.append((name, args))
+            or {"stdout": "", "exit_code": 0, "success": True, "streamed": True}
         ),
-        tool_executor=NS(execute=lambda *args: executed.append(args)),
         _operation=lambda label: nullcontext(),
     )
 
-    LLMAgent._run_bash_command(agent, "mkfs.ext4 /dev/example")
+    LLMAgent._run_bash_command(agent, "echo hello")
 
-    assert executed == []
-    assert console.results and console.results[-1][1] is False
+    assert executed == [("exec_command", {"command": "echo hello"})]
+    assert console.results and console.results[-1][1] is True
 
 
 def test_compaction_uses_provider_neutral_summarizer():
@@ -192,7 +190,6 @@ def test_actual_failed_exec_capture_is_compacted_and_persisted(tmp_path):
     agent = NS(
         verbose=False,
         console=console,
-        permissions=NS(check=lambda *args: (True, "")),
         tool_executor=executor,
         context_length=16_000,
         token_estimator=NS(chars_per_token=3.3),
@@ -233,7 +230,6 @@ def test_midsize_exec_capture_survives_for_eviction(tmp_path):
     agent = NS(
         verbose=False,
         console=console,
-        permissions=NS(check=lambda *args: (True, "")),
         tool_executor=executor,
         context_length=200_000,  # exec budget 6k, so 4k of output is not compacted
         token_estimator=NS(chars_per_token=3.3),
@@ -275,6 +271,42 @@ def test_old_session_captures_are_pruned(tmp_path):
     assert {path.name for path in root.iterdir()} == {"live", "s3", "s4"}
 
 
+def test_unparseable_arguments_still_answer_their_tool_call(tmp_path):
+    """A malformed argument payload must not leave an unpaired tool call.
+
+    Providers reject an assistant message whose tool calls have no matching
+    results, so a call kia cannot parse is answered with an error result and
+    the batch continues instead of aborting the turn.
+    """
+    console = _Console()
+    executed = []
+    calls = [
+        {"id": "bad", "type": "function", "function": {"name": "write_file", "arguments": "{not json"}},
+        {"id": "good", "type": "function", "function": {"name": "write_file", "arguments": json.dumps({"file": "ok.txt", "content": "ok"})}},
+    ]
+    console.error = lambda *args, **kwargs: None
+    agent = NS(
+        verbose=False,
+        console=console,
+        tool_executor=NS(execute=lambda name, args: executed.append((name, args)) or {"success": True, "message": "written"}),
+        context=NS(messages=[], add=lambda message: agent.context.messages.append(message)),
+        cancellation=None,
+        context_length=16_000,
+        token_estimator=NS(chars_per_token=3.3),
+        work_dir=str(tmp_path),
+        _session_id="test",
+        round_id=1,
+        tool_compaction_totals={"calls": 0, "original_chars": 0, "retained_chars": 0},
+    )
+
+    outcome = LLMAgent.execute_tool_calls(agent, calls)
+
+    assert outcome == TurnOutcome.COMPLETED
+    assert executed == [("write_file", {"file": "ok.txt", "content": "ok"})]
+    assert [message["tool_call_id"] for message in agent.context.messages] == ["bad", "good"]
+    assert "Invalid tool arguments" in agent.context.messages[0]["content"]
+
+
 def test_large_tool_result_is_persisted_before_context(tmp_path):
     console = _Console()
     console.system = lambda *args, **kwargs: None
@@ -283,7 +315,6 @@ def test_large_tool_result_is_persisted_before_context(tmp_path):
     agent = NS(
         verbose=False,
         console=console,
-        permissions=NS(check=lambda *args: (True, "")),
         tool_executor=NS(execute=lambda *args: {"stdout": result_text, "exit_code": 0, "success": True}),
         context_length=16_000,
         token_estimator=NS(chars_per_token=3.3),
@@ -295,9 +326,9 @@ def test_large_tool_result_is_persisted_before_context(tmp_path):
         tool_compaction_totals={"calls": 0, "original_chars": 0, "retained_chars": 0},
     )
 
-    interrupted = LLMAgent.execute_tool_calls(agent, [tool_call])
+    outcome = LLMAgent.execute_tool_calls(agent, [tool_call])
 
-    assert not interrupted
+    assert outcome == TurnOutcome.COMPLETED
     stored = agent.context.messages[-1]["content"]
     assert len(stored) <= tool_result_char_budget(16_000, tool_name="exec_command")
     assert "Large exec_command result compacted" in stored

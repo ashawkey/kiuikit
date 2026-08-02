@@ -1,8 +1,7 @@
 """CLI entry point for kia: terminal-based AI agent.
 
 Usage:
-    kia [--model MODEL] [--verbose] [--perm auto|default|strict]
-        [--resume [SESSION_ID]]
+    kia [--model MODEL] [--verbose] [--resume [SESSION_ID]]
         [--list | --storage | --clean [ENTRY ...] | --update]
 """
 
@@ -28,7 +27,6 @@ from rich.table import Table
 
 from kiui.config import conf, LOCAL_CONFIG_PATH
 from kiui.agent.ui import AgentConsole
-from kiui.agent.permissions import PermissionMode
 from kiui.agent.models import ReasoningEffort, resolve_model_profile
 
 
@@ -45,7 +43,6 @@ class Args:
     stream: bool = True  # stream the response token-by-token as it is generated
     reasoning_effort: ReasoningEffort | None = None  # defaults to model config, then high
 
-    perm: PermissionMode = PermissionMode.AUTO
     resume: str | None = None  # --resume [session_id]
     list: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # --list: show available models and exit
     storage: Annotated[bool, tyro.conf.FlagCreatePairsOff] = False  # show project .kia usage and exit
@@ -140,8 +137,6 @@ def get_agent(args: Args) -> "tuple[LLMAgent | None, HubClient | None]":
             reasoning_effort=args.reasoning_effort or model_conf.get("reasoning_effort", "high"),
             context_length=model_conf.get("context_length"),
             max_output_tokens=model_conf.get("max_output_tokens"),
-
-            permission_mode=args.perm,
             persona=args.persona,
             console=console,
             events=events,

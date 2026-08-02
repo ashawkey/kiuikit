@@ -97,7 +97,6 @@ def test_oauth_commands_use_current_provider():
     [
         ("/usage", True),
         ("/context", True),
-        ("/perm auto", True),
         ("/goal clear", True),
         ("/wait 1h later", False),
         ("/model", True),        # bare form only lists
@@ -552,7 +551,6 @@ def test_cancelled_exec_preserves_its_partial_result_in_round_context(tmp_path):
     agent.stream = False
     agent.input_broker = None
     agent.cancellation = None
-    agent.permissions = NS(check=lambda *args: (True, ""))
     agent.context_length = 16_000
     agent.token_estimator = NS(chars_per_token=3.3)
     agent.work_dir = str(tmp_path)

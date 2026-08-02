@@ -35,7 +35,6 @@ class SubagentManager:
         """
         from kiui.config import conf
         from kiui.agent.backend import LLMAgent
-        from kiui.agent.permissions import PermissionMode
 
         openai_conf = conf.get("openai", {})
         if self.model_alias not in openai_conf:
@@ -62,7 +61,6 @@ class SubagentManager:
                 reasoning_effort=model_conf.get("reasoning_effort", self.reasoning_effort),
                 context_length=model_conf.get("context_length"),
                 max_output_tokens=model_conf.get("max_output_tokens"),
-                permission_mode=PermissionMode.AUTO,
                 exec_mode=True,
                 is_subagent=True,
                 work_dir=work_dir,

@@ -15,7 +15,6 @@ from kiui.agent.providers import (
     ProviderSettings,
     create_provider,
 )
-from kiui.agent.permissions import PermissionMode
 from kiui.agent.personas import DEFAULT_PERSONA, PersonaInfo, discover_personas, get_persona
 from kiui.agent.utils.interrupt import RequestInterrupted
 
@@ -39,7 +38,6 @@ class AgentCommandsMixin:
         "persona": "List/switch personas; /persona reload to re-scan",
         "goal": "Set a goal the agent auto-iterates toward (/goal <text> | clear)",
         "wait": "Send a prompt after a delay (/wait <30s|5m|1h> <prompt>)",
-        "perm": "Show or change permission mode (/perm auto|default|strict)",
         "rewind": "Return to before a user prompt, edit it, then branch",
         "clear": "Clear conversation history (keep system prompt)",
         "resume": "Save current, then resume a previous session (/resume [session_id])",
@@ -53,7 +51,7 @@ class AgentCommandsMixin:
     # prompt, so only commands that read session state or take effect on the
     # *next* API call qualify.
     INSTANT_COMMANDS = frozenset({
-        "help", "usage", "context", "system_prompt", "auth", "perm", "reasoning", "goal",
+        "help", "usage", "context", "system_prompt", "auth", "reasoning", "goal",
     })
     # The same, but only in their bare listing form: given an argument these
     # switch model or persona, or load a skill into the running conversation.
@@ -92,8 +90,6 @@ class AgentCommandsMixin:
             self._cmd_clear()
         elif cmd == "resume":
             self._cmd_resume(raw)
-        elif cmd == "perm":
-            self._cmd_perm(raw)
         elif cmd == "model":
             self._cmd_model(raw)
         elif cmd == "login":
@@ -151,7 +147,7 @@ class AgentCommandsMixin:
             "  Press [bold]Enter[/bold] to send, [bold]Escape → Enter[/bold] for a newline.\n"
             "  Invoke a discovered skill with [cyan]/<skill-name> [optional task][/cyan].\n"
             "  While the agent is working, messages queue; commands that do not touch\n"
-            "  the conversation (such as /usage, /context, /perm) run right away."
+            "  the conversation (such as /usage and /context) run right away."
         )
 
     def _cmd_compact(self):
@@ -381,29 +377,6 @@ class AgentCommandsMixin:
         lines.append(f"\n  [bold]Total:[/bold] ~{est_tokens:,} tokens / {self.context_length:,} [{ctx_pct:.0f}%]")
 
         self.console.print("\n".join(lines))
-
-    def _cmd_perm(self, raw: str):
-        parts = raw.split()
-        if len(parts) < 2:
-            mode = self.permissions.mode.value
-            allowed = ", ".join(sorted(self.permissions.session_allowed_tools)) or "(none)"
-            self.console.print(
-                f"[bold blue]Permission mode:[/bold blue] [cyan]{mode}[/cyan]\n"
-                f"  Session-allowed tools: {allowed}\n"
-                f"  Usage: [cyan]/perm auto|default|strict[/cyan]"
-            )
-            return
-
-        target = parts[1].lower()
-        valid = {m.value for m in PermissionMode}
-        if target not in valid:
-            self.console.error(f"Unknown mode '{target}'. Choose from: {', '.join(sorted(valid))}")
-            return
-
-        new_mode = PermissionMode(target)
-        self.permissions.mode = new_mode
-        self.permissions.reset_session()
-        self.console.system(f"Permission mode changed to: {new_mode.value}")
 
     def _cmd_reasoning(self, raw: str):
         parts = raw.split(maxsplit=1)

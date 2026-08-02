@@ -18,19 +18,18 @@ when to give up — belongs to the ``batch`` skill, which drives this through
 """
 
 from kiui.agent.context import CompactionState
+from kiui.agent.utils.interrupt import TurnOutcome
 
 
 class IsolatedTurnMixin:
     """Run agentic turns that leave no trace in the conversation."""
 
-    def run_isolated_turn(self, prompt: str) -> tuple[str | None, bool]:
+    def run_isolated_turn(self, prompt: str) -> tuple[str | None, TurnOutcome]:
         """Run one full agentic turn for *prompt*, then discard its context.
 
-        Returns ``(response, interrupted)``. *response* is the assistant's final
-        text, or ``None`` when the turn produced none (a cancelled turn, a fatal
-        API error, or a reply with no text). *interrupted* reports whether the
-        user cancelled, which a caller must treat as "stop", not "this item
-        failed" — the item never really ran.
+        Returns ``(response, outcome)``. *response* is the assistant's final
+        text, or ``None`` when the turn produced none. A user-interrupt outcome
+        tells a caller to stop rather than record an ordinary failure.
 
         The caller keeps the returned value; conversational state is rolled
         back: messages, compaction state, the compaction floor, enclosing turn
@@ -58,7 +57,7 @@ class IsolatedTurnMixin:
         if self._isolated_turn_active:
             raise RuntimeError("Isolated turns cannot nest.")
         if self.cancellation is not None and self.cancellation.cancelled:
-            return None, True
+            return None, TurnOutcome.USER_INTERRUPTED
 
         snapshot = list(self.context.messages)
         compaction_state = self.context.compaction_state
@@ -68,6 +67,7 @@ class IsolatedTurnMixin:
         outer_interrupted = self._last_interrupted
         outer_interrupt_reverts_prompt = self._interrupt_reverts_prompt
         outer_finish_reason = self._last_finish_reason
+        outer_turn_outcome = self._last_turn_outcome
 
         self._isolated_turn_active = True
         try:
@@ -86,7 +86,7 @@ class IsolatedTurnMixin:
             # event history that reconnecting web clients replay.
             with self.console.suppressed():
                 response = self.get_response()
-            return response, self._last_interrupted
+            return response, self._last_turn_outcome
         finally:
             self._isolated_turn_active = False
             # replace_messages copies, so the snapshot stays reusable even
@@ -102,5 +102,6 @@ class IsolatedTurnMixin:
             # report its status through the return value without overwriting the
             # enclosing turn's rollback state.
             self._last_interrupted = outer_interrupted
+            self._last_turn_outcome = outer_turn_outcome
             self._interrupt_reverts_prompt = outer_interrupt_reverts_prompt
             self._last_finish_reason = outer_finish_reason

@@ -646,7 +646,6 @@ def _schema(name: str, description: str, properties: dict[str, Any], required: l
 
 TOOLS = [
     {
-        "permission": "safe",
         "run": browser_status,
         "describe": _describe_status,
         "schema": _schema(
@@ -656,7 +655,6 @@ TOOLS = [
         ),
     },
     {
-        "permission": "risky",
         "run": browser_open,
         "describe": _describe_open,
         "schema": _schema(
@@ -667,7 +665,6 @@ TOOLS = [
         ),
     },
     {
-        "permission": "safe",
         "run": browser_observe,
         "describe": _describe_observe,
         "schema": _schema(
@@ -680,7 +677,6 @@ TOOLS = [
         ),
     },
     {
-        "permission": "risky",
         "run": browser_click,
         "describe": _describe_click,
         "schema": _schema(
@@ -691,7 +687,6 @@ TOOLS = [
         ),
     },
     {
-        "permission": "risky",
         "run": browser_type,
         "describe": _describe_type,
         "schema": _schema(
@@ -706,7 +701,6 @@ TOOLS = [
         ),
     },
     {
-        "permission": "safe",
         "run": browser_scroll,
         "describe": _describe_scroll,
         "schema": _schema(
@@ -720,7 +714,6 @@ TOOLS = [
         ),
     },
     {
-        "permission": "safe",
         "run": browser_extract,
         "describe": _describe_extract,
         "schema": _schema(
@@ -734,7 +727,6 @@ TOOLS = [
         ),
     },
     {
-        "permission": "risky",
         "run": browser_tabs,
         "describe": _describe_tabs,
         "schema": _schema(
@@ -747,7 +739,6 @@ TOOLS = [
         ),
     },
     {
-        "permission": "safe",
         "run": browser_stop,
         "describe": _describe_stop,
         "schema": _schema(

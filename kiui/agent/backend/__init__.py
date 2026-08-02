@@ -41,7 +41,6 @@ from kiui.agent.tools.results import (
     prune_tool_result_artifacts,
     read_tool_result_text,
 )
-from kiui.agent.permissions import PermissionController, PermissionMode
 from kiui.agent.providers import (
     CompletionRequest,
     ProviderSettings,
@@ -76,7 +75,11 @@ from kiui.agent.models import (
     ReasoningEffort,
     resolve_model_profile,
 )
-from kiui.agent.utils.interrupt import run_interruptible, RequestInterrupted
+from kiui.agent.utils.interrupt import (
+    run_interruptible,
+    RequestInterrupted,
+    TurnOutcome,
+)
 from kiui.agent.utils.io import (
     CancellationToken,
     EventHub,
@@ -169,7 +172,6 @@ class LLMAgent(
         stream: bool = True,
         reasoning_effort: ReasoningEffort = "high",
         context_length: int | None = None,
-        permission_mode: PermissionMode = PermissionMode.AUTO,
         persona: str | None = None,
         exec_mode: bool = False,
         is_subagent: bool = False,
@@ -253,12 +255,6 @@ class LLMAgent(
         )
         self.system_prompt = self._build_system_prompt()
 
-        self.permissions = PermissionController(
-            mode=permission_mode,
-            console=self.console,
-            work_dir=self.work_dir,
-        )
-
         # subagent manager (only for top-level agents with a model_alias;
         # sub-agents get None so they cannot recursively spawn children)
         self.subagent_manager = (
@@ -280,10 +276,6 @@ class LLMAgent(
             cancellation=cancellation,
             isolated_turn=self.run_isolated_turn,
         )
-        # Confirmation policy reads permission classes straight from the registry,
-        # so built-in and skill tools share one source of truth.
-        self.permissions.tool_permission = self.tool_executor.registry.permission
-
         self.context = ContextManager(self.system_prompt)
         self._pending_images: list[dict[str, str]] = []
         # Whether a context-isolated turn owns the conversation right now; see
@@ -301,6 +293,7 @@ class LLMAgent(
         self.goal_iterations: int = 0      # number of goal-check rounds run so far
         self._pending_auto: str | None = None  # queued auto-injected prompt (goal check)
         self._last_interrupted: bool = False   # set by get_response when a round is cancelled
+        self._last_turn_outcome: TurnOutcome = TurnOutcome.COMPLETED
         self._interrupt_reverts_prompt: bool = False
         self._rewind_draft: str | None = None  # prompt restored after /rewind or cancellation
 
@@ -741,10 +734,10 @@ class LLMAgent(
 
 
 
-    def execute_tool_calls(self, tool_calls: list) -> bool:
-        """Execute tool calls via the built-in ToolExecutor.
+    def execute_tool_calls(self, tool_calls: list) -> TurnOutcome:
+        """Execute one assistant tool-call batch via the built-in ToolExecutor.
 
-        Returns True if the round was interrupted by the user (ESC / Ctrl+C /
+        Returns ``USER_INTERRUPTED`` if the round was cancelled (ESC / Ctrl+C /
         web cancel) partway through, in which case any remaining tool calls are
         answered with a synthetic "skipped" result so the assistant/tool message
         pairing stays valid, and the caller should return to the prompt.
@@ -767,11 +760,15 @@ class LLMAgent(
                 })
                 continue
 
+            parse_error = None
             try:
                 function_args = json.loads(tool_call["function"]["arguments"])
-            except json.JSONDecodeError as e:
+            except json.JSONDecodeError as exc:
                 function_args = {}
-                self.console.error(f"Failed to parse tool args: {e}")
+                parse_error = str(exc)
+
+            if parse_error is not None:
+                self.console.error(f"Failed to parse tool args: {parse_error}")
             
             if self.verbose:
                 self.console.debug(f"Tool call {i+1}/{len(tool_calls)}: {function_name}({function_args})")
@@ -785,19 +782,15 @@ class LLMAgent(
                 })
                 continue
 
-            allowed, denial_reason = self.permissions.check(function_name, function_args)
             t_exec = time.monotonic()
-            if self.cancellation is not None and self.cancellation.cancelled:
+            if parse_error is not None:
+                result = {"error": f"Invalid tool arguments: {parse_error}", "success": False}
+            elif self.cancellation is not None and self.cancellation.cancelled:
                 result = {
                     "error": "Tool call skipped: the user interrupted the turn.",
                     "success": False,
                     "interrupted": True,
                 }
-            elif not allowed:
-                msg = f"Tool call denied: {function_name}"
-                if denial_reason:
-                    msg += f"\nReason: {denial_reason}"
-                result = {"error": msg, "success": False}
             else:
                 with self.console.thinking(label="Executing", status_suffix=function_name):
                     result = self.tool_executor.execute(function_name, function_args)
@@ -926,7 +919,7 @@ class LLMAgent(
         if self.verbose and len(tool_calls) > 1:
             self.console.debug(f"All {len(tool_calls)} tool calls completed in {total_elapsed:.1f}s")
 
-        return interrupted
+        return TurnOutcome.USER_INTERRUPTED if interrupted else TurnOutcome.COMPLETED
 
     def _resolve_unexecuted_tool_calls(self, message: dict[str, Any]) -> None:
         """Keep history valid when a turn ends on tool calls that never ran.
@@ -1017,6 +1010,7 @@ class LLMAgent(
         iteration = 0
         t_turn_start = time.monotonic()
         self._last_interrupted = False
+        self._last_turn_outcome = TurnOutcome.COMPLETED
         self._interrupt_reverts_prompt = False
         turn_has_response = False
         auto_continues = 0
@@ -1041,12 +1035,14 @@ class LLMAgent(
                 message = self.call_api()
             except RequestInterrupted:
                 self._pending_images.clear()
+                self._last_turn_outcome = TurnOutcome.USER_INTERRUPTED
                 self.console.system("Request cancelled.")
                 self._last_interrupted = True
                 self._interrupt_reverts_prompt = not turn_has_response
                 return None
             except RuntimeError as e:
                 self._pending_images.clear()
+                self._last_turn_outcome = TurnOutcome.FAILED
                 self.console.error(f"API call failed: {e}")
                 return None
 
@@ -1108,18 +1104,19 @@ class LLMAgent(
                     self.console.debug(f"Turn complete: {iteration} iteration(s) in {turn_elapsed:.1f}s")
                 return content or None
 
-            interrupted = self.execute_tool_calls(message["tool_calls"])
+            outcome = self.execute_tool_calls(message["tool_calls"])
             # A skill loaded this round may contribute tools; `self.tools` is a
             # live registry view, so the next loop iteration advertises them
             # automatically with no manual rebuild.
 
-            if interrupted:
+            if outcome is True or outcome == TurnOutcome.USER_INTERRUPTED:
                 # The user cancelled a tool mid-round. Stop the agentic loop
                 # and return to the prompt instead of feeding the (partial)
                 # tool results back to the model for another iteration.
                 self._pending_images.clear()
                 self.console.system("Turn interrupted.")
                 self._last_interrupted = True
+                self._last_turn_outcome = outcome
                 return None
 
             self._inject_pending_steer()
@@ -1137,10 +1134,6 @@ class LLMAgent(
         """
         self.console.tool(f"! {command}")
         arguments = {"command": command}
-        allowed, reason = self.permissions.check_safety("exec_command", arguments)
-        if not allowed:
-            self.console.tool_result(reason, success=False)
-            return
         t_exec = time.monotonic()
         with self._operation("shell command"):
             with self.console.thinking(label="Executing", status_suffix="exec_command"):
@@ -1191,13 +1184,13 @@ class LLMAgent(
         self.tool_executor._loaded_skills.clear()
         self.tool_executor._skill_loads.clear()
         self.tool_executor.goal_report = None
-        self.permissions.reset_session()
         # Drop any standing goal — the new session starts clean.
         self.goal = None
         self.goal_active = False
         self.goal_iterations = 0
         self._pending_auto = None
         self._last_interrupted = False
+        self._last_turn_outcome = TurnOutcome.COMPLETED
         # Create and persist the branch root before the first round.
         self._install_change_tracker()
         self.save_session(self._session_id, reason="initial")
@@ -1581,7 +1574,6 @@ class LLMAgent(
             model=f"{self.provider_name}/{self.model}",
             context=f"{self.context_length:,} tokens",
             reasoning=reasoning,
-            permission=self.permissions.mode.value,
             persona=self.persona.name,
             skills=self._skills_summary(),
             workspace=self.work_dir,

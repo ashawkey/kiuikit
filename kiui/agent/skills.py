@@ -8,9 +8,9 @@ instructions. Skills may bundle ``scripts/``, ``references/``, and ``assets/``
 directories referenced by relative paths from the skill root.
 
 All frontmatter fields are parsed for compatibility, but ``allowed-tools`` is
-not enforced: kia uses its own permission model, so a skill cannot narrow or
-widen tool access. The field is accepted (so cross-agent skills load cleanly)
-but has no effect.
+not enforced: all ordinary kia tools execute automatically, so a skill cannot
+narrow or widen tool access. The field is accepted (so cross-agent skills load
+cleanly) but has no effect.
 
 Skills load via progressive disclosure: only name+description is advertised in
 the system prompt; the full body is pulled into context on demand via the
@@ -267,9 +267,9 @@ def load_skill_tools(skill_dir: str | Path) -> list[dict[str, Any]]:
 
     A skill may ship a ``tools.py`` at its root exposing a module-level
     ``TOOLS`` list. Each entry must provide an OpenAI function ``schema``, a
-    ``run`` callable (invoked as ``run(executor, **arguments)``), plus optional
-    ``permission`` (``"safe"`` or ``"risky"``, default risky) and ``describe``
-    callables. A descriptor owns that skill tool's semantic UI label.
+    ``run`` callable (invoked as ``run(executor, **arguments)``), plus an
+    optional ``describe`` callable. A descriptor owns that skill tool's
+    semantic UI label.
 
     Since these tools become callable in-process, this is only appropriate for
     trusted (user-authored and bundled) skills. The module is imported under a

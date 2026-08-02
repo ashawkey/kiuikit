@@ -2,9 +2,8 @@
 
 These tools are injected into the agent's tool surface only while the monitor
 skill is loaded (via ``load_skill`` or ``/skills monitor``). Each entry exposes
-an OpenAI function *schema*, a ``run`` callable invoked as ``run(executor,
-**arguments)``, and a ``permission`` class consulted by the permission
-controller. The executor owns the process *registry* and cleanup
+an OpenAI function *schema* and a ``run`` callable invoked as
+``run(executor, **arguments)``. The executor owns the process *registry* and cleanup
 (``ProcessManagerMixin``); these functions drive it.
 """
 
@@ -319,7 +318,6 @@ def _describe_stop_process(args: dict[str, Any]) -> ToolCallDescription:
 
 TOOLS = [
     {
-        "permission": "risky",
         "run": start_process,
         "describe": _describe_start_process,
         "schema": {
@@ -342,7 +340,6 @@ TOOLS = [
         },
     },
     {
-        "permission": "safe",
         "run": inspect_processes,
         "describe": _describe_inspect_processes,
         "schema": {
@@ -381,7 +378,6 @@ TOOLS = [
         },
     },
     {
-        "permission": "risky",
         "run": stop_process,
         "describe": _describe_stop_process,
         "schema": {

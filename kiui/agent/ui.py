@@ -695,8 +695,8 @@ class AgentConsole:
 
         Anything wrapped in :meth:`visible` is exempt, because suppressing it
         would strand the user: interactive prompts (an unanswerable question
-        blocks the run), errors, and safety-guard denials are the only account
-        of *why* the nested work failed.
+        blocks the run) and errors are the only account of *why* the nested
+        work failed.
         """
         self._quiet_depth += 1
         self._console.quiet = True
@@ -805,8 +805,8 @@ class AgentConsole:
     def local(self, *args, **kwargs):
         """Print terminal-only information such as authentication secrets.
 
-        Renders even under :meth:`suppressed`: the permission prompt asks its
-        question through here, and an invisible question cannot be answered.
+        Renders even under :meth:`suppressed`: interactive questions may be
+        terminal-only, and an invisible question cannot be answered.
         """
         with self.visible():
             self._console.print(*args, **kwargs)
@@ -865,7 +865,6 @@ class AgentConsole:
         model: str,
         context: str,
         reasoning: str,
-        permission: str,
         persona: str,
         skills: str,
         workspace: str,
@@ -873,7 +872,6 @@ class AgentConsole:
         """Render the interactive agent's startup summary."""
         self._agent_panel([
             ("Model", f"{model} ({context}) · {reasoning}"),
-            ("Permission", permission),
             ("Persona", persona),
             ("Skills", skills),
             ("Workspace", workspace),

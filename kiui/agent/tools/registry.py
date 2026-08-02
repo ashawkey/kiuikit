@@ -1,19 +1,15 @@
 """Unified tool registry: one descriptor and one resolver for every tool.
 
 Every tool the model can call — built-in or skill-provided — is described by a
-single :class:`ToolSpec` (OpenAI ``schema`` + ``handler`` + ``permission`` +
-optional ``gate`` and call ``describe`` function). :class:`ToolRegistry` holds
-them all and is the single
-source of truth for three questions that used to be answered in three places:
+single :class:`ToolSpec` (OpenAI ``schema`` + ``handler`` + optional ``gate``
+and call ``describe`` function). :class:`ToolRegistry` holds them all and is
+the single source of truth for two questions:
 
 - *Which tools are advertised to the API?* — :meth:`ToolRegistry.advertised`
   applies gates (image/sub-agent/goal), the persona whitelist, and the
   per-persona skill-tool policy in one pass.
 - *How does a call dispatch?* — :meth:`ToolRegistry.get` returns the spec whose
   ``handler`` is invoked as ``handler(executor, **arguments)``.
-- *What is a tool's permission class?* — :attr:`ToolSpec.permission`
-  (``"safe"`` / ``"risky"``), consulted by the permission controller.
-
 Registering a skill's tools is atomic and rejects any name that collides with a
 built-in or with another loaded skill's tool, so conflicts fail loudly at load
 time instead of silently shadowing.
@@ -33,7 +29,6 @@ from .schemas import BUILTIN_TOOL_SCHEMAS
 # skill name as the source.
 BUILTIN_SOURCE = "builtin"
 _TOOL_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
-_VALID_PERMISSIONS = frozenset({"safe", "risky"})
 
 # Advertising gates. A gated tool is advertised only when its condition holds:
 #   "image"         -> the model supports image input
@@ -49,9 +44,7 @@ class ToolSpec:
     """A single callable tool exposed to the model.
 
     ``handler`` is invoked as ``handler(executor, **arguments)`` and returns a
-    result dict. ``permission`` is ``"safe"`` (no default-mode prompt) or
-    ``"risky"`` (prompts in default mode); strict mode prompts for both.
-    ``source`` is :data:`BUILTIN_SOURCE` for built-in
+    result dict. ``source`` is :data:`BUILTIN_SOURCE` for built-in
     tools or the owning skill name. ``gate`` is one of the ``GATE_*`` constants
     or ``None``. ``describe`` is owned by the tool definition and provides its
     semantic call label; absent descriptors use the shared generic fallback.
@@ -60,7 +53,6 @@ class ToolSpec:
     name: str
     schema: dict[str, Any]
     handler: Callable[..., dict[str, Any]]
-    permission: str = "risky"
     source: str = BUILTIN_SOURCE
     gate: str | None = None
     describe: Callable[[dict[str, Any]], ToolCallDescription] | None = None
@@ -70,24 +62,24 @@ class ToolSpec:
 # Built-in tool table
 # ---------------------------------------------------------------------------
 
-# name -> (executor method, permission, gate). The schema is pulled from
+# name -> (executor method, gate). The schema is pulled from
 # BUILTIN_TOOL_SCHEMAS so the wire format stays defined once in schemas.py.
-_BUILTIN_TABLE: dict[str, tuple[str, str, str | None]] = {
-    "read_file": ("_read_file", "safe", None),
-    "read_image": ("_read_image", "safe", GATE_IMAGE),
-    "write_file": ("_write_file", "risky", None),
-    "edit_file": ("_edit_file", "risky", None),
-    "multi_edit": ("_multi_edit", "risky", None),
-    "ls": ("_ls", "safe", None),
-    "exec_command": ("_exec_command", "risky", None),
-    "glob_files": ("_glob_files", "safe", None),
-    "grep_files": ("_grep_files", "safe", None),
-    "web_search": ("_web_search", "safe", None),
-    "web_fetch": ("_web_fetch", "safe", None),
-    "remove_file": ("_remove_file", "risky", None),
-    "spawn_subagent": ("_spawn_subagent", "risky", GATE_SUBAGENT_ROOT),
-    "load_skill": ("_load_skill", "safe", None),
-    "report_goal": ("_report_goal", "safe", GATE_GOAL),
+_BUILTIN_TABLE: dict[str, tuple[str, str | None]] = {
+    "read_file": ("_read_file", None),
+    "read_image": ("_read_image", GATE_IMAGE),
+    "write_file": ("_write_file", None),
+    "edit_file": ("_edit_file", None),
+    "multi_edit": ("_multi_edit", None),
+    "ls": ("_ls", None),
+    "exec_command": ("_exec_command", None),
+    "glob_files": ("_glob_files", None),
+    "grep_files": ("_grep_files", None),
+    "web_search": ("_web_search", None),
+    "web_fetch": ("_web_fetch", None),
+    "remove_file": ("_remove_file", None),
+    "spawn_subagent": ("_spawn_subagent", GATE_SUBAGENT_ROOT),
+    "load_skill": ("_load_skill", None),
+    "report_goal": ("_report_goal", GATE_GOAL),
 }
 
 BUILTIN_TOOL_NAMES = frozenset(_BUILTIN_TABLE)
@@ -145,12 +137,11 @@ def validate_tool_schema(schema: Any, context: str = "Tool") -> str:
 def build_builtin_specs() -> dict[str, ToolSpec]:
     """Build the built-in ToolSpec table (name -> spec)."""
     specs: dict[str, ToolSpec] = {}
-    for name, (method_name, permission, gate) in _BUILTIN_TABLE.items():
+    for name, (method_name, gate) in _BUILTIN_TABLE.items():
         specs[name] = ToolSpec(
             name=name,
             schema=BUILTIN_TOOL_SCHEMAS[name],
             handler=_builtin_handler(method_name),
-            permission=permission,
             source=BUILTIN_SOURCE,
             gate=gate,
             describe=BUILTIN_CALL_DESCRIBERS[name],
@@ -168,19 +159,14 @@ class ToolRegistry:
         """Return the spec for *name*, or ``None`` if no such tool exists."""
         return self._specs.get(name)
 
-    def permission(self, name: str) -> str | None:
-        """Return a tool's permission class, or ``None`` if it is unknown."""
-        spec = self._specs.get(name)
-        return spec.permission if spec is not None else None
-
     # -- skill tools --------------------------------------------------------
 
     def register_skill(self, skill: str, entries: list[dict[str, Any]]) -> None:
         """Register a skill's tools atomically.
 
         Each entry provides an OpenAI function ``schema``, a ``run`` callable
-        (used as the handler), and optional ``permission`` and ``describe``
-        callables. A tool name that collides with a built-in or with another
+        (used as the handler), and an optional ``describe`` callable. A tool
+        name that collides with a built-in or with another
         already-registered skill's tool aborts the whole registration before any
         entry is committed, so a skill is never left partially registered.
         """
@@ -194,11 +180,6 @@ class ToolRegistry:
             handler = entry.get("run")
             if not callable(handler):
                 raise ValueError(f"Skill '{skill}' TOOLS[{index}] run must be callable.")
-            permission = entry.get("permission", "risky")
-            if permission not in _VALID_PERMISSIONS:
-                raise ValueError(
-                    f"Skill '{skill}' TOOLS[{index}] permission must be 'safe' or 'risky'."
-                )
             describer = entry.get("describe")
             if describer is not None and not callable(describer):
                 raise ValueError(
@@ -224,7 +205,6 @@ class ToolRegistry:
                 name=name,
                 schema=schema,
                 handler=handler,
-                permission=permission,
                 source=skill,
                 describe=describer,
             )
