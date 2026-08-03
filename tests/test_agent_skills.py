@@ -107,7 +107,11 @@ def test_skills_summary_counts_only_registry_in_persona_prompt():
     included = _SummaryAgent(skills, f"Persona instructions.\n\n{section}")
     excluded = _SummaryAgent(skills, "Short persona without the skills marker.")
 
+    # A persona whose prompt omits {{kia:skills}} advertises nothing, so the
+    # count must agree with the zero token share.
+    assert "0/1 advertised" in excluded._skills_summary()
     assert "~0 tokens (0.0% of prompt)" in excluded._skills_summary()
+    assert "1/1 advertised" in included._skills_summary()
     assert "~0 tokens" not in included._skills_summary()
 
 

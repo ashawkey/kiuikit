@@ -16,7 +16,6 @@ import pytest
 import kiui.agent.tools as tools
 import kiui.agent.tools.commands as command_tools
 import kiui.agent.tools.search as search_tools
-from kiui.agent.skills import load_skill_tools
 from kiui.agent.bundled_skills.browser import tools as browser_tools
 from kiui.agent.tools import (
     ToolExecutor,
@@ -44,16 +43,9 @@ class _SilentConsole:
         yield
 
 
-_MONITOR_SKILL_DIR = (
-    Path(tools.__file__).parent.parent / "bundled_skills" / "monitor"
-)
-
-
 def _executor_with_monitor(tmp_path):
-    """Build an executor with the bundled monitor skill's process tools loaded."""
-    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
-    te.register_skill_tools("monitor", load_skill_tools(_MONITOR_SKILL_DIR))
-    return te
+    """Backward-compatible helper for an executor with core process tools."""
+    return ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
 
 
 def test_native_tool_resource_cleanup(tmp_path):
@@ -501,6 +493,27 @@ def test_inspect_processes_no_longer_accepts_wait(tmp_path):
     assert "unexpected keyword argument 'wait'" in result["error"]
 
 
+def test_process_status_listener_tracks_start_and_finish(tmp_path):
+    te = _executor_with_monitor(tmp_path)
+    updates = []
+    te.add_process_listener(lambda running, finished: updates.append((running, finished)))
+    started = te.execute(
+        "start_process",
+        {"command": "python -c 'print(123)'"},
+    )
+    try:
+        for _ in range(100):
+            if updates and updates[-1] == (0, 1):
+                break
+            time.sleep(0.05)
+        assert (1, 0) in updates
+        assert updates[-1] == (0, 1)
+        assert te.process_counts() == (0, 1)
+        assert started["process_id"]
+    finally:
+        te.shutdown_processes()
+
+
 def test_managed_background_process_lifecycle(tmp_path):
     te = _executor_with_monitor(tmp_path)
     started = te.execute(
@@ -521,6 +534,8 @@ def test_managed_background_process_lifecycle(tmp_path):
         inspected = te.execute("inspect_processes", {"process_id": process_id})
         assert inspected["success"]
         assert inspected["processes"][0]["status"] == "running"
+        by_pid = te.inspect_processes(process_id=str(started["pid"]))
+        assert by_pid["processes"][0]["process_id"] == process_id
 
         stopped = te.execute("stop_process", {"process_id": process_id})
         assert stopped["success"]

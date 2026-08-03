@@ -33,6 +33,7 @@ from kiui.agent.tools import (
     format_tool_result,
     format_tool_summary,
 )
+from kiui.agent.tools.process_manager import format_process_status
 from kiui.agent.tools.results import (
     discard_tool_result_artifact,
     persist_tool_result_artifact,
@@ -256,6 +257,8 @@ class LLMAgent(
             cancellation=cancellation,
             isolated_turn=self.run_isolated_turn,
         )
+        self._process_status_sink = None
+        self.tool_executor.set_process_status_callback(self._process_status_changed)
         self.context = ContextManager(self.system_prompt)
         self._pending_images: list[dict[str, str]] = []
         # Whether a context-isolated turn owns the conversation right now; see
@@ -350,6 +353,16 @@ class LLMAgent(
         counting alone cannot see.
         """
         return self.token_estimator.prompt_tokens(self.context.total_chars)
+
+    def _process_status_changed(self, running: int, finished: int) -> None:
+        """Publish process counts independently of model-driven inspections."""
+        status = format_process_status(running, finished)
+        if self._process_status_sink is not None:
+            self._process_status_sink(status)
+        if self.events is not None:
+            self.events.publish(
+                "process_status", running=running, finished=finished, text=status
+            )
 
     def _status_suffix(self) -> ContextStatus:
         """Context-window progress shown in the 'Working...' status bar."""
@@ -1200,6 +1213,11 @@ class LLMAgent(
         self.console.interactive_input = True
         self.console.status_sink = terminal.set_status
 
+        set_process_status = getattr(terminal, "set_process_status", None)
+        self._process_status_sink = set_process_status
+        if set_process_status is not None:
+            set_process_status(format_process_status(*self.tool_executor.process_counts()))
+
         async def loop() -> None:
             nonlocal active, exit_requested, should_exit, prompts
             ui_loop = asyncio.get_running_loop()
@@ -1356,6 +1374,9 @@ class LLMAgent(
             executor.shutdown(wait=True)
             if self.cancellation is not None:
                 self.cancellation.watch_keyboard = True
+            self._process_status_sink = None
+            if set_process_status is not None:
+                set_process_status("")
             self.console.interactive_input = False
             self.console.status_sink = None
 

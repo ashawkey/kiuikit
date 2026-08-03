@@ -152,6 +152,7 @@ The agent supports the following slash commands in the CLI:
 | `/compact` | Force context compaction via LLM summarization |
 | `/continue` | Resume an unfinished round without adding a user message; warns if the last round is complete (output-limit, missing-terminal, and empty responses continue automatically, except a response truncated mid tool call, whose calls are answered as never executed so the history stays valid) |
 | `/usage` | Show token usage for this session |
+| `/ps [process-id]` | List managed background processes, or show one process with recent output |
 | `/model [name]` | Show or switch LLM model mid-session |
 | `/login [provider\|model-alias]` | Authenticate an OAuth provider; defaults to the current provider |
 | `/logout [provider\|model-alias]` | Remove stored OAuth credentials |
@@ -167,7 +168,7 @@ The agent supports the following slash commands in the CLI:
 
 A message sent while the agent is working normally steers the next tool-call iteration. The user command `/wait` is deliberately different: its prompt becomes ready only after the requested seconds (`s`), minutes (`m`), or hours (`h`) and always starts a fresh round after the current round finishes. This is separate from the model-facing core `wait` tool, which pauses within the current round before later sequential tool calls. While the agent is idle, the same activity indicator used for `Working...` and `Executing...` shows `Waiting...` with a live countdown in the terminal and Web UI. Only one prompt, immediate or delayed, can be pending; use the existing pending-message edit/withdraw action to cancel it.
 
-A command sent while the agent is working does not have to wait for the round: a round owns the conversation, the provider, and the terminal prompt, so any command that merely reads session state (`/help`, `/usage`, `/context`, `/system_prompt`, `/auth`, and the bare listing form of `/model`, `/persona`, `/skills`) or takes effect on the next API call (`/reasoning`) is answered immediately — from the terminal and the Web UI alike. Commands that rewrite the conversation or swap what runs it (`/clear`, `/compact`, `/rewind`, `/resume`, `/login`, a `/model` or `/persona` switch, `/skills <name>`) stay queued until the round ends. Direct skill invocations also start model rounds, so `/<skill-name>` always queues while another round is active.
+A command sent while the agent is working does not have to wait for the round: a round owns the conversation, the provider, and the terminal prompt, so any command that merely reads session state (`/help`, `/usage`, `/ps`, `/context`, `/system_prompt`, `/auth`, and the bare listing form of `/model`, `/persona`, `/skills`) or takes effect on the next API call (`/reasoning`) is answered immediately — from the terminal and the Web UI alike. Commands that rewrite the conversation or swap what runs it (`/clear`, `/compact`, `/rewind`, `/resume`, `/login`, a `/model` or `/persona` switch, `/skills <name>`) stay queued until the round ends. Direct skill invocations also start model rounds, so `/<skill-name>` always queues while another round is active.
 
 ### Bash shortcut
 
@@ -420,6 +421,20 @@ The agent has access to the following tools:
 | `web_fetch` | Fetch and parse content from a URL |
 | `remove_file` | Remove a file or directory |
 | `load_skill` | Load the full prompt instructions for a skill by name |
+| `start_process` | Start a managed background process with file-backed output |
+| `inspect_processes` | Inspect one or all managed background processes, with an optional bounded log tail for one process |
+| `stop_process` | Stop a managed background process and its child process tree |
+
+Managed background process tools are built into kia so model calls, the `/ps`
+command, and the live terminal/web status use the same process registry.
+
+The status bar shows `(Proc: N running [M finished])` while jobs are active.
+Use `/ps` to list jobs and `/ps <process-id>` for details and recent output.
+Processes are terminated on `/clear`, session switch, and exit. The bundled
+`monitor` skill adds an active-monitoring workflow. For periodic monitoring,
+call the core `wait` tool first and put the inspection or status calls after it
+in the same sequential tool-call batch; do not group the wait and checks in
+parallel.
 
 ### Skill-provided tools
 
@@ -429,20 +444,6 @@ returns a `ToolCallDescription`, keeping each skill's
 call-label semantics beside its tools while the shared UI owns rendering. Those
 tools are registered and advertised to the model only while the skill is loaded,
 and removed when it is unloaded.
-The bundled **`monitor`** skill uses this to provide the managed background
-process tools, so they appear only after `load_skill("monitor")`:
-
-| Tool | Description |
-|------|-------------|
-| `start_process` | Start a managed background process with file-backed output |
-| `inspect_processes` | Inspect one or all managed background processes, with an optional bounded log tail for one process |
-| `stop_process` | Stop a managed background process and its child process tree |
-
-The executor always owns the process *registry* and cleanup, so any background
-processes are terminated on `/clear`, session switch, and exit even when the
-`monitor` skill is not loaded. For periodic monitoring, call the core `wait`
-tool first and put the inspection or status calls after it in the same sequential
-tool-call batch; do not group the wait and checks in parallel.
 
 The bundled **`batch`** skill follows the same split: the agent owns the
 context-isolated turn, the skill owns everything around it.

@@ -113,6 +113,8 @@ def test_oauth_commands_use_current_provider():
     "query, instant",
     [
         ("/usage", True),
+        ("/ps", True),
+        ("/ps p-12345678", True),
         ("/context", True),
         ("/wait 1h later", False),
         ("/model", True),        # bare form only lists
@@ -131,6 +133,69 @@ def test_oauth_commands_use_current_provider():
 def test_instant_command_classification(query, instant):
     agent = type("Agent", (AgentCommandsMixin,), {})()
     assert agent.is_instant_command(query) is instant
+
+
+def test_process_status_callback_publishes_without_inspection(tmp_path):
+    events = EventHub()
+    agent = LLMAgent.__new__(LLMAgent)
+    agent.events = events
+    agent._process_status_sink = None
+    agent.tool_executor = backend.ToolExecutor(work_dir=str(tmp_path))
+    agent.tool_executor.set_process_status_callback(agent._process_status_changed)
+
+    started = agent.tool_executor.execute(
+        "start_process", {"command": "python -c 'import time; time.sleep(.2)'"}
+    )
+    try:
+        assert _wait_until(lambda: agent.tool_executor.process_counts() == (0, 1))
+        statuses = [event for event in events.after(0) if event.type == "process_status"]
+        assert any(event.data["running"] == 1 for event in statuses)
+        assert statuses[-1].data["finished"] == 1
+        assert statuses[-1].data["text"] == ""
+        assert started["process_id"]
+    finally:
+        agent.tool_executor.shutdown_processes()
+
+
+def test_ps_lists_processes_and_shows_detail_tail():
+    output = []
+    calls = []
+
+    class Console:
+        def print(self, message):
+            output.append(str(message))
+
+        def system(self, message):
+            output.append(str(message))
+
+        def warn(self, message):
+            output.append(str(message))
+
+    process = {
+        "process_id": "p-12345678",
+        "pid": 42,
+        "status": "running",
+        "exit_code": None,
+        "command": "python worker.py --long-option value",
+        "cwd": "/tmp/work",
+        "log_path": ".kia/processes/p-12345678.log",
+        "log_tail": "ready\n",
+    }
+    agent = type("Agent", (AgentCommandsMixin,), {})()
+    agent.console = Console()
+    agent.tool_executor = NS(inspect_processes=lambda **kwargs: (
+        calls.append(kwargs) or {"success": True, "processes": [process]}
+    ))
+
+    agent._cmd_ps("/ps")
+    agent._cmd_ps("/ps p-12345678")
+
+    assert calls == [
+        {"process_id": None, "log_tail_chars": 0},
+        {"process_id": "p-12345678", "log_tail_chars": 8000},
+    ]
+    assert "p-12345678" in output[0]
+    assert any("Recent output" in item and "ready" in item for item in output)
 
 
 def test_slash_command_catalog_includes_skills_without_shadowing_builtins():

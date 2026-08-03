@@ -89,6 +89,7 @@ def _message_terminal(*, pending=None, status=None):
     terminal = object.__new__(TerminalInput)
     terminal._busy = True
     terminal._status = list(status or [])
+    terminal._process_status = ""
     terminal._status_lock = threading.Lock()
     terminal._pending_text = lambda: pending
     terminal._prompt_label = "> "
@@ -113,6 +114,16 @@ def test_busy_prompt_shows_only_working_status_without_pending_message():
     assert "queue> " not in text
     assert ("class:separator.busy", "─" * 79) in message
     assert ("class:prompt.busy", "> ") in message
+
+
+def test_process_status_is_appended_to_working_status():
+    terminal = _message_terminal()
+    terminal._process_status = "(Proc: 1 running [2 finished])"
+
+    text = "".join(fragment for _, fragment in terminal._message())
+
+    assert "Working..." in text
+    assert "(Proc: 1 running [2 finished])" in text
 
 
 def test_detailed_status_overrides_busy_fallback_and_shows_pending_message():

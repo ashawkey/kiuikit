@@ -5,11 +5,13 @@ description: Run and manage background processes or actively watch servers, jobs
 
 # Background Processes and Monitoring
 
-Loading this skill enables:
+These process tools are always available:
 
 - `start_process`: launch a managed background process with file-backed combined output;
 - `inspect_processes`: return one status snapshot and an optional bounded log tail;
 - `stop_process`: terminate one managed process and its process tree.
+
+Loading this skill adds the active-monitoring workflow below.
 
 Use `exec_command` for non-interactive foreground commands expected to finish reliably. It times out after 300 seconds by default; set `timeout=null` only when no timeout is intentionally required. Use the managed tools for servers and long-running commands, and the core `wait` tool for monitoring intervals.
 

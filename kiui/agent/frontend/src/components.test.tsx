@@ -144,6 +144,11 @@ describe('interaction components', () => {
     expect(screen.getByText('read_file')).toBeInTheDocument()
   })
 
+  it('shows background processes while otherwise idle', () => {
+    render(<ActivityStatus busy={false} status={null} processStatus="(Proc: 1 running [2 finished])" />)
+    expect(screen.getByText('(Proc: 1 running [2 finished])')).toBeInTheDocument()
+  })
+
   it('hides the status when the operation and indicator are both idle', () => {
     const { container } = render(<ActivityStatus busy={false} status={null} />)
     expect(container).toBeEmptyDOMElement()

@@ -164,6 +164,7 @@ export type ThinkingProps = {
   progress?: boolean
   countdown?: number
   startedAt?: number
+  processStatus?: string
 }
 
 export function Thinking({
@@ -176,6 +177,7 @@ export function Thinking({
   progress = false,
   countdown,
   startedAt,
+  processStatus = '',
 }: ThinkingProps) {
   const mountedAt = useRef(Date.now())
   const start = startedAt ?? mountedAt.current
@@ -195,6 +197,7 @@ export function Thinking({
       <span /><span /><span />
       <em>{label}... ({countdown == null ? `${seconds}s` : formatDuration(countdown - seconds)})</em>
       {progress ? <i className="indeterminate-progress" aria-hidden="true"><i /></i> : null}
+      {processStatus ? <small>{processStatus}</small> : null}
       {contextLimit > 0 ? (
         <>
           <i className={`context-progress ${contextLevel}`} aria-hidden="true">
@@ -211,12 +214,18 @@ export function Thinking({
 export function ActivityStatus({
   busy,
   status,
+  processStatus = '',
 }: {
   busy: boolean
   status: ThinkingProps | null
+  processStatus?: string
 }) {
-  if (!busy && status === null) return null
-  return <Thinking {...(status ?? {})} />
+  if (!busy && status === null) {
+    return processStatus ? (
+      <div className="working" aria-label="background processes"><small>{processStatus}</small></div>
+    ) : null
+  }
+  return <Thinking {...(status ?? {})} processStatus={processStatus} />
 }
 
 export function Login({ onSuccess }: { onSuccess: () => void }) {

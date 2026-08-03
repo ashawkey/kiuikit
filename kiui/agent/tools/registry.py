@@ -61,6 +61,9 @@ class ToolSpec:
 # name -> (executor method, gate). The schema is pulled from
 # BUILTIN_TOOL_SCHEMAS so the wire format stays defined once in schemas.py.
 _BUILTIN_TABLE: dict[str, tuple[str, str | None]] = {
+    "start_process": ("_start_process", None),
+    "inspect_processes": ("_inspect_processes", None),
+    "stop_process": ("_stop_process", None),
     "read_file": ("_read_file", None),
     "read_image": ("_read_image", GATE_IMAGE),
     "write_file": ("_write_file", None),

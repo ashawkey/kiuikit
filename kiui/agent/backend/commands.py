@@ -1,5 +1,7 @@
 """Interactive slash commands for :class:`LLMAgent`."""
 
+from rich.markup import escape
+
 from kiui.agent.context import (
     build_tool_name_index,
     get_display_text,
@@ -29,6 +31,7 @@ class AgentCommandsMixin:
         "compact": "Force context compaction via LLM summarization",
         "continue": "Resume an unfinished round without adding a user message",
         "usage": "Show token usage for this session",
+        "ps": "List background processes; /ps <process-id|pid> shows its recent log",
         "model": "Show or switch LLM model (/model <name>)",
         "login": "Log in to an OAuth provider (/login [provider|model-alias])",
         "logout": "Remove stored OAuth credentials (/logout [provider|model-alias])",
@@ -50,7 +53,7 @@ class AgentCommandsMixin:
     # prompt, so only commands that read session state or take effect on the
     # *next* API call qualify.
     INSTANT_COMMANDS = frozenset({
-        "help", "usage", "context", "system_prompt", "auth", "reasoning",
+        "help", "usage", "ps", "context", "system_prompt", "auth", "reasoning",
     })
     # The same, but only in their bare listing form: given an argument these
     # switch model or persona, or load a skill into the running conversation.
@@ -85,6 +88,8 @@ class AgentCommandsMixin:
             self._cmd_continue(raw)
         elif cmd == "usage":
             self._cmd_usage()
+        elif cmd == "ps":
+            self._cmd_ps(raw)
         elif cmd == "clear":
             self._cmd_clear()
         elif cmd == "resume":
@@ -212,6 +217,50 @@ class AgentCommandsMixin:
             self.save_session(self._session_id, reason="round")
         except Exception as e:
             self.console.warn(f"Could not save continued round: {e}")
+
+    def _cmd_ps(self, raw: str) -> None:
+        """List managed processes, or inspect one with a recent log tail."""
+        parts = raw.split()
+        if len(parts) > 2:
+            self.console.warn("Usage: /ps [process-id]")
+            return
+        process_id = parts[1] if len(parts) == 2 else None
+        result = self.tool_executor.inspect_processes(
+            process_id=process_id,
+            log_tail_chars=8000 if process_id else 0,
+        )
+        if not result["success"]:
+            self.console.warn(result["error"])
+            return
+        processes = result["processes"]
+        if not processes:
+            self.console.system("No managed background processes.")
+            return
+        lines = []
+        for process in processes:
+            command = " ".join(process["command"].split())
+            if len(command) > 100:
+                command = command[:97] + "..."
+            status = process["status"]
+            if status == "exited":
+                status += f" ({process['exit_code']})"
+            lines.append(
+                f"  [cyan]{escape(process['process_id'])}[/cyan] "
+                f"pid={process['pid']} [bold]{status}[/bold]  {escape(command)}"
+            )
+        self.console.print("[bold blue]Background processes:[/bold blue]\n" + "\n".join(lines))
+        if process_id:
+            process = processes[0]
+            self.console.print(
+                f"  cwd: {escape(process['cwd'])}\n"
+                f"  log: {escape(process['log_path'])}"
+            )
+            tail = process.get("log_tail", "")
+            if tail:
+                prefix = "... (tail truncated)\n" if process.get("log_tail_truncated") else ""
+                self.console.print(f"[bold blue]Recent output:[/bold blue]\n{escape(prefix + tail)}")
+            else:
+                self.console.print("[dim]No output captured yet.[/dim]")
 
     def _cmd_usage(self):
         ctx_tokens = self._context_tokens()

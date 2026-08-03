@@ -440,6 +440,7 @@ class TerminalInput:
         self._last_ctrl_c = 0.0  # timestamp of last Ctrl+C on an empty buffer
         self._busy = False
         self._status: list[tuple[str, str]] = []
+        self._process_status = ""
         self._status_lock = threading.Lock()
         self._cancel: Callable[[], None] | None = None
         self._pending_text: Callable[[], str | None] | None = None
@@ -451,6 +452,7 @@ class TerminalInput:
             "status.text": "ansiwhite",
             "status.detail": "ansibrightblack",
             "status.pending": "ansimagenta",
+            "status.process": "ansibrightblack",
             "status.progress": "ansicyan",
             "status.context.low": "ansicyan",
             "status.context.medium": "ansiyellow",
@@ -659,11 +661,18 @@ class TerminalInput:
         pending = self._pending_text() if self._pending_text is not None else None
         with self._status_lock:
             status = list(self._status)
+            process_status = self._process_status
         if self._busy and not status:
             status = [
                 ("class:status.spinner", "⠋ "),
                 ("class:status.text", "Working..."),
             ]
+        if process_status:
+            process_fragment = ("class:status.process", process_status)
+            if status:
+                status.extend([("", " "), process_fragment])
+            else:
+                status = [process_fragment]
         if pending is not None:
             preview = pending.replace("\n", " ")
             if len(preview) > 20:
@@ -709,6 +718,13 @@ class TerminalInput:
     def set_status(self, status: list[tuple[str, str]] | None) -> None:
         with self._status_lock:
             self._status = status or []
+        app = self._session.app
+        if app.is_running:
+            app.invalidate()
+
+    def set_process_status(self, status: str) -> None:
+        with self._status_lock:
+            self._process_status = status
         app = self._session.app
         if app.is_running:
             app.invalidate()

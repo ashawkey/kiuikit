@@ -52,6 +52,7 @@ function SessionPane({
   const submitActionRef = useRef<string | null>(null)
   const withdrawActionRef = useRef<string | null>(null)
   const [thinkingStatus, setThinkingStatus] = useState<ThinkingProps | null>(null)
+  const [processStatus, setProcessStatus] = useState('')
   const lastSeq = useRef(0)
   const streamKey = useRef('')
   const localKey = useRef(0)
@@ -202,6 +203,9 @@ function SessionPane({
       case 'thinking_stop':
         setThinkingStatus(null)
         break
+      case 'process_status':
+        setProcessStatus(typeof data.text === 'string' ? data.text : '')
+        break
       case 'timeline_reset':
         setThinkingStatus(null)
         setEvents([])
@@ -284,7 +288,13 @@ function SessionPane({
         <div className="timeline" aria-live="polite">
           {events.map((event) => <EventCard event={event} key={event.key} />)}
         </div>
-        {active ? <ActivityStatus busy={operationId !== null} status={thinkingStatus} /> : null}
+        {active ? (
+          <ActivityStatus
+            busy={operationId !== null}
+            status={thinkingStatus}
+            processStatus={processStatus}
+          />
+        ) : null}
       </section>
       {active && showConnectionStatus ? (
         <ConnectionBanner status={connection.status} onRetry={connection.retry} />

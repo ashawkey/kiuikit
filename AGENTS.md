@@ -41,7 +41,7 @@ Prefer inspecting the relevant module over relying on a static exhaustive file l
 - `backend/`: provider-neutral API loop, commands, goals, and session coordination.
 - `providers/`: provider implementations and authentication.
 - `tools/registry.py`: single source of truth for tool schema, handler, and advertising. Built-in schemas alone live in `tools/schemas.py`; execution routes through `tools/executor.py`.
-- Managed-process internals live in `tools/process_manager.py` and `tools/process_util.py`; user-facing process tools come from the bundled `monitor` skill.
+- Managed-process tools and internals live in `tools/process_manager.py` and `tools/process_util.py`; the bundled `monitor` skill supplies the active-monitoring workflow.
 - `context.py` owns conversation/token compaction. `session_store.py` owns the append-only message/code revision DAG and object storage. Rewind planning/application lives in `utils/rewind.py` and is coordinated by `backend/sessions.py`.
 - `skills.py` and `personas.py` implement discovery/validation. Bundled resources are under `bundled_skills/` and `bundled_personas/`; project resources are under `.kia/`.
 - `terminal.py` owns prompt lifecycle. Preserve the invariant that a session has one prompt task; pause/ask/restart must remain one locked operation.

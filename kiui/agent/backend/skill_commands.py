@@ -54,9 +54,14 @@ class SkillCommandsMixin:
         can_load = self.persona.tools is None or "load_skill" in self.persona.tools
         advertised = filter_persona_skills(self.persona, self.skills) if can_load else {}
         skills_section = build_skills_prompt_section(advertised)
+        # A persona template may omit {{kia:skills}} entirely, in which case
+        # nothing is advertised however permissive its skill policy is; report
+        # the prompt's truth rather than the policy's intent.
+        if not skills_section or skills_section not in self.system_prompt:
+            advertised = {}
+            skills_section = ""
         total_tokens = self.token_estimator.chars_to_tokens(len(self.system_prompt))
-        skill_chars = len(skills_section) if skills_section in self.system_prompt else 0
-        skill_tokens = self.token_estimator.chars_to_tokens(skill_chars)
+        skill_tokens = self.token_estimator.chars_to_tokens(len(skills_section))
         percent = 100 * skill_tokens / total_tokens if total_tokens else 0
         count = f"{len(advertised)}/{len(self.skills)} advertised"
         return f"{count} · ~{skill_tokens:,} tokens ({percent:.1f}% of prompt)"

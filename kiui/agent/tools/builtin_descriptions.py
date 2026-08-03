@@ -25,6 +25,22 @@ def _describe_exec(args: dict[str, Any]) -> ToolCallDescription:
     )
 
 
+def _describe_start_process(args: dict[str, Any]) -> ToolCallDescription:
+    return _description(
+        "start_process",
+        quote_tool_call_value(args["command"]),
+        f"cwd {args['cwd']}" if args.get("cwd") else "",
+    )
+
+
+def _describe_inspect_processes(args: dict[str, Any]) -> ToolCallDescription:
+    return _description(
+        "inspect_processes",
+        str(args.get("process_id") or "all"),
+        f"tail {args['log_tail_chars']:,} chars" if args.get("log_tail_chars") else "",
+    )
+
+
 def _describe_read_file(args: dict[str, Any]) -> ToolCallDescription:
     start = max(1, args.get("offset") or 1)
     limit = args.get("limit")
@@ -61,6 +77,9 @@ def _describe_grep(args: dict[str, Any]) -> ToolCallDescription:
 
 
 BUILTIN_CALL_DESCRIBERS: dict[str, Callable[[dict[str, Any]], ToolCallDescription]] = {
+    "start_process": _describe_start_process,
+    "inspect_processes": _describe_inspect_processes,
+    "stop_process": lambda a: _description("stop_process", str(a["process_id"])),
     "exec_command": _describe_exec,
     "wait": lambda a: _description("wait", f"{a['seconds']:g}s"),
     "read_file": _describe_read_file,

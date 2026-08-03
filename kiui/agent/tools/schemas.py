@@ -9,11 +9,71 @@ single source of truth per tool.
 from .constants import (
     MAX_GLOB_RESULTS,
     MAX_GREP_MATCHES,
+    MAX_PROCESS_LOG_TAIL_CHARS,
     MAX_READ_LINES,
 )
 
 
 _BUILTIN_TOOL_SCHEMAS_LIST = [
+    {
+        "type": "function",
+        "function": {
+            "name": "start_process",
+            "description": (
+                "Start a managed background process and return immediately. "
+                "Its combined output is written to a readable log file."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {"type": "string", "description": "Shell command to run in the background"},
+                    "cwd": {"type": "string", "description": "Working directory (optional)"},
+                },
+                "required": ["command"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "inspect_processes",
+            "description": (
+                "Inspect managed background process status. Optionally include a bounded "
+                "tail from one process's log. Omit process_id to list all processes."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "process_id": {"type": "string", "description": "Process ID to inspect (optional)"},
+                    "log_tail_chars": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": MAX_PROCESS_LOG_TAIL_CHARS,
+                        "default": 0,
+                        "description": (
+                            f"Characters of recent log content to return directly (default: 0, max: {MAX_PROCESS_LOG_TAIL_CHARS}). "
+                            "Requires process_id."
+                        ),
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "stop_process",
+            "description": "Stop a managed background process.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "process_id": {"type": "string", "description": "Managed process ID returned by start_process"},
+                },
+                "required": ["process_id"],
+            },
+        },
+    },
         {
             "type": "function",
             "function": {
