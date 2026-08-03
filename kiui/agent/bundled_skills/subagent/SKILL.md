@@ -86,7 +86,7 @@ For read-only investigations, disjoint files, or separate worktrees:
 1. Load the `monitor` skill.
 2. Call `start_process` once per runner command, retaining every process ID and
    log path. Give each child a self-contained task and the correct `cwd`.
-3. Use `inspect_processes` to wait and inspect statuses until all have exited.
+3. Inspect statuses immediately. While any remain active, call the core `wait` tool first and then `inspect_processes` in the same sequential tool-call batch.
 4. Read each process log's JSON result. Use a bounded log tail first; read the
    log file directly if needed.
 5. If abandoning the group because of a deadline, failure, or user request,

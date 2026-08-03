@@ -62,6 +62,7 @@ def _describe_grep(args: dict[str, Any]) -> ToolCallDescription:
 
 BUILTIN_CALL_DESCRIBERS: dict[str, Callable[[dict[str, Any]], ToolCallDescription]] = {
     "exec_command": _describe_exec,
+    "wait": lambda a: _description("wait", f"{a['seconds']:g}s"),
     "read_file": _describe_read_file,
     "read_image": lambda a: _description("read_image", str(a["file"])),
     "write_file": lambda a: _description("write_file", str(a["file"])),

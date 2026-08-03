@@ -8,6 +8,7 @@ import sys
 import threading
 import time
 import tracemalloc
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -37,6 +38,10 @@ class _SilentConsole:
 
     def warn(self, *args, **kwargs):
         pass
+
+    @contextmanager
+    def thinking(self, **kwargs):
+        yield
 
 
 _MONITOR_SKILL_DIR = (
@@ -456,6 +461,46 @@ def test_search_honors_gitignore_outside_a_git_repository(tmp_path):
     assert "hidden.txt" in te._glob_files("*.txt", include_ignored=True)["matches"]
 
 
+def test_wait_tool_is_bounded_and_interruptible(tmp_path):
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+
+    started = time.monotonic()
+    result = te.execute("wait", {"seconds": 0.02})
+    assert result == {"waited_seconds": 0.02, "success": True}
+    assert time.monotonic() - started >= 0.015
+
+    events = EventHub()
+    cancellation = CancellationToken(events)
+    cancellation.begin("test wait")
+    te.cancellation = cancellation
+    timer = threading.Timer(0.02, cancellation.cancel)
+    timer.start()
+    try:
+        started = time.monotonic()
+        result = te.execute("wait", {"seconds": 10})
+    finally:
+        timer.cancel()
+    assert result["interrupted"] and not result["success"]
+    assert time.monotonic() - started < 1
+
+
+@pytest.mark.parametrize("seconds", [0, -1, float("inf"), "1", True])
+def test_wait_tool_rejects_invalid_duration(tmp_path, seconds):
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+    result = te.execute("wait", {"seconds": seconds})
+    assert not result["success"]
+
+
+def test_inspect_processes_no_longer_accepts_wait(tmp_path):
+    te = _executor_with_monitor(tmp_path)
+    schema = te.registry.get("inspect_processes").schema
+    assert "wait" not in schema["function"]["parameters"]["properties"]
+
+    result = te.execute("inspect_processes", {"wait": 0.01})
+    assert not result["success"]
+    assert "unexpected keyword argument 'wait'" in result["error"]
+
+
 def test_managed_background_process_lifecycle(tmp_path):
     te = _executor_with_monitor(tmp_path)
     started = te.execute(
@@ -534,6 +579,7 @@ class _RecordingConsole(_SilentConsole):
         ("grep_files", {"pattern": "needle"}),
         ("grep_files", {"pattern": "needle", "path": "sub", "file_glob": "*.py", "case_insensitive": True}),
         ("load_skill", {"name": "monitor"}),
+        ("wait", {"seconds": 0.001}),
     ],
 )
 def test_replayed_tool_calls_render_like_live_ones(tmp_path, name, args):
@@ -668,11 +714,11 @@ def test_monitor_skill_owns_its_tool_descriptions(tmp_path):
     te = _executor_with_monitor(tmp_path)
     te.console = console
 
-    te.execute("inspect_processes", {"process_id": "p-1", "wait": 5, "log_tail_chars": 1000})
+    te.execute("inspect_processes", {"process_id": "p-1", "log_tail_chars": 1000})
     te.execute("stop_process", {"process_id": "p-1"})
 
     assert console.labels == [
-        "inspect_processes p-1 · wait 5s · tail 1,000 chars",
+        "inspect_processes p-1 · tail 1,000 chars",
         "stop_process p-1",
     ]
 

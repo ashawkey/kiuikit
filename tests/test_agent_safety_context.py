@@ -307,6 +307,40 @@ def test_unparseable_arguments_still_answer_their_tool_call(tmp_path):
     assert "Invalid tool arguments" in agent.context.messages[0]["content"]
 
 
+def test_interrupted_wait_skips_later_sequential_calls(tmp_path):
+    console = _Console()
+    executed = []
+    calls = [
+        {"id": "wait", "type": "function", "function": {"name": "wait", "arguments": '{"seconds": 10}'}},
+        {"id": "inspect", "type": "function", "function": {"name": "inspect_processes", "arguments": '{}'}},
+    ]
+
+    def execute(name, args):
+        executed.append((name, args))
+        return {"error": "Wait was interrupted by the user.", "success": False, "interrupted": True}
+
+    agent = NS(
+        verbose=False,
+        console=console,
+        tool_executor=NS(execute=execute),
+        context=NS(messages=[], add=lambda message: agent.context.messages.append(message)),
+        cancellation=None,
+        context_length=16_000,
+        token_estimator=NS(chars_per_token=3.3),
+        work_dir=str(tmp_path),
+        _session_id="test",
+        round_id=1,
+        tool_compaction_totals={"calls": 0, "original_chars": 0, "retained_chars": 0},
+    )
+
+    outcome = LLMAgent.execute_tool_calls(agent, calls)
+
+    assert outcome == TurnOutcome.USER_INTERRUPTED
+    assert executed == [("wait", {"seconds": 10})]
+    assert [message["tool_call_id"] for message in agent.context.messages] == ["wait", "inspect"]
+    assert "skipped" in agent.context.messages[-1]["content"].lower()
+
+
 def test_large_tool_result_is_persisted_before_context(tmp_path):
     console = _Console()
     console.system = lambda *args, **kwargs: None

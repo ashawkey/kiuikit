@@ -14,6 +14,7 @@ from kiui.agent.utils.io import CancellationToken
 from kiui.agent.ui import AgentConsole
 
 from .commands import CommandToolsMixin
+from .control import ControlToolsMixin
 from .files import FileToolsMixin
 from .formatting import log_tool_call
 from .process_manager import ProcessManagerMixin
@@ -26,6 +27,7 @@ from .web import WebToolsMixin
 class ToolExecutor(
     FileToolsMixin,
     CommandToolsMixin,
+    ControlToolsMixin,
     ProcessManagerMixin,
     SearchToolsMixin,
     WebToolsMixin,

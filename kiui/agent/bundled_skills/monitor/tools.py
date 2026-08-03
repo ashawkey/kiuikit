@@ -29,7 +29,6 @@ from kiui.agent.tools.process_util import (
     _terminate_process,
     _windows_job_active_processes,
 )
-from kiui.agent.utils.interrupt import CancelWatcher
 
 
 def _release_completed_windows_job(record: dict[str, Any]) -> bool:
@@ -198,11 +197,9 @@ def start_process(executor, command: str, cwd: str | None = None) -> dict[str, A
 
 
 def inspect_processes(
-    executor, process_id: str | None = None, wait: float = 0, log_tail_chars: int = 0
+    executor, process_id: str | None = None, log_tail_chars: int = 0
 ) -> dict[str, Any]:
-    """Optionally wait, then return status and a bounded log tail."""
-    if wait < 0:
-        return {"error": "wait must be non-negative", "success": False}
+    """Return process status and an optional bounded log tail."""
     if log_tail_chars < 0 or log_tail_chars > MAX_PROCESS_LOG_TAIL_CHARS:
         return {
             "error": f"log_tail_chars must be between 0 and {MAX_PROCESS_LOG_TAIL_CHARS}",
@@ -220,25 +217,6 @@ def inspect_processes(
             record = executor._processes.get(process_id)
         if record is None:
             return {"error": f"Unknown managed process: {process_id}", "success": False}
-
-    if wait:
-        deadline = time.monotonic() + wait
-        interrupted = False
-        try:
-            with CancelWatcher(executor.cancellation) as watcher:
-                while (remaining := deadline - time.monotonic()) > 0:
-                    if watcher.is_cancelled:
-                        interrupted = True
-                        break
-                    time.sleep(min(0.1, remaining))
-        except KeyboardInterrupt:
-            interrupted = True
-        if interrupted:
-            return {
-                "error": "Process inspection wait was interrupted by user.",
-                "success": False,
-                "interrupted": True,
-            }
 
     if record is not None:
         records = [record]
@@ -301,8 +279,6 @@ def _describe_start_process(args: dict[str, Any]) -> ToolCallDescription:
 
 def _describe_inspect_processes(args: dict[str, Any]) -> ToolCallDescription:
     qualifiers = []
-    if args.get("wait"):
-        qualifiers.append(f"wait {args['wait']:g}s")
     if args.get("log_tail_chars"):
         qualifiers.append(f"tail {args['log_tail_chars']:,} chars")
     return ToolCallDescription(
@@ -347,20 +323,13 @@ TOOLS = [
             "function": {
                 "name": "inspect_processes",
                 "description": (
-                    "Inspect managed background process status after an optional bounded wait. "
-                    "Optionally include a bounded tail from one process's log. "
-                    "Omit process_id to list all processes."
+                    "Inspect managed background process status. Optionally include a bounded "
+                    "tail from one process's log. Omit process_id to list all processes."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "process_id": {"type": "string", "description": "Process ID to inspect (optional)"},
-                        "wait": {
-                            "type": "number",
-                            "minimum": 0,
-                            "default": 0,
-                            "description": "Seconds to wait before returning a status snapshot (default: 0)",
-                        },
                         "log_tail_chars": {
                             "type": "integer",
                             "minimum": 0,

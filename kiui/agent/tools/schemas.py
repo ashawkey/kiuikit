@@ -159,6 +159,28 @@ _BUILTIN_TOOL_SCHEMAS_LIST = [
         {
             "type": "function",
             "function": {
+                "name": "wait",
+                "description": (
+                    "Pause before subsequent sequential tool calls. Use this for monitoring intervals: "
+                    "call wait first, then place the status or inspection calls after it in the same "
+                    "tool-call batch. Do not use it in a parallel tool-call group."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "seconds": {
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "description": "Seconds to wait",
+                        },
+                    },
+                    "required": ["seconds"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "glob_files",
                 "description": (
                     "Find files matching a glob pattern. Prefer this to exec_command with find. "

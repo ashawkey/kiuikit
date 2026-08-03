@@ -165,7 +165,7 @@ The agent supports the following slash commands in the CLI:
 | `/resume [session_id]` | Save the current session, then resume a previous one (bare `/resume` picks interactively) |
 | `/exit` or `/quit` | Exit the agent |
 
-A message sent while the agent is working normally steers the next tool-call iteration. `/wait` is deliberately different: its prompt becomes ready only after the requested seconds (`s`), minutes (`m`), or hours (`h`) and always starts a fresh round after the current round finishes. While the agent is idle, the same activity indicator used for `Working...` and `Executing...` shows `Waiting...` with a live countdown in the terminal and Web UI. Only one prompt, immediate or delayed, can be pending; use the existing pending-message edit/withdraw action to cancel it.
+A message sent while the agent is working normally steers the next tool-call iteration. The user command `/wait` is deliberately different: its prompt becomes ready only after the requested seconds (`s`), minutes (`m`), or hours (`h`) and always starts a fresh round after the current round finishes. This is separate from the model-facing core `wait` tool, which pauses within the current round before later sequential tool calls. While the agent is idle, the same activity indicator used for `Working...` and `Executing...` shows `Waiting...` with a live countdown in the terminal and Web UI. Only one prompt, immediate or delayed, can be pending; use the existing pending-message edit/withdraw action to cancel it.
 
 A command sent while the agent is working does not have to wait for the round: a round owns the conversation, the provider, and the terminal prompt, so any command that merely reads session state (`/help`, `/usage`, `/context`, `/system_prompt`, `/auth`, and the bare listing form of `/model`, `/persona`, `/skills`) or takes effect on the next API call (`/reasoning`) is answered immediately — from the terminal and the Web UI alike. Commands that rewrite the conversation or swap what runs it (`/clear`, `/compact`, `/rewind`, `/resume`, `/login`, a `/model` or `/persona` switch, `/skills <name>`) stay queued until the round ends. Direct skill invocations also start model rounds, so `/<skill-name>` always queues while another round is active.
 
@@ -413,6 +413,7 @@ The agent has access to the following tools:
 | `multi_edit` | Apply an ordered batch of edits to one file atomically (all-or-nothing) |
 | `ls` | List a directory's immediate contents (gitignore-aware) |
 | `exec_command` | Run foreground shell commands with real-time streaming output |
+| `wait` | Pause before subsequent sequential tool calls, with an interruptible countdown |
 | `glob_files` | Find files matching a glob pattern (gitignore-aware) |
 | `grep_files` | Search file contents using ripgrep regex (gitignore-aware) |
 | `web_search` | Search the web via DuckDuckGo |
@@ -434,12 +435,14 @@ process tools, so they appear only after `load_skill("monitor")`:
 | Tool | Description |
 |------|-------------|
 | `start_process` | Start a managed background process with file-backed output |
-| `inspect_processes` | Inspect one or all managed background processes, optionally after a bounded wait and with a bounded log tail for one process |
+| `inspect_processes` | Inspect one or all managed background processes, with an optional bounded log tail for one process |
 | `stop_process` | Stop a managed background process and its child process tree |
 
 The executor always owns the process *registry* and cleanup, so any background
 processes are terminated on `/clear`, session switch, and exit even when the
-`monitor` skill is not loaded.
+`monitor` skill is not loaded. For periodic monitoring, call the core `wait`
+tool first and put the inspection or status calls after it in the same sequential
+tool-call batch; do not group the wait and checks in parallel.
 
 The bundled **`batch`** skill follows the same split: the agent owns the
 context-isolated turn, the skill owns everything around it.
