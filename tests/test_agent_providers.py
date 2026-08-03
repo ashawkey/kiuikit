@@ -4,6 +4,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 
+from kiui.agent.models import reasoning_kwargs
 from kiui.agent.providers import (
     CompletionRequest,
     OpenAICompatibleProvider,
@@ -40,6 +41,24 @@ class _Client:
 
     def close(self):
         self.close_calls += 1
+
+
+def test_reasoning_effort_maps_provider_specific_max_levels():
+    assert reasoning_kwargs("openai", "max") == {"reasoning_effort": "xhigh"}
+    assert reasoning_kwargs("anthropic", "max") == {
+        "reasoning_effort": "max",
+        "extra_body": {
+            "thinking": {"type": "adaptive"},
+            "output_config": {"effort": "max"},
+        },
+    }
+    assert reasoning_kwargs("anthropic", "xhigh") == {
+        "reasoning_effort": "max",
+        "extra_body": {
+            "thinking": {"type": "adaptive"},
+            "output_config": {"effort": "max"},
+        },
+    }
 
 
 def test_registry_defaults_to_openai_adapter():

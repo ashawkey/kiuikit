@@ -116,6 +116,8 @@ def test_oauth_commands_use_current_provider():
         ("/ps", True),
         ("/ps p-12345678", True),
         ("/context", True),
+        ("/effort", True),
+        ("/effort max", True),
         ("/wait 1h later", False),
         ("/model", True),        # bare form only lists
         ("/model gpt-5", False),  # switching swaps the provider mid-round
@@ -196,6 +198,26 @@ def test_ps_lists_processes_and_shows_detail_tail():
     ]
     assert "p-12345678" in output[0]
     assert any("Recent output" in item and "ready" in item for item in output)
+
+
+def test_effort_command_lists_choices_and_accepts_max():
+    output = []
+    errors = []
+    agent = type("Agent", (AgentCommandsMixin,), {})()
+    agent.console = NS(system=output.append, error=errors.append)
+    agent.profile = NS(reasoning="anthropic")
+    agent.reasoning_effort = "high"
+
+    agent._cmd_effort("/effort")
+    agent._cmd_effort("/effort max")
+
+    assert output[0] == (
+        "Reasoning: anthropic, effort: high. "
+        "Available: none, minimal, low, medium, high, xhigh, max"
+    )
+    assert output[1] == "Reasoning effort set to max."
+    assert agent.reasoning_effort == "max"
+    assert errors == []
 
 
 def test_slash_command_catalog_includes_skills_without_shadowing_builtins():

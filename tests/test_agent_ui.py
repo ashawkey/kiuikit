@@ -2,7 +2,7 @@ import io
 
 from rich.console import Console
 
-from kiui.agent.ui import ResponseStream, ThinkingIndicator
+from kiui.agent.ui import AgentConsole, ContextStatus, ResponseStream, ThinkingIndicator
 
 
 def test_thinking_indicator_can_render_a_countdown():
@@ -15,6 +15,34 @@ def test_thinking_indicator_can_render_a_countdown():
     assert indicator._label_plain(99) == "Waiting... (0s)"
     status = "".join(text for _, text in indicator._prompt_status("⠋", 1.1))
     assert "Waiting... (1m 00s)" in status
+
+
+def test_thinking_indicator_shows_frozen_accumulated_round_time():
+    output = io.StringIO()
+    console = Console(file=output, width=80, no_color=True)
+    context = ContextStatus(13, 100, 226_000, 5_000)
+    indicator = ThinkingIndicator(
+        console, status_suffix=context, round_elapsed=312.9
+    )
+
+    assert indicator._label_plain(12) == (
+        "Working... (12s) · 13% · ↑226K · ↓5K · 5m"
+    )
+    status = "".join(text for _, text in indicator._prompt_status("⠋", 12))
+    assert status.endswith(" · 5m")
+
+
+def test_agent_console_freezes_round_time_when_each_indicator_starts(monkeypatch):
+    times = iter([100.0, 112.0, 130.0])
+    monkeypatch.setattr("kiui.agent.ui.time.monotonic", lambda: next(times))
+    console = AgentConsole()
+
+    with console.round_timer():
+        first = console.thinking()
+        second = console.thinking(label="Executing")
+
+    assert first._round_elapsed == 12.0
+    assert second._round_elapsed == 30.0
 
 
 def make_stream():
@@ -66,6 +94,27 @@ def test_response_stream_keeps_streamed_list_items_compact():
 
     lines = output.getvalue().splitlines()
     assert [line.strip() for line in lines] == ["•  • first", "• second", "• third"]
+
+
+def test_response_stream_preserves_nested_list_indentation():
+    output, stream = make_stream()
+
+    stream.on_content(
+        "- parent\n"
+        "  - child one\n"
+        "  - child two\n"
+        "- sibling\n"
+    )
+    stream.close()
+
+    lines = output.getvalue().splitlines()
+    positions = {
+        text: next(line.rindex("•") for line in lines if text in line)
+        for text in ("parent", "child one", "child two", "sibling")
+    }
+    assert positions["child one"] == positions["child two"]
+    assert positions["child one"] > positions["parent"]
+    assert positions["sibling"] == positions["parent"]
 
 
 def test_response_stream_preserves_literal_asterisks_and_inline_code():

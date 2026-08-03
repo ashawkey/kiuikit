@@ -7,10 +7,10 @@ from pathlib import Path
 
 from .paths import KIA_GITIGNORE_NAME, get_kia_dir
 
-# Entries a default clean keeps. Skills are authored content, and batch results
-# are a deliverable the agent is expected to still be working from — both would
-# be a real loss, unlike the caches and transcripts a clean is meant to reclaim.
-PRESERVED_ENTRIES = frozenset({"skills", "batch"})
+# Entries a default clean keeps. Skills are authored content; batch results and
+# orchestrator state are durable work products the agent may still be using.
+# Losing any of them would be a real loss, unlike reclaimable caches/transcripts.
+PRESERVED_ENTRIES = frozenset({"skills", "batch", "orchestrator"})
 
 
 @dataclass(frozen=True)

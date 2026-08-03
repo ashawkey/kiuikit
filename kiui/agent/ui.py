@@ -8,6 +8,7 @@ interactive prompting are handled in one place.
 from __future__ import annotations
 
 import math
+import re
 import threading
 import time
 from contextlib import contextmanager
@@ -46,12 +47,14 @@ _QS_STYLE = questionary.Style([
 _DOT = "\u2022"      # bullet •
 _CHECK = "\u2713"    # ✓
 _CROSS = "\u2717"    # ✗
+_LIST_ITEM_RE = re.compile(r"^[ \t]*(?:[-+*]|\d+[.)])\s+")
 
+# drawn with ▄ █ ▀
 _AGENT_LOGO = (
     "   ▄   \n"
     " ▄█▀█▄ \n"
     "▀█▄▀▄█▀\n"
-    "  ▀█▀  \n"
+    "▀ ▀▀▀ ▀\n"
 )
 
 # Diff rendering: if old + new lines exceed this, show a summary instead
@@ -146,6 +149,18 @@ def _format_duration(seconds: float) -> str:
     return f"{seconds}s"
 
 
+def _format_round_duration(seconds: float) -> str:
+    """Compact frozen elapsed time for completed parts of a round."""
+    total = max(0, math.floor(seconds))
+    hours, remainder = divmod(total, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    if hours:
+        return f"{hours}h {minutes:02d}m"
+    if minutes:
+        return f"{minutes}m"
+    return f"{seconds}s"
+
+
 class ThinkingIndicator:
     """Animated model activity, countdown, or indeterminate progress."""
 
@@ -157,6 +172,7 @@ class ThinkingIndicator:
         label: str = "Working",
         progress: bool = False,
         countdown: float | None = None,
+        round_elapsed: float | None = None,
         render_terminal: bool = True,
         status_sink: Callable[[list[tuple[str, str]] | None], None] | None = None,
         indicator_stack: list["ThinkingIndicator"] | None = None,
@@ -168,6 +184,7 @@ class ThinkingIndicator:
         self._label_text = label
         self._progress = progress
         self._countdown = countdown
+        self._round_elapsed = round_elapsed
         self._render_terminal = render_terminal
         self._status_sink = status_sink
         self._status: Status | None = None
@@ -267,6 +284,7 @@ class ThinkingIndicator:
                 label=self._label_text,
                 progress=self._progress,
                 countdown=self._countdown,
+                round_elapsed=self._round_elapsed,
             )
         else:
             self._events.publish(
@@ -276,6 +294,7 @@ class ThinkingIndicator:
                 label=self._label_text,
                 progress=self._progress,
                 countdown=self._countdown,
+                round_elapsed=self._round_elapsed,
             )
 
     def _publish_stop(self) -> None:
@@ -333,18 +352,24 @@ class ThinkingIndicator:
                 else str(self._status_suffix)
             )
             fragments.append(("class:status.detail", f" · {suffix}"))
+        if self._round_elapsed is not None:
+            fragments.append((
+                "class:status.detail",
+                f" · {_format_round_duration(self._round_elapsed)}",
+            ))
         return fragments
 
     def _label_plain(self, elapsed: float) -> str:
-        base = self._base_label(elapsed)
-        if not self._status_suffix:
-            return base
-        suffix = (
-            self._status_suffix.plain()
-            if isinstance(self._status_suffix, ContextStatus)
-            else str(self._status_suffix)
-        )
-        return f"{base} · {suffix}"
+        parts = [self._base_label(elapsed)]
+        if self._status_suffix:
+            parts.append(
+                self._status_suffix.plain()
+                if isinstance(self._status_suffix, ContextStatus)
+                else str(self._status_suffix)
+            )
+        if self._round_elapsed is not None:
+            parts.append(_format_round_duration(self._round_elapsed))
+        return " · ".join(parts)
 
     def _label(self, elapsed: float) -> str | Table:
         base = self._base_label(elapsed)
@@ -359,15 +384,31 @@ class ThinkingIndicator:
                     Text("·", style="dim"),
                     Text(str(self._status_suffix), style="dim"),
                 ])
+            if self._round_elapsed is not None:
+                cells.extend([
+                    Text("·", style="dim"),
+                    Text(_format_round_duration(self._round_elapsed), style="dim"),
+                ])
             row.add_row(*cells)
             return row
         if not self._status_suffix:
-            return base
+            if self._round_elapsed is None:
+                return base
+            return f"{base} · {_format_round_duration(self._round_elapsed)}"
         if isinstance(self._status_suffix, str):
-            return f"{base} · {self._status_suffix}"
+            suffix = f"{base} · {self._status_suffix}"
+            if self._round_elapsed is not None:
+                suffix += f" · {_format_round_duration(self._round_elapsed)}"
+            return suffix
 
         row = Table.grid(padding=(0, 1))
-        row.add_row(Text(base), Text("·", style="dim"), self._status_suffix.render())
+        cells = [Text(base), Text("·", style="dim"), self._status_suffix.render()]
+        if self._round_elapsed is not None:
+            cells.extend([
+                Text("·", style="dim"),
+                Text(_format_round_duration(self._round_elapsed), style="dim"),
+            ])
+        row.add_row(*cells)
         return row
 
     def _tick(self) -> None:
@@ -449,6 +490,7 @@ class _TerminalMarkdownStream:
         self._pending = ""
         self._table_candidate: str | None = None
         self._table_lines: list[str] = []
+        self._list_lines: list[str] = []
         self._code_fence = ""
         self._code_language = "text"
         self._started = False
@@ -493,6 +535,7 @@ class _TerminalMarkdownStream:
     def _open_code(self, fence: str, language: str) -> None:
         self._flush_table_candidate()
         self._flush_table()
+        self._flush_list()
         self._code_fence = fence
         self._code_language = language
         label = "code" if language == "text" else language
@@ -519,6 +562,11 @@ class _TerminalMarkdownStream:
         if self._table_lines:
             self._print(Markdown("\n".join(self._table_lines)))
             self._table_lines.clear()
+
+    def _flush_list(self) -> None:
+        if self._list_lines:
+            self._print(_CompactMarkdown("\n".join(self._list_lines)))
+            self._list_lines.clear()
 
     def _render_ordinary_line(self, line: str) -> None:
         if line.strip():
@@ -551,8 +599,12 @@ class _TerminalMarkdownStream:
         if fence is not None:
             self._open_code(*fence)
         elif "|" in line and line.strip():
+            self._flush_list()
             self._table_candidate = line
+        elif _LIST_ITEM_RE.match(line):
+            self._list_lines.append(line)
         else:
+            self._flush_list()
             self._render_ordinary_line(line)
 
     def feed(self, text: str) -> None:
@@ -567,6 +619,7 @@ class _TerminalMarkdownStream:
             self._pending = ""
         self._flush_table_candidate()
         self._flush_table()
+        self._flush_list()
         if self._code_fence:
             self._close_code()
 
@@ -574,6 +627,7 @@ class _TerminalMarkdownStream:
         self._pending = ""
         self._table_candidate = None
         self._table_lines.clear()
+        self._list_lines.clear()
 
 
 class ResponseStream:
@@ -676,6 +730,7 @@ class AgentConsole:
         ) = None
         self._indicator_stack: list[ThinkingIndicator] = []
         self._indicator_lock = threading.RLock()
+        self._round_timer_state = threading.local()
         self._quiet_depth = 0
         self._visible_depth = 0
 
@@ -735,6 +790,25 @@ class AgentConsole:
             capture_console.print(*objects, markup=markup)
         return capture.get().rstrip("\n")
 
+    @contextmanager
+    def round_timer(self) -> Iterator[None]:
+        """Track one autonomous round for frozen status-bar totals."""
+        stack = getattr(self._round_timer_state, "stack", None)
+        if stack is None:
+            stack = []
+            self._round_timer_state.stack = stack
+        stack.append(time.monotonic())
+        try:
+            yield
+        finally:
+            stack.pop()
+
+    def _round_elapsed(self) -> float | None:
+        stack = getattr(self._round_timer_state, "stack", None)
+        if not stack:
+            return None
+        return time.monotonic() - stack[-1]
+
     def thinking(
         self,
         *,
@@ -763,6 +837,7 @@ class AgentConsole:
                 None,
                 status_suffix=status_suffix,
                 label=label,
+                round_elapsed=self._round_elapsed(),
                 render_terminal=False,
             )
         return ThinkingIndicator(
@@ -772,6 +847,7 @@ class AgentConsole:
             label=label,
             progress=progress,
             countdown=countdown,
+            round_elapsed=self._round_elapsed(),
             render_terminal=not self.interactive_input,
             status_sink=self.status_sink if self.interactive_input else None,
             indicator_stack=self._indicator_stack,

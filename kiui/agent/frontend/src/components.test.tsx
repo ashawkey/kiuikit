@@ -121,6 +121,29 @@ describe('interaction components', () => {
     }
   })
 
+  it('shows frozen accumulated round time after status details', () => {
+    vi.useFakeTimers()
+    try {
+      render(
+        <Thinking
+          contextTokens={13}
+          contextLimit={100}
+          inputTokens={226_000}
+          outputTokens={5_000}
+          roundElapsed={312}
+        />,
+      )
+      expect(screen.getByText('Working... (0s)')).toBeInTheDocument()
+      expect(screen.getByText('↑226K · ↓5K')).toBeInTheDocument()
+      expect(screen.getByText('· 5m')).toBeInTheDocument()
+      act(() => { vi.advanceTimersByTime(2000) })
+      expect(screen.getByText('Working... (2s)')).toBeInTheDocument()
+      expect(screen.getByText('· 5m')).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('counts down while waiting', () => {
     vi.useFakeTimers()
     try {

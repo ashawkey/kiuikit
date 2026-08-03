@@ -780,6 +780,24 @@ def test_skill_owned_tool_output_description_is_used(tmp_path):
     assert describe_tool_output("demo_output", result, spec.describe_output) == "Returned useful"
 
 
+def test_read_file_output_description_only_warns_for_unintentional_truncation():
+    line_cap = {
+        "lines_read": 100,
+        "truncated": True,
+        "truncation_reason": "line cap",
+        "success": True,
+    }
+    char_cap = {
+        "lines_read": 42,
+        "truncated": True,
+        "truncation_reason": "character cap",
+        "success": True,
+    }
+
+    assert describe_tool_output("read_file", line_cap) == "100 lines read"
+    assert describe_tool_output("read_file", char_cap) == "42 lines read · truncated (character cap)"
+
+
 def test_builtin_process_output_description_is_informative():
     result = {
         "processes": [{

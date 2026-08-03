@@ -215,6 +215,16 @@ def test_codex_request_converts_chat_messages_and_tools():
     assert body["tools"][0]["name"] == "read_file"
 
 
+def test_codex_request_maps_max_effort_to_xhigh():
+    body = _build_body(CompletionRequest(
+        model="gpt-5.6-sol",
+        messages=[{"role": "user", "content": "inspect"}],
+        reasoning_effort="max",
+    ))
+
+    assert body["reasoning"] == {"effort": "xhigh", "summary": "auto"}
+
+
 def test_codex_stream_round_trip_and_provider_state(monkeypatch, tmp_path):
     terminal_output = [
         {

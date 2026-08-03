@@ -435,8 +435,10 @@ class TerminalInput:
         prompt_label: str = "> ",
         work_dir: str | Path | None = None,
         commands: dict[str, str] | None = None,
+        system_message: Callable[[str], None] = print,
     ):
         self._prompt_label = prompt_label
+        self._system_message = system_message
         self._last_ctrl_c = 0.0  # timestamp of last Ctrl+C on an empty buffer
         self._busy = False
         self._status: list[tuple[str, str]] = []
@@ -604,7 +606,9 @@ class TerminalInput:
                 event.app.exit(exception=EOFError)  # quit the CLI
             else:
                 self._last_ctrl_c = now
-                run_in_terminal(lambda: print("(press Ctrl+C again to exit)"))
+                run_in_terminal(
+                    lambda: self._system_message("press Ctrl+C again to exit")
+                )
 
         @kb.add("escape", filter=~is_searching)
         def _(event):

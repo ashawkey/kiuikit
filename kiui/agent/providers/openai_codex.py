@@ -172,7 +172,8 @@ def _build_body(request: CompletionRequest) -> dict[str, Any]:
         body["tools"] = _responses_tools(request.tools)
     if request.reasoning_effort is not None:
         body["reasoning"] = {
-            "effort": request.reasoning_effort,
+            # OpenAI's highest reasoning level is named xhigh.
+            "effort": "xhigh" if request.reasoning_effort == "max" else request.reasoning_effort,
             "summary": "auto",
         }
     cache_key = _prompt_cache_key(request.session_id)

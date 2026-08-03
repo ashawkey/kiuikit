@@ -55,7 +55,7 @@ Useful runner options:
 --model-alias ALIAS
 --persona NAME
 --work-dir PATH
---reasoning-effort {none,minimal,low,medium,high,xhigh}
+--reasoning-effort {none,minimal,low,medium,high,xhigh,max}
 ```
 
 Omitting `--model-alias` selects the first configured model, as `run_agent` does.

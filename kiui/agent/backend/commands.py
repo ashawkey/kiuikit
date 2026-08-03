@@ -1,5 +1,7 @@
 """Interactive slash commands for :class:`LLMAgent`."""
 
+from contextlib import nullcontext
+
 from rich.markup import escape
 
 from kiui.agent.context import (
@@ -22,6 +24,10 @@ from kiui.agent.utils.interrupt import RequestInterrupted
 
 
 class AgentCommandsMixin:
+    def _round_timer(self):
+        timer = getattr(self.console, "round_timer", None)
+        return timer() if timer is not None else nullcontext()
+
     # Single source of truth for slash commands: name → help line.
     # Drives dispatch (COMMANDS), /help output, and terminal auto-completion.
     COMMAND_HELP = {
@@ -36,7 +42,7 @@ class AgentCommandsMixin:
         "login": "Log in to an OAuth provider (/login [provider|model-alias])",
         "logout": "Remove stored OAuth credentials (/logout [provider|model-alias])",
         "auth": "Show authentication status (/auth [provider|model-alias])",
-        "reasoning": "Show or set reasoning effort (none|minimal|low|medium|high|xhigh)",
+        "effort": "Show or set reasoning effort (/effort <level>)",
         "skills": "List skills; /skills <name> to load one, /skills reload to re-scan",
         "persona": "List/switch personas; /persona reload to re-scan",
         "wait": "Send a prompt after a delay (/wait <30s|5m|1h> <prompt>)",
@@ -53,7 +59,7 @@ class AgentCommandsMixin:
     # prompt, so only commands that read session state or take effect on the
     # *next* API call qualify.
     INSTANT_COMMANDS = frozenset({
-        "help", "usage", "ps", "context", "system_prompt", "auth", "reasoning",
+        "help", "usage", "ps", "context", "system_prompt", "auth", "effort",
     })
     # The same, but only in their bare listing form: given an argument these
     # switch model or persona, or load a skill into the running conversation.
@@ -102,8 +108,8 @@ class AgentCommandsMixin:
             self._cmd_logout(raw)
         elif cmd == "auth":
             self._cmd_auth(raw)
-        elif cmd == "reasoning":
-            self._cmd_reasoning(raw)
+        elif cmd == "effort":
+            self._cmd_effort(raw)
         elif cmd == "context":
             self._cmd_context()
         elif cmd == "system_prompt":
@@ -211,8 +217,9 @@ class AgentCommandsMixin:
             return
 
         self.console.rule()
-        with self._operation("agent response"):
-            self.get_response()
+        with self._round_timer():
+            with self._operation("agent response"):
+                self.get_response()
         try:
             self.save_session(self._session_id, reason="round")
         except Exception as e:
@@ -431,16 +438,18 @@ class AgentCommandsMixin:
 
         self.console.print("\n".join(lines))
 
-    def _cmd_reasoning(self, raw: str):
+    def _cmd_effort(self, raw: str):
         parts = raw.split(maxsplit=1)
+        choices = ", ".join(REASONING_EFFORTS)
         if len(parts) == 1:
             self.console.system(
-                f"Reasoning: {self.profile.reasoning or 'unsupported'}, effort: {self.reasoning_effort}"
+                f"Reasoning: {self.profile.reasoning or 'unsupported'}, effort: {self.reasoning_effort}. "
+                f"Available: {choices}"
             )
             return
         effort = parts[1].strip().lower()
         if effort not in REASONING_EFFORTS:
-            self.console.error(f"Invalid reasoning effort '{effort}'. Choose: {', '.join(REASONING_EFFORTS)}")
+            self.console.error(f"Invalid reasoning effort '{effort}'. Choose: {choices}")
             return
         self.reasoning_effort = effort
         self.console.system(f"Reasoning effort set to {effort}.")

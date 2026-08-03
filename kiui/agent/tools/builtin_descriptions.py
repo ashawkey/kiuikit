@@ -108,7 +108,10 @@ def _describe_process_output(result: dict[str, Any]) -> str:
 
 def _describe_read_output(result: dict[str, Any]) -> str:
     message = f"{result.get('lines_read', 0)} lines read"
-    return message + (" · truncated" if result.get("truncated") else "")
+    reason = result.get("truncation_reason")
+    if result.get("truncated") and reason != "line cap":
+        message += f" · truncated{f' ({reason})' if reason else ''}"
+    return message
 
 
 def _describe_search_output(result: dict[str, Any], noun: str) -> str:

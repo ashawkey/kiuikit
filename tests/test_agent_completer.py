@@ -85,6 +85,21 @@ def test_terminal_does_not_disable_cursor_position_reporting(monkeypatch):
     assert "output" not in kwargs
 
 
+def test_ctrl_c_exit_hint_uses_system_message(monkeypatch):
+    system_message = Mock()
+    terminal = object.__new__(TerminalInput)
+    terminal._busy = False
+    terminal._last_ctrl_c = 0.0
+    terminal._system_message = system_message
+    bindings = terminal._create_keybindings()
+    handler = next(b.handler for b in bindings.bindings if b.keys == (Keys.ControlC,))
+    monkeypatch.setattr("kiui.agent.terminal.run_in_terminal", lambda callback: callback())
+
+    handler(SimpleNamespace(current_buffer=Buffer(), app=Mock()))
+
+    system_message.assert_called_once_with("press Ctrl+C again to exit")
+
+
 def _message_terminal(*, pending=None, status=None):
     terminal = object.__new__(TerminalInput)
     terminal._busy = True

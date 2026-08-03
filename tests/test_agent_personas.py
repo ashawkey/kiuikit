@@ -30,7 +30,7 @@ def _write_persona(
 def test_bundled_personas_are_declarative():
     personas = discover_personas()
 
-    assert set(personas) >= {"coder", "chatter", "reviewer"}
+    assert set(personas) >= {"coder", "chatter", "reviewer", "orchestrator"}
     assert personas["coder"].path.endswith("PERSONA.md")
     assert personas["coder"].tools is None
     assert personas["coder"].bundled_skills is None
@@ -40,6 +40,38 @@ def test_bundled_personas_are_declarative():
     assert personas["chatter"].local_skills is False
     assert personas["reviewer"].bundled_skills == frozenset({"pdf-reading"})
     assert personas["reviewer"].local_skills is False
+    assert personas["orchestrator"].tools == frozenset(
+        {
+            "read_file",
+            "write_file",
+            "edit_file",
+            "multi_edit",
+            "ls",
+            "load_skill",
+            "start_process",
+            "inspect_processes",
+            "stop_process",
+            "wait",
+        }
+    )
+    assert personas["orchestrator"].bundled_skills == frozenset(
+        {"subagent", "monitor", "code-review"}
+    )
+    assert personas["orchestrator"].local_skills is False
+    assert "{{kia:autonomous-mode}}" not in personas["orchestrator"].template
+    assert "## User Interaction" in personas["orchestrator"].template
+    assert "`change`" in personas["orchestrator"].template
+    assert "`monitor`" in personas["orchestrator"].template
+    assert "At most one implementation subagent may run" in personas["orchestrator"].template
+    assert "Do not maintain resource-lock metadata" in personas["orchestrator"].template
+    assert '"version": 2' in personas["orchestrator"].template
+    assert '"request_path"' in personas["orchestrator"].template
+    assert '"implementation_reports"' not in personas["orchestrator"].template
+    assert '"review_reports"' not in personas["orchestrator"].template
+    assert '"blocking_findings"' not in personas["orchestrator"].template
+    assert '"history": []' not in personas["orchestrator"].template
+    assert "must never overwrite an existing ledger" in personas["orchestrator"].template
+    assert "ledger mutation is a hard stop" in personas["orchestrator"].template
 
 
 def test_read_persona_validates_skill_policy(tmp_path):

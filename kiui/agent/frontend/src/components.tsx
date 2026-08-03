@@ -154,6 +154,16 @@ function formatDuration(value: number) {
   return `${seconds}s`
 }
 
+function formatRoundDuration(value: number) {
+  const total = Math.max(0, Math.floor(value))
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const seconds = total % 60
+  if (hours) return `${hours}h ${String(minutes).padStart(2, '0')}m`
+  if (minutes) return `${minutes}m`
+  return `${seconds}s`
+}
+
 export type ThinkingProps = {
   suffix?: string
   contextTokens?: number
@@ -164,6 +174,7 @@ export type ThinkingProps = {
   progress?: boolean
   countdown?: number
   startedAt?: number
+  roundElapsed?: number
   processStatus?: string
 }
 
@@ -177,6 +188,7 @@ export function Thinking({
   progress = false,
   countdown,
   startedAt,
+  roundElapsed,
   processStatus = '',
 }: ThinkingProps) {
   const mountedAt = useRef(Date.now())
@@ -207,6 +219,7 @@ export function Thinking({
           <small>↑{compactTokens(inputTokens)} · ↓{compactTokens(outputTokens)}</small>
         </>
       ) : suffix ? <small>{suffix}</small> : null}
+      {roundElapsed == null ? null : <small>· {formatRoundDuration(roundElapsed)}</small>}
     </div>
   )
 }

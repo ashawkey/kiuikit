@@ -1095,9 +1095,10 @@ class LLMAgent(
         """
         self.console.tool(f"! {command}")
         arguments = {"command": command}
-        with self._operation("shell command"):
-            with self.console.thinking(label="Executing", status_suffix="exec_command"):
-                result = self.tool_executor.execute("exec_command", arguments)
+        with AgentCommandsMixin._round_timer(self):
+            with self._operation("shell command"):
+                with self.console.thinking(label="Executing", status_suffix="exec_command"):
+                    result = self.tool_executor.execute("exec_command", arguments)
         success = result.get("success", False)
         registry = getattr(self.tool_executor, "registry", None)
         spec = registry.get("exec_command") if registry is not None else None
@@ -1483,8 +1484,9 @@ class LLMAgent(
         })
         self.round_id += 1
         self.console.rule()
-        with self._operation("agent response"):
-            self.get_response()
+        with AgentCommandsMixin._round_timer(self):
+            with self._operation("agent response"):
+                self.get_response()
 
         if self._last_interrupted:
             if self._interrupt_reverts_prompt:
@@ -1556,6 +1558,7 @@ class LLMAgent(
             history_path=str(self._kia_dir() / "history"),
             work_dir=_wd,
             commands=self._slash_commands,
+            system_message=self.console.system,
         )
 
         try:
@@ -1612,8 +1615,9 @@ class LLMAgent(
         self.console.rule()
 
         operation = self._operation("agent response") if manage_operation else nullcontext()
-        with operation:
-            response = self.get_response()
+        with AgentCommandsMixin._round_timer(self):
+            with operation:
+                response = self.get_response()
 
         t1 = time.time()
         self.console.system(f"Execution time: {t1 - t0:.2f} seconds")

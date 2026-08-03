@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
-ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
-REASONING_EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh")
+ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"]
+REASONING_EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
 
 
 @dataclass(frozen=True)
@@ -53,23 +53,26 @@ def reasoning_kwargs(style: str | None, effort: ReasoningEffort) -> dict[str, An
     if style is None:
         return {}
     if style == "openai":
-        return {"reasoning_effort": effort}
+        # OpenAI's highest reasoning level is named xhigh.
+        return {"reasoning_effort": "xhigh" if effort == "max" else effort}
     if style == "anthropic":
         # OpenAI-compatible Anthropic gateways commonly consume both the generic
         # effort field and the native adaptive-thinking controls.
-        mapped = "max" if effort == "xhigh" else effort
         if effort == "none":
             return {"extra_body": {"thinking": {"type": "disabled"}}}
+        # Anthropic has no minimal level. Its broadly supported top level is max;
+        # newer models may also name an intermediate extended level xhigh.
+        mapped = {"minimal": "low", "xhigh": "max"}.get(effort, effort)
         return {
-            "reasoning_effort": effort,
+            "reasoning_effort": mapped,
             "extra_body": {
                 "thinking": {"type": "adaptive"},
                 "output_config": {"effort": mapped},
             },
         }
     if style == "gemini":
-        # Gemini 3 uses qualitative thinking levels; it has no xhigh level.
-        mapped = {"none": "minimal", "xhigh": "high"}.get(effort, effort)
+        # Gemini 3 uses qualitative thinking levels; it has no xhigh/max level.
+        mapped = {"none": "minimal", "xhigh": "high", "max": "high"}.get(effort, effort)
         return {
             "extra_body": {
                 "google": {
@@ -83,8 +86,8 @@ def reasoning_kwargs(style: str | None, effort: ReasoningEffort) -> dict[str, An
     if style == "deepseek":
         if effort == "none":
             return {"extra_body": {"thinking": {"type": "disabled"}}}
-        # DeepSeek officially maps low/medium to high and xhigh to max.
-        mapped = "max" if effort == "xhigh" else "high"
+        # DeepSeek officially maps low/medium to high and xhigh/max to max.
+        mapped = "max" if effort in ("xhigh", "max") else "high"
         return {
             "reasoning_effort": mapped,
             "extra_body": {"thinking": {"type": "enabled"}},

@@ -199,6 +199,7 @@ function SessionPane({
           startedAt: typeof data.started_at === 'number' ? data.started_at * 1000 : Date.now(),
           progress: data.progress === true,
           countdown: typeof data.countdown === 'number' ? data.countdown : undefined,
+          roundElapsed: typeof data.round_elapsed === 'number' ? data.round_elapsed : undefined,
         })
         break
       case 'thinking_stop':

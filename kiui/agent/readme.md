@@ -157,6 +157,7 @@ The agent supports the following slash commands in the CLI:
 | `/login [provider\|model-alias]` | Authenticate an OAuth provider; defaults to the current provider |
 | `/logout [provider\|model-alias]` | Remove stored OAuth credentials |
 | `/auth [provider\|model-alias]` | Show authentication status |
+| `/effort [level]` | Show or set reasoning effort (`none`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`) |
 | `/rewind` | Return to before a user prompt, restore it to the chatbox, then branch |
 | `/skills` | List installed skills; `/skills reload` to re-scan; `/skills <name>` to load one |
 | `/<skill-name> [task]` | Invoke a skill for an optional task; without one, run its declared default or ask what to do |
@@ -166,9 +167,9 @@ The agent supports the following slash commands in the CLI:
 | `/resume [session_id]` | Save the current session, then resume a previous one (bare `/resume` picks interactively) |
 | `/exit` or `/quit` | Exit the agent |
 
-A message sent while the agent is working normally steers the next tool-call iteration. The user command `/wait` is deliberately different: its prompt becomes ready only after the requested seconds (`s`), minutes (`m`), or hours (`h`) and always starts a fresh round after the current round finishes. This is separate from the model-facing core `wait` tool, which pauses within the current round before later sequential tool calls. While the agent is idle, the same activity indicator used for `Working...` and `Executing...` shows `Waiting...` with a live countdown in the terminal and Web UI. Only one prompt, immediate or delayed, can be pending; use the existing pending-message edit/withdraw action to cancel it.
+A message sent while the agent is working normally steers the next tool-call iteration. The user command `/wait` is deliberately different: its prompt becomes ready only after the requested seconds (`s`), minutes (`m`), or hours (`h`) and always starts a fresh round after the current round finishes. This is separate from the model-facing core `wait` tool, which pauses within the current round before later sequential tool calls. While the agent is idle, the same activity indicator used for `Working...` and `Executing...` shows `Waiting...` with a live countdown in the terminal and Web UI. During an active round, every working, executing, and tool-wait indicator also ends with the accumulated round time measured when that iteration started (for example, `· 13% · ↑226K · ↓5K · 5m`); only the current iteration's parenthesized counter updates continuously. Only one prompt, immediate or delayed, can be pending; use the existing pending-message edit/withdraw action to cancel it.
 
-A command sent while the agent is working does not have to wait for the round: a round owns the conversation, the provider, and the terminal prompt, so any command that merely reads session state (`/help`, `/usage`, `/ps`, `/context`, `/system_prompt`, `/auth`, and the bare listing form of `/model`, `/persona`, `/skills`) or takes effect on the next API call (`/reasoning`) is answered immediately — from the terminal and the Web UI alike. Commands that rewrite the conversation or swap what runs it (`/clear`, `/compact`, `/rewind`, `/resume`, `/login`, a `/model` or `/persona` switch, `/skills <name>`) stay queued until the round ends. Direct skill invocations also start model rounds, so `/<skill-name>` always queues while another round is active.
+A command sent while the agent is working does not have to wait for the round: a round owns the conversation, the provider, and the terminal prompt, so any command that merely reads session state (`/help`, `/usage`, `/ps`, `/context`, `/system_prompt`, `/auth`, and the bare listing form of `/model`, `/persona`, `/skills`) or takes effect on the next API call (`/effort`) is answered immediately — from the terminal and the Web UI alike. Commands that rewrite the conversation or swap what runs it (`/clear`, `/compact`, `/rewind`, `/resume`, `/login`, a `/model` or `/persona` switch, `/skills <name>`) stay queued until the round ends. Direct skill invocations also start model rounds, so `/<skill-name>` always queues while another round is active.
 
 ### Bash shortcut
 
@@ -365,6 +366,7 @@ A persona owns the agent's identity, complete system prompt, and tool surface. B
 | `coder` | all | The default coding agent (project-aware, full tool access) |
 | `chatter` | `web_search`, `web_fetch` | General chatbot without file/shell access |
 | `reviewer` | paper/file, web, and skill tools | Evidence-grounded academic paper reviewer |
+| `orchestrator` | task-state, process, and skill tools | Durable task queue with delegated implementation and independent review |
 
 Each persona is a directory containing `PERSONA.md`:
 
