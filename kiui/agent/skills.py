@@ -244,13 +244,11 @@ def build_skills_prompt_section(skills: dict[str, dict]) -> str:
     lines = [
         "## Skills",
         "",
-        "The following specialized skills are available. Before acting, check whether",
-        "the request matches a skill below; if it does, use **load_skill** before doing",
-        "the task and follow the loaded instructions. If the user asks to create or",
-        "modify a skill, load a skill-creation skill when one is available. A loaded skill",
-        "may reference bundled",
-        "files (e.g. references/… or scripts/…) relative to its directory; read or",
-        "run those with the ordinary file/exec tools when the instructions call for it.",
+        "Before acting, match the request against the skills below. On a match, call",
+        "**load_skill** before proceeding and follow its instructions. Always load",
+        "**skill-creator** before creating or modifying a skill. Resolve referenced",
+        "files (for example, `references/...` or `scripts/...`) relative to the skill",
+        "directory and access them with the standard file or execution tools.",
         "",
     ]
 

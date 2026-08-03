@@ -1,6 +1,6 @@
 ---
 name: lean
-description: Produce terse, token-efficient answers and strict YAGNI implementations without sacrificing correctness. Use when the user explicitly asks for brevity, concision, minimalism, simplicity, YAGNI, token efficiency, or no over-engineering.
+description: Produce correct, terse, token-efficient answers and YAGNI implementations when the user requests brevity, minimalism, simplicity, or no over-engineering.
 ---
 
 # Lean Mode

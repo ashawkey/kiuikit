@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: Find actionable bugs, regressions, security risks, performance problems, and maintainability issues in source code, diffs, commits, pull requests, or implementation designs. Use when the user asks for a code review, audit, critique, inspection, or risk assessment.
+description: Review code, diffs, commits, pull requests, or designs for actionable bugs, regressions, security risks, performance problems, and maintainability issues.
 ---
 
 # Code Review

@@ -1,6 +1,6 @@
 ---
 name: batch
-description: Apply one identical task to many independent items — captioning, classifying, extracting, scoring, or summarizing a list of files, rows, or URLs — without accumulating per-item results in the conversation. Use when the same instruction repeats over a list and the items do not depend on each other.
+description: Apply one repeated captioning, classification, extraction, scoring, or summarization task to independent files, rows, or URLs without accumulating results in context.
 ---
 
 # Batch Processing over Independent Items

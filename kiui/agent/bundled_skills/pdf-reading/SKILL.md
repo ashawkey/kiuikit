@@ -1,6 +1,6 @@
 ---
 name: pdf-reading
-description: Parse and inspect PDF documents, papers, formulas, tables, figures, charts, and scanned pages with MinerU. Use when the user asks to read, summarize, analyze, cite, or extract content from a PDF.
+description: Parse, inspect, summarize, analyze, cite, or extract PDF papers, formulas, tables, figures, charts, and scanned pages with MinerU.
 compatibility: Requires Python 3.10-3.13 and the external MinerU CLI. Local parsing needs MinerU models and substantial RAM/disk; VLM and hybrid backends may require a supported GPU.
 ---
 

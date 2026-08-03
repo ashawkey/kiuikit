@@ -1,6 +1,6 @@
 ---
 name: subagent
-description: Delegate a self-contained task to a fresh, independent kia agent and wait for its structured result. Use when the user asks for a subagent, when an investigation or implementation can be delegated, or when several independent agent tasks should run in parallel.
+description: Delegate substantial self-contained investigations or implementations to fresh independent kia agents, including parallel work, and wait for structured results.
 ---
 
 # Subagent Delegation

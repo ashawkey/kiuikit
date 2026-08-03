@@ -1,6 +1,6 @@
 ---
 name: project-info
-description: Generate, audit, or refine a repository's AGENTS.md from verified manifests, source structure, tests, CI, and documentation. Use when users want project instructions, onboarding context, or a more accurate and token-efficient AGENTS.md.
+description: Generate, audit, or refine a repository's AGENTS.md into accurate, token-efficient project instructions using verified code, manifests, tests, CI, and docs.
 ---
 
 # Project Info

@@ -1,6 +1,6 @@
 ---
 name: persona-creator
-description: Create or revise and validate declarative kia personas under .kia/personas. Use when the user wants a custom persona, system prompt, behavioral profile, or restricted tool surface.
+description: Create, revise, and validate declarative kia personas under .kia/personas, including custom system prompts, behavior profiles, and restricted tool surfaces.
 ---
 
 # Persona Creator

@@ -1,6 +1,6 @@
 ---
 name: monitor
-description: Run and manage background processes or actively watch servers, jobs, queues, services, logs, GPU usage, and periodic health checks. Use when the user asks to start a long-running or potentially stuck command, monitor repeatedly or on an interval, keep work healthy, relaunch failures, or continue until stopped.
+description: Run long-lived background commands and actively monitor or relaunch servers, jobs, services, logs, GPU usage, and periodic health checks.
 ---
 
 # Background Processes and Monitoring

@@ -1,6 +1,6 @@
 ---
 name: browser
-description: Attach to an already-running Chrome or Chromium browser and directly navigate, inspect, click, type, scroll, extract page content, and manage tabs through CDP. Use for interactive website tasks where the user should see each agent action in their browser.
+description: Control an existing Chrome or Chromium browser through CDP for visible, interactive navigation, inspection, input, scrolling, extraction, and tab management.
 compatibility: Requires a Chromium-based browser with remote debugging enabled and the websockets package provided by kiui[kia].
 ---
 

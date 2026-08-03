@@ -1,6 +1,6 @@
 ---
 name: skill-creator
-description: Use this skill when the user wants to create, revise, or validate an Agent Skill; package a repeatable workflow or domain procedure; add scripts, references, or assets.
+description: Create, revise, or validate Agent Skills that package repeatable workflows or domain procedures with optional scripts, references, and assets.
 ---
 
 # Skill Creator

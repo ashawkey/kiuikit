@@ -1,6 +1,6 @@
 ---
 name: library
-description: Manage reusable kia skills and personas in the kib Git-backed library. Use when the user wants to list, find, install, synchronize, upload, publish, update, or remove a library skill or persona.
+description: List, find, install, synchronize, publish, update, or remove reusable kia skills and personas in the kib Git-backed library.
 ---
 
 # Resource Library

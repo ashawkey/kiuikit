@@ -35,6 +35,7 @@ def test_bundled_personas_are_declarative():
     assert personas["coder"].tools is None
     assert personas["coder"].bundled_skills is None
     assert personas["coder"].local_skills is True
+    assert personas["chatter"].tools == frozenset({"web_search", "web_fetch"})
     assert personas["chatter"].bundled_skills == frozenset()
     assert personas["chatter"].local_skills is False
     assert personas["reviewer"].bundled_skills == frozenset({"pdf-reading"})
