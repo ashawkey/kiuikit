@@ -14,13 +14,14 @@ def _write_persona(
     *,
     description: str = "Test persona",
     tools: str = "all",
+    skills: str = "skills:\n  bundled: []\n  local: false\n",
     body: str = "You are a test persona.",
 ) -> Path:
     path = root / name
     path.mkdir(parents=True)
     (path / "PERSONA.md").write_text(
         f"---\nname: {name}\n"
-        f"description: {description}\ntools: {tools}\n---\n{body}\n",
+        f"description: {description}\ntools: {tools}\n{skills}---\n{body}\n",
         encoding="utf-8",
     )
     return path
@@ -32,6 +33,90 @@ def test_bundled_personas_are_declarative():
     assert set(personas) >= {"coder", "chatter", "reviewer"}
     assert personas["coder"].path.endswith("PERSONA.md")
     assert personas["coder"].tools is None
+    assert personas["coder"].bundled_skills is None
+    assert personas["coder"].local_skills is True
+    assert personas["chatter"].bundled_skills == frozenset()
+    assert personas["chatter"].local_skills is False
+    assert personas["reviewer"].bundled_skills == frozenset({"pdf-reading"})
+    assert personas["reviewer"].local_skills is False
+
+
+def test_read_persona_validates_skill_policy(tmp_path):
+    path = _write_persona(
+        tmp_path,
+        "bad",
+        skills="skills:\n  bundled: [not-bundled]\n  local: false\n",
+    )
+    with pytest.raises(ValueError, match="unknown bundled skill"):
+        read_persona(path)
+
+    (path / "PERSONA.md").write_text(
+        "---\nname: bad\ndescription: Bad\ntools: all\n"
+        "skills:\n  bundled: []\n  local: nope\n---\nPrompt.\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="skills.local.*boolean"):
+        read_persona(path)
+
+
+def test_render_all_bundled_skills(tmp_path):
+    path = _write_persona(
+        tmp_path,
+        "custom",
+        tools="[load_skill]",
+        skills="skills:\n  bundled: all\n  local: false\n",
+        body="{{kia:skills}}",
+    )
+    skills = {
+        "pdf-reading": {"description": "Read PDFs", "source": "bundled"},
+        "monitor": {"description": "Monitor jobs", "source": "bundled"},
+        "project-helper": {"description": "Project helper", "source": "project"},
+    }
+
+    persona = read_persona(path)
+    prompt = persona.build(PersonaContext(skills=skills))
+
+    assert persona.bundled_skills is None
+    assert "**pdf-reading**" in prompt
+    assert "**monitor**" in prompt
+    assert "project-helper" not in prompt
+
+
+def test_render_filters_bundled_and_local_skills(tmp_path):
+    path = _write_persona(
+        tmp_path,
+        "custom",
+        tools="[load_skill]",
+        skills="skills:\n  bundled: [pdf-reading]\n  local: false\n",
+        body="{{kia:skills}}",
+    )
+    skills = {
+        "pdf-reading": {"description": "Read PDFs", "source": "bundled"},
+        "monitor": {"description": "Monitor jobs", "source": "bundled"},
+        "project-helper": {"description": "Project helper", "source": "project"},
+        "personal-helper": {"description": "Personal helper", "source": "personal"},
+    }
+
+    prompt = read_persona(path).build(PersonaContext(skills=skills))
+
+    assert "**pdf-reading**" in prompt
+    assert "monitor" not in prompt
+    assert "project-helper" not in prompt
+    assert "personal-helper" not in prompt
+
+
+def test_read_persona_requires_skill_policy(tmp_path):
+    path = _write_persona(tmp_path, "custom")
+    persona_md = path / "PERSONA.md"
+    persona_md.write_text(
+        persona_md.read_text(encoding="utf-8").replace(
+            "skills:\n  bundled: []\n  local: false\n", ""
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="'skills' is required"):
+        read_persona(path)
 
 
 def test_read_persona_validates_markers(tmp_path):
@@ -41,7 +126,8 @@ def test_read_persona_validates_markers(tmp_path):
         read_persona(path)
 
     (path / "PERSONA.md").write_text(
-        "---\nname: bad\ndescription: Bad\ntools: []\n---\n"
+        "---\nname: bad\ndescription: Bad\ntools: []\n"
+        "skills:\n  bundled: []\n  local: false\n---\n"
         "{{kia:unknown}}\n",
         encoding="utf-8",
     )

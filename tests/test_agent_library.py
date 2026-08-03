@@ -76,7 +76,7 @@ def _persona(root: Path, name: str, description: str = "Useful persona") -> Path
     path.mkdir(parents=True)
     (path / "PERSONA.md").write_text(
         f"---\nname: {name}\ndescription: {description}\n"
-        "tools: []\n---\nYou are useful.\n",
+        "tools: []\nskills:\n  bundled: []\n  local: false\n---\nYou are useful.\n",
         encoding="utf-8",
     )
     return path
@@ -129,7 +129,7 @@ def test_upload_list_and_install_persona(tmp_path):
     persona = source / ".kia" / "personas" / "helper" / "PERSONA.md"
     persona.write_text(
         "---\nname: helper\ndescription: Updated\n"
-        "tools: []\n---\nYou are updated.\n",
+        "tools: []\nskills:\n  bundled: []\n  local: false\n---\nYou are updated.\n",
         encoding="utf-8",
     )
     upload_resource(str(remote), "helper", "persona", source, force=True)

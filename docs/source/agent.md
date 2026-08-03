@@ -241,6 +241,10 @@ A persona pack contains `PERSONA.md` with YAML frontmatter and a Markdown prompt
 name: my-coder
 description: A concise project coding assistant.
 tools: all
+skills:
+  bundled:
+    - code-review
+  local: true
 ---
 You are a terminal coding assistant.
 
@@ -249,7 +253,7 @@ You are a terminal coding assistant.
 {{kia:current-context}}
 ```
 
-`tools` accepts `all`, `[]`, or a list of built-in tool names. Supported whole-line markers are `autonomous-mode`, `skills`, `project-instructions`, and `current-context`, prefixed with `kia:`. They expand exactly once.
+`tools` accepts `all`, `[]`, or a list of built-in tool names. The `skills` mapping is required: `bundled` is either `all` or an explicit bundled-skill list advertised through `{{kia:skills}}`, and `local` enables or disables both project and personal `.kia/skills`. This limits prompt metadata, not explicit `/skills <name>` loads. Supported whole-line markers are `autonomous-mode`, `skills`, `project-instructions`, and `current-context`, prefixed with `kia:`. They expand exactly once.
 
 ```text
 kia --persona chatter   start as another persona

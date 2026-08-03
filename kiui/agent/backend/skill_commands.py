@@ -47,15 +47,19 @@ class SkillCommandsMixin:
             )
 
     def _skills_summary(self) -> str:
-        """Return discovered skill count and its share of the system prompt."""
+        """Return discovered/advertised skill counts and prompt share."""
+        from kiui.agent.personas import filter_persona_skills
         from kiui.agent.skills import build_skills_prompt_section
 
-        skills_section = build_skills_prompt_section(self.skills)
+        can_load = self.persona.tools is None or "load_skill" in self.persona.tools
+        advertised = filter_persona_skills(self.persona, self.skills) if can_load else {}
+        skills_section = build_skills_prompt_section(advertised)
         total_tokens = self.token_estimator.chars_to_tokens(len(self.system_prompt))
         skill_chars = len(skills_section) if skills_section in self.system_prompt else 0
         skill_tokens = self.token_estimator.chars_to_tokens(skill_chars)
         percent = 100 * skill_tokens / total_tokens if total_tokens else 0
-        return f"{len(self.skills)} available · ~{skill_tokens:,} tokens ({percent:.1f}% of prompt)"
+        count = f"{len(advertised)}/{len(self.skills)} advertised"
+        return f"{count} · ~{skill_tokens:,} tokens ({percent:.1f}% of prompt)"
 
     def _report_skills_summary(self):
         """Report discovered skill count and prompt share."""

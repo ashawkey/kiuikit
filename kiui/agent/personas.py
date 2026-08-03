@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from kiui.agent.utils.frontmatter import split_frontmatter
-from kiui.agent.skills import build_skills_prompt_section
+from kiui.agent.skills import BUNDLED_SKILLS_DIR, build_skills_prompt_section
 from kiui.agent.tools.registry import BUILTIN_TOOL_NAMES
 
 DEFAULT_PERSONA = "coder"
@@ -51,6 +51,8 @@ class PersonaInfo:
     name: str
     description: str
     tools: frozenset[str] | None
+    bundled_skills: frozenset[str] | None
+    local_skills: bool
     template: str
     path: str
     source: str
@@ -102,6 +104,44 @@ def read_persona(persona_dir: str | Path, source: str = "local") -> PersonaInfo:
     else:
         raise ValueError("'tools' must be 'all' or a list of built-in tool names")
 
+    skills_value = frontmatter.get("skills")
+    if isinstance(skills_value, dict):
+        unknown_fields = set(skills_value) - {"bundled", "local"}
+        if unknown_fields:
+            raise ValueError(f"unknown 'skills' field(s): {sorted(unknown_fields)}")
+        if set(skills_value) != {"bundled", "local"}:
+            raise ValueError("'skills' must contain 'bundled' and 'local'")
+
+        bundled_value = skills_value["bundled"]
+        if bundled_value == "all":
+            bundled_skills = None
+        elif isinstance(bundled_value, list) and all(
+            isinstance(skill, str) for skill in bundled_value
+        ):
+            try:
+                known_bundled = {
+                    item.name
+                    for item in BUNDLED_SKILLS_DIR.iterdir()
+                    if item.is_dir() and (item / "SKILL.md").is_file()
+                }
+            except OSError as exc:
+                raise ValueError(f"cannot inspect bundled skills: {exc}") from exc
+            unknown = set(bundled_value) - known_bundled
+            if unknown:
+                raise ValueError(
+                    f"unknown bundled skill(s): {sorted(unknown)}; "
+                    f"valid bundled skills: {sorted(known_bundled)}"
+                )
+            bundled_skills = frozenset(bundled_value)
+        else:
+            raise ValueError("'skills.bundled' must be 'all' or a list of bundled skill names")
+
+        local_skills = skills_value["local"]
+        if not isinstance(local_skills, bool):
+            raise ValueError("'skills.local' must be a boolean")
+    else:
+        raise ValueError("'skills' is required and must be a mapping with 'bundled' and 'local'")
+
     template = body.strip()
     if not template:
         raise ValueError("persona prompt body is empty")
@@ -125,6 +165,8 @@ def read_persona(persona_dir: str | Path, source: str = "local") -> PersonaInfo:
         name=name,
         description=description.strip(),
         tools=tools,
+        bundled_skills=bundled_skills,
+        local_skills=local_skills,
         template=template,
         path=str(persona_md),
         source=source,
@@ -196,7 +238,11 @@ def render_persona(persona: PersonaInfo, ctx: PersonaContext) -> str:
     """Expand a persona's recognized markers exactly once."""
     expansions = {
         "autonomous-mode": _AUTONOMOUS_MODE if ctx.exec_mode else "",
-        "skills": build_skills_prompt_section(ctx.skills or {}) if _allows(persona, "load_skill") else "",
+        "skills": (
+            build_skills_prompt_section(filter_persona_skills(persona, ctx.skills or {}))
+            if _allows(persona, "load_skill")
+            else ""
+        ),
         "project-instructions": _build_project_section(ctx.work_dir),
         "current-context": _build_context_section(ctx.work_dir),
     }
@@ -207,6 +253,24 @@ def render_persona(persona: PersonaInfo, ctx: PersonaContext) -> str:
     if ctx.exec_mode:
         rendered.extend(("", _EXEC_MODE_DELEGATION_LIMIT))
     return "\n".join(rendered).strip()
+
+
+def filter_persona_skills(
+    persona: PersonaInfo, skills: dict[str, dict]
+) -> dict[str, dict]:
+    """Return skills this persona advertises through ``{{kia:skills}}``.
+
+    Omitted skills remain discoverable for explicit ``/skills <name>`` loads;
+    this policy only controls progressive-disclosure metadata in the prompt.
+    """
+    selected = {}
+    for name, info in skills.items():
+        if info.get("source") == "bundled":
+            if persona.bundled_skills is None or name in persona.bundled_skills:
+                selected[name] = info
+        elif persona.local_skills:
+            selected[name] = info
+    return selected
 
 
 def _allows(persona: PersonaInfo, tool: str) -> bool:

@@ -2,6 +2,7 @@
 and per-session skill load-count tracking (kiui.agent.skills / tools)."""
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -40,6 +41,7 @@ def test_bundled_skills_load_from_package_and_shadow_stale_copies(tmp_path, monk
 
     assert skills["alpha"]["description"] == "current bundled"
     assert Path(skills["alpha"]["dir"]) == bundled / "alpha"
+    assert skills["alpha"]["source"] == "bundled"
     assert issues["shadowed"][0]["path"] == str(project / ".kia" / "skills" / "alpha" / "SKILL.md")
 
 
@@ -56,6 +58,7 @@ def test_project_skill_shadows_personal_skill(tmp_path, monkeypatch):
     skills = discover_skills(project, issues=issues)
 
     assert skills["dup"]["description"] == "project copy"
+    assert skills["dup"]["source"] == "project"
     assert len(issues["shadowed"]) == 1
     assert issues["shadowed"][0]["name"] == "dup"
 
@@ -79,6 +82,9 @@ class _SummaryAgent(SkillCommandsMixin):
     def __init__(self, skills, system_prompt):
         self.skills = skills
         self.system_prompt = system_prompt
+        self.persona = SimpleNamespace(
+            tools=None, bundled_skills=None, local_skills=True
+        )
         self.token_estimator = TokenEstimator()
 
 

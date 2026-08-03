@@ -372,6 +372,10 @@ Each persona is a directory containing `PERSONA.md`:
 name: my-coder
 description: A concise project coding assistant.
 tools: all
+skills:
+  bundled:
+    - code-review
+  local: true
 ---
 You are a terminal-based coding assistant.
 
@@ -380,7 +384,7 @@ You are a terminal-based coding assistant.
 {{kia:current-context}}
 ```
 
-`tools` is required and is either `all` or a YAML list of built-in tool names; use `[]` for no tools. Supported whole-line markers are `autonomous-mode`, `skills`, `project-instructions`, and `current-context`, each prefixed with `kia:` as above. Markers are expanded once, so marker-like text inside project instructions is not interpreted.
+`tools` is required and is either `all` or a YAML list of built-in tool names; use `[]` for no tools. `skills` is also required: `bundled` is either `all` or an explicit list of bundled skill names advertised through `{{kia:skills}}`, while `local` is a boolean covering both project and personal `.kia/skills`. This policy limits prompt metadata, not explicit user loads through `/skills <name>`. Supported whole-line markers are `autonomous-mode`, `skills`, `project-instructions`, and `current-context`, each prefixed with `kia:` as above. Markers are expanded once, so marker-like text inside project instructions is not interpreted.
 
 Project instructions normally come from `./AGENTS.md`. If `./.kia/AGENTS.md` exists, it replaces that file; an exact `@AGENTS.md` line imports the root file at that position, allowing local instructions to extend it. No other import paths are supported.
 

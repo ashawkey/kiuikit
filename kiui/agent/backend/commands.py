@@ -254,10 +254,17 @@ class AgentCommandsMixin:
                 tools = "all tools" if info.tools is None else (
                     f"tools: {', '.join(sorted(info.tools))}" if info.tools else "no tools"
                 )
+                bundled = "all bundled" if info.bundled_skills is None else (
+                    f"bundled: {', '.join(sorted(info.bundled_skills))}"
+                    if info.bundled_skills else "no bundled skills"
+                )
+                local = "local skills" if info.local_skills else "no local skills"
                 self.console.print(f"  [cyan]{name}[/cyan]{default}{current}")
                 if info.description:
                     self.console.print(f"    {info.description}")
-                self.console.print(f"    [dim]{tools} · {info.source} · {info.path}[/dim]")
+                self.console.print(
+                    f"    [dim]{tools} · {bundled} · {local} · {info.source} · {info.path}[/dim]"
+                )
             self.console.print(
                 "\n[dim]/persona <name> to switch · /persona reload to re-scan[/dim]"
             )

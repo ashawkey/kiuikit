@@ -96,9 +96,10 @@ def discover_skills(
     Bundled skills are searched first so stale project copies left by older kia
     versions cannot shadow them. The project directory is then searched before
     the user's home directory. Returns ``{skill_name: {"path", "dir",
-    "description", "body", "frontmatter", "active"}}`` where ``dir`` is the
-    skill root (for resolving bundled resources), ``body`` is the markdown
-    instructions with frontmatter stripped, and ``active`` is always true.
+    "description", "body", "frontmatter", "active", "source"}}`` where ``dir``
+    is the skill root (for resolving bundled resources), ``body`` is the markdown
+    instructions with frontmatter stripped, ``active`` is always true, and
+    ``source`` is ``bundled``, ``project``, or ``personal``.
 
     When *issues* is a dict, it is populated (in place) with non-fatal discovery
     problems so callers can surface them:
@@ -117,12 +118,15 @@ def discover_skills(
 
     # Bundled skills are authoritative. Project scope then wins over personal
     # scope. Skip home when the project already is home to avoid a duplicate scan.
-    skill_dirs = [BUNDLED_SKILLS_DIR, base / SKILL_DIRS[0] / "skills"]
+    skill_dirs = [
+        (BUNDLED_SKILLS_DIR, "bundled"),
+        (base / SKILL_DIRS[0] / "skills", "project"),
+    ]
     if base.resolve() != home.resolve():
-        skill_dirs.append(home / SKILL_DIRS[0] / "skills")
+        skill_dirs.append((home / SKILL_DIRS[0] / "skills", "personal"))
 
     skills: dict[str, dict] = {}
-    for skills_dir in skill_dirs:
+    for skills_dir, source in skill_dirs:
         if not skills_dir.is_dir():
             continue
 
@@ -146,6 +150,7 @@ def discover_skills(
 
             try:
                 skills[skill_name] = read_skill(item)
+                skills[skill_name]["source"] = source
             except (OSError, UnicodeDecodeError, ValueError) as e:
                 errors.append({
                     "name": skill_name,
