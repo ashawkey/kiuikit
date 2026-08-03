@@ -242,6 +242,7 @@ TOOLS = [
     [
         ('"run": "ping"', "run must be callable"),
         ('"describe": "ping",\n        "run": ping', "describe must be callable"),
+        ('"describe_output": "ping",\n        "run": ping', "describe_output must be callable"),
         ('"description": ""', "non-empty description"),
         ('"type": "object",\n                    "properties"', "schema must be a function schema"),
     ],
@@ -250,7 +251,7 @@ def test_skill_tool_definition_is_validated(tmp_path, replacement, message):
     d = _write_skill(tmp_path, ".kia", "broken", _valid("broken"))
     if replacement.startswith('"run"'):
         tools = _TOOLS_PY.replace('"run": ping', replacement)
-    elif replacement.startswith('"describe"'):
+    elif replacement.startswith(('"describe"', '"describe_output"')):
         tools = _TOOLS_PY.replace('"run": ping', replacement)
     elif replacement.startswith('"description"'):
         tools = _TOOLS_PY.replace('"description": "Echo a value back."', replacement)

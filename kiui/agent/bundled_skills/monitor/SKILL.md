@@ -5,7 +5,7 @@ description: Run and manage background processes or actively watch servers, jobs
 
 # Background Processes and Monitoring
 
-These process tools are always available:
+These process tools are built in and available when the active persona permits them:
 
 - `start_process`: launch a managed background process with file-backed combined output;
 - `inspect_processes`: return one status snapshot and an optional bounded log tail;

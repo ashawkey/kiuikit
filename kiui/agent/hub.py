@@ -116,6 +116,7 @@ class RemoteSession:
         self.prompt: dict | None = None
         self.pending: dict | None = None
         self.operation_id: str | None = None
+        self.process_status = ""
         self.agent_ws = None             # starlette WebSocket to the agent
         self.agent_send_lock = asyncio.Lock()
         # Async wakeup for browser readers. Events are published on the event
@@ -130,6 +131,7 @@ class RemoteSession:
         self.prompt = None
         self.pending = None
         self.operation_id = None
+        self.process_status = ""
 
     def touch(self) -> None:
         """Wake browser readers (safe to call from any thread)."""
@@ -185,6 +187,9 @@ class RemoteSession:
         elif etype == "operation_end":
             if self.operation_id == data.get("id"):
                 self.operation_id = None
+        elif etype == "process_status":
+            text = data.get("text", "")
+            self.process_status = text if isinstance(text, str) else ""
         self.events.publish(etype, **data)
         self.touch()
 
@@ -260,7 +265,9 @@ class Hub:
         with self._registry_lock:
             return [s.summary() for s in self._sessions.values()]
 
-    def register(self, session_id: str, meta: dict) -> RemoteSession:
+    def register(
+        self, session_id: str, meta: dict, process_status: str = ""
+    ) -> RemoteSession:
         with self._registry_lock:
             session = self._sessions.get(session_id)
             new = session is None
@@ -271,6 +278,7 @@ class Hub:
                 # Re-registration (agent reconnect): fresh stream, updated meta.
                 session.meta = meta
                 session.reset()
+            session.process_status = process_status
             session._loop = self._loop
             count = len(self._sessions)
         self._notify_control()
@@ -506,7 +514,10 @@ class Hub:
             meta = raw.get("meta", {})
             if not isinstance(meta, dict):
                 meta = {}
-            session = self.register(session_id, meta)
+            process_status = raw.get("process_status", "")
+            if not isinstance(process_status, str):
+                process_status = ""
+            session = self.register(session_id, meta, process_status)
             previous_ws = session.agent_ws
             session.agent_ws = websocket
             if previous_ws is not None and previous_ws is not websocket:
@@ -652,6 +663,7 @@ class Hub:
                 "stream_id": s.events.stream_id,
                 "latest_seq": s.events.latest_seq,
                 "operation_id": s.operation_id,
+                "process_status": s.process_status,
                 "prompt": s.prompt,
                 "pending": s.pending,
                 "oldest_seq": s.events.oldest_seq,

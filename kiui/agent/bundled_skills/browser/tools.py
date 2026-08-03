@@ -240,11 +240,8 @@ def _tabs(connection: CDPConnection) -> list[dict[str, Any]]:
     ]
 
 
-def _ok(*, ui_summary: str | None = None, **values: Any) -> dict[str, Any]:
-    result = {**values, "success": True}
-    if ui_summary:
-        result["_ui_summary"] = ui_summary
-    return result
+def _ok(**values: Any) -> dict[str, Any]:
+    return {**values, "success": True}
 
 
 def _label(text: str, fallback: str = "") -> str:
@@ -257,9 +254,7 @@ def browser_status(executor, cdp_url: str | None = None) -> dict[str, Any]:
     connection = _connection(executor, cdp_url)
     tabs = _tabs(connection)
     active = next(tab for tab in tabs if tab["active"])
-    summary = f"Attached to Chrome · {len(tabs)} tabs · active: {_label(active['title'], active['url'])}"
     return _ok(
-        ui_summary=summary,
         connected=True,
         endpoint=connection.endpoint,
         active=active,
@@ -278,8 +273,7 @@ def browser_open(executor, url: str, new_tab: bool = False) -> dict[str, Any]:
         result = connection.send("Page.navigate", {"url": url}, connection.session(), timeout=30)
         if result.get("errorText"):
             raise RuntimeError(result["errorText"])
-    summary = f"Opened new tab: {_label(url)}" if new_tab else f"Navigated current tab: {_label(url)}"
-    return _ok(ui_summary=summary, tab_id=target_id, url=url, new_tab=new_tab)
+    return _ok(tab_id=target_id, url=url, new_tab=new_tab)
 
 
 _OBSERVE_SCRIPT = r"""
@@ -359,13 +353,7 @@ def browser_observe(
         result["elements_truncated"] = True
     remaining = _MAX_OUTPUT_CHARS - len(json.dumps({**result, "text": ""}, ensure_ascii=False))
     result["text"] = result["text"][: max(0, remaining)]
-    count = len(result["elements"])
-    count_label = f"{count}+" if result["elements_truncated"] else str(count)
-    summary = (
-        f"Observed {_label(result['title'], result['url'])} · "
-        f"{count_label} interactive elements · {len(result['text']):,} text chars"
-    )
-    return _ok(ui_summary=summary, **result)
+    return _ok(**result)
 
 
 def _element_geometry(connection: CDPConnection, index: int) -> dict[str, Any]:
@@ -397,11 +385,7 @@ def browser_click(executor, index: int) -> dict[str, Any]:
     point = {"x": geometry["x"], "y": geometry["y"], "button": "left", "clickCount": 1}
     connection.send("Input.dispatchMouseEvent", {**point, "type": "mousePressed"}, session)
     connection.send("Input.dispatchMouseEvent", {**point, "type": "mouseReleased"}, session)
-    description = f"{geometry['tag']} #{index}"
-    if geometry["text"]:
-        description += f": {_label(geometry['text'])}"
     return _ok(
-        ui_summary=f"Clicked {description}",
         index=index,
         tag=geometry["tag"],
         text=geometry["text"],
@@ -444,9 +428,7 @@ def browser_type(executor, index: int, text: str, clear: bool = True) -> dict[st
     connection.evaluate(
         "document.activeElement?.dispatchEvent(new Event('change', {bubbles: true})); true"
     )
-    cleared = ", cleared first" if clear else ""
     return _ok(
-        ui_summary=f"Typed {len(text)} characters into {result['tag']} #{index}{cleared}",
         index=index,
         tag=result["tag"],
         typed=True,
@@ -484,7 +466,6 @@ def browser_scroll(
     if not result or result.get("error") == "stale":
         raise RuntimeError("Element index is stale; call browser_observe again")
     return _ok(
-        ui_summary=f"Scrolled {target_label} {direction} {pages:g} pages ({abs(result['amount']):,} px)",
         direction=direction,
         pages=pages,
         index=index,
@@ -520,12 +501,7 @@ def browser_extract(
     original_text = result["text"]
     result["text"] = original_text[: max(0, remaining)]
     result["truncated"] = result["truncated"] or len(result["text"]) < len(original_text)
-    summary = f"Extracted {len(result['text']):,} text chars from {_label(result['title'], result['url'])}"
-    if include_links:
-        summary += f" · {len(result['links'])} links"
-    if result["truncated"]:
-        summary += " · truncated"
-    return _ok(ui_summary=summary, **result)
+    return _ok(**result)
 
 
 def browser_tabs(executor, action: str = "list", tab_id: str | None = None) -> dict[str, Any]:
@@ -546,14 +522,7 @@ def browser_tabs(executor, action: str = "list", tab_id: str | None = None) -> d
         if connection.target_id == target_id:
             connection.target_id = None
     tabs = _tabs(connection)
-    if action == "list":
-        summary = f"Listed {len(tabs)} browser tabs"
-    elif action == "switch":
-        active = next(tab for tab in tabs if tab["active"])
-        summary = f"Switched tab · active: {_label(active['title'], active['url'])}"
-    else:
-        summary = f"Closed tab · {len(tabs)} tabs remain"
-    return _ok(ui_summary=summary, action=action, tabs=tabs)
+    return _ok(action=action, tabs=tabs)
 
 
 def browser_stop(executor) -> dict[str, Any]:
@@ -561,10 +530,10 @@ def browser_stop(executor) -> dict[str, Any]:
     connection = getattr(executor, "_browser_connection", None)
     if connection is None:
         message = "Browser was already detached"
-        return _ok(ui_summary=message, connected=False, message=message)
+        return _ok(connected=False, message=message)
     executor.close_tool_resource("browser")
     message = "Detached from browser; Chrome remains open"
-    return _ok(ui_summary=message, connected=False, message=message)
+    return _ok(connected=False, message=message)
 
 
 def _describe_status(args: dict[str, Any]) -> ToolCallDescription:
@@ -628,6 +597,78 @@ def _describe_stop(args: dict[str, Any]) -> ToolCallDescription:
     return ToolCallDescription("browser_stop")
 
 
+def _describe_status_output(result: dict[str, Any]) -> str:
+    active = result["active"]
+    return (
+        f"Attached to Chrome · {len(result['tabs'])} tabs · "
+        f"active: {_label(active['title'], active['url'])}"
+    )
+
+
+def _describe_open_output(result: dict[str, Any]) -> str:
+    if result.get("new_tab"):
+        return f"Opened new tab: {_label(result['url'])}"
+    return f"Navigated current tab: {_label(result['url'])}"
+
+
+def _describe_observe_output(result: dict[str, Any]) -> str:
+    count = len(result["elements"])
+    count_label = f"{count}+" if result.get("elements_truncated") else str(count)
+    return (
+        f"Observed {_label(result['title'], result['url'])} · "
+        f"{count_label} interactive elements · {len(result['text']):,} text chars"
+    )
+
+
+def _describe_click_output(result: dict[str, Any]) -> str:
+    description = f"{result['tag']} #{result['index']}"
+    if result.get("text"):
+        description += f": {_label(result['text'])}"
+    return f"Clicked {description}"
+
+
+def _describe_type_output(result: dict[str, Any]) -> str:
+    cleared = " · cleared first" if result.get("cleared") else ""
+    return (
+        f"Typed {result['characters']} characters into "
+        f"{result['tag']} #{result['index']}{cleared}"
+    )
+
+
+def _describe_scroll_output(result: dict[str, Any]) -> str:
+    target = "page" if result.get("index") is None else f"element #{result['index']}"
+    return (
+        f"Scrolled {target} {result['direction']} {result['pages']:g} pages "
+        f"({abs(result['pixels']):,} px)"
+    )
+
+
+def _describe_extract_output(result: dict[str, Any]) -> str:
+    message = (
+        f"Extracted {len(result['text']):,} text chars from "
+        f"{_label(result['title'], result['url'])}"
+    )
+    if result.get("links"):
+        message += f" · {len(result['links'])} links"
+    if result.get("truncated"):
+        message += " · truncated"
+    return message
+
+
+def _describe_tabs_output(result: dict[str, Any]) -> str:
+    tabs = result["tabs"]
+    if result["action"] == "list":
+        return f"Listed {len(tabs)} browser tabs"
+    if result["action"] == "switch":
+        active = next(tab for tab in tabs if tab["active"])
+        return f"Switched tab · active: {_label(active['title'], active['url'])}"
+    return f"Closed tab · {len(tabs)} tabs remain"
+
+
+def _describe_stop_output(result: dict[str, Any]) -> str:
+    return str(result["message"])
+
+
 def _schema(name: str, description: str, properties: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
     return {
         "type": "function",
@@ -648,6 +689,7 @@ TOOLS = [
     {
         "run": browser_status,
         "describe": _describe_status,
+        "describe_output": _describe_status_output,
         "schema": _schema(
             "browser_status",
             "Attach to an already-running Chrome browser through CDP and report its active page and tabs.",
@@ -657,6 +699,7 @@ TOOLS = [
     {
         "run": browser_open,
         "describe": _describe_open,
+        "describe_output": _describe_open_output,
         "schema": _schema(
             "browser_open",
             "Navigate the current visible browser tab or open a new visible tab.",
@@ -667,6 +710,7 @@ TOOLS = [
     {
         "run": browser_observe,
         "describe": _describe_observe,
+        "describe_output": _describe_observe_output,
         "schema": _schema(
             "browser_observe",
             "Read the active page and assign indexes to visible interactive elements for click, type, and scroll.",
@@ -679,6 +723,7 @@ TOOLS = [
     {
         "run": browser_click,
         "describe": _describe_click,
+        "describe_output": _describe_click_output,
         "schema": _schema(
             "browser_click",
             "Click an element index from the latest browser_observe call with a real mouse event.",
@@ -689,6 +734,7 @@ TOOLS = [
     {
         "run": browser_type,
         "describe": _describe_type,
+        "describe_output": _describe_type_output,
         "schema": _schema(
             "browser_type",
             "Type text into an editable element index from the latest browser_observe call.",
@@ -703,6 +749,7 @@ TOOLS = [
     {
         "run": browser_scroll,
         "describe": _describe_scroll,
+        "describe_output": _describe_scroll_output,
         "schema": _schema(
             "browser_scroll",
             "Scroll the page or an indexed scrollable element by viewport-sized pages.",
@@ -716,6 +763,7 @@ TOOLS = [
     {
         "run": browser_extract,
         "describe": _describe_extract,
+        "describe_output": _describe_extract_output,
         "schema": _schema(
             "browser_extract",
             "Extract bounded text and optional links from the active page or a CSS-selected region.",
@@ -729,6 +777,7 @@ TOOLS = [
     {
         "run": browser_tabs,
         "describe": _describe_tabs,
+        "describe_output": _describe_tabs_output,
         "schema": _schema(
             "browser_tabs",
             "List, switch, or close tabs in the attached browser. Closing a tab is irreversible.",
@@ -741,6 +790,7 @@ TOOLS = [
     {
         "run": browser_stop,
         "describe": _describe_stop,
+        "describe_output": _describe_stop_output,
         "schema": _schema(
             "browser_stop",
             "Detach Kia from Chrome without closing the user's browser or tabs.",

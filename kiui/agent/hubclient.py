@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
+from typing import Callable
 
 from kiui.agent.utils.io import (
     CancellationToken,
@@ -49,6 +50,7 @@ class HubClient:
         self.token = token
         self.session_id = session_id
         self.meta = meta
+        self.get_process_status: Callable[[], str] | None = None
         self._stopped = threading.Event()
         self._thread: threading.Thread | None = None
         self._async_state_lock = threading.Lock()
@@ -118,11 +120,13 @@ class HubClient:
                     self._async_stopped = None
 
     async def _session(self, ws) -> None:
+        process_status = self.get_process_status() if self.get_process_status else ""
         await ws.send(json.dumps({
             "type": "register",
             "token": self.token,
             "session_id": self.session_id,
             "meta": self.meta,
+            "process_status": process_status,
         }))
         # Wait for the registration ack before streaming.
         ack = json.loads(await ws.recv())

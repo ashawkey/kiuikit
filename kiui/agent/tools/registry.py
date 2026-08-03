@@ -2,7 +2,7 @@
 
 Every tool the model can call — built-in or skill-provided — is described by a
 single :class:`ToolSpec` (OpenAI ``schema`` + ``handler`` + optional ``gate``
-and call ``describe`` function). :class:`ToolRegistry` holds them all and is
+and call/output describers). :class:`ToolRegistry` holds them all and is
 the single source of truth for two questions:
 
 - *Which tools are advertised to the API?* — :meth:`ToolRegistry.advertised`
@@ -21,7 +21,7 @@ from dataclasses import dataclass
 import re
 from typing import Any, Callable
 
-from .builtin_descriptions import BUILTIN_CALL_DESCRIBERS
+from .builtin_descriptions import BUILTIN_CALL_DESCRIBERS, BUILTIN_OUTPUT_DESCRIBERS
 from .formatting import ToolCallDescription
 from .schemas import BUILTIN_TOOL_SCHEMAS
 
@@ -42,8 +42,9 @@ class ToolSpec:
     ``handler`` is invoked as ``handler(executor, **arguments)`` and returns a
     result dict. ``source`` is :data:`BUILTIN_SOURCE` for built-in
     tools or the owning skill name. ``gate`` is one of the ``GATE_*`` constants
-    or ``None``. ``describe`` is owned by the tool definition and provides its
-    semantic call label; absent descriptors use the shared generic fallback.
+    or ``None``. ``describe`` and ``describe_output`` are owned by the tool
+    definition and provide its call label and concise result message;
+    absent descriptors use shared generic fallbacks.
     """
 
     name: str
@@ -52,6 +53,7 @@ class ToolSpec:
     source: str = BUILTIN_SOURCE
     gate: str | None = None
     describe: Callable[[dict[str, Any]], ToolCallDescription] | None = None
+    describe_output: Callable[[dict[str, Any]], str] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -143,6 +145,7 @@ def build_builtin_specs() -> dict[str, ToolSpec]:
             source=BUILTIN_SOURCE,
             gate=gate,
             describe=BUILTIN_CALL_DESCRIBERS[name],
+            describe_output=BUILTIN_OUTPUT_DESCRIBERS.get(name),
         )
     return specs
 
@@ -163,8 +166,8 @@ class ToolRegistry:
         """Register a skill's tools atomically.
 
         Each entry provides an OpenAI function ``schema``, a ``run`` callable
-        (used as the handler), and an optional ``describe`` callable. A tool
-        name that collides with a built-in or with another
+        (used as the handler), and optional ``describe`` / ``describe_output``
+        callables. A tool name that collides with a built-in or with another
         already-registered skill's tool aborts the whole registration before any
         entry is committed, so a skill is never left partially registered.
         """
@@ -182,6 +185,11 @@ class ToolRegistry:
             if describer is not None and not callable(describer):
                 raise ValueError(
                     f"Skill '{skill}' TOOLS[{index}] describe must be callable."
+                )
+            output_describer = entry.get("describe_output")
+            if output_describer is not None and not callable(output_describer):
+                raise ValueError(
+                    f"Skill '{skill}' TOOLS[{index}] describe_output must be callable."
                 )
 
             schema = entry.get("schema")
@@ -205,6 +213,7 @@ class ToolRegistry:
                 handler=handler,
                 source=skill,
                 describe=describer,
+                describe_output=output_describer,
             )
         self._specs.update(prepared)
 

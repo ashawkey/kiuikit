@@ -566,7 +566,9 @@ class SessionMixin:
 
             elif role == "tool":
                 result_text = get_text(msg)
-                summary = format_tool_summary(result_text)
+                summary = get_display_text(msg)
+                if summary == result_text:
+                    summary = format_tool_summary(result_text)
                 self.console.tool_result(summary, success=not result_text_failed(result_text))
 
         self.console.system("── End of replay ──")

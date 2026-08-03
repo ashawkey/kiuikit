@@ -28,8 +28,8 @@ from kiui.agent.ui import AgentConsole, ContextStatus
 from kiui.agent.utils import get_kia_dir
 from kiui.agent.skills import discover_skills
 from kiui.agent.tools import (
-    MAX_GREP_MATCHES,
     ToolExecutor,
+    describe_tool_output,
     format_tool_result,
     format_tool_summary,
 )
@@ -768,7 +768,6 @@ class LLMAgent(
                 })
                 continue
 
-            t_exec = time.monotonic()
             if parse_error is not None:
                 result = {"error": f"Invalid tool arguments: {parse_error}", "success": False}
             elif self.cancellation is not None and self.cancellation.cancelled:
@@ -780,9 +779,7 @@ class LLMAgent(
             else:
                 with self.console.thinking(label="Executing", status_suffix=function_name):
                     result = self.tool_executor.execute(function_name, function_args)
-            exec_elapsed = time.monotonic() - t_exec
             image_url = result.pop("image_url", None)
-            ui_summary = result.pop("_ui_summary", None)
             if image_url and result.get("success"):
                 self._pending_images.append({
                     "file": function_args["file"],
@@ -791,9 +788,15 @@ class LLMAgent(
             result_text = format_tool_result(result)
 
             success = result.get("success", False)
+            registry = getattr(self.tool_executor, "registry", None)
+            spec = registry.get(function_name) if registry is not None else None
+            output_description = describe_tool_output(
+                function_name,
+                result,
+                spec.describe_output if spec is not None else None,
+            )
             if result.get("streamed"):
-                exit_code = result.get("exit_code", "?")
-                self.console.tool_result(f"exit code {exit_code} ({exec_elapsed:.1f}s)", success=success)
+                self.console.tool_result(output_description, success=success)
             elif function_name in ("edit_file", "write_file") and "diff" in result:
                 self.console.diff_edit(**result["diff"], success=success)
             elif function_name == "multi_edit":
@@ -801,15 +804,9 @@ class LLMAgent(
                     for d in result["diffs"]:
                         self.console.diff_edit(**d, success=success)
                 else:
-                    self.console.tool_result(format_tool_summary(result_text), success=success)
-            elif function_name == "read_file":
-                self._display_read_result(result, success)
-            elif function_name in ("glob_files", "grep_files"):
-                self._display_search_result(function_name, result, success)
-            elif ui_summary and success:
-                self.console.tool_result(ui_summary, success=True)
+                    self.console.tool_result(output_description, success=success)
             else:
-                self.console.tool_result(format_tool_summary(result_text), success=success)
+                self.console.tool_result(output_description, success=success)
 
             envelope = ToolResultEnvelope(function_name, function_args, result, result_text)
             budget = tool_result_char_budget(
@@ -891,6 +888,8 @@ class LLMAgent(
                 "tool_call_id": tool_call["id"],
                 "content": result_text,
             }
+            if output_description != format_tool_summary(result_text):
+                tool_message["display_content"] = output_description
             self.context.add(tool_message)
 
             # Detect a user interrupt: either the tool self-reported it
@@ -930,32 +929,6 @@ class LLMAgent(
                 })
         else:
             self.context.drop_last(message)
-
-    def _display_read_result(self, result: dict[str, Any], success: bool) -> None:
-        """Compact read_file result: show path, line count, success."""
-        if not success:
-            self.console.tool_result(format_tool_summary(format_tool_result(result)), success=False)
-            return
-        lines_read = result.get("lines_read", "?")
-        self.console.tool_result(f"{lines_read} lines read", success=True)
-
-    def _display_search_result(self, tool_name: str, result: dict[str, Any], success: bool) -> None:
-        """Compact glob_files/grep_files result: show match count / file count."""
-        if not success:
-            error_msg = result.get("error", "Unknown error")
-            self.console.tool_result(error_msg, success=False)
-            return
-        count = result.get("count", 0)
-        truncated = result.get("truncated", False)
-        if tool_name == "glob_files":
-            msg = f"{count} files matched"
-            if truncated:
-                msg += " (truncated to 500)"
-        else:
-            msg = f"{count} matches"
-            if truncated:
-                msg += f" (truncated to {MAX_GREP_MATCHES})"
-        self.console.tool_result(msg, success=True)
 
     def _inject_pending_steer(self) -> bool:
         """Add pending conversational input before the next agentic iteration."""
@@ -1122,18 +1095,20 @@ class LLMAgent(
         """
         self.console.tool(f"! {command}")
         arguments = {"command": command}
-        t_exec = time.monotonic()
         with self._operation("shell command"):
             with self.console.thinking(label="Executing", status_suffix="exec_command"):
                 result = self.tool_executor.execute("exec_command", arguments)
-        exec_elapsed = time.monotonic() - t_exec
-        result_text = format_tool_result(result)
         success = result.get("success", False)
-        if result.get("streamed", True):
-            exit_code = result.get("exit_code", "?")
-            self.console.tool_result(f"exit code {exit_code} ({exec_elapsed:.1f}s)", success=success)
-        else:
-            self.console.tool_result(format_tool_summary(result_text), success=success)
+        registry = getattr(self.tool_executor, "registry", None)
+        spec = registry.get("exec_command") if registry is not None else None
+        self.console.tool_result(
+            describe_tool_output(
+                "exec_command",
+                result,
+                spec.describe_output if spec is not None else None,
+            ),
+            success=success,
+        )
         cleanup_error = discard_tool_result_artifact(result)
         if cleanup_error:
             self.console.warn(f"Could not remove temporary tool output: {cleanup_error}")

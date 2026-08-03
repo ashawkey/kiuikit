@@ -44,6 +44,7 @@ export type StateMessage = {
   oldest_seq: number
   replay_truncated: boolean
   operation_id: string | null
+  process_status: string
   prompt: Prompt | null
   pending: PendingMessage | null
 }

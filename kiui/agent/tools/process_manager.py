@@ -40,6 +40,7 @@ class ProcessManagerMixin:
     def _init_process_registry(self) -> None:
         self._processes: dict[str, dict[str, Any]] = {}
         self._process_lock = threading.Lock()
+        self._process_notify_lock = threading.RLock()
         self._process_listeners: set[Callable[[int, int], None]] = set()
         self._last_process_counts = (0, 0)
         self._process_status_callback = None
@@ -47,10 +48,14 @@ class ProcessManagerMixin:
     def add_process_listener(
         self, listener: Callable[[int, int], None], *, notify: bool = True
     ) -> None:
-        with self._process_lock:
-            self._process_listeners.add(listener)
-        if notify:
-            listener(*self.process_counts())
+        # Serialize the initial snapshot with lifecycle notifications too; an
+        # observer installed during a completion must not receive stale counts
+        # after the completion update.
+        with self._process_notify_lock:
+            with self._process_lock:
+                self._process_listeners.add(listener)
+            if notify:
+                listener(*self.process_counts())
 
     def set_process_status_callback(
         self, callback: Callable[[int, int], None] | None
@@ -75,18 +80,22 @@ class ProcessManagerMixin:
         return running, len(records) - running
 
     def _notify_process_status(self, *, force: bool = False) -> None:
-        counts = self.process_counts()
-        with self._process_lock:
-            if not force and counts == self._last_process_counts:
-                return
-            self._last_process_counts = counts
-            listeners = list(self._process_listeners)
-        for listener in listeners:
-            try:
-                listener(*counts)
-            except Exception:
-                # Process lifecycle must not depend on a UI observer.
-                pass
+        # Lifecycle changes can arrive from several capture threads. Serialize
+        # both the count snapshot and callback delivery so an older update can
+        # never overtake a newer one in the terminal or Web UI.
+        with self._process_notify_lock:
+            counts = self.process_counts()
+            with self._process_lock:
+                if not force and counts == self._last_process_counts:
+                    return
+                self._last_process_counts = counts
+                listeners = list(self._process_listeners)
+            for listener in listeners:
+                try:
+                    listener(*counts)
+                except Exception:
+                    # Process lifecycle must not depend on a UI observer.
+                    pass
 
     @staticmethod
     def _release_completed_windows_job(record: dict[str, Any]) -> bool:

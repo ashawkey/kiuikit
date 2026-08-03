@@ -83,6 +83,13 @@ def test_sessions_endpoint_requires_auth_and_lists():
 def test_per_session_state_and_event_replay():
     hub = make_hub()
     session = add_session(hub, "s1")
+    # The authoritative state must retain status even after its event falls out
+    # of the bounded replay window.
+    session.events = EventHub(max_events=1)
+    session.ingest({
+        "type": "process_status",
+        "data": {"running": 1, "finished": 0, "text": "(Proc: 1 running [0 finished])"},
+    })
     session.events.publish("system", text="ready")
     with TestClient(hub.app) as client:
         response = client.post("/api/login", json={"token": "correct-token"})
@@ -93,6 +100,8 @@ def test_per_session_state_and_event_replay():
             state = receive_type(sock, "state")
             assert state["csrf"] == csrf
             assert state["session"] == "s1"
+            assert state["process_status"] == "(Proc: 1 running [0 finished])"
+            assert state["replay_truncated"] is True
             assert receive_type(sock, "system")["data"]["text"] == "ready"
 
 
@@ -131,6 +140,21 @@ def test_websocket_requires_same_origin():
 
 # -- RemoteSession derived-state unit --------------------------------------
 
+def test_remote_session_tracks_process_status_for_authoritative_state():
+    session = RemoteSession("s1", {})
+    session.ingest({
+        "type": "process_status",
+        "data": {"running": 1, "finished": 2, "text": "(Proc: 1 running [2 finished])"},
+    })
+    assert session.process_status == "(Proc: 1 running [2 finished])"
+
+    session.ingest({
+        "type": "process_status",
+        "data": {"running": 0, "finished": 3, "text": ""},
+    })
+    assert session.process_status == ""
+
+
 # -- action feedback / discovery -------------------------------------------
 
 # -- live agent link (real loopback; internal endpoint is 127.0.0.1 only) ---
@@ -157,12 +181,14 @@ def test_agent_link_end_to_end():
         session_id="live", meta={"title": "t", "cwd": "/c", "model": "m", "host": "h"},
     )
     try:
+        client.get_process_status = lambda: "(Proc: 1 running [0 finished])"
         client.start()
         deadline = time.time() + 5
         while time.time() < deadline and not hub.get_session("live"):
             time.sleep(0.05)
         session = hub.get_session("live")
         assert session is not None
+        assert session.process_status == "(Proc: 1 running [0 finished])"
 
         # Replayed history reaches the hub.
         deadline = time.time() + 5

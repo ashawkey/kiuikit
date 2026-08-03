@@ -22,6 +22,7 @@ from kiui.agent.tools import (
     _human_size,
     apply_edit,
     find_match,
+    describe_tool_output,
     format_tool_result,
     result_text_failed,
 )
@@ -493,6 +494,37 @@ def test_inspect_processes_no_longer_accepts_wait(tmp_path):
     assert "unexpected keyword argument 'wait'" in result["error"]
 
 
+def test_process_status_notifications_are_delivered_in_order(tmp_path):
+    te = _executor_with_monitor(tmp_path)
+    counts = [(1, 0)]
+    updates = []
+    entered = threading.Event()
+    release = threading.Event()
+    te.process_counts = lambda: counts[0]
+
+    def listener(running, finished):
+        if (running, finished) == (1, 0):
+            entered.set()
+            release.wait(timeout=2)
+        updates.append((running, finished))
+
+    te.add_process_listener(listener, notify=False)
+    first = threading.Thread(target=te._notify_process_status)
+    first.start()
+    assert entered.wait(timeout=2)
+
+    counts[0] = (0, 1)
+    second = threading.Thread(target=te._notify_process_status)
+    second.start()
+    time.sleep(0.05)
+    assert updates == []
+
+    release.set()
+    first.join(timeout=2)
+    second.join(timeout=2)
+    assert updates == [(1, 0), (0, 1)]
+
+
 def test_process_status_listener_tracks_start_and_finish(tmp_path):
     te = _executor_with_monitor(tmp_path)
     updates = []
@@ -722,6 +754,58 @@ def test_skill_owned_tool_description_is_used(tmp_path):
 
     assert te.execute("inspect_demo", {"process_id": "p-1", "wait": 5})["success"]
     assert console.labels == ["inspect_demo p-1 · wait 5s"]
+
+
+def test_skill_owned_tool_output_description_is_used(tmp_path):
+    te = ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+    te.register_skill_tools("demo", [{
+        "run": lambda executor, value: {"value": value, "success": True},
+        "describe_output": lambda result: f"Returned {result['value']}",
+        "schema": {
+            "type": "function",
+            "function": {
+                "name": "demo_output",
+                "description": "Return a value.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"value": {"type": "string"}},
+                    "required": ["value"],
+                },
+            },
+        },
+    }])
+
+    result = te.execute("demo_output", {"value": "useful"})
+    spec = te.registry.get("demo_output")
+    assert describe_tool_output("demo_output", result, spec.describe_output) == "Returned useful"
+
+
+def test_builtin_process_output_description_is_informative():
+    result = {
+        "processes": [{
+            "process_id": "p-1234",
+            "pid": 42,
+            "status": "running",
+            "exit_code": None,
+            "command": "python worker.py",
+            "log_path": ".kia/processes/p-1234.log",
+            "log_tail": "hello\n",
+            "log_tail_truncated": False,
+        }],
+        "count": 1,
+        "success": True,
+    }
+
+    assert describe_tool_output("inspect_processes", result) == (
+        "p-1234 · running · pid 42 · python worker.py\n"
+        "log tail: 6 chars · .kia/processes/p-1234.log\n"
+        "hello"
+    )
+
+
+def test_failed_tool_output_uses_error_instead_of_success_describer():
+    result = {"error": "boom", "success": False}
+    assert describe_tool_output("inspect_processes", result) == "Error: boom"
 
 
 def test_monitor_skill_owns_its_tool_descriptions(tmp_path):

@@ -304,7 +304,7 @@ def get_text(msg: dict) -> str:
 
 
 def get_display_text(msg: dict) -> str:
-    """Return user-facing text when a message carries an internal expansion."""
+    """Return user-facing text when a message carries a separate display form."""
     display = msg.get("display_content")
     return display if isinstance(display, str) else get_text(msg)
 

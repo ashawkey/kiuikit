@@ -125,6 +125,32 @@ def format_tool_result(result: dict[str, Any]) -> str:
         return json.dumps(result, indent=2)
 
 
+def describe_tool_output(
+    name: str,
+    result: dict[str, Any],
+    describer: Callable[[dict[str, Any]], str] | None = None,
+) -> str:
+    """Return a concise user-facing description of a tool result.
+
+    Tool-owned describers receive the complete result dictionary. Invalid
+    descriptions fall back to the generic formatted summary so display logic
+    can never break tool execution.
+    """
+    if describer is None:
+        from .builtin_descriptions import BUILTIN_OUTPUT_DESCRIBERS
+
+        describer = BUILTIN_OUTPUT_DESCRIBERS.get(name)
+    if describer is not None and result.get("success", False):
+        try:
+            description = describer(result)
+            if not isinstance(description, str) or not description.strip():
+                raise TypeError("tool output describer must return a non-empty string")
+            return format_tool_summary(description)
+        except (KeyError, TypeError, IndexError, ValueError):
+            pass
+    return format_tool_summary(format_tool_result(result))
+
+
 def result_text_failed(result_text: str) -> bool:
     """Whether a formatted result records a failure during replay."""
     lines = result_text.splitlines()

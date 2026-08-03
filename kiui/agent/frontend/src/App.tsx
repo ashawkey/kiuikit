@@ -86,6 +86,7 @@ function SessionPane({
       }
       streamKey.current = key
       setOperationId(state.operation_id)
+      setProcessStatus(state.process_status)
       // State frames are authoritative after reconnect. A fresh stream cannot
       // inherit an old indicator; an idle operation cannot keep one visible.
       if (streamChanged || state.operation_id === null) setThinkingStatus(null)

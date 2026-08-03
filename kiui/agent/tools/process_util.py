@@ -1,10 +1,9 @@
 """Platform helpers for controlling OS processes.
 
 Shared by the foreground ``exec_command`` tool (which only needs
-``_terminate_process``) and the managed-background-process tools bundled with
-the ``monitor`` skill. Keeping these here means the process-killing and
-Windows Job Object machinery lives in one place regardless of where the
-higher-level tools are defined.
+``_terminate_process``) and the built-in managed-background-process tools.
+Keeping these here means the process-killing and Windows Job Object machinery
+lives in one place regardless of where the higher-level tools are defined.
 """
 
 import os

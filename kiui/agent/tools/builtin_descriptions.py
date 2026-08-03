@@ -76,6 +76,49 @@ def _describe_grep(args: dict[str, Any]) -> ToolCallDescription:
     )
 
 
+def _describe_process_output(result: dict[str, Any]) -> str:
+    processes = result.get("processes") or [result]
+    lines = []
+    for process in processes:
+        status = str(process.get("status", "unknown"))
+        if status == "exited":
+            status += f" ({process.get('exit_code', '?')})"
+        command = " ".join(str(process.get("command", "")).split())
+        if len(command) > 80:
+            command = command[:79] + "…"
+        line = f"{process.get('process_id', '?')} · {status} · pid {process.get('pid', '?')}"
+        if command:
+            line += f" · {command}"
+        lines.append(line)
+    count = result.get("count", len(processes))
+    if not lines:
+        return "No managed processes"
+    if count > len(lines):
+        lines.append(f"… {count - len(lines)} more processes")
+    process = processes[0] if len(processes) == 1 else None
+    if process is not None and "log_tail" in process:
+        tail = str(process.get("log_tail", ""))
+        state = "truncated tail" if process.get("log_tail_truncated") else "log tail"
+        lines.append(f"{state}: {len(tail):,} chars · {process.get('log_path', '?')}")
+        tail_lines = tail.rstrip().splitlines()
+        for line in tail_lines[-2:]:
+            lines.append(line if len(line) <= 120 else "…" + line[-119:])
+    return "\n".join(lines)
+
+
+def _describe_read_output(result: dict[str, Any]) -> str:
+    message = f"{result.get('lines_read', 0)} lines read"
+    return message + (" · truncated" if result.get("truncated") else "")
+
+
+def _describe_search_output(result: dict[str, Any], noun: str) -> str:
+    message = f"{result.get('count', 0)} {noun}"
+    if result.get("truncated"):
+        reason = result.get("truncation_reason")
+        message += f" · truncated{f' ({reason})' if reason else ''}"
+    return message
+
+
 BUILTIN_CALL_DESCRIBERS: dict[str, Callable[[dict[str, Any]], ToolCallDescription]] = {
     "start_process": _describe_start_process,
     "inspect_processes": _describe_inspect_processes,
@@ -94,4 +137,26 @@ BUILTIN_CALL_DESCRIBERS: dict[str, Callable[[dict[str, Any]], ToolCallDescriptio
     "load_skill": lambda a: _description("load_skill", str(a["name"])),
     "web_search": lambda a: _description("web_search", quote_tool_call_value(a["query"])),
     "web_fetch": lambda a: _description("web_fetch", str(a["url"])),
+}
+
+
+BUILTIN_OUTPUT_DESCRIBERS: dict[str, Callable[[dict[str, Any]], str]] = {
+    "exec_command": lambda r: (
+        f"exit code {r.get('exit_code', '?')}"
+        + (" · interrupted" if r.get("interrupted") else "")
+        + (" · timed out" if r.get("timed_out") else "")
+    ),
+    "start_process": _describe_process_output,
+    "inspect_processes": _describe_process_output,
+    "stop_process": _describe_process_output,
+    "read_file": _describe_read_output,
+    "read_image": lambda r: str(r["message"]),
+    "write_file": lambda r: str(r["message"]),
+    "edit_file": lambda r: str(r["message"]).splitlines()[0],
+    "multi_edit": lambda r: str(r["message"]),
+    "ls": lambda r: _describe_search_output(r, "entries"),
+    "remove_file": lambda r: str(r["message"]),
+    "glob_files": lambda r: _describe_search_output(r, "files matched"),
+    "grep_files": lambda r: _describe_search_output(r, "matches"),
+    "wait": lambda r: f"Waited {r['waited_seconds']:g}s",
 }

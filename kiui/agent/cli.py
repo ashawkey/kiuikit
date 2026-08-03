@@ -28,6 +28,7 @@ from rich.table import Table
 from kiui.config import conf, LOCAL_CONFIG_PATH
 from kiui.agent.ui import AgentConsole
 from kiui.agent.models import ReasoningEffort, resolve_model_profile
+from kiui.agent.tools.process_manager import format_process_status
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +148,10 @@ def get_agent(args: Args) -> "tuple[LLMAgent | None, HubClient | None]":
     except ValueError as e:
         console.error(f"Invalid provider configuration for '{args.model}': {e}")
         return None, None
+    if hub_client is not None:
+        hub_client.get_process_status = lambda: format_process_status(
+            *agent.tool_executor.process_counts()
+        )
     return agent, hub_client
 
 

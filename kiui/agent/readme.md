@@ -425,8 +425,10 @@ The agent has access to the following tools:
 | `inspect_processes` | Inspect one or all managed background processes, with an optional bounded log tail for one process |
 | `stop_process` | Stop a managed background process and its child process tree |
 
-Managed background process tools are built into kia so model calls, the `/ps`
-command, and the live terminal/web status use the same process registry.
+Managed background process tools are built into kia so permitted model calls,
+the `/ps` command, and the live terminal/web status use the same process registry.
+Like other built-in model tools, their advertisement is subject to the active
+persona's tool policy; `/ps` and live status remain available to the UI.
 
 The status bar shows `(Proc: N running [M finished])` while jobs are active.
 Use `/ps` to list jobs and `/ps <process-id>` for details and recent output.
@@ -439,11 +441,15 @@ parallel.
 ### Skill-provided tools
 
 A skill may ship a `tools.py` at its root (a module-level `TOOLS` list of
-`{schema, run, describe}` entries; `describe` is optional). A descriptor
-returns a `ToolCallDescription`, keeping each skill's
-call-label semantics beside its tools while the shared UI owns rendering. Those
-tools are registered and advertised to the model only while the skill is loaded,
-and removed when it is unloaded.
+`{schema, run, describe, describe_output}` entries; both descriptors are
+optional). `describe(arguments)` returns a `ToolCallDescription` for the call
+label. `describe_output(result)` returns a concise string for the successful
+result; failures use the standard error formatter. This keeps each skill's
+call and result semantics beside its tools while the shared UI owns rendering.
+The full result still goes to the model, while the concise output is persisted
+for consistent live and replay display. Those tools are registered and
+advertised to the model only while the skill is loaded, and removed when it is
+unloaded.
 
 The bundled **`batch`** skill follows the same split: the agent owns the
 context-isolated turn, the skill owns everything around it.

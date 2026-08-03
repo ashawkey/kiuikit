@@ -191,7 +191,12 @@ def test_replay_shows_tool_calls_the_way_the_live_view_does(tmp_path: Path):
         {"role": "assistant", "content": "", "tool_calls": [
             {"id": "1", "function": {"name": "read_file", "arguments": '{"file": "a.txt"}'}},
         ]},
-        {"role": "tool", "tool_call_id": "1", "content": "1  an error message"},
+        {
+            "role": "tool",
+            "tool_call_id": "1",
+            "content": "1  an error message",
+            "display_content": "1 line read",
+        },
         {"role": "assistant", "content": "", "tool_calls": [
             {"id": "2", "function": {"name": "edit_file", "arguments": '{"file": "a.txt", "old_text": "x", "new_text": "y"}'}},
         ]},
@@ -203,7 +208,7 @@ def test_replay_shows_tool_calls_the_way_the_live_view_does(tmp_path: Path):
     assert "edit_file a.txt" in console.text
     assert '{"file"' not in console.text
     # Only the result actually formatted as a failure is marked as one.
-    assert "ok: 1  an error message" in console.text
+    assert "ok: 1 line read" in console.text
     assert "fail: Error: File not found: a.txt" in console.text
 
 
