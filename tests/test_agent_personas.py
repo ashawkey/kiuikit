@@ -49,6 +49,18 @@ def test_read_persona_validates_markers(tmp_path):
         read_persona(path)
 
 
+def test_exec_mode_forbids_nested_subagents(tmp_path):
+    path = _write_persona(tmp_path / "personas", "custom")
+    persona = read_persona(path)
+
+    interactive_prompt = persona.build(PersonaContext(exec_mode=False))
+    exec_prompt = persona.build(PersonaContext(exec_mode=True))
+
+    assert "subagent" not in interactive_prompt
+    assert "Do not invoke the `subagent` skill" in exec_prompt
+    assert "Delegation depth is limited to one" in exec_prompt
+
+
 def test_render_expands_markers_once(tmp_path):
     work = tmp_path / "work"
     work.mkdir()

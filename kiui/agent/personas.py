@@ -33,6 +33,10 @@ You are running autonomously with no user available to respond.
 - If blocked, report the blocker instead of using a risky workaround.
 - Complete and verify the task, then return a concise summary."""
 
+_EXEC_MODE_DELEGATION_LIMIT = """## Delegation Limit
+Do not invoke the `subagent` skill, call `run_agent`, or otherwise launch another
+agent. Delegation depth is limited to one."""
+
 @dataclass(frozen=True)
 class PersonaContext:
     """Runtime information available to persona markers."""
@@ -200,6 +204,8 @@ def render_persona(persona: PersonaInfo, ctx: PersonaContext) -> str:
     for line in persona.template.splitlines():
         match = _MARKER_RE.fullmatch(line.strip())
         rendered.append(expansions[match.group(1)] if match else line)
+    if ctx.exec_mode:
+        rendered.extend(("", _EXEC_MODE_DELEGATION_LIMIT))
     return "\n".join(rendered).strip()
 
 

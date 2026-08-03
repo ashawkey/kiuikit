@@ -216,6 +216,12 @@ A `pre-compaction` session revision is saved before the history is replaced, so 
 
 Two guards keep an unproductive pass from repeating every round. Before the round-trip, a split that would free less than it writes back — the summary is the one part of a compaction that *adds* context — is abandoned without calling the model at all. After it, every pass sets a floor that suppresses the next one until the context has actually grown by 5% of the window, whether or not the pass went well: a pass that clears the yield bar by a hair used to reset that floor, leaving the marginal pass right behind it unguarded. Summarization runs at low reasoning effort under a fixed output cap, since rewriting a conversation into a fixed section structure is transcription rather than reasoning.
 
+### Subagents
+
+The bundled `subagent` skill delegates a self-contained task to a fresh agent through the public `run_agent` API. The skill's runner emits one JSON result and is normally executed with `exec_command`, so foreground waiting, timeout, and interruption use the same process-tree lifecycle as other shell commands. The child has an independent conversation and no session or rewind history, but works directly in the selected directory; its file changes are immediately visible to the parent and are not separately tracked as subagent patches.
+
+A delegated prompt must include all relevant context because it does not inherit the parent conversation or loaded skills. For independent read-only tasks, disjoint file changes, or separate worktrees, load `monitor` and launch several runners as managed background processes, then inspect each JSON log. Do not parallelize agents that may write the same files or otherwise mutate coupled state.
+
 ### Batch processing
 
 Repeating one task over many independent items (caption 1000 images, classify 5000 rows) is the case none of the three layers above can fix: every item pays for every earlier item, and compaction eventually summarizes away the very results that were asked for.
@@ -347,7 +353,7 @@ force-pushes. An empty repository is initialized on the first upload.
 
 ### Bundled skills
 
-kia ships a few common skills, including `skill-creator` for authoring spec-compliant skills, `batch` for repetitive work over independent items (see [Batch processing](#batch-processing)), and `pdf-reading` for converting PDFs into readable Markdown and structured data with the external [MinerU](https://github.com/opendatalab/MinerU) CLI. The PDF skill can read extracted text, LaTeX, tables, and captions; direct inspection of extracted image pixels still requires a vision-capable tool. Bundled skills are loaded directly from the installed package rather than copied into `.kia`, so updates take effect whenever `kiui` is updated. To customize one, create a new project or personal skill under a different name.
+kia ships a few common skills, including `skill-creator` for authoring spec-compliant skills, `subagent` for delegating independent agent tasks (see [Subagents](#subagents)), `batch` for repetitive work over independent items (see [Batch processing](#batch-processing)), and `pdf-reading` for converting PDFs into readable Markdown and structured data with the external [MinerU](https://github.com/opendatalab/MinerU) CLI. The PDF skill can read extracted text, LaTeX, tables, and captions; direct inspection of extracted image pixels still requires a vision-capable tool. Bundled skills are loaded directly from the installed package rather than copied into `.kia`, so updates take effect whenever `kiui` is updated. To customize one, create a new project or personal skill under a different name.
 
 ## Personas
 

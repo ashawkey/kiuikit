@@ -21,9 +21,10 @@ how the next one is handled.
    its summary. That is parallel, resumable, and has no agentic overhead.
 2. **A few tool calls per item, same shape every time** — `run_batch`.
 3. **Items differ in structure, or need judgment about which tools to use** —
-   handle them in the normal conversation, splitting the work into manageable groups.
-4. **Fewer than roughly 20 items, or items that build on each other** — just do
-   them in the normal conversation. Isolation is not worth its overhead.
+   do not use `run_batch`. For a small number of substantial, self-contained tasks,
+   use the `subagent` skill; otherwise handle them in the normal conversation.
+4. **Fewer than roughly 20 short items, or items that build on each other** — just
+   do them in the normal conversation. Isolation is not worth its overhead.
 
 ## Build the item list without paying for it
 
