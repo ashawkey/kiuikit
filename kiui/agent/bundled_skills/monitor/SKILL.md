@@ -8,34 +8,40 @@ description: Run long-lived background commands and actively monitor or relaunch
 These process tools are built in and available when the active persona permits them:
 
 - `start_process`: launch a managed background process with file-backed combined output;
-- `inspect_processes`: return one status snapshot and an optional bounded log tail;
+- `wait_processes`: block locally until a selected process exits, optionally writes output, or a timeout expires;
+- `inspect_processes`: return one immediate status snapshot and an optional bounded log tail;
 - `stop_process`: terminate one managed process and its process tree.
 
 Loading this skill adds the active-monitoring workflow below.
 
-Use `exec_command` for non-interactive foreground commands expected to finish reliably. It times out after 300 seconds by default; set `timeout=null` only when no timeout is intentionally required. Use the managed tools for servers and long-running commands, and the core `wait` tool for monitoring intervals.
+Use `exec_command` for non-interactive foreground commands expected to finish reliably. Its default timeout is 300 seconds; set `timeout=null` only when no timeout is intentionally required. Use managed tools for servers, long-running commands, and observers.
 
 ## Start and manage a process
 
 1. Call `start_process(command, cwd)` and retain its `process_id` and `log_path`.
-2. Inspect it with `inspect_processes(process_id, log_tail_chars=M)`. Each call returns one immediate snapshot.
-3. Use the returned tail for occasional output. For frequent checks or exact incremental output, track a line offset and read `log_path` with `read_file`.
-4. Call `stop_process` only when the user wants the managed process terminated. Interrupting a `wait` stops the agent's monitoring loop but leaves the process running.
+2. Use `wait_processes(process_ids=[...], timeout=N)` for ongoing monitoring. It consumes no additional model rounds while blocked and returns when any selected process exits or the timeout expires.
+3. Set `wake_on_output=true` only when each new log write requires diagnosis. Otherwise leave it false to avoid waking on routine output.
+4. After an exit or meaningful output event, use `inspect_processes(process_id, log_tail_chars=M)` only when log content is needed. For exact incremental output, track a line offset and read `log_path` with `read_file`.
+5. Call `stop_process` only when the user wants the managed process terminated. Interrupting `wait_processes` stops monitoring but leaves all managed processes running.
 
 ## Active monitoring loop
 
-1. Establish the target, interval, authorized corrective action, and stopping condition. Ask only when a missing detail blocks safe action.
+1. Establish the target, authorized corrective action, and stopping condition. Ask only when a missing detail blocks safe action.
 2. Check the authoritative current state immediately. A quiet log or running observer does not prove that the target is healthy.
-3. If the command itself must remain alive, launch it with `start_process`. Use the core `wait(seconds=N)` tool between monitoring checkpoints.
-4. At each checkpoint:
-   - inspect relevant process status and new logs;
-   - run authoritative status commands;
+3. If the target or an external-system observer must remain alive, launch it with `start_process`.
+4. Wait with one `wait_processes` call over all relevant managed process IDs. Choose a substantial timeout appropriate to the expected runtime; do not emulate polling with repeated short waits.
+5. On each returned event:
+   - if a process exited, inspect its relevant final log and authoritative state;
+   - if output woke the wait, inspect only the new relevant output;
+   - if the timeout expired, run an authoritative health/status check only when one is due;
    - diagnose meaningful changes or failures;
    - recheck current state immediately before any relaunch or mutation;
    - apply only the requested corrective action and verify its result.
-5. If the stopping condition is not met, issue `wait(seconds=N)` first, followed by the next inspection or status calls in the same sequential tool-call batch, then repeat.
+6. If the stopping condition is not met, call `wait_processes` again. Do not use the general `wait` followed by `inspect_processes` for managed-process monitoring.
 
-**Every non-terminal checkpoint must end with the next `wait` and check batch.** Do not end with a text-only progress update, ask the user to request another check, or confuse a running background process with active agent monitoring. Do not put `wait` and its subsequent checks in a parallel tool-call group.
+For schedulers or services not represented by managed processes, start a lightweight observer command that polls the external system locally and exits on a meaningful state change. Monitor that observer with `wait_processes`; if it reports changes without exiting, set `wake_on_output=true`. This avoids spending one model round per scheduler poll.
+
+**Every non-terminal checkpoint must continue with `wait_processes`.** Do not end with a text-only progress update, ask the user to request another check, or confuse a running process with active agent monitoring.
 
 ## Stopping and failures
 
@@ -44,7 +50,6 @@ Use `exec_command` for non-interactive foreground commands expected to finish re
 - Stop normally when the requested terminal state is reached. If a monitored process exits and no restart was requested, report the result.
 - If an observer or managed job fails unexpectedly, inspect its complete relevant error, diagnose it, and restart only when consistent with the user's request.
 - Preserve exact job names, IDs, namespaces, users, clusters, and launch arguments. Recheck before remediation to avoid duplicate actions.
-- Keep checkpoint updates brief, and follow any non-terminal update with the next `wait` and check batch.
 
 ## Completion output
 

@@ -133,12 +133,12 @@ def test_busy_prompt_shows_only_working_status_without_pending_message():
 
 def test_process_status_is_appended_to_working_status():
     terminal = _message_terminal()
-    terminal._process_status = "(Proc: 1 running [2 finished])"
+    terminal._process_status = "1/3 running processes"
 
     text = "".join(fragment for _, fragment in terminal._message())
 
     assert "Working..." in text
-    assert "(Proc: 1 running [2 finished])" in text
+    assert "Working... · 1/3 running processes" in text
 
 
 def test_detailed_status_overrides_busy_fallback_and_shows_pending_message():

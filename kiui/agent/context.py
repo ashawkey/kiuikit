@@ -120,6 +120,7 @@ RESULT_BUDGET_OVERRIDES = {
     "read_file": (0.06, 4_000, 16_000),
     "web_fetch": (0.04, 3_000, 10_000),
     "inspect_processes": (0.04, 3_000, 10_000),
+    "wait_processes": (0.02, 2_000, 6_000),
 }
 
 # Upper bound on the raw capture fed into the semantic reducers. Well above any
@@ -129,7 +130,7 @@ RESULT_BUDGET_OVERRIDES = {
 COMPACTION_INPUT_MAX_CHARS = 512_000
 
 PROACTIVE_TOOLS = frozenset({
-    "read_file", "exec_command", "inspect_processes", "ls", "glob_files", "grep_files",
+    "read_file", "exec_command", "inspect_processes", "wait_processes", "ls", "glob_files", "grep_files",
     "web_fetch", "web_search",
 })
 PREFIX_TOOLS = frozenset({
@@ -207,7 +208,7 @@ COMPACTION_KEEP_RECENT_MAX_TOKENS = 20_000
 COMPACTION_MIN_YIELD_RATIO = 0.05
 
 PRUNABLE_TOOLS = frozenset({
-    "read_file", "exec_command", "web_fetch", "inspect_processes",
+    "read_file", "exec_command", "web_fetch", "inspect_processes", "wait_processes",
     "web_search", "glob_files", "grep_files", "ls",
 })
 
@@ -681,6 +682,7 @@ _IDENTITY_ARGS: dict[str, tuple[str, ...]] = {
     "exec_command": ("command", "cwd"),
     # Per process: a snapshot of one process says nothing about another.
     "inspect_processes": ("process_id",),
+    "wait_processes": ("process_ids",),
 }
 
 # Writing to a file invalidates every earlier read of it, whatever range that

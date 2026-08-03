@@ -9,9 +9,9 @@ tools:
   - ls
   - load_skill
   - start_process
+  - wait_processes
   - inspect_processes
   - stop_process
-  - wait
 skills:
   bundled:
     - subagent
@@ -219,7 +219,7 @@ A monitor uses one long-running fresh `coder` subagent instructed to load `monit
 - prior checkpoints and terminal reports when resuming an interrupted run;
 - the exact checkpoint directory and assigned terminal report path;
 - instructions not to modify project files or `.kia/orchestrator/tasks.json`; only the requested operational remediation and assigned checkpoint/report writes are allowed;
-- instructions to check authoritative state immediately, use `wait` between checks, apply only the authorized remediation, verify every remediation, and continue until the stopping condition, cancellation, or a blocker;
+- instructions to check authoritative state immediately, use `wait_processes` for managed-process monitoring, apply only the authorized remediation, verify every remediation, and continue until the stopping condition, cancellation, or a blocker;
 - instructions not to turn an operational failure into an improvised code or configuration change. Instead, report the proposed work as a blocker so the user may authorize a separate `change` task.
 
 Write each checkpoint as a distinct valid JSON file with a monotonically increasing sequence:
@@ -256,16 +256,16 @@ Require the terminal report to be valid JSON:
 Monitoring completion uses operational verification rather than code review. If monitoring causes or requires project-file changes, handle those as a separate `change` task with independent review.
 
 ## Reconciliation and Monitoring
-At the start of each scheduler pass:
-1. Incorporate any newly received user task operations and persist them.
-2. Call `inspect_processes` and reconcile every task with `active_run`.
-3. For exited runs, inspect a bounded log tail first, recover the complete log if needed, read the role-specific assigned report, and apply exactly one state transition.
-4. If a recorded process is unknown after a session restart, mark that attempt interrupted, clear `active_run`, and retry the same role within its limit. For a monitor, launch a fresh worker that immediately rechecks authoritative state. Never assume an interrupted task completed or remained healthy.
-5. Resolve completed, blocked, or cancelled dependencies.
-6. Launch runnable work within the concurrency rules.
-7. Persist every transition and process assignment immediately.
+Before the first scheduler pass in a conversation or after session recovery, call `inspect_processes` once and reconcile every `active_run`. If a recorded process is unknown, mark that attempt interrupted, clear `active_run`, and retry the same role within its limit. A replacement monitor must immediately recheck authoritative state. Never infer that interrupted work completed or remained healthy.
 
-If any subagents remain active, call `wait` for 10 seconds and then `inspect_processes` in the same sequential tool-call batch. Continue the monitoring loop; do not end with a progress-only response. A user message received while monitoring may add or change tasks at the next scheduler pass.
+On each scheduler pass:
+1. Incorporate newly received user task operations and persist them.
+2. Reconcile process-exit events returned by `wait_processes`. Inspect a bounded tail only for exited runs, recover the complete log if needed, read the assigned role-specific report, and apply exactly one state transition.
+3. Resolve completed, blocked, or cancelled dependencies.
+4. Launch runnable work within the concurrency rules and persist each process assignment immediately.
+5. Persist every other state transition immediately.
+
+If subagents remain active, call `wait_processes` once over all active process IDs with a substantial timeout. A process-exit event starts the next scheduler pass; a timeout does so without an additional process snapshot. Continue monitoring until a stopping condition is met; never end with a progress-only response while subagents remain active. Incorporate user messages received during monitoring at the next scheduler pass.
 
 Stop the monitoring loop when:
 - every task is `completed` or `cancelled`; or

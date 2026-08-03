@@ -17,6 +17,7 @@ import kiui.agent.tools as tools
 import kiui.agent.tools.commands as command_tools
 import kiui.agent.tools.search as search_tools
 from kiui.agent.bundled_skills.browser import tools as browser_tools
+from kiui.agent.tools.process_manager import format_process_status
 from kiui.agent.tools import (
     ToolExecutor,
     _human_size,
@@ -47,6 +48,11 @@ class _SilentConsole:
 def _executor_with_monitor(tmp_path):
     """Backward-compatible helper for an executor with core process tools."""
     return ToolExecutor(console=_SilentConsole(), work_dir=str(tmp_path))
+
+
+def test_process_status_format():
+    assert format_process_status(2, 2) == "2/4 running processes"
+    assert format_process_status(0, 4) == ""
 
 
 def test_native_tool_resource_cleanup(tmp_path):
@@ -492,6 +498,142 @@ def test_inspect_processes_no_longer_accepts_wait(tmp_path):
     result = te.execute("inspect_processes", {"wait": 0.01})
     assert not result["success"]
     assert "unexpected keyword argument 'wait'" in result["error"]
+
+
+def test_wait_processes_returns_when_any_selected_process_exits(tmp_path):
+    te = _executor_with_monitor(tmp_path)
+    fast = te.execute(
+        "start_process",
+        {"command": "python -c 'import time; time.sleep(0.1)'"},
+    )
+    slow = te.execute(
+        "start_process",
+        {"command": "python -c 'import time; time.sleep(30)'"},
+    )
+    try:
+        started = time.monotonic()
+        result = te.execute(
+            "wait_processes",
+            {"process_ids": [fast["process_id"], slow["process_id"]], "timeout": 5},
+        )
+        assert result["success"]
+        assert result["event"] == "process_exit"
+        assert [item["process_id"] for item in result["processes"]] == [fast["process_id"]]
+        assert result["pending_process_ids"] == [slow["process_id"]]
+        assert time.monotonic() - started < 3
+    finally:
+        te.shutdown_processes()
+
+
+def test_wait_processes_can_wake_on_new_output(tmp_path):
+    te = _executor_with_monitor(tmp_path)
+    started = te.execute(
+        "start_process",
+        {"command": "python -u -c \"import time; time.sleep(.1); print('ready'); time.sleep(30)\""},
+    )
+    try:
+        result = te.execute(
+            "wait_processes",
+            {
+                "process_ids": [started["process_id"]],
+                "timeout": 5,
+                "wake_on_output": True,
+            },
+        )
+        assert result["success"]
+        assert result["event"] == "log_output"
+        assert result["processes"][0]["process_id"] == started["process_id"]
+        assert result["processes"][0]["log_bytes_added"] > 0
+    finally:
+        te.shutdown_processes()
+
+
+def test_wait_processes_timeout_is_concise(tmp_path):
+    te = _executor_with_monitor(tmp_path)
+    started = te.execute(
+        "start_process",
+        {"command": "python -c 'import time; time.sleep(30)'"},
+    )
+    try:
+        result = te.execute(
+            "wait_processes",
+            {"process_ids": [started["process_id"]], "timeout": 0.02},
+        )
+        assert result == {
+            "event": "timeout",
+            "processes": [],
+            "count": 0,
+            "pending_process_ids": [started["process_id"]],
+            "timed_out": True,
+            "success": True,
+        }
+    finally:
+        te.shutdown_processes()
+
+
+def test_wait_processes_handles_keyboard_interrupt_without_stopping_process(
+    tmp_path, monkeypatch
+):
+    te = _executor_with_monitor(tmp_path)
+    started = te.execute(
+        "start_process",
+        {"command": "python -c 'import time; time.sleep(30)'"},
+    )
+
+    def interrupt(*, timeout):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(te._process_condition, "wait", interrupt)
+    try:
+        result = te.execute(
+            "wait_processes",
+            {"process_ids": [started["process_id"]], "timeout": 10},
+        )
+        assert result["interrupted"] and not result["success"]
+        assert te.inspect_processes(started["process_id"])["processes"][0]["status"] == "running"
+    finally:
+        te.shutdown_processes()
+
+
+def test_wait_processes_is_interruptible_without_stopping_process(tmp_path):
+    events = EventHub()
+    cancellation = CancellationToken(events)
+    cancellation.begin("test process wait")
+    te = ToolExecutor(
+        console=_SilentConsole(), work_dir=str(tmp_path), cancellation=cancellation
+    )
+    started = te.execute(
+        "start_process",
+        {"command": "python -c 'import time; time.sleep(30)'"},
+    )
+    timer = threading.Timer(0.02, cancellation.cancel)
+    timer.start()
+    try:
+        result = te.execute(
+            "wait_processes",
+            {"process_ids": [started["process_id"]], "timeout": 10},
+        )
+        assert result["interrupted"] and not result["success"]
+        assert te.inspect_processes(started["process_id"])["processes"][0]["status"] == "running"
+    finally:
+        timer.cancel()
+        te.shutdown_processes()
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"process_ids": [], "timeout": 1},
+        {"process_ids": ["missing"], "timeout": 1},
+        {"process_ids": ["p-1", "p-1"], "timeout": 1},
+        {"process_ids": ["p-1"], "timeout": 0},
+        {"process_ids": ["p-1"], "timeout": float("inf")},
+        {"process_ids": ["p-1"], "timeout": 1, "wake_on_output": "yes"},
+    ],
+)
+def test_wait_processes_rejects_invalid_arguments(tmp_path, arguments):
+    te = _executor_with_monitor(tmp_path)
+    assert not te.execute("wait_processes", arguments)["success"]
 
 
 def test_process_status_notifications_are_delivered_in_order(tmp_path):

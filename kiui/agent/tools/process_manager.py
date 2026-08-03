@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import signal
 import subprocess
@@ -18,6 +19,8 @@ from .constants import (
     MAX_PROCESS_LOG_TAIL_CHARS,
     MAX_TOOL_OUTPUT_CHARS,
 )
+from kiui.agent.utils.interrupt import CancelWatcher
+
 from .process_util import (
     _close_windows_job,
     _create_windows_job,
@@ -31,7 +34,7 @@ def format_process_status(running: int, finished: int) -> str:
     """Return the compact process summary shared by terminal and web UIs."""
     if running <= 0:
         return ""
-    return f"(Proc: {running} running [{finished} finished])"
+    return f"{running}/{running + finished} running processes"
 
 
 class ProcessManagerMixin:
@@ -40,6 +43,7 @@ class ProcessManagerMixin:
     def _init_process_registry(self) -> None:
         self._processes: dict[str, dict[str, Any]] = {}
         self._process_lock = threading.Lock()
+        self._process_condition = threading.Condition(self._process_lock)
         self._process_notify_lock = threading.RLock()
         self._process_listeners: set[Callable[[int, int], None]] = set()
         self._last_process_counts = (0, 0)
@@ -133,6 +137,17 @@ class ProcessManagerMixin:
             "capture_error": record.get("capture_error"),
         }
 
+    def _find_process_record_locked(self, process_id: str) -> dict[str, Any] | None:
+        """Resolve a managed process ID or supervisor PID with the registry locked."""
+        record = self._processes.get(process_id)
+        if record is None and process_id.isdigit():
+            pid = int(process_id)
+            record = next(
+                (item for item in self._processes.values() if item["pid"] == pid),
+                None,
+            )
+        return record
+
     def _start_process(self, command: str, cwd: str | None = None) -> dict[str, Any]:
         """Start a session-managed background process with file-backed output."""
         cwd = str(self._resolve_path(cwd or "."))
@@ -212,6 +227,7 @@ class ProcessManagerMixin:
             "log_path": str(log_path.relative_to(self._resolve_path("."))),
             "started_at": time.time(),
             "log_truncated": False,
+            "log_bytes": 0,
             "job_handle": job_handle,
             "process_backend": process_backend,
             "job_lock": threading.Lock(),
@@ -234,6 +250,9 @@ class ProcessManagerMixin:
                             log_enabled = False
                         else:
                             written += len(data)
+                            with self._process_condition:
+                                record["log_bytes"] = written
+                                self._process_condition.notify_all()
                     if len(chunk) > remaining:
                         record["log_truncated"] = True
             except OSError as exc:
@@ -251,12 +270,15 @@ class ProcessManagerMixin:
                             time.sleep(0.1)
                 with record["state_lock"]:
                     record["process"] = None
+                with self._process_condition:
+                    self._process_condition.notify_all()
                 self._notify_process_status()
 
         capture_thread = threading.Thread(target=capture_output, daemon=True)
         record["capture_thread"] = capture_thread
-        with self._process_lock:
+        with self._process_condition:
             self._processes[process_id] = record
+            self._process_condition.notify_all()
         capture_thread.start()
         self._notify_process_status()
         return {**self._process_info(record), "success": True}
@@ -279,13 +301,7 @@ class ProcessManagerMixin:
         record = None
         if process_id is not None:
             with self._process_lock:
-                record = self._processes.get(process_id)
-                if record is None and process_id.isdigit():
-                    pid = int(process_id)
-                    record = next(
-                        (item for item in self._processes.values() if item["pid"] == pid),
-                        None,
-                    )
+                record = self._find_process_record_locked(process_id)
             if record is None:
                 return {"error": f"Unknown managed process: {process_id}", "success": False}
 
@@ -329,6 +345,132 @@ class ProcessManagerMixin:
                 processes.pop()
             result["count"] = len(processes)
         return result
+
+    def wait_processes(
+        self,
+        process_ids: list[str],
+        timeout: float,
+        wake_on_output: bool = False,
+    ) -> dict[str, Any]:
+        """Block until a selected process exits, emits output, or times out.
+
+        Waiting happens inside this tool, so a long quiet interval consumes no
+        model rounds. Output wakeups observe only bytes written after this call
+        begins. User cancellation interrupts the wait but leaves every managed
+        process running.
+        """
+        if (
+            not isinstance(process_ids, list)
+            or not process_ids
+            or any(not isinstance(item, str) or not item for item in process_ids)
+        ):
+            return {
+                "error": "process_ids must be a non-empty list of process ID strings",
+                "success": False,
+            }
+        if len(set(process_ids)) != len(process_ids):
+            return {"error": "process_ids must not contain duplicates", "success": False}
+        if (
+            not isinstance(timeout, (int, float))
+            or isinstance(timeout, bool)
+            or not math.isfinite(timeout)
+            or timeout <= 0
+        ):
+            return {"error": "timeout must be a finite number greater than zero", "success": False}
+        if not isinstance(wake_on_output, bool):
+            return {"error": "wake_on_output must be a boolean", "success": False}
+
+        with self._process_lock:
+            records = [self._find_process_record_locked(item) for item in process_ids]
+            unknown = [item for item, record in zip(process_ids, records) if record is None]
+            if unknown:
+                return {
+                    "error": f"Unknown managed process: {unknown[0]}",
+                    "success": False,
+                }
+            selected = [record for record in records if record is not None]
+            baseline_bytes = {
+                record["process_id"]: record.get("log_bytes", 0) for record in selected
+            }
+
+        deadline = time.monotonic() + float(timeout)
+        interrupted = False
+        event = "timeout"
+        changed: list[dict[str, Any]] = []
+
+        try:
+            with self.console.thinking(label="Waiting for processes", countdown=float(timeout)):
+                with CancelWatcher(self.cancellation) as watcher:
+                    while True:
+                        with self._process_condition:
+                            exited = [
+                                record for record in selected
+                                if self._process_info(record)["status"] == "exited"
+                            ]
+                            output = [
+                                record for record in selected
+                                if (
+                                    wake_on_output
+                                    and record.get("log_bytes", 0)
+                                    > baseline_bytes[record["process_id"]]
+                                )
+                            ]
+                            if exited:
+                                event = "process_exit"
+                                changed = exited
+                                break
+                            if output:
+                                event = "log_output"
+                                changed = output
+                                break
+                            if watcher.is_cancelled:
+                                interrupted = True
+                                break
+                            remaining = deadline - time.monotonic()
+                            if remaining <= 0:
+                                break
+                            # A short cap keeps web cancellation responsive; lifecycle
+                            # and output changes wake the condition immediately.
+                            self._process_condition.wait(timeout=min(0.1, remaining))
+        except KeyboardInterrupt:
+            interrupted = True
+
+        if interrupted:
+            return {
+                "error": "Process wait was interrupted by the user; managed processes are still running.",
+                "success": False,
+                "interrupted": True,
+            }
+
+        selected_infos = [self._process_info(record) for record in selected]
+        info_by_id = {info["process_id"]: info for info in selected_infos}
+        process_infos = []
+        for record in changed:
+            info = info_by_id[record["process_id"]]
+            if event == "log_output":
+                info["log_bytes_added"] = (
+                    record.get("log_bytes", 0) - baseline_bytes[record["process_id"]]
+                )
+            process_infos.append(info)
+        pending = [
+            info["process_id"] for info in selected_infos if info["status"] == "running"
+        ]
+        return {
+            "event": event,
+            "processes": process_infos,
+            "count": len(process_infos),
+            "pending_process_ids": pending,
+            "timed_out": event == "timeout",
+            "success": True,
+        }
+
+    def _wait_processes(
+        self,
+        process_ids: list[str],
+        timeout: float,
+        wake_on_output: bool = False,
+    ) -> dict[str, Any]:
+        return self.wait_processes(process_ids, timeout, wake_on_output)
 
     def _inspect_processes(
         self, process_id: str | None = None, log_tail_chars: int = 0

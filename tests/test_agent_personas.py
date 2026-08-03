@@ -49,9 +49,9 @@ def test_bundled_personas_are_declarative():
             "ls",
             "load_skill",
             "start_process",
+            "wait_processes",
             "inspect_processes",
             "stop_process",
-            "wait",
         }
     )
     assert personas["orchestrator"].bundled_skills == frozenset(
@@ -62,6 +62,8 @@ def test_bundled_personas_are_declarative():
     assert "## User Interaction" in personas["orchestrator"].template
     assert "`change`" in personas["orchestrator"].template
     assert "`monitor`" in personas["orchestrator"].template
+    assert "call `wait_processes` once over all active process IDs" in personas["orchestrator"].template
+    assert "`wait`" not in personas["orchestrator"].template
     assert "At most one implementation subagent may run" in personas["orchestrator"].template
     assert "Do not maintain resource-lock metadata" in personas["orchestrator"].template
     assert '"version": 2' in personas["orchestrator"].template

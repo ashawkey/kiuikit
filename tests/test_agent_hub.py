@@ -88,7 +88,7 @@ def test_per_session_state_and_event_replay():
     session.events = EventHub(max_events=1)
     session.ingest({
         "type": "process_status",
-        "data": {"running": 1, "finished": 0, "text": "(Proc: 1 running [0 finished])"},
+        "data": {"running": 1, "finished": 0, "text": "1/1 running processes"},
     })
     session.events.publish("system", text="ready")
     with TestClient(hub.app) as client:
@@ -100,7 +100,7 @@ def test_per_session_state_and_event_replay():
             state = receive_type(sock, "state")
             assert state["csrf"] == csrf
             assert state["session"] == "s1"
-            assert state["process_status"] == "(Proc: 1 running [0 finished])"
+            assert state["process_status"] == "1/1 running processes"
             assert state["replay_truncated"] is True
             assert receive_type(sock, "system")["data"]["text"] == "ready"
 
@@ -144,9 +144,9 @@ def test_remote_session_tracks_process_status_for_authoritative_state():
     session = RemoteSession("s1", {})
     session.ingest({
         "type": "process_status",
-        "data": {"running": 1, "finished": 2, "text": "(Proc: 1 running [2 finished])"},
+        "data": {"running": 1, "finished": 2, "text": "1/3 running processes"},
     })
-    assert session.process_status == "(Proc: 1 running [2 finished])"
+    assert session.process_status == "1/3 running processes"
 
     session.ingest({
         "type": "process_status",
@@ -181,14 +181,14 @@ def test_agent_link_end_to_end():
         session_id="live", meta={"title": "t", "cwd": "/c", "model": "m", "host": "h"},
     )
     try:
-        client.get_process_status = lambda: "(Proc: 1 running [0 finished])"
+        client.get_process_status = lambda: "1/1 running processes"
         client.start()
         deadline = time.time() + 5
         while time.time() < deadline and not hub.get_session("live"):
             time.sleep(0.05)
         session = hub.get_session("live")
         assert session is not None
-        assert session.process_status == "(Proc: 1 running [0 finished])"
+        assert session.process_status == "1/1 running processes"
 
         # Replayed history reaches the hub.
         deadline = time.time() + 5

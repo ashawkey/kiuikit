@@ -65,6 +65,7 @@ class ToolSpec:
 _BUILTIN_TABLE: dict[str, tuple[str, str | None]] = {
     "start_process": ("_start_process", None),
     "inspect_processes": ("_inspect_processes", None),
+    "wait_processes": ("_wait_processes", None),
     "stop_process": ("_stop_process", None),
     "read_file": ("_read_file", None),
     "read_image": ("_read_image", GATE_IMAGE),

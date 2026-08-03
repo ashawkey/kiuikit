@@ -63,6 +63,40 @@ _BUILTIN_TOOL_SCHEMAS_LIST = [
     {
         "type": "function",
         "function": {
+            "name": "wait_processes",
+            "description": (
+                "Block without additional model rounds until any selected managed process exits, "
+                "optionally emits new output, or the timeout expires. Returns only processes that "
+                "triggered the wakeup; interruption leaves them running."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "process_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "minItems": 1,
+                        "uniqueItems": True,
+                        "description": "Managed process IDs returned by start_process",
+                    },
+                    "timeout": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "description": "Maximum seconds to wait before returning a timeout event",
+                    },
+                    "wake_on_output": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Also return when a selected process writes new log output",
+                    },
+                },
+                "required": ["process_ids", "timeout"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "stop_process",
             "description": "Stop a managed background process.",
             "parameters": {

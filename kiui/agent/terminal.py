@@ -674,7 +674,7 @@ class TerminalInput:
         if process_status:
             process_fragment = ("class:status.process", process_status)
             if status:
-                status.extend([("", " "), process_fragment])
+                status.extend([("", " · "), process_fragment])
             else:
                 status = [process_fragment]
         if pending is not None:

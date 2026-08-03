@@ -168,8 +168,8 @@ describe('interaction components', () => {
   })
 
   it('shows background processes while otherwise idle', () => {
-    render(<ActivityStatus busy={false} status={null} processStatus="(Proc: 1 running [2 finished])" />)
-    expect(screen.getByText('(Proc: 1 running [2 finished])')).toBeInTheDocument()
+    render(<ActivityStatus busy={false} status={null} processStatus="1/3 running processes" />)
+    expect(screen.getByText('1/3 running processes')).toBeInTheDocument()
   })
 
   it('hides the status when the operation and indicator are both idle', () => {
