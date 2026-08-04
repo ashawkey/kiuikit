@@ -47,7 +47,7 @@ def _describe_wait_processes(args: dict[str, Any]) -> ToolCallDescription:
     return _description(
         "wait_processes",
         primary,
-        f"timeout {args['timeout']:g}s",
+        f"timeout {args['timeout']:g}s" if args.get("timeout") is not None else "until event",
         "wake on output" if args.get("wake_on_output") else "",
     )
 

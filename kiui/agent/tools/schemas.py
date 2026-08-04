@@ -66,8 +66,10 @@ _BUILTIN_TOOL_SCHEMAS_LIST = [
             "name": "wait_processes",
             "description": (
                 "Block without additional model rounds until any selected managed process exits, "
-                "optionally emits new output, or the timeout expires. Returns only processes that "
-                "triggered the wakeup; interruption leaves them running."
+                "optionally emits new output, or an optional timeout expires. For finite jobs, omit "
+                "timeout so the call wakes on exit instead of polling; use a timeout only for a real "
+                "deadline or scheduled health check. Returns only processes that triggered the "
+                "wakeup; interruption leaves them running."
             ),
             "parameters": {
                 "type": "object",
@@ -82,7 +84,10 @@ _BUILTIN_TOOL_SCHEMAS_LIST = [
                     "timeout": {
                         "type": "number",
                         "exclusiveMinimum": 0,
-                        "description": "Maximum seconds to wait before returning a timeout event",
+                        "description": (
+                            "Optional maximum seconds to wait. Omit by default to wait until a "
+                            "process event; do not use short timeouts to poll progress."
+                        ),
                     },
                     "wake_on_output": {
                         "type": "boolean",
@@ -90,7 +95,7 @@ _BUILTIN_TOOL_SCHEMAS_LIST = [
                         "description": "Also return when a selected process writes new log output",
                     },
                 },
-                "required": ["process_ids", "timeout"],
+                "required": ["process_ids"],
             },
         },
     },

@@ -265,7 +265,7 @@ On each scheduler pass:
 4. Launch runnable work within the concurrency rules and persist each process assignment immediately.
 5. Persist every other state transition immediately.
 
-If subagents remain active, call `wait_processes` once over all active process IDs with a substantial timeout. A process-exit event starts the next scheduler pass; a timeout does so without an additional process snapshot. Continue monitoring until a stopping condition is met; never end with a progress-only response while subagents remain active. Incorporate user messages received during monitoring at the next scheduler pass.
+If subagents remain active, call `wait_processes` once over all active process IDs without a timeout, so a process-exit event starts the next scheduler pass without polling. Use a timeout only when an independent scheduler deadline or authoritative health check is genuinely due before any expected exit, and set it to that full interval. Continue monitoring until a stopping condition is met; never end with a progress-only response while subagents remain active. Incorporate user messages received during monitoring at the next scheduler pass.
 
 Stop the monitoring loop when:
 - every task is `completed` or `cancelled`; or

@@ -425,7 +425,7 @@ The agent has access to the following tools:
 | `load_skill` | Load the full prompt instructions for a skill by name |
 | `start_process` | Start a managed background process with file-backed output |
 | `inspect_processes` | Inspect one or all managed background processes, with an optional bounded log tail for one process |
-| `wait_processes` | Block until a selected managed process exits, optionally writes output, or a timeout expires |
+| `wait_processes` | Block until a selected managed process exits, optionally writes output, or an optional timeout expires; omit the timeout for ordinary finite jobs |
 | `stop_process` | Stop a managed background process and its child process tree |
 
 Managed background process tools are built into kia so permitted model calls,

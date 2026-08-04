@@ -525,6 +525,24 @@ def test_wait_processes_returns_when_any_selected_process_exits(tmp_path):
         te.shutdown_processes()
 
 
+def test_wait_processes_defaults_to_waiting_until_process_exit(tmp_path):
+    te = _executor_with_monitor(tmp_path)
+    started = te.execute(
+        "start_process",
+        {"command": "python -c 'import time; time.sleep(0.1)'"},
+    )
+    try:
+        result = te.execute(
+            "wait_processes",
+            {"process_ids": [started["process_id"]]},
+        )
+        assert result["success"]
+        assert result["event"] == "process_exit"
+        assert result["pending_process_ids"] == []
+    finally:
+        te.shutdown_processes()
+
+
 def test_wait_processes_can_wake_on_new_output(tmp_path):
     te = _executor_with_monitor(tmp_path)
     started = te.execute(
@@ -628,6 +646,7 @@ def test_wait_processes_is_interruptible_without_stopping_process(tmp_path):
         {"process_ids": ["p-1", "p-1"], "timeout": 1},
         {"process_ids": ["p-1"], "timeout": 0},
         {"process_ids": ["p-1"], "timeout": float("inf")},
+        {"process_ids": ["p-1"], "timeout": True},
         {"process_ids": ["p-1"], "timeout": 1, "wake_on_output": "yes"},
     ],
 )

@@ -349,15 +349,15 @@ class ProcessManagerMixin:
     def wait_processes(
         self,
         process_ids: list[str],
-        timeout: float,
+        timeout: float | None = None,
         wake_on_output: bool = False,
     ) -> dict[str, Any]:
         """Block until a selected process exits, emits output, or times out.
 
-        Waiting happens inside this tool, so a long quiet interval consumes no
-        model rounds. Output wakeups observe only bytes written after this call
-        begins. User cancellation interrupts the wait but leaves every managed
-        process running.
+        With no timeout, the call waits until an event or user cancellation, so
+        a long quiet interval consumes no model rounds. Output wakeups observe
+        only bytes written after this call begins. User cancellation interrupts
+        the wait but leaves every managed process running.
         """
         if (
             not isinstance(process_ids, list)
@@ -370,13 +370,16 @@ class ProcessManagerMixin:
             }
         if len(set(process_ids)) != len(process_ids):
             return {"error": "process_ids must not contain duplicates", "success": False}
-        if (
+        if timeout is not None and (
             not isinstance(timeout, (int, float))
             or isinstance(timeout, bool)
             or not math.isfinite(timeout)
             or timeout <= 0
         ):
-            return {"error": "timeout must be a finite number greater than zero", "success": False}
+            return {
+                "error": "timeout must be omitted or a finite number greater than zero",
+                "success": False,
+            }
         if not isinstance(wake_on_output, bool):
             return {"error": "wake_on_output must be a boolean", "success": False}
 
@@ -393,13 +396,16 @@ class ProcessManagerMixin:
                 record["process_id"]: record.get("log_bytes", 0) for record in selected
             }
 
-        deadline = time.monotonic() + float(timeout)
+        deadline = None if timeout is None else time.monotonic() + float(timeout)
         interrupted = False
         event = "timeout"
         changed: list[dict[str, Any]] = []
 
         try:
-            with self.console.thinking(label="Waiting for processes", countdown=float(timeout)):
+            with self.console.thinking(
+                label="Waiting for processes",
+                countdown=float(timeout) if timeout is not None else None,
+            ):
                 with CancelWatcher(self.cancellation) as watcher:
                     while True:
                         with self._process_condition:
@@ -426,12 +432,14 @@ class ProcessManagerMixin:
                             if watcher.is_cancelled:
                                 interrupted = True
                                 break
-                            remaining = deadline - time.monotonic()
-                            if remaining <= 0:
+                            remaining = None if deadline is None else deadline - time.monotonic()
+                            if remaining is not None and remaining <= 0:
                                 break
                             # A short cap keeps web cancellation responsive; lifecycle
                             # and output changes wake the condition immediately.
-                            self._process_condition.wait(timeout=min(0.1, remaining))
+                            self._process_condition.wait(
+                                timeout=0.1 if remaining is None else min(0.1, remaining)
+                            )
         except KeyboardInterrupt:
             interrupted = True
 
@@ -467,7 +475,7 @@ class ProcessManagerMixin:
     def _wait_processes(
         self,
         process_ids: list[str],
-        timeout: float,
+        timeout: float | None = None,
         wake_on_output: bool = False,
     ) -> dict[str, Any]:
         return self.wait_processes(process_ids, timeout, wake_on_output)
