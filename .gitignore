@@ -9,14 +9,11 @@ __pycache__/
 build/
 dist/
 node_modules/
-!kiui/agent/frontend/dist/
-!kiui/agent/frontend/dist/**
 data/
 tmp*
 result/
 results/
 temp/
-.kia/
 .kiui.yaml
 graphify-out/
 plan_*.md

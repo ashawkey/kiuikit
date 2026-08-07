@@ -25,19 +25,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-kia = [
-  "openai",
-  "tyro",
-  "prompt_toolkit",
-  "ddgs",
-  "httpx",
-  "beautifulsoup4",
-  "pathspec",
-  "filelock",
-  "fastapi>=0.120",
-  "uvicorn[standard]>=0.38",
-  "websockets>=12",
-]
 full = [
   "torch", # keep this so the doc can be built successfully
   "tqdm",
@@ -60,17 +47,6 @@ full = [
   "PyMCubes",
   "fbxloader",
   "envlight",
-  "prompt_toolkit",
-  "pygments",
-  "openai",
-  "httpx",
-  "beautifulsoup4",
-  "ddgs",
-  "pathspec",
-  "filelock",
-  "fastapi>=0.120",
-  "uvicorn[standard]>=0.38",
-  "websockets>=12",
 ]
 
 [project.scripts]
@@ -79,14 +55,9 @@ kisr = "kiui.sr:main"
 kivi = "kiui.video:main"
 kiss = "kiui.sys:main"
 ks = "kiui.slurm:main"
-kia = "kiui.agent.cli:main"
-kib = "kiui.agent.library_cli:main"
 
 [tool.setuptools]
 include-package-data = true
-
-[tool.setuptools.package-data]
-"kiui.agent" = ["bundled_skills/**/*", "bundled_personas/**/*"]
 
 [tool.setuptools.exclude-package-data]
 "*" = ["**/__pycache__/*", "**/*.py[cod]"]

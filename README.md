@@ -34,20 +34,6 @@ pip install git+https://github.com/ashawkey/kiuikit.git # only the minimal packa
 | `kivi` | Video/image info, resize, preview (capped-CRF), split |
 | `kiss` | System information — OS, CPU, GPU, torch, CUDA, conda |
 | `ks` | Slurm job management — queue, history, logs, cancel, usage |
-| `kia` | AI coding agent — terminal-native with web UI, skills, and more |
-| `kib` | AI harness library — share skills and personas across projects |
-
-### Agent
-
-`kia` is an experimental personal AI harness.
-
-```bash
-pip install "kiui[kia]"
-kia
-```
-
-- Personal resource library (`kib`): share skills and personas across projects.
-- Native terminal UI + synchronized web UI, remote access from any browser.
 
 **Python library:**
 
